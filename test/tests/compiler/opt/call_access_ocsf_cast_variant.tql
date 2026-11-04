@@ -1,0 +1,7 @@
+// A cast keeps the contents of a variant unchanged.
+export
+class_uid = 3002
+metadata = {version: "1.5.0"}
+unmapped = {foo: bar}
+this = ocsf_cast(this)
+where unmapped.foo == 1

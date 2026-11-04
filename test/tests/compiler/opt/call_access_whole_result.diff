@@ -1,0 +1,189 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "export",
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:47..53 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+-        
+-      ],
+-      order: "ordered"
+-    },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:54..59 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
++        binary_expr {
+           left: function_call {
+             fn: {
+               path: [
+                 `drop_matching` @ [1]:60..73 from 0
+               ],
+               ref: std::drop_matching/fn
+             },
+             args: [
+               this_ [1]:74..78 from 0,
+               constant string "x" @ [1]:80..83 from 0
+             ],
+             method: false,
+             location: [1]:60..84 from 0
+           },
+           op: "eq",
+           right: constant none_t {} @ [1]:88..92 from 0,
+           location: [1]:60..92 from 0
+-        }
+-      ],
+-      named_args: [
+-        
+-      ]
+-    },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:93..98 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
++        },
++        binary_expr {
+           left: function_call {
+             fn: {
+               path: [
+                 `select_matching` @ [1]:99..114 from 0
+               ],
+               ref: std::select_matching/fn
+             },
+             args: [
+               this_ [1]:115..119 from 0,
+               constant string "x" @ [1]:121..124 from 0
+             ],
+             method: false,
+             location: [1]:99..125 from 0
+           },
+           op: "eq",
+           right: constant none_t {} @ [1]:129..133 from 0,
+           location: [1]:99..133 from 0
+-        }
+-      ],
+-      named_args: [
+-        
+-      ]
+-    },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:134..139 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
++        },
++        binary_expr {
+           left: function_call {
+             fn: {
+               path: [
+                 `ocsf_cast` @ [1]:140..149 from 0
+               ],
+               ref: std::ocsf_cast/fn
+             },
+             args: [
+               this_ [1]:150..154 from 0
+             ],
+             method: false,
+             location: [1]:140..155 from 0
+           },
+           op: "eq",
+           right: constant none_t {} @ [1]:159..163 from 0,
+           location: [1]:140..163 from 0
+-        }
+-      ],
+-      named_args: [
+-        
+-      ]
+-    },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:164..169 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
++        },
++        binary_expr {
+           left: function_call {
+             fn: {
+               path: [
+                 `ocsf_derive` @ [1]:170..181 from 0
+               ],
+               ref: std::ocsf_derive/fn
+             },
+             args: [
+               this_ [1]:182..186 from 0
+             ],
+             method: false,
+             location: [1]:170..187 from 0
+           },
+           op: "eq",
+           right: record {
+             begin: [1]:191..192 from 0,
+             items: [
+               
+             ],
+             end: [1]:192..193 from 0
+           },
+           location: [1]:170..193 from 0
+         }
+       ],
+-      named_args: [
++      order: "ordered"
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:193..193 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
+         
+-      ]
++      ],
++      order: "ordered"
+     }
+   ],
+   definition_location: [1]:47..193 from 0
+ }

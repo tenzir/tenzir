@@ -1,0 +1,14 @@
+// A cast keeps the contents of variants, but drops fields that the class lacks.
+// `expected` evaluates the predicate as a value, which the optimizer never
+// rewrites, so it must be `true` for every event that the filter keeps. The
+// events carry their ID in `metadata.uid`, so that the cast drops at most one
+// field, whose warning is then deterministic.
+from {class_uid: 3002, metadata: {version: "1.5.0", uid: "1"}, unmapped: {foo: 1}},
+     {class_uid: 3004, metadata: {version: "1.5.0", uid: "2"}, entity: {data: 42}},
+     {class_uid: 3004, metadata: {version: "1.5.0", uid: "3"}, entity: {data: {x: 42}}},
+     {class_uid: 3002, metadata: {version: "1.5.0", uid: "4"}, unmapped: {foo: "1"}},
+     {class_uid: 3002, metadata: {version: "1.5.0", uid: "5"}, entity: {data: 42}}
+this = {id: metadata.uid, r: ocsf_cast(this)}
+expected = r.entity.data == 42 or r.unmapped.foo == 1
+where r.entity.data == 42 or r.unmapped.foo == 1
+select id, expected

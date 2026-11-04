@@ -1,0 +1,185 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "export",
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:148..154 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+-        
++        binary_expr {
++          left: binary_expr {
++            left: root_field {
++              id: `Computer` @ [1]:226..234 from 0,
++              has_question_mark: false
++            },
++            op: "eq",
++            right: constant string "dc01" @ [1]:289..295 from 0,
++            location: [1]:226..295 from 0
++          },
++          op: "and_",
++          right: binary_expr {
++            left: function_call {
++              fn: {
++                path: [
++                  `type_kind` @ [1]:242..257 from 0
++                ],
++                ref: std::type_kind/fn
++              },
++              args: [
++                root_field {
++                  id: `Computer` @ [1]:226..234 from 0,
++                  has_question_mark: false
++                }
++              ],
++              method: false,
++              location: [1]:242..257 from 0
++            },
++            op: "eq",
++            right: constant string "string" @ [1]:242..257 from 0,
++            location: [1]:242..257 from 0
++          },
++          location: [1]:226..295 from 0
++        }
+       ],
+       order: "ordered"
+     },
+     SetIr {
+       assignments: [
+         {
+           left: root_field {
+             id: `class_uid` @ [1]:155..164 from 0,
+             has_question_mark: false
+           },
+           right: constant int64 3002 @ [1]:167..171 from 0,
+           location: [1]:155..171 from 0
+         }
+       ],
+       order: "ordered"
+     },
+     SetIr {
+       assignments: [
+         {
+           left: root_field {
+             id: `metadata` @ [1]:172..180 from 0,
+             has_question_mark: false
+           },
+           right: record {
+             begin: [1]:183..184 from 0,
+             items: [
+               field {
+                 name: `version` @ [1]:184..191 from 0,
+                 expr: constant string "1.5.0" @ [1]:193..200 from 0
+               }
+             ],
+             end: [1]:200..201 from 0
+           },
+           location: [1]:172..201 from 0
+         }
+       ],
+       order: "ordered"
+     },
+     SetIr {
+       assignments: [
+         {
+           left: field_access {
+             left: root_field {
+               id: `src_endpoint` @ [1]:202..214 from 0,
+               has_question_mark: false
+             },
+             has_question_mark: false,
+             name: `hostname` @ [1]:215..223 from 0,
+             location: [1]:202..223 from 0
+           },
+           right: root_field {
+             id: `Computer` @ [1]:226..234 from 0,
+             has_question_mark: false
+           },
+           location: [1]:202..234 from 0
+         }
+       ],
+       order: "ordered"
+     },
+     SetIr {
+       assignments: [
+         {
+           left: this_ [1]:235..239 from 0,
+           right: function_call {
+             fn: {
+               path: [
+                 `ocsf_cast` @ [1]:242..251 from 0
+               ],
+               ref: std::ocsf_cast/fn
+             },
+             args: [
+               this_ [1]:252..256 from 0
+             ],
+             method: false,
+             location: [1]:242..257 from 0
+           },
+           location: [1]:235..257 from 0
+         }
+       ],
+       order: "ordered"
+     },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:258..263 from 0
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:295..295 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
+         ],
+-        ref: std::where/op
++        named_args: [
++          
++        ]
+       },
+-      args: [
+-        expression binary_expr {
+-          left: field_access {
+-            left: root_field {
+-              id: `src_endpoint` @ [1]:264..276 from 0,
+-              has_question_mark: false
+-            },
+-            has_question_mark: false,
+-            name: `hostname` @ [1]:277..285 from 0,
+-            location: [1]:264..285 from 0
+-          },
+-          op: "eq",
+-          right: constant string "dc01" @ [1]:289..295 from 0,
+-          location: [1]:264..295 from 0
+-        }
++      filter: [
++        
+       ],
+-      named_args: [
+-        
+-      ]
++      order: "ordered"
+     }
+   ],
+   definition_location: [1]:148..295 from 0
+ }

@@ -1,0 +1,11 @@
+// A scalar field may need a profile itself.
+// `expected` evaluates the predicate as a value, which the optimizer never
+// rewrites, so it must be `true` for every event that the filter keeps. The
+// events carry their ID in `metadata.uid`, so that the cast drops at most one
+// field, whose warning is then deterministic.
+from {class_uid: 3002, metadata: {version: "1.5.0", uid: "1"}, is_alert: true},
+     {class_uid: 3002, metadata: {version: "1.5.0", uid: "2", profiles: ["security_control"]}, is_alert: true}
+this = {id: metadata.uid, r: ocsf_cast(this)}
+expected = r.is_alert == true
+where r.is_alert == true
+select id, expected

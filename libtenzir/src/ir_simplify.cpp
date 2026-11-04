@@ -12,6 +12,7 @@
 #include "tenzir/ir.hpp"
 #include "tenzir/nova/const_eval.hpp"
 #include "tenzir/nova/eval.hpp"
+#include "tenzir/nova/function_plugin.hpp"
 #include "tenzir/nova/instantiate_ctx.hpp"
 #include "tenzir/nova/materialize.hpp"
 #include "tenzir/tql2/ast.hpp"
@@ -166,6 +167,30 @@ auto is_removable(ast::expression const& x) -> bool {
     });
 }
 
+/// Detects a `move`, which removes the field that it reads.
+class MoveFinder final : public ast::visitor<MoveFinder> {
+public:
+  template <class T>
+  auto visit(T& x) -> void {
+    enter(x);
+  }
+
+  auto visit(ast::unary_expr& x) -> void {
+    found = found or x.op == ast::unary_op::move;
+    enter(x);
+  }
+
+  bool found = false;
+};
+
+/// Returns whether `x` contains a `move`.
+auto moves(ast::expression const& x) -> bool {
+  auto finder = MoveFinder{};
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
+  finder.visit(const_cast<ast::expression&>(x));
+  return finder.found;
+}
+
 /// What the simplifier learns about an expression while simplifying it.
 struct Properties {
   /// Whether the expression may fold into a constant. This requires that it
@@ -250,6 +275,9 @@ public:
     // A condition silently treats `null` as `false`.
     if (context == Context::condition and is_null(x)) {
       x = ast::constant{false, x.get_location()};
+    }
+    if (context != Context::value and rewrite_call_access(x, context)) {
+      return simplify(x, context);
     }
     return result.properties;
   }
@@ -472,6 +500,208 @@ private:
     };
   }
 
+  /// An access to a field of the result of a function call whose function may
+  /// describe the field over the call's arguments.
+  struct CallAccess {
+    ast::expression const& base;
+    ast::function_call const& call;
+    nova::FunctionPlugin const& plugin;
+    std::vector<ast::field_path::segment> path;
+
+    /// Whether the evaluator accepts the call. Checked only once a function
+    /// describes the access, since instantiating a call is costly.
+    auto instantiates(registry const& reg) const -> bool {
+      return tenzir::instantiates(base, reg);
+    }
+  };
+
+  /// Returns `x` as a call access that is eligible for a rewrite: The call
+  /// must be deterministic, and its arguments must neither fail nor move
+  /// fields, so that a rewrite may evaluate them more often, or not at all.
+  /// The path may be empty, for a call whose value the function describes.
+  auto as_call_access(ast::expression const& x) const -> Option<CallAccess> {
+    auto path = std::vector<ast::field_path::segment>{};
+    auto const* base = &x;
+    while (auto const* access = try_as<ast::field_access>(*base)) {
+      path.push_back({access->name, access->has_question_mark});
+      base = &access->left;
+    }
+    auto const* call = try_as<ast::function_call>(*base);
+    if (not call or not call->fn.ref.resolved()) {
+      return None{};
+    }
+    auto const* plugin
+      = dynamic_cast<nova::FunctionPlugin const*>(&reg_.get(*call));
+    if (not plugin) {
+      return None{};
+    }
+    for (auto const& arg : call->args) {
+      auto const* named = try_as<ast::assignment>(arg);
+      auto const& value = named ? named->right : arg;
+      if (not is_removable(value) or moves(value)) {
+        return None{};
+      }
+    }
+    if (not base->is_deterministic(reg_)) {
+      return None{};
+    }
+    std::ranges::reverse(path);
+    return CallAccess{*base, *call, *plugin, std::move(path)};
+  }
+
+  /// Returns whether `x` is a constant or a list of constants.
+  static auto is_constant_list(ast::expression const& x) -> bool {
+    if (auto const* constant = try_as<ast::constant>(x)) {
+      return is<list>(constant->value);
+    }
+    auto const* items = try_as<ast::list>(x);
+    return items and std::ranges::all_of(items->items, [](auto const& item) {
+             auto const* expr = try_as<ast::expression>(item);
+             return expr and is<ast::constant>(*expr);
+           });
+  }
+
+  /// Rewrites the predicate `x` if it reads a field of a call's result as an
+  /// operand, and the function can describe the field over the call's
+  /// arguments, as in `FunctionPlugin::rewrite_field_access`. The operand must
+  /// be one that the predicate always evaluates: `x` itself, or a side of a
+  /// comparison. The rewrite is local to `x`, so it evaluates the arguments of
+  /// the call only where `x` does.
+  auto rewrite_call_access(ast::expression& x, Context context) -> bool {
+    if (lambda_depth_ > 0 or call_depth_ > 0) {
+      return false;
+    }
+    auto* binary = try_as<ast::binary_expr>(x);
+    if (not binary) {
+      auto access = as_call_access(x);
+      return access and rewrite_value(x, *access, x, context);
+    }
+    switch (binary->op) {
+      case ast::binary_op::eq:
+      case ast::binary_op::neq:
+      case ast::binary_op::gt:
+      case ast::binary_op::geq:
+      case ast::binary_op::lt:
+      case ast::binary_op::leq:
+      case ast::binary_op::in:
+        break;
+      default:
+        return false;
+    }
+    auto const comparison
+      = binary->op == ast::binary_op::eq or binary->op == ast::binary_op::neq;
+    for (auto* side : {&binary->left, &binary->right}) {
+      // `in` is not commutative, and only a field on its left compares.
+      if (side == &binary->right and binary->op == ast::binary_op::in) {
+        break;
+      }
+      auto access = as_call_access(*side);
+      if (not access) {
+        continue;
+      }
+      auto const& other = side == &binary->left ? binary->right : binary->left;
+      auto const comparable
+        = (comparison and is<ast::constant>(other))
+          or (binary->op == ast::binary_op::in and is_constant_list(other));
+      if (comparable) {
+        auto predicate = access->plugin.rewrite_field_comparison(
+          access->call, access->path, binary->op, other, {.reg = reg_});
+        if (predicate and access->instantiates(reg_)
+            and commit(x, std::move(*predicate))) {
+          return true;
+        }
+      }
+      if (rewrite_value(x, *access, *side, context)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// Replaces `operand`, which is `x` or one of its operands and reads the
+  /// field of `access`, by the description of the field. The cases of the
+  /// description become disjuncts: for a predicate `P[operand]` and cases
+  /// `(g1, v1), …, (gn, vn)`, the result is `(g1 and P[v1]) or … or (gn and
+  /// P[vn]) or (not (g1 or … or gn) and P[null])`. As the guards are `bool`s
+  /// that are never `null` and at most one of them is `true`, this has the
+  /// same value as `P[operand]` in three-valued logic. A disjunct whose
+  /// predicate simplifies to `false` is omitted.
+  auto rewrite_value(ast::expression& x, CallAccess const& access,
+                     ast::expression& operand, Context context) -> bool {
+    auto cases = access.plugin.rewrite_field_access(access.call, access.path,
+                                                    {.reg = reg_});
+    if (not cases or not access.instantiates(reg_)) {
+      return false;
+    }
+    // Reserve the budget for the cases before simplifying the predicates over
+    // them, which may rewrite further accesses, so that the recursion ends
+    // even if a description reads its own call again.
+    auto reserved = size_t{0};
+    for (auto const& [guard, value] : *cases) {
+      reserved += ir::expression_size(guard) + ir::expression_size(value);
+    }
+    if (reserved > rewrite_budget_) {
+      return false;
+    }
+    rewrite_budget_ -= reserved;
+    auto const source = operand.get_location();
+    auto const instantiate = [&](ast::expression value) {
+      auto original = std::exchange(operand, std::move(value));
+      auto result = x;
+      operand = std::move(original);
+      simplify(result, context);
+      return result;
+    };
+    auto const disjoin = [&](Option<ast::expression> lhs, ast::expression rhs) {
+      if (not lhs) {
+        return rhs;
+      }
+      return ast::expression{
+        ast::binary_expr{std::move(*lhs), ast::binary_op::or_, std::move(rhs)}};
+    };
+    auto const conjoin = [](ast::expression guard, ast::expression predicate) {
+      if (as_bool(guard) == true) {
+        return predicate;
+      }
+      return ast::expression{ast::binary_expr{
+        std::move(guard), ast::binary_op::and_, std::move(predicate)}};
+    };
+    auto result = Option<ast::expression>{};
+    auto any = Option<ast::expression>{};
+    for (auto& [guard, value] : *cases) {
+      any = disjoin(std::move(any), guard);
+      auto predicate = instantiate(std::move(value));
+      if (as_bool(predicate) == false) {
+        continue;
+      }
+      result = disjoin(std::move(result),
+                       conjoin(std::move(guard), std::move(predicate)));
+    }
+    auto fallback = instantiate(ast::constant{caf::none, source});
+    if (as_bool(fallback) != false) {
+      auto none = any ? ast::expression{ast::unary_expr{
+                          located{ast::unary_op::not_, source},
+                          std::move(*any),
+                        }}
+                      : ast::expression{ast::constant{true, source}};
+      result = disjoin(std::move(result),
+                       conjoin(std::move(none), std::move(fallback)));
+    }
+    return commit(x, result ? std::move(*result)
+                            : ast::expression{ast::constant{false, source}});
+  }
+
+  /// Replaces `x` by `replacement` if the rewrite budget suffices.
+  auto commit(ast::expression& x, ast::expression replacement) -> bool {
+    auto const size = ir::expression_size(replacement);
+    if (size > rewrite_budget_) {
+      return false;
+    }
+    rewrite_budget_ -= size;
+    x = std::move(replacement);
+    return true;
+  }
+
   auto simplify_operands(ast::function_call& x) -> Properties {
     // A function may require syntax rather than a value for an argument, such
     // as a field for `drop_null_fields(x, a)`, a lambda for `count_if`, or a
@@ -494,6 +724,7 @@ private:
       .removable = false,
     };
     auto const in_accepted_call = std::exchange(in_accepted_call_, true);
+    ++call_depth_;
     for (auto& arg : x.args) {
       // A named argument is an assignment, not an expression that assigns.
       if (auto* named = try_as<ast::assignment>(arg)) {
@@ -502,6 +733,7 @@ private:
         properties &= simplify(arg, Context::value);
       }
     }
+    --call_depth_;
     in_accepted_call_ = in_accepted_call;
     return properties;
   }
@@ -561,7 +793,9 @@ private:
 
   auto simplify_operands(ast::lambda_expr& x) -> Properties {
     // A lambda is not a value that we could fold.
+    ++lambda_depth_;
     auto const body = simplify(x.body, Context::value);
+    --lambda_depth_;
     return {
       .constant = false,
       .evaluable = body.evaluable,
@@ -653,6 +887,13 @@ private:
   /// Whether the expression being simplified is in the arguments of a call
   /// that the evaluator accepts.
   bool in_accepted_call_ = false;
+  /// The number of function calls and lambdas whose arguments or body are
+  /// being simplified. Rewrites of call accesses apply only outside of them.
+  size_t call_depth_ = 0;
+  size_t lambda_depth_ = 0;
+  /// The number of expression nodes that rewrites of call accesses may still
+  /// produce.
+  size_t rewrite_budget_ = ir::max_rewritten_predicate_size;
 };
 
 /// Counts the expression nodes of an expression.

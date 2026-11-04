@@ -1,0 +1,9 @@
+// Lists, timestamps converted to milliseconds, and encoded variants change in
+// ways that the description does not cover.
+export
+x = ocsf_cast(this)
+where x.observables == null
+y = ocsf_cast(this, timestamp_to_ms=true)
+where y.time == 2026-01-01
+z = ocsf_cast(this, encode_variants=true)
+where z.unmapped.foo == 1

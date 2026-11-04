@@ -1,0 +1,17 @@
+// String equality with a known class.
+// `expected` evaluates the predicate as a value, which the optimizer never
+// rewrites, so it must be `true` for every event that the filter keeps.
+from {id: 1, name: "x", num: 1},
+     {id: 2, name: 42, num: uint(1)},
+     {id: 3, name: null, num: 1.0},
+     {id: 4, name: "y", num: uint(9223372036854775808)},
+     {id: 5, name: ["x"], num: "1"},
+     {id: 6, num: 2}
+class_uid = 3002
+metadata = {version: "1.5.0"}
+src_endpoint.hostname = move name
+activity_id = move num
+this = {id: id, r: ocsf_cast(this)}
+expected = r.src_endpoint.hostname == "x"
+where r.src_endpoint.hostname == "x"
+select id, expected

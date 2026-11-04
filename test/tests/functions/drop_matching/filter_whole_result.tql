@@ -1,0 +1,3 @@
+// A comparison of the whole result keeps the call.
+from {a: 1}
+where drop_matching(this, "x") == null

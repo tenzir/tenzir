@@ -1,0 +1,8 @@
+// Fields that `drop_matching` keeps read the input, and the others are `null`.
+// `expected` evaluates the predicate as a value, which the optimizer never
+// rewrites, so it must be `true` for every event that the filter keeps.
+from {id: 1, a: 1, secret_b: 2}, {id: 2, a: 2}, {id: 3, a: 1, secret_b: null}
+this = {id: id, r: drop_matching(this, "^secret_")}
+expected = r.a == 1 and r.secret_b == null
+where r.a == 1 and r.secret_b == null
+select id, expected

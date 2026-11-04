@@ -1,0 +1,10 @@
+warning: found inconsistent list layout between `activity_id` and `activity_name`
+  --> tests/functions/ocsf_derive/batch_independent_lists.tql:10:20
+   |
+10 | this = {id: id, r: ocsf_derive(this)}
+   |                    ~~~~~~~~~~~~~~~~~
+   |
+{
+  id: 2,
+  expected: true,
+}
