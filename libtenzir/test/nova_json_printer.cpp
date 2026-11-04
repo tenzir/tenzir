@@ -169,6 +169,16 @@ TEST("print TQL on one line") {
               "identifier\":\"z\"}}");
 }
 
+TEST("print integers as strings") {
+  auto options = plain(true);
+  options.stringify_integers = true;
+  auto const printed = print(options);
+  CHECK(printed.find(R"("int":"-42")") != std::string::npos);
+  CHECK(printed.find(R"("uint":"42")") != std::string::npos);
+  CHECK(printed.find(R"("list":["1",null,"two",[],{}])") != std::string::npos);
+  CHECK(printed.find(R"("one":1.0)") != std::string::npos);
+}
+
 TEST("print styled") {
   auto options = plain(true);
   options.style = jq_style();
