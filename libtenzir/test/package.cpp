@@ -391,9 +391,10 @@ TEST("packages that declare nothing resolve where they are used") {
 }
 
 TEST("a package may not use itself") {
-  auto self = load({{"package.yaml", "name: P\ndependencies:\n  self: {}\n"},
+  // Not `self`, which TQL reads as a keyword, so no package has that id.
+  auto self = load({{"package.yaml", "name: P\ndependencies:\n  loop: {}\n"},
                     {"operators/op.tql", "pass"}},
-                   "self");
+                   "loop");
   auto reg = test::builtin_registry().clone();
   auto dh = collecting_diagnostic_handler{};
   auto packages = std::vector<package>{self};
@@ -403,7 +404,7 @@ TEST("a package may not use itself") {
   for (auto& diagnostic : std::move(dh).collect()) {
     messages.push_back(std::move(diagnostic.message));
   }
-  CHECK(mentions(messages, "package `self` uses itself"));
+  CHECK(mentions(messages, "package `loop` uses itself"));
 }
 
 TEST("only the package that fails is reported") {
