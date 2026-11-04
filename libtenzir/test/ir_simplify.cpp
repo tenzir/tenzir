@@ -392,25 +392,29 @@ TEST("expression size") {
 }
 
 TEST("substitution stops when the predicate grows beyond the bound") {
-  auto const doubling
+  // Every step replaces `x` with `x + y.z`, which reads it once.
+  auto const growing
     = [](ast::field_path const& field) -> Option<ast::expression> {
-    return ast::binary_expr{field.inner(), ast::binary_op::add, field.inner()};
+    if (field.path().size() != 1 or field.path().front().id.name != "x") {
+      return field.inner();
+    }
+    return ast::binary_expr{field.inner(), ast::binary_op::add, parse("y.z")};
   };
   auto predicate = parse("x == 1");
   auto steps = 0;
   while (true) {
     auto split = ir::split_filter_by_substitution(
-      {predicate}, test::builtin_registry(), doubling);
+      {predicate}, test::builtin_registry(), growing);
     if (split.independent.empty()) {
       break;
     }
     predicate = std::move(split.independent.front());
     ++steps;
   }
-  // After `n` steps, the predicate has `2^(n + 1) + 1` nodes, and the bound is
-  // 4096 nodes.
-  CHECK_EQUAL(steps, 10);
-  CHECK_EQUAL(ir::expression_size(predicate), size_t{2049});
+  // After `n` steps, the predicate has `3n + 3` nodes, and the bound is 4096
+  // nodes.
+  CHECK_EQUAL(steps, 1364);
+  CHECK_EQUAL(ir::expression_size(predicate), size_t{4095});
   // A substitution that does not grow the predicate may exceed the bound.
   auto const rename = [](ast::field_path const&) -> Option<ast::expression> {
     return ast::root_field{ast::identifier{"y", location::unknown}};
@@ -426,6 +430,105 @@ TEST("substitution stops when the predicate grows beyond the bound") {
   REQUIRE_EQUAL(split.independent.size(), size_t{1});
   CHECK_EQUAL(ir::expression_size(split.independent.front()),
               ir::expression_size(large));
+}
+
+TEST("plain and cheap expressions") {
+  CHECK(ir::is_plain(parse("x")));
+  CHECK(ir::is_plain(parse("x.y[\"z\"]")));
+  CHECK(ir::is_plain(parse("this")));
+  CHECK(ir::is_plain(parse("@name")));
+  CHECK(ir::is_plain(parse("42")));
+  CHECK(not ir::is_plain(parse("x + 1")));
+  CHECK(not ir::is_plain(parse("x[y]")));
+  CHECK(not ir::is_plain(parse("{a: x}")));
+  auto const& reg = test::builtin_registry();
+  CHECK(ir::is_cheap(parse("x + 1 == y.z"), reg));
+  CHECK(ir::is_cheap(parse("{a: x, b: [y, 1]}"), reg));
+  CHECK(ir::is_cheap(parse("x.ip() == 1.2.3.4 and y.length() > 1"), reg));
+  CHECK(not ir::is_cheap(parse("x.parse_json()"), reg));
+  CHECK(not ir::is_cheap(parse("x + y.parse_syslog().app_name"), reg));
+  // A cheap function with an expensive argument is expensive.
+  CHECK(not ir::is_cheap(parse("x.parse_json().length()"), reg));
+}
+
+TEST("substitution copies plain values freely") {
+  auto const rename = [](ast::field_path const&) -> Option<ast::expression> {
+    return parse("y.z");
+  };
+  auto split = ir::split_filter_by_substitution(
+    parse_chain({"x == 1 or x == 2", "x != 3"}), test::builtin_registry(),
+    rename);
+  CHECK_EQUAL(render_chain(split.independent),
+              render_filter({"y.z == 1 or y.z == 2", "y.z != 3"}));
+  CHECK(split.dependent.empty());
+}
+
+TEST("substitution does not copy expensive function calls") {
+  auto const call = [](ast::field_path const&) -> Option<ast::expression> {
+    return parse("y.parse_json()");
+  };
+  auto split = ir::split_filter_by_substitution(parse_chain({"x == 1"}),
+                                                test::builtin_registry(), call);
+  CHECK(split.independent.empty());
+  CHECK_EQUAL(render_chain(split.dependent), render_filter({"x == 1"}));
+  // A cheap function call counts as a computed value.
+  auto const conversion
+    = [](ast::field_path const&) -> Option<ast::expression> {
+    return parse("y.ip()");
+  };
+  split = ir::split_filter_by_substitution(
+    parse_chain({"x == 1.2.3.4"}), test::builtin_registry(), conversion);
+  CHECK_EQUAL(render_chain(split.independent),
+              render_filter({"y.ip() == 1.2.3.4"}));
+  split = ir::split_filter_by_substitution(
+    parse_chain({"x == 1.2.3.4 or x == 5.6.7.8"}), test::builtin_registry(),
+    conversion);
+  CHECK(split.independent.empty());
+}
+
+TEST("substitution copies a computed value at most once") {
+  // `x` and `w` are computed, the others are plain.
+  auto const computed
+    = [](ast::field_path const& field) -> Option<ast::expression> {
+    auto const& name = field.path().front().id.name;
+    if (name == "x") {
+      return parse("y + 1");
+    }
+    if (name == "w") {
+      return parse(fmt::format("(y + 2).{}", field.path().back().id.name));
+    }
+    return field.inner();
+  };
+  auto split = ir::split_filter_by_substitution(
+    parse_chain({"x == 1", "z == 2"}), test::builtin_registry(), computed);
+  CHECK_EQUAL(render_chain(split.independent),
+              render_filter({"y + 1 == 1", "z == 2"}));
+  CHECK(split.dependent.empty());
+  // The chain reads `x` twice, even though each predicate reads it once.
+  split = ir::split_filter_by_substitution(
+    parse_chain({"x > 1", "x < 10", "z == 2"}), test::builtin_registry(),
+    computed);
+  CHECK_EQUAL(render_chain(split.independent), render_filter({"z == 2"}));
+  CHECK_EQUAL(render_chain(split.dependent),
+              render_filter({"x > 1", "x < 10"}));
+  split = ir::split_filter_by_substitution(parse_chain({"x == 1 or x == 2"}),
+                                           test::builtin_registry(), computed);
+  CHECK(split.independent.empty());
+  // Members of the same computed value read it as well.
+  split = ir::split_filter_by_substitution(
+    parse_chain({"w.a == 1 or w.b == 2"}), test::builtin_registry(), computed);
+  CHECK(split.independent.empty());
+  // Doubling the field in every step therefore stops after one step.
+  auto const doubling
+    = [](ast::field_path const& field) -> Option<ast::expression> {
+    return ast::binary_expr{field.inner(), ast::binary_op::add, field.inner()};
+  };
+  split = ir::split_filter_by_substitution(parse_chain({"x == 1"}),
+                                           test::builtin_registry(), doubling);
+  REQUIRE_EQUAL(split.independent.size(), size_t{1});
+  split = ir::split_filter_by_substitution(std::move(split.independent),
+                                           test::builtin_registry(), doubling);
+  CHECK(split.independent.empty());
 }
 
 TEST("split conjunctions") {

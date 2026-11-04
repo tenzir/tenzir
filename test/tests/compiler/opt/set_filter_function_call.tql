@@ -1,0 +1,9 @@
+// A predicate that reads a value computed by an expensive function, such as a
+// parser, stays behind its assignment, because moving it would call the
+// function once more, and once per read. Predicates that do not read the value
+// still move, and so do predicates on cheap conversions.
+export
+a = y.ip()
+s = line.parse_syslog()
+where s.app_name == "sshd" or s.app_name == "cron"
+where x == 1 and a == 192.0.2.1

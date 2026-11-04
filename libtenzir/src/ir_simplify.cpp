@@ -671,6 +671,40 @@ public:
   size_t size = 0;
 };
 
+/// Finds the parts of an expression whose evaluation costs more than reading
+/// fields and combining them with operators.
+class CostFinder final : public ast::visitor<CostFinder> {
+public:
+  explicit CostFinder(registry const& reg) : reg_{reg} {
+  }
+
+  template <class T>
+  auto visit(T& x) -> void {
+    enter(x);
+  }
+
+  auto visit(ast::function_call& x) -> void {
+    if (not x.fn.ref.resolved() or not reg_.get(x).is_cheap()) {
+      found = true;
+      return;
+    }
+    enter(x);
+  }
+
+  auto visit(ast::lambda_expr&) -> void {
+    found = true;
+  }
+
+  auto visit(ast::pipeline_expr&) -> void {
+    found = true;
+  }
+
+  bool found = false;
+
+private:
+  registry const& reg_;
+};
+
 /// Replaces package `let` references by their cached values where the
 /// evaluator accepts them. The simplifier keeps the references, but a
 /// condition that only reads them is constant.
@@ -755,6 +789,38 @@ auto ir::expression_size(ast::expression const& expr) -> size_t {
   // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
   counter.visit(const_cast<ast::expression&>(expr));
   return counter.size;
+}
+
+auto ir::is_plain(ast::expression const& expr) -> bool {
+  return expr.match(
+    [](ast::constant const&) {
+      return true;
+    },
+    [](ast::meta const&) {
+      return true;
+    },
+    [](ast::this_ const&) {
+      return true;
+    },
+    [](ast::root_field const&) {
+      return true;
+    },
+    [](ast::field_access const& x) {
+      return is_plain(x.left);
+    },
+    [](ast::index_expr const& x) {
+      return is_plain(x.expr) and is<ast::constant>(x.index);
+    },
+    [](auto const&) {
+      return false;
+    });
+}
+
+auto ir::is_cheap(ast::expression const& expr, registry const& reg) -> bool {
+  auto finder = CostFinder{reg};
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
+  finder.visit(const_cast<ast::expression&>(expr));
+  return not finder.found;
 }
 
 auto ir::is_infallible(ast::expression const& expr) -> bool {

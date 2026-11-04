@@ -1,0 +1,8 @@
+// The arm filters of a `match` with a guard that calls an expensive function
+// stay inside the arms, because moving them in front would evaluate the guard
+// once more.
+export
+match kind {
+  "a" if v.match_regex("^b+$") => { where x == 1 }
+  _ => { where x == 2 }
+}

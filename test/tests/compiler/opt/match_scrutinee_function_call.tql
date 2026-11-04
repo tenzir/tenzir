@@ -1,0 +1,8 @@
+// The arm filters of a `match` whose scrutinee calls an expensive function,
+// such as a parser, stay inside the arms, because moving them in front would
+// evaluate the scrutinee once more.
+export
+match line.parse_syslog().app_name {
+  "sshd" => { where x == 1 }
+  _ => { where x == 2 }
+}

@@ -1,0 +1,170 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "export",
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:159..165 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
+     },
+     SetIr {
+       assignments: [
+         {
+           left: root_field {
+             id: `a` @ [1]:166..167 from 0,
+             has_question_mark: false
+           },
+           right: binary_expr {
+             left: root_field {
+               id: `x` @ [1]:170..171 from 0,
+               has_question_mark: false
+             },
+             op: "add",
+             right: root_field {
+               id: `y` @ [1]:174..175 from 0,
+               has_question_mark: false
+             },
+             location: [1]:170..175 from 0
+           },
+           location: [1]:166..175 from 0
+         }
+       ],
+       order: "ordered"
+     },
+     SetIr {
+       assignments: [
+         {
+           left: root_field {
+             id: `b` @ [1]:176..177 from 0,
+             has_question_mark: false
+           },
+           right: binary_expr {
+             left: root_field {
+               id: `a` @ [1]:180..181 from 0,
+               has_question_mark: false
+             },
+             op: "add",
+             right: root_field {
+               id: `a` @ [1]:184..185 from 0,
+               has_question_mark: false
+             },
+             location: [1]:180..185 from 0
+           },
+           location: [1]:176..185 from 0
+         }
+       ],
+       order: "ordered"
+     },
++    where_ir {
++      op: {
++        path: [
++          
++        ],
++        ref: unresolved
++      },
++      args: [
++        Incomplete binary_expr {
++          left: binary_expr {
++            left: root_field {
++              id: `b` @ [1]:190..191 from 0,
++              has_question_mark: false
++            },
++            op: "add",
++            right: root_field {
++              id: `b` @ [1]:194..195 from 0,
++              has_question_mark: false
++            },
++            location: [1]:190..195 from 0
++          },
++          op: "eq",
++          right: constant int64 1 @ [1]:207..208 from 0,
++          location: [1]:202..208 from 0
++        }
++      ],
++      named_args: [
++        
++      ]
++    },
+     SetIr {
+       assignments: [
+         {
+           left: root_field {
+             id: `c` @ [1]:186..187 from 0,
+             has_question_mark: false
+           },
+           right: binary_expr {
+             left: root_field {
+               id: `b` @ [1]:190..191 from 0,
+               has_question_mark: false
+             },
+             op: "add",
+             right: root_field {
+               id: `b` @ [1]:194..195 from 0,
+               has_question_mark: false
+             },
+             location: [1]:190..195 from 0
+           },
+           location: [1]:186..195 from 0
+         }
+       ],
+       order: "ordered"
+     },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:196..201 from 0
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:208..208 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
+         ],
+-        ref: std::where/op
++        named_args: [
++          
++        ]
+       },
+-      args: [
+-        expression binary_expr {
+-          left: root_field {
+-            id: `c` @ [1]:202..203 from 0,
+-            has_question_mark: false
+-          },
+-          op: "eq",
+-          right: constant int64 1 @ [1]:207..208 from 0,
+-          location: [1]:202..208 from 0
+-        }
++      filter: [
++        
+       ],
+-      named_args: [
+-        
+-      ]
++      order: "ordered"
+     }
+   ],
+   definition_location: [1]:159..208 from 0
+ }

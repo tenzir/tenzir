@@ -1,0 +1,10 @@
+// A predicate may compute a value without function calls once more in front
+// of its assignment, but not several times, so predicates that together read
+// the value more than once stay behind it.
+export
+a = x + 1
+where a > 5
+b = y + 1
+where b > 1 and b < 10
+c = z + 1
+where c == 1 or c == 2

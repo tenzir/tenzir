@@ -746,6 +746,19 @@ auto constant_condition(ast::expression const& condition, registry const& reg)
 /// Returns the number of expression nodes in `expr`.
 auto expression_size(ast::expression const& expr) -> size_t;
 
+/// Returns whether evaluating `expr` costs about as much as reading a field,
+/// which holds for constants, metadata, and fields, including their members
+/// and constant indexes. A rewrite may evaluate such an expression any number
+/// of times in place of a value that the pipeline computes once.
+auto is_plain(ast::expression const& expr) -> bool;
+
+/// Returns whether `expr` combines its values with operators and cheap
+/// functions only, as for `function_plugin::is_cheap`, but no expensive ones,
+/// such as parsers. A rewrite may evaluate such an expression once more in
+/// place of a value that the pipeline computes, but should not copy it several
+/// times.
+auto is_cheap(ast::expression const& expr, registry const& reg) -> bool;
+
 /// Returns whether evaluating `expr` cannot fail the pipeline. A function can
 /// fail depending on its input, so `expr` must not call any.
 auto is_infallible(ast::expression const& expr) -> bool;

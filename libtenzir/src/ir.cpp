@@ -29,9 +29,12 @@
 #include "tenzir/tql2/user_defined_operator.hpp"
 #include "tenzir/type.hpp"
 
+#include <caf/binary_serializer.hpp>
+#include <caf/byte_buffer.hpp>
 #include <fmt/format.h>
 
 #include <algorithm>
+#include <map>
 #include <ranges>
 #include <span>
 #include <utility>
@@ -84,15 +87,81 @@ auto ir::split_filter_by_dependents(ir::OptimizeFilter filter,
   });
 }
 
+namespace {
+
+/// Identifies the value that a replacement computes. Replacements for
+/// different members of the same assigned value compute the same value, so the
+/// members do not count.
+auto computation_key(ast::expression const& replacement) -> caf::byte_buffer {
+  auto const* base = &replacement;
+  while (true) {
+    if (auto const* access = try_as<ast::field_access>(*base)) {
+      base = &access->left;
+    } else if (auto const* index = try_as<ast::index_expr>(*base)) {
+      base = &index->expr;
+    } else {
+      break;
+    }
+  }
+  auto buffer = caf::byte_buffer{};
+  auto f = caf::binary_serializer{buffer};
+  auto copy = *base;
+  auto const success = f.apply(copy);
+  TENZIR_ASSERT(success);
+  return buffer;
+}
+
+} // namespace
+
 auto ir::split_filter_by_substitution(OptimizeFilter filter,
                                       registry const& reg,
                                       ast::FieldSubstitution const& fields,
                                       ast::MetaSubstitution const& meta)
   -> split_filter_result {
+  // A replacement that is not plain stands for a value that the operator
+  // computes, which a moved predicate computes once more. That is acceptable
+  // for a cheap value that the whole chain reads once, but copying it several
+  // times multiplies the work, and copying an expensive function call, such as
+  // a parser, may repeat arbitrarily expensive work.
+  auto substitutions = std::vector<Option<ast::expression>>{};
+  auto computations = std::vector<std::vector<caf::byte_buffer>>{};
+  auto reads = std::map<caf::byte_buffer, size_t>{};
+  substitutions.reserve(filter.size());
+  computations.reserve(filter.size());
+  for (auto const& expr : filter) {
+    auto computed = std::vector<caf::byte_buffer>{};
+    auto const counting = ast::FieldSubstitution{
+      [&](ast::field_path const& field) -> Option<ast::expression> {
+        auto replacement = fields(field);
+        if (not replacement or is_plain(*replacement)) {
+          return replacement;
+        }
+        if (not is_cheap(*replacement, reg)) {
+          return None{};
+        }
+        computed.push_back(computation_key(*replacement));
+        return replacement;
+      }};
+    auto substituted = ast::substitute_refs(expr, reg, counting, meta);
+    if (substituted) {
+      for (auto const& key : computed) {
+        ++reads[key];
+      }
+    } else {
+      computed.clear();
+    }
+    substitutions.push_back(std::move(substituted));
+    computations.push_back(std::move(computed));
+  }
   auto result = split_filter_result{};
-  for (auto& expr : filter) {
-    auto substituted = ast::substitute_refs(expr, reg, fields, meta);
-    if (not substituted) {
+  for (auto i = size_t{0}; i < filter.size(); ++i) {
+    auto& expr = filter[i];
+    auto& substituted = substitutions[i];
+    auto const copied
+      = std::ranges::any_of(computations[i], [&](caf::byte_buffer const& key) {
+          return reads.at(key) > 1;
+        });
+    if (not substituted or copied) {
       result.dependent.push_back(std::move(expr));
       continue;
     }
