@@ -490,7 +490,7 @@ TEST("substitution copies a computed value at most once") {
   // `x` and `w` are computed, the others are plain.
   auto const computed
     = [](ast::field_path const& field) -> Option<ast::expression> {
-    auto const& name = field.path().front().id.name;
+    auto const name = field.path().front().id.name;
     if (name == "x") {
       return parse("y + 1");
     }
