@@ -13,6 +13,7 @@
 #include "tenzir/ir.hpp"
 #include "tenzir/session.hpp"
 #include "tenzir/source.hpp"
+#include "tenzir/test/compile.hpp"
 #include "tenzir/test/registry.hpp"
 #include "tenzir/test/test.hpp"
 #include "tenzir/tql2/parser.hpp"
@@ -41,31 +42,6 @@ auto workspace_using(std::vector<std::string> ids) -> PackageDependencies {
   auto result = PackageDependencies{};
   for (auto& id : ids) {
     result.emplace(std::move(id), PackageDependency{});
-  }
-  return result;
-}
-
-/// The messages of the errors that compiling `text` against `reg` reports,
-/// letting it name the packages in `prelude`.
-auto compile_errors(registry const& reg, ExternPrelude const& prelude,
-                    std::string_view text) -> std::vector<std::string> {
-  auto dh = collecting_diagnostic_handler{};
-  auto provider = session_provider::make(dh, reg);
-  auto ctx = provider.as_session();
-  auto source = Source::new_source(std::string{text}, "<test>", false);
-  auto sources = SourceMap{};
-  sources.add_source(source);
-  auto tokens = tokenize_permissive(source->text);
-  auto parsed = parse(tokens, *source, ctx);
-  if (parsed and resolve_entities(*parsed, prelude, ctx)) {
-    auto root = compile_ctx::make_root(base_ctx{ctx.dh(), ctx.reg()}, sources);
-    std::ignore = std::move(*parsed).compile(root);
-  }
-  auto result = std::vector<std::string>{};
-  for (auto& diagnostic : std::move(dh).collect()) {
-    if (diagnostic.severity == severity::error) {
-      result.push_back(std::move(diagnostic.message));
-    }
   }
   return result;
 }
@@ -295,14 +271,15 @@ TEST("a package sees only the packages it declares") {
   CHECK(not is<entity_ref>(other->try_get(sneak)));
   // Pipelines see what the workspace declares, and not what its packages do.
   auto prelude = extern_prelude(workspace_using({"tools"}));
-  CHECK(compile_errors(*reg, prelude, "from {x: 1} | tools::twice | discard")
-          .empty());
-  CHECK(mentions(compile_errors(*reg, prelude,
-                                "from {x: 1} | acme::double | discard"),
+  CHECK(
+    test::compile_errors(*reg, prelude, "from {x: 1} | tools::twice | discard")
+      .empty());
+  CHECK(mentions(test::compile_errors(*reg, prelude,
+                                      "from {x: 1} | acme::double | discard"),
                  "package `acme` is not among the dependencies"));
   // Code that a builtin writes names no package at all.
-  CHECK(mentions(compile_errors(*reg, ExternPrelude::empty(),
-                                "from {x: 1} | tools::twice | discard"),
+  CHECK(mentions(test::compile_errors(*reg, ExternPrelude::empty(),
+                                      "from {x: 1} | tools::twice | discard"),
                  "package `tools` is not among the dependencies"));
 }
 
@@ -323,8 +300,8 @@ TEST("a package's constants see only the packages it declares") {
     add_packages(*reg, declared, dh, nullptr, PackageVisibility::declared));
   // `user::$twice` names `base`, which the workspace does not: it resolves
   // against what `user` may name.
-  CHECK(compile_errors(*reg, extern_prelude(workspace_using({"user"})),
-                       "from {x: user::$twice} | discard")
+  CHECK(test::compile_errors(*reg, extern_prelude(workspace_using({"user"})),
+                             "from {x: user::$twice} | discard")
           .empty());
   auto other = test::builtin_registry().clone();
   auto undeclared = std::vector<package>{base, rogue};
@@ -391,8 +368,8 @@ TEST("a package is resolved after the packages it uses") {
   auto packages = std::vector<package>{top, middle, bottom};
   REQUIRE(
     add_packages(*reg, packages, dh, nullptr, PackageVisibility::declared));
-  CHECK(compile_errors(*reg, extern_prelude(workspace_using({"top"})),
-                       "from {x: top::$value} | discard")
+  CHECK(test::compile_errors(*reg, extern_prelude(workspace_using({"top"})),
+                             "from {x: top::$value} | discard")
           .empty());
 }
 
@@ -407,15 +384,17 @@ TEST("packages that declare nothing resolve where they are used") {
   // and fails where it is used.
   REQUIRE(add_packages(*reg, packages, dh, nullptr,
                        PackageVisibility::all_deprecated));
-  CHECK(mentions(compile_errors(*reg, ExternPrelude::all_packages_deprecated(),
-                                "from {x: 1} | broken::oops | discard"),
+  CHECK(mentions(test::compile_errors(*reg,
+                                      ExternPrelude::all_packages_deprecated(),
+                                      "from {x: 1} | broken::oops | discard"),
                  "does_not_exist"));
 }
 
 TEST("a package may not use itself") {
-  auto self = load({{"package.yaml", "name: P\ndependencies:\n  self: {}\n"},
+  // Not `self`, which TQL reads as a keyword, so no package has that id.
+  auto self = load({{"package.yaml", "name: P\ndependencies:\n  loop: {}\n"},
                     {"operators/op.tql", "pass"}},
-                   "self");
+                   "loop");
   auto reg = test::builtin_registry().clone();
   auto dh = collecting_diagnostic_handler{};
   auto packages = std::vector<package>{self};
@@ -425,7 +404,7 @@ TEST("a package may not use itself") {
   for (auto& diagnostic : std::move(dh).collect()) {
     messages.push_back(std::move(diagnostic.message));
   }
-  CHECK(mentions(messages, "package `self` uses itself"));
+  CHECK(mentions(messages, "package `loop` uses itself"));
 }
 
 TEST("only the package that fails is reported") {

@@ -41,6 +41,8 @@
 #include "tenzir/tql2/resolve.hpp"
 #include "tenzir/tql2/tokens.hpp"
 #include "tenzir/try.hpp"
+#include "tenzir/unified.hpp"
+#include "tenzir/workspace.hpp"
 
 #include <arrow/util/utf8.h>
 #include <caf/actor_from_state.hpp>
@@ -74,8 +76,10 @@ namespace tenzir {
 using namespace tenzir::si_literals;
 
 namespace {
-auto load_packages_for_exec(diagnostic_handler& dh, caf::actor_system& sys,
-                            SourceMap* source_map) -> failure_or<void> {
+/// The packages installed in the configured package directories, by their
+/// ids, where a later directory's package replaces an earlier one's.
+auto installed_packages(diagnostic_handler& dh, caf::actor_system& sys)
+  -> failure_or<std::vector<package>> {
   auto package_dirs = std::vector<std::filesystem::path>{};
   for (const auto& dir : config_dirs(sys.config())) {
     package_dirs.emplace_back(dir / "packages");
@@ -188,12 +192,49 @@ auto load_packages_for_exec(diagnostic_handler& dh, caf::actor_system& sys,
   for (auto& [id, pkg] : packages_by_id) {
     packages.push_back(std::move(pkg));
   }
+  return packages;
+}
+
+/// Publishes the packages a pipeline run here may use, and returns what it
+/// may name of them.
+auto load_packages_for_exec(diagnostic_handler& dh, caf::actor_system& sys,
+                            SourceMap* source_map)
+  -> failure_or<ExternPrelude> {
+  // In a workspace, a pipeline uses the packages the workspace uses, the way
+  // its deployments would, and none installed elsewhere. `tenzir.workspace`
+  // names one, or `none` for none. Otherwise, only the unified command
+  // interface, which brings workspaces, looks for one: a released `tenzir`
+  // loads packages as it always has.
+  auto const& cfg = caf::content(sys.config());
+  auto root = Option<std::filesystem::path>{};
+  if (auto const* chosen = caf::get_if<std::string>(&cfg, "tenzir.workspace")) {
+    if (*chosen != "none") {
+      root = std::filesystem::path{*chosen};
+    }
+  } else if (unified_mode()) {
+    auto ec = std::error_code{};
+    root = find_workspace(std::filesystem::current_path(ec));
+  }
+  auto workspace = Option<Workspace>{};
+  if (root) {
+    TRY(workspace, load_workspace(*root, dh));
+  }
+  auto installed = std::vector<package>{};
+  if (not workspace) {
+    TRY(installed, installed_packages(dh, sys));
+  }
   auto guard = begin_registry_update();
   auto next = guard.current()->clone();
-  TRY(add_packages(*next, packages, dh, source_map,
-                   PackageVisibility::all_deprecated));
+  auto prelude = ExternPrelude::all_packages_deprecated();
+  if (workspace) {
+    TRY(prelude, add_workspace_packages(*next, workspace->dependencies,
+                                        workspace->packages, dh, source_map));
+  } else {
+    TRY(add_packages(*next, installed, dh, source_map,
+                     PackageVisibility::all_deprecated));
+  }
   guard.publish(std::shared_ptr<const registry>{std::move(next)});
-  return {};
+  return prelude;
 }
 
 } // namespace
@@ -2058,7 +2099,7 @@ auto exec2(Arc<const Source> source, diagnostic_handler& dh,
   }
   auto& handler = reporting ? static_cast<diagnostic_handler&>(*reporting) : dh;
   auto result = std::invoke([&]() -> failure_or<bool> {
-    TRY(load_packages_for_exec(handler, sys, &source_map));
+    TRY(auto prelude, load_packages_for_exec(handler, sys, &source_map));
     // The packages are published now, so this snapshot is what the pipeline
     // compiles and runs against.
     auto reg = global_registry();
@@ -2075,8 +2116,7 @@ auto exec2(Arc<const Source> source, diagnostic_handler& dh,
       fmt::print("{:#?}\n", parsed);
       return not ctx.has_failure();
     }
-    TRY(
-      resolve_entities(parsed, ExternPrelude::all_packages_deprecated(), ctx));
+    TRY(resolve_entities(parsed, prelude, ctx));
     auto flag = cfg.parallelism ? Option<std::string_view>{*cfg.parallelism}
                                 : Option<std::string_view>{};
     auto configured = caf::get_or(content(sys.config()),

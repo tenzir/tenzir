@@ -21,6 +21,8 @@
 
 namespace {
 
+// libtenzir has its own copy of this rule in `tenzir::unified_mode`, for
+// `tenzir run`, which runs in the engine. The two have to agree.
 auto unified_mode() -> bool {
   auto const* value = std::getenv("TENZIR_UNIFIED");
   if (not value or not *value) {

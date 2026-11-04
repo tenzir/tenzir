@@ -1003,7 +1003,8 @@ auto tql_files_in(package_files const& files, std::string_view dir,
   return result;
 }
 
-/// Reads the files of the package in `dir` that `package::load` looks at.
+} // namespace
+
 auto read_package_files(std::filesystem::path const& dir,
                         diagnostic_handler& dh, bool only_entities)
   -> failure_or<package_files> {
@@ -1087,8 +1088,6 @@ auto read_package_files(std::filesystem::path const& dir,
   }
   return result;
 }
-
-} // namespace
 
 auto package::load(const std::filesystem::path& dir, diagnostic_handler& dh,
                    bool only_entities) -> failure_or<package> {
