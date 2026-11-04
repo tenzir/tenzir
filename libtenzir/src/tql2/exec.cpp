@@ -41,6 +41,7 @@
 #include "tenzir/tql2/resolve.hpp"
 #include "tenzir/tql2/tokens.hpp"
 #include "tenzir/try.hpp"
+#include "tenzir/unified.hpp"
 #include "tenzir/workspace.hpp"
 
 #include <arrow/util/utf8.h>
@@ -200,9 +201,20 @@ auto load_packages_for_exec(diagnostic_handler& dh, caf::actor_system& sys,
                             SourceMap* source_map)
   -> failure_or<ExternPrelude> {
   // In a workspace, a pipeline uses the packages the workspace uses, the way
-  // its deployments would, and none installed elsewhere.
-  auto ec = std::error_code{};
-  auto root = find_workspace(std::filesystem::current_path(ec));
+  // its deployments would, and none installed elsewhere. `tenzir.workspace`
+  // names one, or `none` for none. Otherwise, only the unified command
+  // interface, which brings workspaces, looks for one: a released `tenzir`
+  // loads packages as it always has.
+  auto const& cfg = caf::content(sys.config());
+  auto root = Option<std::filesystem::path>{};
+  if (auto const* chosen = caf::get_if<std::string>(&cfg, "tenzir.workspace")) {
+    if (*chosen != "none") {
+      root = std::filesystem::path{*chosen};
+    }
+  } else if (unified_mode()) {
+    auto ec = std::error_code{};
+    root = find_workspace(std::filesystem::current_path(ec));
+  }
   auto workspace = Option<Workspace>{};
   if (root) {
     TRY(workspace, load_workspace(*root, dh));

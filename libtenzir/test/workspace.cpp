@@ -16,6 +16,7 @@
 #include "tenzir/test/test.hpp"
 #include "tenzir/tql2/registry.hpp"
 #include "tenzir/tql2/resolve.hpp"
+#include "tenzir/unified.hpp"
 
 #include <fmt/format.h>
 
@@ -102,17 +103,27 @@ void write_workspace(Scratch const& scratch) {
 
 } // namespace
 
+TEST("workspaces come with the unified command interface") {
+  {
+    auto unset = Env{"TENZIR_UNIFIED", None{}};
+    CHECK(not unified_mode());
+  }
+  for (auto const* off : {"", "0", "false", "No"}) {
+    auto value = Env{"TENZIR_UNIFIED", std::string{off}};
+    CHECK(not unified_mode());
+  }
+  for (auto const* on : {"1", "true", "YES"}) {
+    auto value = Env{"TENZIR_UNIFIED", std::string{on}};
+    CHECK(unified_mode());
+  }
+}
+
 TEST("a workspace is where its lock is") {
   auto scratch = Scratch{};
   write_workspace(scratch);
-  {
-    auto unset = Env{"TENZIR_WORKSPACE", None{}};
-    auto found = find_workspace(scratch.root / "ws" / "pipelines");
-    REQUIRE(found);
-    CHECK_EQUAL(*found, scratch.root / "ws");
-  }
-  auto none = Env{"TENZIR_WORKSPACE", std::string{"none"}};
-  CHECK(not find_workspace(scratch.root / "ws"));
+  auto found = find_workspace(scratch.root / "ws" / "pipelines");
+  REQUIRE(found);
+  CHECK_EQUAL(*found, scratch.root / "ws");
 }
 
 TEST("a workspace's manifest lists only its dependencies") {

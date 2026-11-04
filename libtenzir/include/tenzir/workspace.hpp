@@ -19,7 +19,9 @@
 namespace tenzir {
 
 // What makes a directory a workspace, and how its pipelines see its packages,
-// the same for `tenzir` run in it and for a deployment of it.
+// the same for `tenzir` run in it and for a deployment of it. `tenzir` looks
+// for a workspace only with the unified command interface (`unified_mode`),
+// and uses the one that `tenzir.workspace` names in any case.
 
 /// What a workspace's `package.yaml` lists, from its contents: its
 /// `dependencies`, and nothing else. A workspace is no package: nothing calls
@@ -68,9 +70,6 @@ struct Workspace {
 
 /// The workspace `from` lies in: the nearest directory at or above it that
 /// holds a `package.lock`.
-///
-/// `TENZIR_WORKSPACE` overrides the search: a path names the workspace, and
-/// `none` or an empty value runs outside of any.
 auto find_workspace(std::filesystem::path const& from)
   -> Option<std::filesystem::path>;
 

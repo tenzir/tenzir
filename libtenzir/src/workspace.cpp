@@ -279,12 +279,6 @@ auto add_workspace_packages(registry& reg,
 
 auto find_workspace(std::filesystem::path const& from)
   -> Option<std::filesystem::path> {
-  if (auto chosen = detail::getenv("TENZIR_WORKSPACE")) {
-    if (*chosen == "none" or chosen->empty()) {
-      return None{};
-    }
-    return std::filesystem::path{*chosen};
-  }
   auto ec = std::error_code{};
   for (auto dir = from; not dir.empty(); dir = dir.parent_path()) {
     if (std::filesystem::exists(dir / lockfile_name, ec)) {
