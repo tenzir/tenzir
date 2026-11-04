@@ -473,8 +473,8 @@ TEST("substitution does not copy expensive function calls") {
   CHECK_EQUAL(render_chain(split.dependent), render_filter({"x == 1"}));
   // This holds below an expensive call that the predicate makes already.
   split = ir::split_filter_by_substitution(
-    parse_chain({"x.replace(\"a\", \"b\") == \"c\""}),
-    test::builtin_registry(), call);
+    parse_chain({R"(x.replace("a", "b") == "c")"}), test::builtin_registry(),
+    call);
   CHECK(split.independent.empty());
   // A cheap function call counts as a computed value.
   auto const conversion

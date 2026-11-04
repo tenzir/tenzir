@@ -150,7 +150,8 @@ auto ir::split_filter_by_substitution(OptimizeFilter filter,
       auto const it = reads.find(entry.first);
       return entry.second + (it == reads.end() ? 0 : it->second) > 1;
     });
-    if (copied or count_expensive(predicate, reg) > count_expensive(expr, reg)) {
+    if (copied
+        or count_expensive(predicate, reg) > count_expensive(expr, reg)) {
       result.dependent.push_back(std::move(expr));
       continue;
     }
