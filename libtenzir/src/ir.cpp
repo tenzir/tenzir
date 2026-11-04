@@ -119,19 +119,40 @@ auto ir::split_filter_by_substitution(OptimizeFilter filter,
                                       ast::FieldSubstitution const& fields,
                                       ast::MetaSubstitution const& meta)
   -> split_filter_result {
+  // Returns the simplified predicate with a placeholder field in place of every
+  // expensive replacement. Its expensive parts are those that the predicate has
+  // without copying any, after the substitution of the other replacements,
+  // which may make some of its own parts constant.
+  auto const without_expensive = [&](ast::expression const& expr) {
+    auto const placeholder = ast::FieldSubstitution{
+      [&](ast::field_path const& field) -> Option<ast::expression> {
+        auto replacement = fields(field);
+        if (replacement and not is_cheap(*replacement, reg)) {
+          return ast::root_field{
+            ast::identifier{"__expensive", replacement->get_location()},
+            false,
+          };
+        }
+        return replacement;
+      }};
+    auto substituted = ast::substitute_refs(expr, reg, placeholder, meta);
+    TENZIR_ASSERT(substituted);
+    return simplify_predicate(std::move(*substituted), reg);
+  };
   // A replacement that is not plain stands for a value that the operator
   // computes, which a moved predicate computes once more. That is acceptable
   // for a cheap value that the moved predicates read once in total, but
-  // copying it several times multiplies the work. A predicate that ends up
-  // with more expensive parts, such as parsers, than it had may repeat
-  // arbitrarily expensive work. The simplifier may describe an expensive call
-  // by its arguments, such as a field of `ocsf_cast(this)` by the input, in
-  // which case the predicate moves if it reads that field once.
+  // copying it several times multiplies the work. A predicate that copies
+  // expensive parts, such as parsers, may repeat arbitrarily expensive work.
+  // The simplifier may describe an expensive call by its arguments, such as a
+  // field of `ocsf_cast(this)` by the input, in which case the predicate moves
+  // if it reads that field once.
   auto result = split_filter_result{};
   // The reads of computed values by the predicates that moved.
   auto reads = std::map<caf::byte_buffer, size_t>{};
   for (auto& expr : filter) {
     auto computed = std::map<caf::byte_buffer, size_t>{};
+    auto expensive = false;
     auto const counting = ast::FieldSubstitution{
       [&](ast::field_path const& field) -> Option<ast::expression> {
         auto replacement = fields(field);
@@ -140,6 +161,7 @@ auto ir::split_filter_by_substitution(OptimizeFilter filter,
           // cheap computation of only that member, such as `ocsf_cast(this).a`
           // by `_ocsf_cast_field(…)`, so each member counts on its own.
           auto const cheap = is_cheap(*replacement, reg);
+          expensive = expensive or not cheap;
           ++computed[computation_key(*replacement, not cheap)];
         }
         return replacement;
@@ -155,7 +177,9 @@ auto ir::split_filter_by_substitution(OptimizeFilter filter,
       return entry.second + (it == reads.end() ? 0 : it->second) > 1;
     });
     if (copied
-        or count_expensive(predicate, reg) > count_expensive(expr, reg)) {
+        or (expensive
+            and count_expensive(predicate, reg)
+                  > count_expensive(without_expensive(expr), reg))) {
       result.dependent.push_back(std::move(expr));
       continue;
     }

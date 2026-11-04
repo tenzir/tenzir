@@ -1029,18 +1029,27 @@ private:
     if (not ir::is_repeatable(args_.scrutinee, reg)) {
       return None{};
     }
-    // The lifted filter compares the scrutinee with every pattern, so it
-    // evaluates the scrutinee once per pattern, and `match` evaluates it
-    // again. An expensive function call, such as a parser, would repeat
-    // expensive work, and so would copying other computations several times.
+    // The lifted filter compares the scrutinee with every pattern, once for a
+    // constant and twice for a range, and `match` evaluates it again. An
+    // expensive function call, such as a parser, would repeat expensive work,
+    // and so would copying other computations several times.
     if (not ir::is_plain(args_.scrutinee)) {
-      auto patterns = size_t{0};
+      auto comparisons = size_t{0};
       for (auto const& arm : args_.arms) {
-        if (not arm.wildcard) {
-          patterns += arm.patterns.size();
+        if (arm.wildcard) {
+          continue;
+        }
+        for (auto const& pattern : arm.patterns) {
+          comparisons += pattern.kind.match(
+            [](MatchPattern::Range const&) {
+              return size_t{2};
+            },
+            [](auto const&) {
+              return size_t{1};
+            });
         }
       }
-      if (not ir::is_cheap(args_.scrutinee, reg) or patterns > 1) {
+      if (not ir::is_cheap(args_.scrutinee, reg) or comparisons > 1) {
         return None{};
       }
     }

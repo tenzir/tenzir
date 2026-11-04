@@ -476,6 +476,19 @@ TEST("substitution does not copy expensive function calls") {
     parse_chain({R"(x.replace("a", "b") == "c")"}), test::builtin_registry(),
     call);
   CHECK(split.independent.empty());
+  // An expensive part that the substitution makes constant does not make up
+  // for one that it copies.
+  auto const mixed
+    = [](ast::field_path const& field) -> Option<ast::expression> {
+    if (field.path().front().id.name == "x") {
+      return parse(R"("[1]")");
+    }
+    return parse("raw.parse_json()");
+  };
+  split = ir::split_filter_by_substitution(
+    parse_chain({"y.foo == 1 and x.parse_json() == [1]"}),
+    test::builtin_registry(), mixed);
+  CHECK(split.independent.empty());
   // A cheap function call counts as a computed value.
   auto const conversion
     = [](ast::field_path const&) -> Option<ast::expression> {
