@@ -89,6 +89,15 @@ struct LockedPackage {
 auto locked_packages(std::filesystem::path const& root, diagnostic_handler& dh)
   -> failure_or<std::vector<LockedPackage>> {
   auto path = root / lockfile_name;
+  auto ec = std::error_code{};
+  if (not std::filesystem::exists(path, ec)) {
+    if (ec) {
+      diagnostic::error("{}", ec).note("while checking {}", path).emit(dh);
+      return failure::promise();
+    }
+    // Whether something needed a lock shows once the packages are loaded.
+    return std::vector<LockedPackage>{};
+  }
   TRY(auto yaml, read_yaml(path, dh));
   auto refuse
     = [&](std::string_view why) -> failure_or<std::vector<LockedPackage>> {
@@ -203,7 +212,62 @@ auto local_package_directories(std::filesystem::path const& root,
   return result;
 }
 
+/// Loads a package from `files`, failing when one of them does not parse,
+/// rather than leaving it out as `package::load` does.
+auto load_whole(package_files const& files, std::string_view origin,
+                std::string_view default_id, diagnostic_handler& dh,
+                bool only_entities) -> failure_or<package> {
+  auto tracking = ErrorTracking{dh};
+  auto loaded
+    = package::load(files, origin, default_id, tracking, only_entities);
+  if (not loaded or tracking.erred()) {
+    return failure::promise();
+  }
+  return loaded;
+}
+
+/// Whether the `package.yaml` in `dir` is a workspace's. One that does not
+/// read counts as a workspace's, so that loading it says why.
+auto holds_workspace_manifest(std::filesystem::path const& dir) -> bool {
+  auto yaml = load_yaml(dir / manifest_name);
+  return not yaml or not is_package_manifest(*yaml);
+}
+
+/// Fails unless every package that `workspace` or one of its packages uses
+/// is among its packages: a local one, or one its lock pins.
+auto require_loaded(Workspace const& workspace,
+                    std::filesystem::path const& root, diagnostic_handler& dh)
+  -> failure_or<void> {
+  auto reported = std::unordered_set<std::string>{};
+  auto check = [&](PackageDependencies const& dependencies) {
+    for (auto const& [id, _] : dependencies) {
+      auto loaded
+        = std::ranges::any_of(workspace.packages, [&](package const& pkg) {
+            return pkg.id == id;
+          });
+      if (not loaded and reported.insert(id).second) {
+        diagnostic::error("`{}` is neither a local package nor locked", id)
+          .hint("run `tenzir-platform package lock` in {}", root)
+          .emit(dh);
+      }
+    }
+  };
+  check(workspace.dependencies);
+  for (auto const& pkg : workspace.packages) {
+    check(pkg.dependencies);
+  }
+  if (not reported.empty()) {
+    return failure::promise();
+  }
+  return {};
+}
+
 } // namespace
+
+auto is_package_manifest(data const& manifest) -> bool {
+  auto const* fields = try_as<record>(&manifest);
+  return fields and fields->find("name") != fields->end();
+}
 
 auto workspace_dependencies(data const& manifest, std::string_view origin,
                             diagnostic_handler& dh)
@@ -245,14 +309,10 @@ auto workspace_dependencies(data const& manifest, std::string_view origin,
 auto load_workspace_package(package_files const& files, std::string_view origin,
                             std::string_view id, diagnostic_handler& dh,
                             bool only_entities) -> failure_or<package> {
-  auto tracking = ErrorTracking{dh};
-  auto loaded = package::load(files, origin, id, tracking, only_entities);
-  if (not loaded or tracking.erred()) {
-    return failure::promise();
-  }
-  if (loaded->id != id) {
+  TRY(auto loaded, load_whole(files, origin, id, dh, only_entities));
+  if (loaded.id != id) {
     diagnostic::error("the package says its id is `{}`, but it is `{}` here",
-                      loaded->id, id)
+                      loaded.id, id)
       .note("in {}", origin)
       .emit(dh);
     return failure::promise();
@@ -281,7 +341,19 @@ auto find_workspace(std::filesystem::path const& from)
   -> Option<std::filesystem::path> {
   auto ec = std::error_code{};
   for (auto dir = from; not dir.empty(); dir = dir.parent_path()) {
-    if (std::filesystem::exists(dir / lockfile_name, ec)) {
+    if (std::filesystem::exists(dir / manifest_name, ec)) {
+      if (holds_workspace_manifest(dir)) {
+        return dir;
+      }
+      // A package under a workspace's `packages/` belongs to that workspace,
+      // and any other one is a root of its own.
+      auto parent = dir.parent_path();
+      auto workspace = parent.parent_path();
+      if (parent.filename() == local_directory
+          and std::filesystem::exists(workspace / manifest_name, ec)
+          and holds_workspace_manifest(workspace)) {
+        return workspace;
+      }
       return dir;
     }
     if (dir == dir.parent_path()) {
@@ -309,26 +381,43 @@ auto load_workspace(std::filesystem::path const& root, diagnostic_handler& dh)
   auto result = Workspace{};
   // Without a manifest, the workspace lists nothing.
   auto manifest = root / manifest_name;
+  auto yaml = data{};
   auto ec = std::error_code{};
   if (std::filesystem::exists(manifest, ec)) {
-    TRY(auto yaml, read_yaml(manifest, dh));
-    TRY(result.dependencies,
-        workspace_dependencies(yaml, manifest.string(), dh));
+    TRY(yaml, read_yaml(manifest, dh));
   } else if (ec) {
     diagnostic::error("{}", ec).note("while checking {}", manifest).emit(dh);
     return failure::promise();
   }
-  // The packages written in the workspace, each named by its directory.
-  TRY(auto locals, local_package_directories(root, dh));
-  for (auto const& dir : locals) {
-    TRY(auto local, load_workspace_package(dir, dir.filename().string(), dh,
-                                           /*only_entities=*/true));
-    result.packages.push_back(std::move(local));
+  if (is_package_manifest(yaml)) {
+    // A package of its own, whose pipelines may name it and what it uses.
+    // Its manifest may name it, and its directory does otherwise.
+    auto dir = root.lexically_normal();
+    if (dir.filename().empty()) {
+      dir = dir.parent_path();
+    }
+    TRY(auto files, read_package_files(dir, dh, /*only_entities=*/true));
+    TRY(auto self, load_whole(files, dir.string(), dir.filename().string(), dh,
+                              /*only_entities=*/true));
+    result.dependencies = self.dependencies;
+    result.dependencies.emplace(self.id, PackageDependency{});
+    result.packages.push_back(std::move(self));
+  } else {
+    TRY(result.dependencies,
+        workspace_dependencies(yaml, manifest.string(), dh));
+    // The packages written in the workspace, each named by its directory.
+    TRY(auto locals, local_package_directories(root, dh));
+    for (auto const& dir : locals) {
+      TRY(auto local, load_workspace_package(dir, dir.filename().string(), dh,
+                                             /*only_entities=*/true));
+      result.packages.push_back(std::move(local));
+    }
   }
   // The packages the lock pins, which the package manager unpacked into the
   // cache under their hashes.
   TRY(auto locked, locked_packages(root, dh));
   if (locked.empty()) {
+    TRY(require_loaded(result, root, dh));
     return result;
   }
   auto cache = package_cache_directory();
@@ -343,8 +432,7 @@ auto load_workspace(std::filesystem::path const& root, diagnostic_handler& dh)
     if (std::ranges::any_of(result.packages, [&](package const& local) {
           return local.id == entry.id;
         })) {
-      diagnostic::error("`{}` is both locked and a local package of the "
-                        "workspace",
+      diagnostic::error("`{}` is both locked and a package of the workspace",
                         entry.id)
         .emit(dh);
       return failure::promise();
@@ -363,6 +451,7 @@ auto load_workspace(std::filesystem::path const& root, diagnostic_handler& dh)
                                              /*only_entities=*/true));
     result.packages.push_back(std::move(fetched));
   }
+  TRY(require_loaded(result, root, dh));
   return result;
 }
 

@@ -118,12 +118,80 @@ TEST("workspaces come with the unified command interface") {
   }
 }
 
-TEST("a workspace is where its lock is") {
+TEST("a workspace is found the way Cargo finds one") {
   auto scratch = Scratch{};
   write_workspace(scratch);
-  auto found = find_workspace(scratch.root / "ws" / "pipelines");
-  REQUIRE(found);
-  CHECK_EQUAL(*found, scratch.root / "ws");
+  scratch.write("ws/vendor/other/package.yaml", "name: Other\n");
+  scratch.write("repo/acme/package.yaml", "name: Acme\n");
+  // The workspace found from `from`, or an empty path for none.
+  auto found_from = [&](std::filesystem::path const& from) {
+    std::filesystem::create_directories(scratch.root / from);
+    auto found = find_workspace(scratch.root / from);
+    return found ? *found : std::filesystem::path{};
+  };
+  // The workspace's own manifest, and that of a package under its
+  // `packages/`, which belongs to it.
+  CHECK_EQUAL(found_from("ws/pipelines"), scratch.root / "ws");
+  CHECK_EQUAL(found_from("ws/packages/myteam/operators"), scratch.root / "ws");
+  // Any other package is a workspace of its own.
+  CHECK_EQUAL(found_from("ws/vendor/other"),
+              scratch.root / "ws" / "vendor" / "other");
+  CHECK_EQUAL(found_from("repo/acme/operators"),
+              scratch.root / "repo" / "acme");
+}
+
+TEST("a package of its own uses itself and what it locks") {
+  auto scratch = Scratch{};
+  auto cache = Env{"XDG_CACHE_HOME", (scratch.root / "cache").string()};
+  scratch.write("repo/tools/package.yaml", "name: Tools\n"
+                                           "dependencies:\n"
+                                           "  acme: \"^1\"\n");
+  scratch.write("repo/tools/operators/twice.tql",
+                "acme::double | acme::double");
+  auto dh = collecting_diagnostic_handler{};
+  // Not locked yet: the error says what to run.
+  CHECK(not load_workspace(scratch.root / "repo" / "tools", dh));
+  auto unlocked = std::move(dh).collect();
+  REQUIRE(not unlocked.empty());
+  CHECK(unlocked.front().message.contains("nor locked"));
+  scratch.write("repo/tools/package.lock",
+                fmt::format("format: 1\n"
+                            "packages:\n"
+                            "  - id: acme\n"
+                            "    version: 1.2.0\n"
+                            "    git: https://example.com/library.git\n"
+                            "    commit: abc\n"
+                            "    hash: sha256:{}\n",
+                            acme_hash));
+  scratch.write(fmt::format("cache/tenzir/packages/{}/package.yaml", acme_hash),
+                "name: Acme\n");
+  scratch.write(fmt::format("cache/tenzir/packages/{}/operators/double.tql",
+                            acme_hash),
+                "x = x * 2");
+  auto loaded_dh = collecting_diagnostic_handler{};
+  auto workspace = load_workspace(scratch.root / "repo" / "tools", loaded_dh);
+  REQUIRE(workspace);
+  CHECK_EQUAL(workspace->packages.size(), size_t{2});
+  auto reg = test::builtin_registry().clone();
+  auto prelude = add_workspace_packages(
+    *reg, workspace->dependencies, workspace->packages, loaded_dh, nullptr);
+  REQUIRE(prelude);
+  CHECK(test::compile_errors(*reg, *prelude,
+                             "from {x: 1} | tools::twice | acme::double "
+                             "| discard")
+          .empty());
+}
+
+TEST("a workspace that needs nothing locked needs no lock") {
+  auto scratch = Scratch{};
+  scratch.write("ws/package.yaml", "dependencies:\n"
+                                   "  myteam: {path: packages/myteam}\n");
+  scratch.write("ws/packages/myteam/package.yaml", "name: My Team\n");
+  scratch.write("ws/packages/myteam/operators/twice.tql", "x = x * 2");
+  auto dh = collecting_diagnostic_handler{};
+  auto workspace = load_workspace(scratch.root / "ws", dh);
+  REQUIRE(workspace);
+  CHECK_EQUAL(workspace->packages.size(), size_t{1});
 }
 
 TEST("a workspace's manifest lists only its dependencies") {

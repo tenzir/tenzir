@@ -22,6 +22,16 @@ namespace tenzir {
 // the same for `tenzir` run in it and for a deployment of it. `tenzir` looks
 // for a workspace only with the unified command interface (`unified_mode`),
 // and uses the one that `tenzir.workspace` names in any case.
+//
+// A workspace is found the way Cargo finds one. A `package.yaml` that is a
+// workspace's lists only its `dependencies`, and makes its directory one. A
+// package's has a `name`. The package belongs to the workspace whose
+// `packages/` it is under, and is otherwise a workspace of its own, which
+// holds just the package and what it uses.
+
+/// Whether `manifest`, the contents of a `package.yaml`, is a package's
+/// rather than a workspace's: a package has a `name`.
+auto is_package_manifest(data const& manifest) -> bool;
 
 /// What a workspace's `package.yaml` lists, from its contents: its
 /// `dependencies`, and nothing else. A workspace is no package: nothing calls
@@ -59,17 +69,19 @@ auto add_workspace_packages(registry& reg,
                             diagnostic_handler& dh, SourceMap* source_map)
   -> failure_or<ExternPrelude>;
 
-/// A directory with a `package.lock`: pipelines run in it may use the packages
-/// its `package.yaml` lists, the way a deployment of it would.
+/// Pipelines run in a workspace use the packages it lists, the way a
+/// deployment of it would.
 struct Workspace {
-  /// What its pipelines may use.
+  /// What its pipelines may use: what a workspace lists, or a package of its
+  /// own and what it uses.
   PackageDependencies dependencies;
-  /// Its local packages under `packages/`, and every package its lock pins.
+  /// The package of its own, or the local packages under `packages/`, and
+  /// every package its lock pins.
   std::vector<package> packages;
 };
 
-/// The workspace `from` lies in: the nearest directory at or above it that
-/// holds a `package.lock`.
+/// The workspace `from` lies in: the directory of the nearest `package.yaml`
+/// at or above it, or of the workspace that package belongs to.
 auto find_workspace(std::filesystem::path const& from)
   -> Option<std::filesystem::path>;
 
@@ -79,8 +91,9 @@ auto find_workspace(std::filesystem::path const& from)
 /// fills it; the engine only reads it.
 auto package_cache_directory() -> Option<std::filesystem::path>;
 
-/// Loads the workspace at `root`: its dependencies, its local packages, and
-/// the packages its lock pins, from the cache.
+/// Loads the workspace at `root`: its dependencies, its own packages, and the
+/// packages its lock pins, from the cache. Without a lock, it fails only when
+/// something needs a package that it would pin.
 auto load_workspace(std::filesystem::path const& root, diagnostic_handler& dh)
   -> failure_or<Workspace>;
 
