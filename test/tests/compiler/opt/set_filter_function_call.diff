@@ -1,0 +1,215 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "export",
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:290..296 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+-        
++        binary_expr {
++          left: root_field {
++            id: `x` @ [1]:389..390 from 0,
++            has_question_mark: false
++          },
++          op: "eq",
++          right: constant int64 1 @ [1]:394..395 from 0,
++          location: [1]:389..395 from 0
++        },
++        binary_expr {
++          left: function_call {
++            fn: {
++              path: [
++                `ip` @ [1]:303..305 from 0
++              ],
++              ref: std::ip/fn
++            },
++            args: [
++              root_field {
++                id: `y` @ [1]:301..302 from 0,
++                has_question_mark: false
++              }
++            ],
++            method: true,
++            location: [1]:301..307 from 0
++          },
++          op: "eq",
++          right: constant ip 192.0.2.1 @ [1]:405..414 from 0,
++          location: [1]:400..414 from 0
++        }
+       ],
+       order: "ordered"
+     },
+     SetIr {
+       assignments: [
+         {
+           left: root_field {
+             id: `a` @ [1]:297..298 from 0,
+             has_question_mark: false
+           },
+           right: function_call {
+             fn: {
+               path: [
+                 `ip` @ [1]:303..305 from 0
+               ],
+               ref: std::ip/fn
+             },
+             args: [
+               root_field {
+                 id: `y` @ [1]:301..302 from 0,
+                 has_question_mark: false
+               }
+             ],
+             method: true,
+             location: [1]:301..307 from 0
+           },
+           location: [1]:297..307 from 0
+         }
+       ],
+       order: "ordered"
+     },
+     SetIr {
+       assignments: [
+         {
+           left: root_field {
+             id: `s` @ [1]:308..309 from 0,
+             has_question_mark: false
+           },
+           right: function_call {
+             fn: {
+               path: [
+                 `parse_syslog` @ [1]:317..329 from 0
+               ],
+               ref: std::parse_syslog/fn
+             },
+             args: [
+               root_field {
+                 id: `line` @ [1]:312..316 from 0,
+                 has_question_mark: false
+               }
+             ],
+             method: true,
+             location: [1]:312..331 from 0
+           },
+           location: [1]:308..331 from 0
+         }
+       ],
+       order: "ordered"
+     },
+     where_ir {
+       op: {
+         path: [
+-          `where` @ [1]:332..337 from 0
++          
+         ],
+-        ref: std::where/op
++        ref: unresolved
+       },
+       args: [
+-        expression binary_expr {
++        Incomplete binary_expr {
+           left: binary_expr {
+             left: field_access {
+               left: root_field {
+                 id: `s` @ [1]:338..339 from 0,
+                 has_question_mark: false
+               },
+               has_question_mark: false,
+               name: `app_name` @ [1]:340..348 from 0,
+               location: [1]:338..348 from 0
+             },
+             op: "eq",
+             right: constant string "sshd" @ [1]:352..358 from 0,
+             location: [1]:338..358 from 0
+           },
+           op: "or_",
+           right: binary_expr {
+             left: field_access {
+               left: root_field {
+                 id: `s` @ [1]:362..363 from 0,
+                 has_question_mark: false
+               },
+               has_question_mark: false,
+               name: `app_name` @ [1]:364..372 from 0,
+               location: [1]:362..372 from 0
+             },
+             op: "eq",
+             right: constant string "cron" @ [1]:376..382 from 0,
+             location: [1]:362..382 from 0
+           },
+           location: [1]:338..382 from 0
+         }
+       ],
+       named_args: [
+         
+       ]
+     },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:383..388 from 0
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:414..414 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
+         ],
+-        ref: std::where/op
++        named_args: [
++          
++        ]
+       },
+-      args: [
+-        expression binary_expr {
+-          left: binary_expr {
+-            left: root_field {
+-              id: `x` @ [1]:389..390 from 0,
+-              has_question_mark: false
+-            },
+-            op: "eq",
+-            right: constant int64 1 @ [1]:394..395 from 0,
+-            location: [1]:389..395 from 0
+-          },
+-          op: "and_",
+-          right: binary_expr {
+-            left: root_field {
+-              id: `a` @ [1]:400..401 from 0,
+-              has_question_mark: false
+-            },
+-            op: "eq",
+-            right: constant ip 192.0.2.1 @ [1]:405..414 from 0,
+-            location: [1]:400..414 from 0
+-          },
+-          location: [1]:389..414 from 0
+-        }
++      filter: [
++        
+       ],
+-      named_args: [
+-        
+-      ]
++      order: "ordered"
+     }
+   ],
+   definition_location: [1]:290..414 from 0
+ }

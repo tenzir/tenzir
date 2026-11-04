@@ -1,0 +1,170 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "export",
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:171..177 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
+     },
+     Match {
+       match_keyword: [1]:178..183 from 0,
+       scrutinee: root_field {
+         id: `kind` @ [1]:184..188 from 0,
+         has_question_mark: false
+       },
+       arms: [
+         {
+           source: [1]:193..196 from 0,
+           pattern_exprs: [
+             {
+               kind: expression_pattern {
+                 expr: constant string "a" @ [1]:193..196 from 0
+               }
+             }
+           ],
+           patterns: [
+             {
+               kind: Constant {
+                 value: string "a"
+               }
+             }
+           ],
+           guard: function_call {
+             fn: {
+               path: [
+                 `match_regex` @ [1]:202..213 from 0
+               ],
+               ref: std::match_regex/fn
+             },
+             args: [
+               root_field {
+                 id: `v` @ [1]:200..201 from 0,
+                 has_question_mark: false
+               },
+               constant string "^b+$" @ [1]:214..220 from 0
+             ],
+             method: true,
+             location: [1]:200..221 from 0
+           },
+           pipeline: {
+             lets: [
+               
+             ],
+             operators: [
+               where_ir {
+                 op: {
+                   path: [
+-                    `where` @ [1]:227..232 from 0
++                    
+                   ],
+-                  ref: std::where/op
++                  ref: unresolved
+                 },
+                 args: [
+-                  expression binary_expr {
++                  Incomplete binary_expr {
+                     left: root_field {
+                       id: `x` @ [1]:233..234 from 0,
+                       has_question_mark: false
+                     },
+                     op: "eq",
+                     right: constant int64 1 @ [1]:238..239 from 0,
+                     location: [1]:233..239 from 0
+                   }
+                 ],
+                 named_args: [
+                   
+                 ]
+               }
+             ],
+             definition_location: [1]:227..239 from 0
+           },
+           wildcard: false
+         },
+         {
+           source: [1]:244..245 from 0,
+           pattern_exprs: [
+             
+           ],
+           patterns: [
+             
+           ],
+           pipeline: {
+             lets: [
+               
+             ],
+             operators: [
+               where_ir {
+                 op: {
+                   path: [
+-                    `where` @ [1]:251..256 from 0
++                    
+                   ],
+-                  ref: std::where/op
++                  ref: unresolved
+                 },
+                 args: [
+-                  expression binary_expr {
++                  Incomplete binary_expr {
+                     left: root_field {
+                       id: `x` @ [1]:257..258 from 0,
+                       has_question_mark: false
+                     },
+                     op: "eq",
+                     right: constant int64 2 @ [1]:262..263 from 0,
+                     location: [1]:257..263 from 0
+                   }
+                 ],
+                 named_args: [
+                   
+                 ]
+               }
+             ],
+             definition_location: [1]:251..263 from 0
+           },
+           wildcard: true
+         }
+       ]
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:267..267 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ],
+   definition_location: [1]:171..267 from 0
+ }

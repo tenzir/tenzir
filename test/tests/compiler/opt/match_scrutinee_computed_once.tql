@@ -1,0 +1,7 @@
+// With a single pattern, the arm filters of a `match` with a computed scrutinee
+// move in front of it, which computes the scrutinee only once more.
+export
+match y + 1 {
+  1 => { where x == 1 }
+  _ => { where x == 2 }
+}

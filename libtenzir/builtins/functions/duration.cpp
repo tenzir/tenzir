@@ -74,6 +74,10 @@ public:
     return true;
   }
 
+  auto is_cheap() const -> bool override {
+    return true;
+  }
+
   auto describe() const -> nova::FunctionDescription override {
     auto d = nova::FunctionDescriber<DurationArgs, DurationFunction>{};
     d.positional("x", &DurationArgs::x, "string");
@@ -249,6 +253,10 @@ public:
     return true;
   }
 
+  auto is_cheap() const -> bool override {
+    return true;
+  }
+
   auto describe() const -> nova::FunctionDescription override {
     auto d
       = nova::FunctionDescriber<IntoDurationArgs, IntoDurationFunction<T>>{};
@@ -385,6 +393,10 @@ public:
   }
 
   auto is_deterministic() const -> bool override {
+    return true;
+  }
+
+  auto is_cheap() const -> bool override {
     return true;
   }
 

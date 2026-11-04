@@ -337,6 +337,10 @@ public:
     return true;
   }
 
+  auto is_cheap() const -> bool override {
+    return true;
+  }
+
   auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto x = ast::expression{};
@@ -369,6 +373,10 @@ public:
   }
 
   auto is_deterministic() const -> bool override {
+    return true;
+  }
+
+  auto is_cheap() const -> bool override {
     return true;
   }
 
@@ -413,6 +421,10 @@ public:
   }
 
   auto is_deterministic() const -> bool override {
+    return true;
+  }
+
+  auto is_cheap() const -> bool override {
     return true;
   }
 

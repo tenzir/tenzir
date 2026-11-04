@@ -8,6 +8,7 @@
 
 #include "tenzir/pushdown/sql.hpp"
 
+#include "tenzir/detail/string.hpp"
 #include "tenzir/pushdown/aggregation.hpp"
 #include "tenzir/pushdown/read.hpp"
 #include "tenzir/ref.hpp"
@@ -441,8 +442,9 @@ private:
       TRY(auto rendered, value(arg));
       args.push_back(std::move(rendered));
     }
-    TRY(auto text, dialect_->render_call(ref.segments().front(), args));
-    return Fragment{std::move(text)};
+    auto const& name = ref.segments().front();
+    TRY(auto text, dialect_->render_call(name, args));
+    return Fragment{std::move(text), dialect_->call_is_predicate(name)};
   }
 
   auto render(ast::expression const& expr) const -> Option<Fragment> {
@@ -479,6 +481,7 @@ public:
   PlanBuilder(SqlRelation relation, SqlQueryDialect const& dialect)
     : dialect_{dialect},
       from_{std::move(relation.from)},
+      from_alias_{std::move(relation.alias)},
       input_{std::move(relation.fields)} {
   }
 
@@ -515,11 +518,35 @@ private:
     };
   }
 
+  /// Returns whether `name` may name something that the query introduces.
+  static auto is_reserved(std::string_view name) -> bool {
+    constexpr auto prefix = std::string_view{"__tenzir_"};
+    return name.size() >= prefix.size()
+           and detail::ascii_icase_equal(name.substr(0, prefix.size()), prefix);
+  }
+
+  /// Spells `*` for the relation of the current level, qualified with its
+  /// name, which the relation gets if it has none.
+  auto qualified_star() -> std::string {
+    if (not from_alias_) {
+      auto name = relation_alias("source");
+      from_ = fmt::format("{} AS {}", from_, dialect_->quote_identifier(name));
+      from_alias_ = std::move(name);
+    }
+    return fmt::format("{}.*", dialect_->quote_identifier(*from_alias_));
+  }
+
   /// Introduces a column name for the query.
   auto alias(std::string_view kind) -> std::string {
-    auto result = fmt::format("__tenzir_{}_{}", kind, aliases_.size());
+    auto result = relation_alias(kind);
     aliases_.push_back(result);
     return result;
+  }
+
+  /// Introduces a name for a relation of the query. A relation may share its
+  /// name with a column, so the name is no alias that may collide.
+  auto relation_alias(std::string_view kind) -> std::string {
+    return fmt::format("__tenzir_{}_{}", kind, names_++);
   }
 
   /// Spells the field at `path` of the input of the current level.
@@ -527,6 +554,12 @@ private:
     if (not input_) {
       // A column that a drop excluded is gone.
       if (not path.empty() and std::ranges::contains(excluded_, path.front())) {
+        return None{};
+      }
+      // The query introduces names that start with `__tenzir_`, such as the
+      // name of a relation, which a target may resolve where the table has no
+      // column of that name.
+      if (not path.empty() and is_reserved(path.front())) {
         return None{};
       }
       return dialect_->bind_field(path);
@@ -567,7 +600,9 @@ private:
         order.emplace_back(column, descending);
       }
       if (not selection_) {
-        selection_ = std::vector<std::string>{"*"};
+        // Some dialects, such as MySQL, accept `*` next to other expressions
+        // only when it names its relation.
+        selection_ = std::vector<std::string>{qualified_star()};
       }
       selection_->append_range(std::move(keys));
       // A derived table has no order of its own, unless the order decides
@@ -577,8 +612,10 @@ private:
       }
     }
     auto inner = current();
+    auto level = relation_alias("level");
     from_ = fmt::format("({}) AS {}", render_select(inner, *dialect_),
-                        dialect_->quote_identifier(alias("level")));
+                        dialect_->quote_identifier(level));
+    from_alias_ = std::move(level);
     if (projected) {
       input_ = std::move(output_);
     }
@@ -817,10 +854,21 @@ private:
     keys.append_range(std::move(order_keys_));
     order_keys_.clear();
     for (auto& [key, descending] : keys) {
-      if (not std::ranges::contains(order_keys_, key,
-                                    &std::pair<std::string, bool>::first)) {
-        order_keys_.emplace_back(std::move(key), descending);
+      auto const same = [&](auto const& other) {
+        return other.first == key;
+      };
+      if (std::ranges::any_of(order_keys_, same)) {
+        continue;
       }
+      // A target may resolve keys that differ only in case to the same
+      // column, which SQL Server then rejects as a duplicate, or to different
+      // ones, which would need both.
+      if (std::ranges::any_of(order_keys_, [&](auto const& other) {
+            return detail::ascii_icase_equal(other.first, key);
+          })) {
+        return false;
+      }
+      order_keys_.emplace_back(std::move(key), descending);
     }
     order_by_.clear();
     for (auto const& [key, descending] : order_keys_) {
@@ -841,6 +889,8 @@ private:
   Ref<SqlQueryDialect const> dialect_;
   /// The relation of the current level.
   std::string from_;
+  /// The name of the relation of the current level, if it has one.
+  Option<std::string> from_alias_;
   /// The fields of the input of the current level, or `None` if they bind
   /// through the dialect.
   Option<SqlFields> input_;
@@ -859,6 +909,8 @@ private:
   std::vector<std::string> excluded_;
   std::vector<std::string> hidden_;
   std::vector<std::string> aliases_;
+  /// The number of names that the query introduced, including relations.
+  size_t names_ = 0;
   Option<std::string> schema_name_;
 };
 
@@ -909,6 +961,11 @@ auto SqlQueryDialect::render_call(std::string_view name,
   return None{};
 }
 
+auto SqlQueryDialect::call_is_predicate(std::string_view name) const -> bool {
+  TENZIR_UNUSED(name);
+  return false;
+}
+
 auto SqlQueryDialect::render_aggregate(std::string_view name,
                                        Option<std::string> const& arg) const
   -> Option<std::string> {
@@ -949,6 +1006,7 @@ auto supports_post_aggregate_stages(ir::OptimizeAggregation const& aggregation,
   auto relation = SqlRelation{
     .from = "t",
     .fields = aggregate_fields(aggregation),
+    .alias = None{},
   };
   return render_plan(std::move(relation), aggregation.stages, dialect).is_some();
 }
@@ -964,6 +1022,7 @@ auto make_post_aggregate_select(SqlSelect aggregate,
     .from = fmt::format("({}) AS {}", render_select(aggregate, dialect),
                         dialect.quote_identifier("__tenzir_aggregate")),
     .fields = aggregate_fields(aggregation),
+    .alias = "__tenzir_aggregate",
   };
   TRY(auto plan, render_plan(std::move(relation), aggregation.stages, dialect));
   return std::move(plan.select);

@@ -211,6 +211,10 @@ public:
     return true;
   }
 
+  auto is_cheap() const -> bool override {
+    return true;
+  }
+
   auto describe() const -> FunctionDescription override {
     auto d = FunctionDescriber<RoundArgs, RoundFunction<Mode>>{};
     d.positional("x", &RoundArgs::x, "number|duration|time");

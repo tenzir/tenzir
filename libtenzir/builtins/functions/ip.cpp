@@ -67,6 +67,10 @@ public:
     return true;
   }
 
+  auto is_cheap() const -> bool override {
+    return true;
+  }
+
   auto describe() const -> FunctionDescription override {
     auto d = FunctionDescriber<IpArgs, IpFunction>{};
     d.positional("x", &IpArgs::x, "string");
@@ -195,6 +199,10 @@ public:
     return true;
   }
 
+  auto is_cheap() const -> bool override {
+    return true;
+  }
+
   auto describe() const -> FunctionDescription override {
     auto d = FunctionDescriber<IpCheckArgs, IpCheckFunction<CheckType>>{};
     d.positional("x", &IpCheckArgs::x, "ip");
@@ -284,6 +292,10 @@ public:
   }
 
   auto is_deterministic() const -> bool override {
+    return true;
+  }
+
+  auto is_cheap() const -> bool override {
     return true;
   }
 

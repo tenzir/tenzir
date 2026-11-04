@@ -1,0 +1,8 @@
+// Moving the arm filters of a `match` in front compares a computed scrutinee
+// with every pattern, so they stay inside the arms if there are several.
+export
+match y + 1 {
+  1 => { where x == 1 }
+  2 => { where x == 2 }
+  _ => { where x == 3 }
+}

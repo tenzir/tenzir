@@ -741,7 +741,9 @@ auto arm_condition(MatchArgs::Arm const& arm, ast::expression const& scrutinee,
     TENZIR_ASSERT(condition);
     return condition;
   }
-  if (not ir::is_repeatable(*arm.guard, reg)) {
+  // Evaluating the guard again must be cheap, as for the scrutinee.
+  if (not ir::is_repeatable(*arm.guard, reg)
+      or not ir::is_cheap(*arm.guard, reg)) {
     return None{};
   }
   if (not condition) {
@@ -1026,6 +1028,30 @@ private:
     // evaluates them again.
     if (not ir::is_repeatable(args_.scrutinee, reg)) {
       return None{};
+    }
+    // The lifted filter compares the scrutinee with every pattern, once for a
+    // constant and twice for a range, and `match` evaluates it again. An
+    // expensive function call, such as a parser, would repeat expensive work,
+    // and so would copying other computations several times.
+    if (not ir::is_plain(args_.scrutinee)) {
+      auto comparisons = size_t{0};
+      for (auto const& arm : args_.arms) {
+        if (arm.wildcard) {
+          continue;
+        }
+        for (auto const& pattern : arm.patterns) {
+          comparisons += pattern.kind.match(
+            [](MatchPattern::Range const&) {
+              return size_t{2};
+            },
+            [](auto const&) {
+              return size_t{1};
+            });
+        }
+      }
+      if (not ir::is_cheap(args_.scrutinee, reg) or comparisons > 1) {
+        return None{};
+      }
     }
     // Every arm but the wildcard arm, which takes the remaining events, needs
     // a condition. This also makes `are_disjoint` exact for their patterns.
