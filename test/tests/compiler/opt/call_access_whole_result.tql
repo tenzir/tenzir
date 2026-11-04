@@ -1,0 +1,6 @@
+// Accesses of the whole result keep the call.
+export
+where drop_matching(this, "x") == null
+where select_matching(this, "x") == null
+where ocsf_cast(this) == null
+where ocsf_derive(this) == {}

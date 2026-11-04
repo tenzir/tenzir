@@ -23,8 +23,8 @@
          ]
        },
        filter: [
--        
--      ],
+         
+       ],
 -      order: "ordered"
 -    },
 -    where_ir {
@@ -36,28 +36,7 @@
 -      },
 -      args: [
 -        expression binary_expr {
-+        binary_expr {
-           left: root_field {
-             id: `severity` @ [1]:217..225 from 0,
-             has_question_mark: false
-           },
-           op: "geq",
-           right: constant int64 3 @ [1]:229..230 from 0,
-           location: [1]:217..230 from 0
-         }
-       ],
--      named_args: [
--        
--      ]
--    },
--    summarize {
--      self: [1]:231..240 from 0,
--      cfg: {
--        aggregates: [
--          {
--            dest: {
--              expr: root_field {
--                id: `events` @ [1]:249..255 from 0,
+-          left: root_field {
 +      order: "ordered",
 +      projection: [
 +        {
@@ -88,9 +67,12 @@
 +        },
 +        {
 +          expr: root_field {
-+            id: `severity` @ [1]:217..225 from 0,
-+            has_question_mark: false
-+          },
+             id: `severity` @ [1]:217..225 from 0,
+             has_question_mark: false
+           },
+-          op: "geq",
+-          right: constant int64 3 @ [1]:229..230 from 0,
+-          location: [1]:217..230 from 0
 +          has_this: false,
 +          path: [
 +            {
@@ -98,182 +80,50 @@
 +              has_question_mark: false
 +            }
 +          ]
-+        }
-+      ],
-+      aggregation: {
-+        columns: [
-+          {
-+            output: [
-+              "src_ip"
-+            ],
-+            input: [
-+              "src_ip"
-+            ]
-+          },
-+          {
-+            output: [
-+              "events"
-+            ],
-+            function: "count"
-+          },
-+          {
-+            output: [
-+              "first",
-+              "seen"
-+            ],
-+            function: "min",
-+            input: [
-+              "ts"
-+            ]
-+          }
-+        ],
-+        schema_name: "tenzir.summarize",
-+        fallback: {
-+          lets: [
-+            
-+          ],
-+          operators: [
-+            summarize {
-+              self: [1]:231..240 from 0,
-+              cfg: {
-+                aggregates: [
-+                  {
-+                    dest: {
-+                      expr: root_field {
-+                        id: `events` @ [1]:249..255 from 0,
-+                        has_question_mark: false
-+                      },
-+                      has_this: false,
-+                      path: [
-+                        {
-+                          id: `events` @ [1]:249..255 from 0,
-+                          has_question_mark: false
-+                        }
-+                      ]
-+                    },
-+                    call: {
-+                      fn: {
-+                        path: [
-+                          `count` @ [1]:256..261 from 0
-+                        ],
-+                        ref: std::count/fn
-+                      },
-+                      args: [
-+                        
-+                      ],
-+                      method: false,
-+                      location: [1]:256..263 from 0
-+                    }
-+                  },
-+                  {
-+                    dest: {
-+                      expr: field_access {
-+                        left: root_field {
-+                          id: `first` @ [1]:265..270 from 0,
-+                          has_question_mark: false
-+                        },
-+                        has_question_mark: false,
-+                        name: `seen` @ [1]:271..275 from 0,
-+                        location: [1]:265..275 from 0
-+                      },
-+                      has_this: false,
-+                      path: [
-+                        {
-+                          id: `first` @ [1]:265..270 from 0,
-+                          has_question_mark: false
-+                        },
-+                        {
-+                          id: `seen` @ [1]:271..275 from 0,
-+                          has_question_mark: false
-+                        }
-+                      ]
-+                    },
-+                    call: {
-+                      fn: {
-+                        path: [
-+                          `min` @ [1]:276..279 from 0
-+                        ],
-+                        ref: std::min/fn
-+                      },
-+                      args: [
-+                        root_field {
-+                          id: `ts` @ [1]:280..282 from 0,
-+                          has_question_mark: false
-+                        }
-+                      ],
-+                      method: false,
-+                      location: [1]:276..283 from 0
-+                    }
-+                  }
-+                ],
-+                groups: [
-+                  {
-+                    expr: {
-+                      expr: root_field {
-+                        id: `src_ip` @ [1]:241..247 from 0,
-+                        has_question_mark: false
-+                      },
-+                      has_this: false,
-+                      path: [
-+                        {
-+                          id: `src_ip` @ [1]:241..247 from 0,
-+                          has_question_mark: false
-+                        }
-+                      ]
-+                    }
-+                  }
-+                ],
-+                indices: [
-+                  -1,
-+                  0,
-+                  1
-+                ],
-+                emission: "final",
-+                mode: "reset",
-+                output: "summary",
-+                emit_every: 1
-+              }
-+            },
-+            where_ir {
-+              op: {
-+                path: [
-+                  
-+                ],
-+                ref: unresolved
-+              },
-+              args: [
-+                Incomplete binary_expr {
-+                  left: root_field {
-+                    id: `events` @ [1]:290..296 from 0,
-+                    has_question_mark: false
-+                  },
-+                  op: "geq",
-+                  right: constant int64 10 @ [1]:300..302 from 0,
-+                  location: [1]:290..302 from 0
-+                }
-+              ],
-+              named_args: [
-+                
-+              ]
-+            }
-+          ],
-+          definition_location: [0]:0..0 from 0
-+        },
-+        stages: [
-+          Filter {
-+            predicate: binary_expr {
-+              left: root_field {
-+                id: `events` @ [1]:290..296 from 0,
-                 has_question_mark: false
-               },
+         }
+       ],
+-      named_args: [
+-        
+-      ]
+-    },
+-    summarize {
+-      self: [1]:231..240 from 0,
+-      cfg: {
+-        aggregates: [
+-          {
+-            dest: {
+-              expr: root_field {
+-                id: `events` @ [1]:249..255 from 0,
+-                has_question_mark: false
+-              },
 -              has_this: false,
 -              path: [
 -                {
 -                  id: `events` @ [1]:249..255 from 0,
 -                  has_question_mark: false
 -                }
--              ]
--            },
++      plan: [
++        Filter {
++          predicate: binary_expr {
++            left: root_field {
++              id: `severity` @ [1]:217..225 from 0,
++              has_question_mark: false
++            },
++            op: "geq",
++            right: constant int64 3 @ [1]:229..230 from 0,
++            location: [1]:217..230 from 0
++          }
++        },
++        Aggregate {
++          columns: [
++            {
++              output: [
++                "src_ip"
++              ],
++              input: [
++                "src_ip"
+               ]
+             },
 -            call: {
 -              fn: {
 -                path: [
@@ -283,7 +133,10 @@
 -              },
 -              args: [
 -                
--              ],
++            {
++              output: [
++                "events"
+               ],
 -              method: false,
 -              location: [1]:256..263 from 0
 -            }
@@ -310,7 +163,8 @@
 -                  has_question_mark: false
 -                }
 -              ]
--            },
++              function: "count"
+             },
 -            call: {
 -              fn: {
 -                path: [
@@ -323,14 +177,15 @@
 -                  id: `ts` @ [1]:280..282 from 0,
 -                  has_question_mark: false
 -                }
--              ],
++            {
++              output: [
++                "first",
++                "seen"
+               ],
 -              method: false,
 -              location: [1]:276..283 from 0
-+              op: "geq",
-+              right: constant int64 10 @ [1]:300..302 from 0,
-+              location: [1]:290..302 from 0
-             }
-           }
+-            }
+-          }
 -        ],
 -        groups: [
 -          {
@@ -345,9 +200,24 @@
 -                  id: `src_ip` @ [1]:241..247 from 0,
 -                  has_question_mark: false
 -                }
--              ]
--            }
--          }
++              function: "min",
++              input: [
++                "ts"
+               ]
+             }
++          ],
++          schema_name: "tenzir.summarize"
++        },
++        Filter {
++          predicate: binary_expr {
++            left: root_field {
++              id: `events` @ [1]:290..296 from 0,
++              has_question_mark: false
++            },
++            op: "geq",
++            right: constant int64 10 @ [1]:300..302 from 0,
++            location: [1]:290..302 from 0
+           }
 -        ],
 -        indices: [
 -          -1,
@@ -358,13 +228,29 @@
 -        mode: "reset",
 -        output: "summary",
 -        emit_every: 1
-+        ]
-       }
-     },
+-      }
+-    },
 -    where_ir {
 -      op: {
 -        path: [
 -          `where` @ [1]:284..289 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
+-          left: root_field {
+-            id: `events` @ [1]:290..296 from 0,
+-            has_question_mark: false
+-          },
+-          op: "geq",
+-          right: constant int64 10 @ [1]:300..302 from 0,
+-          location: [1]:290..302 from 0
+         }
+       ],
+-      named_args: [
++      declined: "`to_stdout` is no stage"
++    },
 +    GenericIr {
 +      desc: "to_stdout",
 +      store: {
@@ -376,28 +262,15 @@
 +        },
 +        args: [
 +          
-         ],
--        ref: std::where/op
++        ],
 +        named_args: [
 +          
 +        ]
-       },
--      args: [
--        expression binary_expr {
--          left: root_field {
--            id: `events` @ [1]:290..296 from 0,
--            has_question_mark: false
--          },
--          op: "geq",
--          right: constant int64 10 @ [1]:300..302 from 0,
--          location: [1]:290..302 from 0
--        }
++      },
 +      filter: [
-+        
-       ],
--      named_args: [
--        
+         
 -      ]
++      ],
 +      order: "ordered"
      }
    ],

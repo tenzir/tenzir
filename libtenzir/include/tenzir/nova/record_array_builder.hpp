@@ -33,10 +33,16 @@ public:
     friend class ArrayBuilder;
     friend class EventBuilder;
     explicit RecordBuilder(ArrayBuilder* parent);
+    /// Adds `name` to the open row and fixes its position there. If the row
+    /// does not write the field, it becomes null when the row is finished.
+    auto reserve_field(std::string_view name) -> void;
     /// Returns the slot for `name` in the open row. If the row already holds
-    /// the field, removes its value and stores it in `previous`.
+    /// a value for the field, removes it and stores it in `previous`.
     auto take_field(std::string_view name, Option<Data>& previous)
       -> FieldBuilder;
+    /// Adds `name` to the open row's fields unless the row already lists it,
+    /// creating the field if needed, and returns its index.
+    auto join_row(std::string_view name) -> storage::Index;
     /// Returns the record that the open row holds for `name`, if it is still
     /// being built.
     auto open_record_field(std::string_view name) -> Option<RecordBuilder>;

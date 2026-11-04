@@ -1,0 +1,144 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "export",
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:74..80 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+-        
++        binary_expr {
++          left: function_call {
++            fn: {
++              path: [
++                `_ocsf_cast_field` @ [1]:88..103 from 0
++              ],
++              ref: std::_ocsf_cast_field/fn
++            },
++            args: [
++              field_access {
++                left: root_field {
++                  id: `metadata` @ [1]:88..103 from 0,
++                  has_question_mark: true
++                },
++                has_question_mark: true,
++                name: `version` @ [1]:88..103 from 0,
++                location: [1]:88..103 from 0
++              },
++              root_field {
++                id: `class_uid` @ [1]:88..103 from 0,
++                has_question_mark: true
++              },
++              field_access {
++                left: root_field {
++                  id: `metadata` @ [1]:88..103 from 0,
++                  has_question_mark: true
++                },
++                has_question_mark: true,
++                name: `profiles` @ [1]:88..103 from 0,
++                location: [1]:88..103 from 0
++              },
++              field_access {
++                left: root_field {
++                  id: `metadata` @ [1]:88..103 from 0,
++                  has_question_mark: true
++                },
++                has_question_mark: true,
++                name: `extensions` @ [1]:88..103 from 0,
++                location: [1]:88..103 from 0
++              },
++              root_field {
++                id: `activity_id` @ [1]:88..103 from 0,
++                has_question_mark: true
++              },
++              constant vector [string "activity_id"] @ [1]:88..103 from 0,
++              constant vector [] @ [1]:88..103 from 0
++            ],
++            method: false,
++            location: [1]:88..103 from 0
++          },
++          op: "eq",
++          right: constant int64 1 @ [1]:125..126 from 0,
++          location: [1]:110..126 from 0
++        }
+       ],
+       order: "ordered"
+     },
+     SetIr {
+       assignments: [
+         {
+           left: this_ [1]:81..85 from 0,
+           right: function_call {
+             fn: {
+               path: [
+                 `ocsf_cast` @ [1]:88..97 from 0
+               ],
+               ref: std::ocsf_cast/fn
+             },
+             args: [
+               this_ [1]:98..102 from 0
+             ],
+             method: false,
+             location: [1]:88..103 from 0
+           },
+           location: [1]:81..103 from 0
+         }
+       ],
+       order: "ordered"
+     },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:104..109 from 0
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:126..126 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
+         ],
+-        ref: std::where/op
++        named_args: [
++          
++        ]
+       },
+-      args: [
+-        expression binary_expr {
+-          left: root_field {
+-            id: `activity_id` @ [1]:110..121 from 0,
+-            has_question_mark: false
+-          },
+-          op: "eq",
+-          right: constant int64 1 @ [1]:125..126 from 0,
+-          location: [1]:110..126 from 0
+-        }
++      filter: [
++        
+       ],
+-      named_args: [
+-        
+-      ]
++      order: "ordered"
+     }
+   ],
+   definition_location: [1]:74..126 from 0
+ }

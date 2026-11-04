@@ -1,0 +1,390 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "export",
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:124..130 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+-        
++        binary_expr {
++          left: function_call {
++            fn: {
++              path: [
++                `_ocsf_cast_field` @ [1]:135..150 from 0
++              ],
++              ref: std::_ocsf_cast_field/fn
++            },
++            args: [
++              field_access {
++                left: root_field {
++                  id: `metadata` @ [1]:135..150 from 0,
++                  has_question_mark: true
++                },
++                has_question_mark: true,
++                name: `version` @ [1]:135..150 from 0,
++                location: [1]:135..150 from 0
++              },
++              root_field {
++                id: `class_uid` @ [1]:135..150 from 0,
++                has_question_mark: true
++              },
++              field_access {
++                left: root_field {
++                  id: `metadata` @ [1]:135..150 from 0,
++                  has_question_mark: true
++                },
++                has_question_mark: true,
++                name: `profiles` @ [1]:135..150 from 0,
++                location: [1]:135..150 from 0
++              },
++              field_access {
++                left: root_field {
++                  id: `metadata` @ [1]:135..150 from 0,
++                  has_question_mark: true
++                },
++                has_question_mark: true,
++                name: `extensions` @ [1]:135..150 from 0,
++                location: [1]:135..150 from 0
++              },
++              root_field {
++                id: `observables` @ [1]:135..150 from 0,
++                has_question_mark: true
++              },
++              constant vector [string "observables"] @ [1]:135..150 from 0,
++              constant vector [] @ [1]:135..150 from 0
++            ],
++            method: false,
++            location: [1]:135..150 from 0
++          },
++          op: "eq",
++          right: constant none_t {} @ [1]:174..178 from 0,
++          location: [1]:157..178 from 0
++        },
++        binary_expr {
++          left: function_call {
++            fn: {
++              path: [
++                `_ocsf_cast_field` @ [1]:183..220 from 0
++              ],
++              ref: std::_ocsf_cast_field/fn
++            },
++            args: [
++              field_access {
++                left: root_field {
++                  id: `metadata` @ [1]:183..220 from 0,
++                  has_question_mark: true
++                },
++                has_question_mark: true,
++                name: `version` @ [1]:183..220 from 0,
++                location: [1]:183..220 from 0
++              },
++              root_field {
++                id: `class_uid` @ [1]:183..220 from 0,
++                has_question_mark: true
++              },
++              field_access {
++                left: root_field {
++                  id: `metadata` @ [1]:183..220 from 0,
++                  has_question_mark: true
++                },
++                has_question_mark: true,
++                name: `profiles` @ [1]:183..220 from 0,
++                location: [1]:183..220 from 0
++              },
++              field_access {
++                left: root_field {
++                  id: `metadata` @ [1]:183..220 from 0,
++                  has_question_mark: true
++                },
++                has_question_mark: true,
++                name: `extensions` @ [1]:183..220 from 0,
++                location: [1]:183..220 from 0
++              },
++              root_field {
++                id: `time` @ [1]:183..220 from 0,
++                has_question_mark: true
++              },
++              constant vector [string "time"] @ [1]:183..220 from 0,
++              constant vector [string "timestamp_to_ms"] @ [1]:183..220 from 0
++            ],
++            method: false,
++            location: [1]:183..220 from 0
++          },
++          op: "eq",
++          right: constant time 2026-01-01T00:00:00Z @ [1]:237..247 from 0,
++          location: [1]:227..247 from 0
++        },
++        binary_expr {
++          left: function_call {
++            fn: {
++              path: [
++                `_ocsf_cast_field` @ [1]:252..289 from 0
++              ],
++              ref: std::_ocsf_cast_field/fn
++            },
++            args: [
++              field_access {
++                left: root_field {
++                  id: `metadata` @ [1]:252..289 from 0,
++                  has_question_mark: true
++                },
++                has_question_mark: true,
++                name: `version` @ [1]:252..289 from 0,
++                location: [1]:252..289 from 0
++              },
++              root_field {
++                id: `class_uid` @ [1]:252..289 from 0,
++                has_question_mark: true
++              },
++              field_access {
++                left: root_field {
++                  id: `metadata` @ [1]:252..289 from 0,
++                  has_question_mark: true
++                },
++                has_question_mark: true,
++                name: `profiles` @ [1]:252..289 from 0,
++                location: [1]:252..289 from 0
++              },
++              field_access {
++                left: root_field {
++                  id: `metadata` @ [1]:252..289 from 0,
++                  has_question_mark: true
++                },
++                has_question_mark: true,
++                name: `extensions` @ [1]:252..289 from 0,
++                location: [1]:252..289 from 0
++              },
++              field_access {
++                left: root_field {
++                  id: `unmapped` @ [1]:252..289 from 0,
++                  has_question_mark: true
++                },
++                has_question_mark: true,
++                name: `foo` @ [1]:252..289 from 0,
++                location: [1]:252..289 from 0
++              },
++              constant vector [string "unmapped", string "foo"] @ [1]:252..289 from 0,
++              constant vector [string "encode_variants"] @ [1]:252..289 from 0
++            ],
++            method: false,
++            location: [1]:252..289 from 0
++          },
++          op: "eq",
++          right: constant int64 1 @ [1]:314..315 from 0,
++          location: [1]:296..315 from 0
++        }
+       ],
+       order: "ordered"
+     },
+     SetIr {
+       assignments: [
+         {
+           left: root_field {
+             id: `x` @ [1]:131..132 from 0,
+             has_question_mark: false
+           },
+           right: function_call {
+             fn: {
+               path: [
+                 `ocsf_cast` @ [1]:135..144 from 0
+               ],
+               ref: std::ocsf_cast/fn
+             },
+             args: [
+               this_ [1]:145..149 from 0
+             ],
+             method: false,
+             location: [1]:135..150 from 0
+           },
+           location: [1]:131..150 from 0
+         }
+       ],
+       order: "ordered"
+     },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:151..156 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
+-          left: field_access {
+-            left: root_field {
+-              id: `x` @ [1]:157..158 from 0,
+-              has_question_mark: false
+-            },
+-            has_question_mark: false,
+-            name: `observables` @ [1]:159..170 from 0,
+-            location: [1]:157..170 from 0
+-          },
+-          op: "eq",
+-          right: constant none_t {} @ [1]:174..178 from 0,
+-          location: [1]:157..178 from 0
+-        }
+-      ],
+-      named_args: [
+-        
+-      ]
+-    },
+     SetIr {
+       assignments: [
+         {
+           left: root_field {
+             id: `y` @ [1]:179..180 from 0,
+             has_question_mark: false
+           },
+           right: function_call {
+             fn: {
+               path: [
+                 `ocsf_cast` @ [1]:183..192 from 0
+               ],
+               ref: std::ocsf_cast/fn
+             },
+             args: [
+               this_ [1]:193..197 from 0,
+               assignment {
+                 left: root_field {
+                   id: `timestamp_to_ms` @ [1]:199..214 from 0,
+                   has_question_mark: false
+                 },
+                 right: constant bool true @ [1]:215..219 from 0,
+                 location: [1]:199..219 from 0
+               }
+             ],
+             method: false,
+             location: [1]:183..220 from 0
+           },
+           location: [1]:179..220 from 0
+         }
+       ],
+       order: "ordered"
+-    },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:221..226 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
+-          left: field_access {
+-            left: root_field {
+-              id: `y` @ [1]:227..228 from 0,
+-              has_question_mark: false
+-            },
+-            has_question_mark: false,
+-            name: `time` @ [1]:229..233 from 0,
+-            location: [1]:227..233 from 0
+-          },
+-          op: "eq",
+-          right: constant time 2026-01-01T00:00:00Z @ [1]:237..247 from 0,
+-          location: [1]:227..247 from 0
+-        }
+-      ],
+-      named_args: [
+-        
+-      ]
+     },
+     SetIr {
+       assignments: [
+         {
+           left: root_field {
+             id: `z` @ [1]:248..249 from 0,
+             has_question_mark: false
+           },
+           right: function_call {
+             fn: {
+               path: [
+                 `ocsf_cast` @ [1]:252..261 from 0
+               ],
+               ref: std::ocsf_cast/fn
+             },
+             args: [
+               this_ [1]:262..266 from 0,
+               assignment {
+                 left: root_field {
+                   id: `encode_variants` @ [1]:268..283 from 0,
+                   has_question_mark: false
+                 },
+                 right: constant bool true @ [1]:284..288 from 0,
+                 location: [1]:268..288 from 0
+               }
+             ],
+             method: false,
+             location: [1]:252..289 from 0
+           },
+           location: [1]:248..289 from 0
+         }
+       ],
+       order: "ordered"
+     },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:290..295 from 0
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:315..315 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
+         ],
+-        ref: std::where/op
++        named_args: [
++          
++        ]
+       },
+-      args: [
+-        expression binary_expr {
+-          left: field_access {
+-            left: field_access {
+-              left: root_field {
+-                id: `z` @ [1]:296..297 from 0,
+-                has_question_mark: false
+-              },
+-              has_question_mark: false,
+-              name: `unmapped` @ [1]:298..306 from 0,
+-              location: [1]:296..306 from 0
+-            },
+-            has_question_mark: false,
+-            name: `foo` @ [1]:307..310 from 0,
+-            location: [1]:296..310 from 0
+-          },
+-          op: "eq",
+-          right: constant int64 1 @ [1]:314..315 from 0,
+-          location: [1]:296..315 from 0
+-        }
+-      ],
+-      named_args: [
++      filter: [
+         
+-      ]
++      ],
++      order: "ordered"
+     }
+   ],
+   definition_location: [1]:124..315 from 0
+ }

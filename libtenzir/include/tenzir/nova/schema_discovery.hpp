@@ -21,6 +21,15 @@ namespace tenzir::nova {
 auto refine_null_types(type const& lhs, type const& rhs)
   -> Result<type, std::string>;
 
+/// Replaces the `null` parts of the discovered type `discovered` with the
+/// corresponding parts of `reference`, such as a registered schema. Records
+/// match fields by name, and only parts that are `null` change, so field sets,
+/// field order, and concrete types stay as discovered. The filled-in parts
+/// carry no names or attributes, enumerations become strings like the events
+/// that a schema produces, and other types that events cannot hold stay
+/// `null`.
+auto fill_null_types(type const& discovered, type const& reference) -> type;
+
 /// Discovers types from columns, constructing each distinct type once. Rows
 /// only carry type IDs; scalar values never participate in discovery.
 ///

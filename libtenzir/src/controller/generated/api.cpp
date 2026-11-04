@@ -1898,6 +1898,29 @@ auto parse_adhoc_pipeline_id(simdjson::dom::element value)
   return AdhocPipelineId::make(std::move(raw));
 }
 
+auto to_string(Encoding value) -> std::string_view {
+  switch (value) {
+    case Encoding::json:
+      return "json";
+    case Encoding::typed_json:
+      return "typed_json";
+  }
+  TENZIR_UNREACHABLE();
+}
+
+auto parse_encoding(simdjson::dom::element value)
+  -> Result<Encoding, ParseError> {
+  TRY(auto raw, api::string_of(value, "Encoding"));
+  if (raw == "json") {
+    return Encoding::json;
+  }
+  if (raw == "typed_json") {
+    return Encoding::typed_json;
+  }
+  return Err{ParseError{
+    "Encoding", fmt::format("`{}` is not one of json, typed_json", raw)}};
+}
+
 auto parse_adhoc_pipeline_definition(simdjson::dom::element value)
   -> Result<AdhocPipelineDefinition, ParseError> {
   TRY(auto object, api::object_of(value, "AdhocPipelineDefinition"));
@@ -1911,8 +1934,14 @@ auto parse_adhoc_pipeline_definition(simdjson::dom::element value)
   TRY(auto definition,
       api::string_of(definition_raw, "AdhocPipelineDefinition.definition"));
 
+  auto encoding = Option<Encoding>{None{}};
+  if (auto encoding_raw = api::optional_field(object, "encoding")) {
+    TRY(auto encoding_present, parse_encoding(*encoding_raw));
+    encoding = std::move(encoding_present);
+  }
+
   return AdhocPipelineDefinition{std::move(adhoc_pipeline_id),
-                                 std::move(definition)};
+                                 std::move(definition), std::move(encoding)};
 }
 
 // ── Encoding ────────────────────────────────────────────────────────────────
@@ -2662,13 +2691,32 @@ auto write_json(AdhocPipelineId const& value, std::string& out) -> void {
   api::write_string(value.to_string(), out);
 }
 
+auto write_json(Encoding const& value, std::string& out) -> void {
+  api::write_string(to_string(value), out);
+}
+
 auto write_json(AdhocPipelineDefinition const& value, std::string& out)
   -> void {
   out += '{';
+  auto field_separator = "";
+  out += field_separator;
+  field_separator = ",";
   out += "\"adhocPipelineId\":";
   write_json(value.adhoc_pipeline_id, out);
-  out += ",\"definition\":";
+  out += field_separator;
+  field_separator = ",";
+  out += "\"definition\":";
   api::write_string(value.definition, out);
+  if (value.encoding) {
+    out += field_separator;
+    field_separator = ",";
+    out += "\"encoding\":";
+    if (value.encoding) {
+      write_json(*value.encoding, out);
+    } else {
+      out += "null";
+    }
+  }
   out += '}';
 }
 

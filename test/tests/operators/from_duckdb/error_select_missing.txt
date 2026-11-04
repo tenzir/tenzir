@@ -1,0 +1,10 @@
+error: Binder Error: Referenced column "missing" not found in FROM clause!
+Candidate bindings: "id"
+
+LINE 1: SELECT "id" AS "__tenzir_column_0", "missing" AS "__tenzir_column_1" FROM (SELECT "id" FROM...
+                                            ^^^^^^^^^
+ --> tests/operators/from_duckdb/error_select_missing.tql:7:1
+  |
+7 | from_duckdb env("DUCKDB_SEED"), table="events"
+  | ^^^^^^^^^^^
+  |

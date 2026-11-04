@@ -498,3 +498,38 @@ TEST("predicates that could fail stay behind the ones that stay") {
   CHECK_EQUAL(render_chain(split.dependent),
               render_filter({"c", "x.slice(stride=-1) == \"\""}));
 }
+
+TEST("simplify reads fields of call results from the arguments") {
+  // `drop_matching` keeps or drops every top-level field by its name.
+  CHECK_EQUAL(simplify("drop_matching(this, \"^x\").a == 1"), render("a == 1"));
+  CHECK_EQUAL(simplify("drop_matching(this, \"^x\").a.b?"), render("a.b?"));
+  CHECK_EQUAL(simplify("drop_matching(this, \"^x\").xa == 1"), render("false"));
+  CHECK_EQUAL(simplify("drop_matching(this, \"^x\").xa != 1"), render("true"));
+  CHECK_EQUAL(simplify("1 == select_matching(y, \"^a\").a"),
+              render("1 == y.a"));
+  CHECK_EQUAL(simplify("not (select_matching(this, \"^a\").a in [1, 2])"),
+              render("not (a in [1, 2])"));
+  // A conditional in an argument stays in the field it reads.
+  CHECK_EQUAL(simplify("select_matching({a: 1} if c else {a: 2}, \".*\").a "
+                       "== 2"),
+              render("({a: 1} if c else {a: 2}).a == 2"));
+}
+
+TEST("simplify keeps fields of call results that it cannot rewrite") {
+  // Omitting a call whose argument could fail would hide its error.
+  CHECK(
+    simplify("select_matching(slice(s, stride=-1), \"^keep$\").gone != \"x\"")
+      .contains("select_matching"));
+  // The rewrite applies to predicates only, not to lambdas and arguments.
+  CHECK_EQUAL(
+    simplify("xs.where(x => drop_matching(this, \"^x\").a == 1).length() > 0"),
+    render("xs.where(x => drop_matching(this, \"^x\").a == 1).length() > 0"));
+  CHECK_EQUAL(simplify("string(drop_matching(this, \"^x\").a == 1) == "
+                       "\"true\""),
+              render("string(drop_matching(this, \"^x\").a == 1) == \"true\""));
+  // An invalid call stays and fails the pipeline.
+  CHECK_EQUAL(simplify("drop_matching(this, \"(\").a == 1"),
+              render("drop_matching(this, \"(\").a == 1"));
+  // A call without a rewrite stays.
+  CHECK_EQUAL(simplify("merge(x, y).a == 1"), render("merge(x, y).a == 1"));
+}

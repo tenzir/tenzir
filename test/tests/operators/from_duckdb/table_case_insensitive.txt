@@ -1,0 +1,9 @@
+{
+  schema_owner: "duckdb",
+}
+{
+  schema_owner: "duckdb",
+}
+{
+  schema_owner: "duckdb",
+}

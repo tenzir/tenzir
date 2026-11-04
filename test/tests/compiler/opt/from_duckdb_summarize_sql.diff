@@ -41,7 +41,8 @@
 +            }
 +          ]
 +        }
-+      ]
++      ],
++      declined: "the query of the user is opaque"
      },
      summarize {
        self: [1]:116..125 from 0,

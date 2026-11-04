@@ -7,6 +7,7 @@
 
 #include "tenzir/active_partition.hpp"
 #include "tenzir/error.hpp"
+#include "tenzir/modules.hpp"
 #include "tenzir/plugin/store.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/taxonomies.hpp"
@@ -28,7 +29,8 @@ auto nova_active_partition(
   -> nova_active_partition_actor::behavior_type {
   auto& state = self->state();
   state.self = self;
-  state.conversion.emplace(std::move(name), internal);
+  auto schema = modules::get_schema(name);
+  state.conversion.emplace(std::move(name), internal, std::move(schema));
   state.paths = std::move(paths);
   state.filesystem = std::move(filesystem);
   state.index_opts = std::move(index_opts);

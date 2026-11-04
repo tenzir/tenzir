@@ -397,6 +397,53 @@ TEST("bitmap builder round-trips values across word boundaries") {
   }
 }
 
+TEST("bitmap builder truncate agrees with a bitwise reference") {
+  auto patterns = std::vector<std::function<bool(Index)>>{
+    [](Index) {
+      return true;
+    },
+    [](Index) {
+      return false;
+    },
+    [](Index i) {
+      return i % 3 == 0;
+    },
+    // Equal bits up to the last one keep a long storage-less prefix.
+    [](Index i) {
+      return i >= 150;
+    },
+  };
+  for (auto const& pattern : patterns) {
+    for (auto length : interesting_lengths) {
+      for (auto keep : interesting_lengths) {
+        if (keep > length) {
+          continue;
+        }
+        for (auto kept : {Index{0}, keep}) {
+          auto bits = std::vector<bool>{};
+          auto builder = BitMap::Builder{};
+          for (auto i = Index{0}; i < length; ++i) {
+            bits.push_back(pattern(i));
+            builder.emplace_back(bits.back());
+          }
+          builder.truncate(kept);
+          bits.resize(static_cast<size_t>(kept));
+          CHECK_EQUAL(builder.size(), kept);
+          CHECK_EQUAL(builder.true_count(), count_true(bits));
+          // Appending after a truncation must not resurrect dropped bits.
+          builder.append_n(false, 70);
+          builder.emplace_back(true);
+          bits.insert(bits.end(), 70, false);
+          bits.push_back(true);
+          const auto bm = builder.finish();
+          CHECK_EQUAL(to_vector(bm), bits);
+          CHECK_EQUAL(bm.true_count(), count_true(bits));
+        }
+      }
+    }
+  }
+}
+
 TEST("bitmap and with hand-written expected bits") {
   // The shared fixtures derive their expectations from the `const&,const&`
   // path, so pin one case against literal values instead.

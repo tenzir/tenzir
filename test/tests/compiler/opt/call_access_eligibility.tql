@@ -1,0 +1,7 @@
+// Only predicates rewrite fields of call results: lambdas and function
+// arguments keep them.
+export
+x = drop_matching(this, "^secret_")
+where xs.where(e => x.a == e).length() > 0
+where string(x.a == 1) == "true"
+where (x.a if c else 1) == 1

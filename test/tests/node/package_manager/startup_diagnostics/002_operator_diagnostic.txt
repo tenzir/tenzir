@@ -1,0 +1,5 @@
+error: expected expression, got `:`
+ --> inputs/package-startup-diagnostics/broken/operators/broken.tql:1:7
+1 | from {:event_code: "broken"}
+  |       ^ got `:`
+error: failed to parse operator `broken` in package `brokenpkg`

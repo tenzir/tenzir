@@ -48,13 +48,20 @@ Database source operators should use this common query surface:
   queries against system catalogs.
 - If a backend supports polling or incremental reads, use `live` and
   `tracking_column` for that API.
-- In `table` mode, act on the optimizer's filter, limit, and projection hints
-  by rewriting the generated query, following `from_clickhouse`. Push only
-  predicates whose backend semantics match TQL, including for nulls, type
-  mismatches, and `NaN`, and evaluate the rest locally. Leave a user-provided
-  `sql` query untouched.
-- The shared pushdown translation (`tenzir/pushdown/`) sanctions a few
-  approximations, which are not bugs:
+- In `table` mode, take over the stages that follow the operator through the
+  stage contract (`ir::QueryStage`, `Describer::query_plan`, and
+  `pushdown::render_plan`), following `from_duckdb`. Absorbed stages leave the
+  pipeline and run with the backend's native semantics, which may differ from
+  TQL for nulls, collations, `NaN`, and type coercion; document the
+  differences on the operator's reference page. Accept the longest prefix that
+  the backend spells, offer `pushdown=false` through `add_pushdown_argument`,
+  and leave a user-provided `sql` query untouched.
+- Sources that still use the older filter, limit, and aggregation hints, such
+  as `from_clickhouse`, push only predicates whose backend semantics match
+  TQL, including for nulls, type mismatches, and `NaN`, and evaluate the rest
+  locally, until they move to the stage contract.
+- For the older hints, the shared pushdown translation (`tenzir/pushdown/`)
+  sanctions a few approximations, which are not bugs:
   - Case-insensitive matching uses the backend's lowercase mapping
     (`Operation::fold_case`), which differs from TQL's case folding on rare
     characters such as `ß`.

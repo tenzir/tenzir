@@ -1,0 +1,59 @@
+warning: required field `activity_id` is missing
+ --> tests/functions/ocsf_cast/filter_profiles_leaf.tql:8:30
+  |
+8 | this = {id: metadata.uid, r: ocsf_cast(this)}
+  |                              ~~~~~~~~~~~~~~~
+  |
+
+warning: required field `category_uid` is missing
+ --> tests/functions/ocsf_cast/filter_profiles_leaf.tql:8:30
+  |
+8 | this = {id: metadata.uid, r: ocsf_cast(this)}
+  |                              ~~~~~~~~~~~~~~~
+  |
+
+warning: required field `metadata.product` is missing
+ --> tests/functions/ocsf_cast/filter_profiles_leaf.tql:8:30
+  |
+8 | this = {id: metadata.uid, r: ocsf_cast(this)}
+  |                              ~~~~~~~~~~~~~~~
+  |
+
+warning: required field `severity_id` is missing
+ --> tests/functions/ocsf_cast/filter_profiles_leaf.tql:8:30
+  |
+8 | this = {id: metadata.uid, r: ocsf_cast(this)}
+  |                              ~~~~~~~~~~~~~~~
+  |
+
+warning: required field `time` is missing
+ --> tests/functions/ocsf_cast/filter_profiles_leaf.tql:8:30
+  |
+8 | this = {id: metadata.uid, r: ocsf_cast(this)}
+  |                              ~~~~~~~~~~~~~~~
+  |
+
+warning: required field `type_uid` is missing
+ --> tests/functions/ocsf_cast/filter_profiles_leaf.tql:8:30
+  |
+8 | this = {id: metadata.uid, r: ocsf_cast(this)}
+  |                              ~~~~~~~~~~~~~~~
+  |
+
+warning: required field `user` is missing
+ --> tests/functions/ocsf_cast/filter_profiles_leaf.tql:8:30
+  |
+8 | this = {id: metadata.uid, r: ocsf_cast(this)}
+  |                              ~~~~~~~~~~~~~~~
+  |
+
+warning: class "Authentication" needs at least one of `service`, `dst_endpoint`, but has none
+ --> tests/functions/ocsf_cast/filter_profiles_leaf.tql:8:30
+  |
+8 | this = {id: metadata.uid, r: ocsf_cast(this)}
+  |                              ~~~~~~~~~~~~~~~
+  |
+{
+  id: "2",
+  expected: true,
+}

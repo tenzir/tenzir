@@ -1,0 +1,8 @@
+// Inequality is `true` for events that the cast drops, so it keeps guards
+// that fold to constants.
+export
+class_uid = 3002
+metadata = {version: "1.5.0"}
+src_endpoint.hostname = Computer
+this = ocsf_cast(this)
+where src_endpoint.hostname != "dc01"

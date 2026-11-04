@@ -1,0 +1,11 @@
+id: healthy
+name: Healthy sibling
+operators:
+  good:
+    definition: where true
+pipelines:
+  main:
+    definition: |
+      from {x: 1}
+      healthy::good
+      discard

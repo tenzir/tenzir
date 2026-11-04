@@ -1,0 +1,5 @@
+error: `constants.tql` may only contain `let` bindings
+ --> <packages/badconstants/constants.tql>:1:1
+1 | pass
+  | ^^^^
+  = note: in package `badconstants`

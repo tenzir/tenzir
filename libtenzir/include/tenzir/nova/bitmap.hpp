@@ -74,7 +74,10 @@ public:
     inline auto append_n(bool value, Index count) -> void;
     /// Removes the last bit and returns it.
     inline auto pop_back() -> bool;
+    /// Drops every bit at index `length` and beyond, working a word at a time.
+    inline auto truncate(Index length) -> void;
     inline auto size() const -> Index;
+    inline auto true_count() const -> Index;
     inline auto finish() -> BitMap;
 
   private:
@@ -556,8 +559,38 @@ inline auto BitMap::Builder::pop_back() -> bool {
   return value;
 }
 
+inline auto BitMap::Builder::truncate(Index length) -> void {
+  TENZIR_ASSERT_LEQ(0, length);
+  TENZIR_ASSERT_LEQ(length, length_);
+  if (length == length_) {
+    return;
+  }
+  if (data_builder.size() == 0) {
+    // All implicit bits share one value.
+    true_count_ = true_count_ == length_ ? length : 0;
+    length_ = length;
+    return;
+  }
+  const auto words = (length + bit_mask) >> word_shift;
+  for (auto i = words; i < data_builder.size(); ++i) {
+    true_count_ -= std::popcount(data_builder[i]);
+  }
+  data_builder.truncate(words);
+  if (const auto bits = length & bit_mask; bits != 0) {
+    auto& word = data_builder.back();
+    const auto mask = (Word{1} << bits) - 1;
+    true_count_ -= std::popcount(word & ~mask);
+    word &= mask;
+  }
+  length_ = length;
+}
+
 inline auto BitMap::Builder::size() const -> Index {
   return length_;
+}
+
+inline auto BitMap::Builder::true_count() const -> Index {
+  return true_count_;
 }
 
 inline auto BitMap::Builder::finish() -> BitMap {

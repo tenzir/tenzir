@@ -48,6 +48,74 @@ auto refine_null_types(type const& lhs, type const& rhs)
   return Err{"concrete value types differ"};
 }
 
+namespace {
+
+/// Returns the type that events built according to `reference` have where
+/// every value is present.
+auto event_type(type const& reference) -> type {
+  return match(
+    reference,
+    [](enumeration_type const&) -> type {
+      return type{string_type{}};
+    },
+    [](map_type const&) -> type {
+      return type{null_type{}};
+    },
+    [](secret_type const&) -> type {
+      return type{null_type{}};
+    },
+    [](list_type const& list) -> type {
+      return type{list_type{event_type(list.value_type())}};
+    },
+    [](record_type const& record) -> type {
+      auto fields = std::vector<struct record_type::field>{};
+      fields.reserve(record.num_fields());
+      for (auto const& field : record.fields()) {
+        fields.emplace_back(std::string{field.name}, event_type(field.type));
+      }
+      return type{record_type{fields}};
+    },
+    []<basic_type T>(T const& basic) -> type {
+      return type{basic};
+    });
+}
+
+} // namespace
+
+auto fill_null_types(type const& discovered, type const& reference) -> type {
+  if (is<null_type>(discovered)) {
+    return event_type(reference);
+  }
+  if (auto list = try_as<list_type>(discovered)) {
+    if (auto other = try_as<list_type>(reference)) {
+      return type{
+        list_type{fill_null_types(list->value_type(), other->value_type())}};
+    }
+    return discovered;
+  }
+  if (auto record = try_as<record_type>(discovered)) {
+    auto other = try_as<record_type>(reference);
+    if (not other) {
+      return discovered;
+    }
+    auto fields = std::vector<struct record_type::field>{};
+    fields.reserve(record->num_fields());
+    for (auto const& field : record->fields()) {
+      // Match names exactly, as a field name may itself contain a dot.
+      auto filled = field.type;
+      for (auto const& candidate : other->fields()) {
+        if (candidate.name == field.name) {
+          filled = fill_null_types(field.type, candidate.type);
+          break;
+        }
+      }
+      fields.emplace_back(std::string{field.name}, std::move(filled));
+    }
+    return type{record_type{fields}};
+  }
+  return discovered;
+}
+
 SchemaDiscovery::SchemaDiscovery() {
   std::ignore = intern(type{null_type{}});
 }

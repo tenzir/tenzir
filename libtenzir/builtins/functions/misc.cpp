@@ -1310,6 +1310,35 @@ public:
     return std::move(d).finish();
   }
 
+  auto rewrite_field_access(ast::function_call const& call,
+                            std::span<ast::field_path::segment const> path,
+                            nova::FieldRewriteCtx) const
+    -> Option<std::vector<nova::FieldCase>> override {
+    // The result keeps or drops every top-level field by its name, and a value
+    // other than a record yields `null` like reading a field of it does.
+    // The whole result is the input without some fields.
+    if (path.empty() or call.args.size() != 2) {
+      return None{};
+    }
+    auto const* regex = try_as<ast::constant>(call.args[1]);
+    auto const* text = regex ? try_as<std::string>(regex->value) : nullptr;
+    if (not text) {
+      return None{};
+    }
+    auto compiled = pattern::make(*text);
+    if (not compiled) {
+      return None{};
+    }
+    auto result = std::vector<nova::FieldCase>{};
+    if (compiled->search(path.front().id.name) == select_) {
+      result.push_back({
+        .guard = ast::constant{true, call.get_location()},
+        .value = nova::access_field(call.args[0], path),
+      });
+    }
+    return result;
+  }
+
   auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};

@@ -51,30 +51,16 @@ public:
     return data_builder_.take_last();
   }
 
+  /// Removes the last `count` rows, which must be absent.
   auto pop_absent(storage::Index count) -> void {
-    for (auto i = storage::Index{0}; i < count; ++i) {
-      [[maybe_unused]] const auto present = bit_builder_.pop_back();
-      TENZIR_ASSERT(not present);
+    if (count == 0) {
+      return;
     }
-    if (count > 0) {
-      data_builder_.pop_skipped(count);
-    }
-  }
-
-  /// Removes the absent rows at the end, which a union padded in front of a
-  /// value that is gone.
-  auto pop_trailing_absent() -> void {
-    auto count = storage::Index{0};
-    while (bit_builder_.size() > 0) {
-      if (bit_builder_.pop_back()) {
-        bit_builder_.emplace_back(true);
-        break;
-      }
-      ++count;
-    }
-    if (count > 0) {
-      data_builder_.pop_skipped(count);
-    }
+    TENZIR_ASSERT_LEQ(count, size());
+    [[maybe_unused]] const auto present = bit_builder_.true_count();
+    bit_builder_.truncate(size() - count);
+    TENZIR_ASSERT_EQ(bit_builder_.true_count(), present);
+    data_builder_.pop_skipped(count);
   }
 
   auto finish() -> MaskedArray<decltype(std::declval<Builder>().finish())> {

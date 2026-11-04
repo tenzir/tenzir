@@ -31,6 +31,18 @@
 -      self: [1]:173..176 from 0,
 -      cfg: {
 -        aggregates: [
+-          {
+-            dest: {
+-              expr: root_field {
+-                id: `count` @ [1]:173..176 from 0,
+-                has_question_mark: false
+-              },
+-              has_this: false,
+-              path: [
+-                {
+-                  id: `count` @ [1]:173..176 from 0,
+-                  has_question_mark: false
+-                }
 +      order: "ordered",
 +      projection: [
 +        {
@@ -47,123 +59,16 @@
 +          ]
 +        }
 +      ],
-+      aggregation: {
-+        columns: [
-           {
--            dest: {
--              expr: root_field {
--                id: `count` @ [1]:173..176 from 0,
--                has_question_mark: false
-+            output: [
-+              "src_ip"
-+            ],
-+            input: [
-+              "src_ip"
-+            ]
-+          },
-+          {
-+            output: [
-+              "count"
-+            ],
-+            function: "count"
-+          }
-+        ],
-+        schema_name: "tenzir.summarize",
-+        fallback: {
-+          lets: [
-+            
-+          ],
-+          operators: [
-+            summarize {
-+              self: [1]:173..176 from 0,
-+              cfg: {
-+                aggregates: [
-+                  {
-+                    dest: {
-+                      expr: root_field {
-+                        id: `count` @ [1]:173..176 from 0,
-+                        has_question_mark: false
-+                      },
-+                      has_this: false,
-+                      path: [
-+                        {
-+                          id: `count` @ [1]:173..176 from 0,
-+                          has_question_mark: false
-+                        }
-+                      ]
-+                    },
-+                    call: {
-+                      fn: {
-+                        path: [
-+                          `count` @ [1]:173..176 from 0
-+                        ],
-+                        ref: std::count/fn
-+                      },
-+                      args: [
-+                        
-+                      ],
-+                      method: false,
-+                      location: [1]:173..176 from 0
-+                    }
-+                  }
-+                ],
-+                groups: [
-+                  {
-+                    expr: {
-+                      expr: root_field {
-+                        id: `src_ip` @ [1]:177..183 from 0,
-+                        has_question_mark: false
-+                      },
-+                      has_this: false,
-+                      path: [
-+                        {
-+                          id: `src_ip` @ [1]:177..183 from 0,
-+                          has_question_mark: false
-+                        }
-+                      ]
-+                    }
-+                  }
-+                ],
-+                indices: [
-+                  -1,
-+                  0
-+                ],
-+                emission: "final",
-+                mode: "reset",
-+                output: "summary",
-+                emit_every: 1
-+              }
-+            },
-+            sort {
-+              args: {
-+                op: {
-+                  path: [
-+                    `sort` @ [1]:173..176 from 0
-+                  ],
-+                  ref: unresolved
-+                },
-+                args: [
-+                  expression unary_expr {
-+                    op: "neg",
-+                    expr: root_field {
-+                      id: `count` @ [1]:173..176 from 0,
-+                      has_question_mark: false
-+                    },
-+                    location: [1]:173..176 from 0
-+                  }
-+                ],
-+                named_args: [
-+                  
-+                ]
-               },
--              has_this: false,
--              path: [
--                {
--                  id: `count` @ [1]:173..176 from 0,
--                  has_question_mark: false
--                }
--              ]
-+              limit: 5
++      plan: [
++        Aggregate {
++          columns: [
++            {
++              output: [
++                "src_ip"
++              ],
++              input: [
++                "src_ip"
+               ]
              },
 -            call: {
 -              fn: {
@@ -171,48 +76,18 @@
 -                  `count` @ [1]:173..176 from 0
 -                ],
 -                ref: std::count/fn
-+            GenericIr {
-+              desc: "head",
-+              store: {
-+                op: {
-+                  path: [
-+                    `head` @ [1]:184..188 from 0
-+                  ],
-+                  ref: std::head/op
-+                },
-+                args: [
-+                  located 5 @ [1]:189..190 from 0
-+                ],
-+                named_args: [
-+                  
-+                ]
-               },
+-              },
 -              args: [
-+              filter: [
-                 
+-                
++            {
++              output: [
++                "count"
                ],
 -              method: false,
 -              location: [1]:173..176 from 0
-+              order: "ordered"
++              function: "count"
              }
-+          ],
-+          definition_location: [0]:0..0 from 0
-+        },
-+        stages: [
-+          Sort {
-+            keys: [
-+              {
-+                field: [
-+                  "count"
-+                ],
-+                descending: true
-+              }
-+            ],
-+            bound: 5
-+          },
-+          Limit {
-+            count: 5
-           }
+-          }
 -        ],
 -        groups: [
 -          {
@@ -228,7 +103,17 @@
 -                  has_question_mark: false
 -                }
 -              ]
--            }
++          ],
++          schema_name: "tenzir.summarize"
++        },
++        Sort {
++          keys: [
++            {
++              field: [
++                "count"
++              ],
++              descending: true
+             }
 -          }
 -        ],
 -        indices: [
@@ -246,9 +131,10 @@
 -        op: {
 -          path: [
 -            `sort` @ [1]:173..176 from 0
--          ],
+           ],
 -          ref: unresolved
--        },
++          bound: 5
+         },
 -        args: [
 -          expression unary_expr {
 -            op: "neg",
@@ -261,8 +147,13 @@
 -        ],
 -        named_args: [
 -          
-         ]
-       }
+-        ]
+-      }
++        Limit {
++          count: 5
++        }
++      ],
++      declined: "`to_stdout` is no stage"
      },
      GenericIr {
 -      desc: "head",
@@ -271,10 +162,9 @@
          op: {
            path: [
 -            `head` @ [1]:184..188 from 0
--          ],
--          ref: std::head/op
 +            `to_stdout` @ [1]:190..190 from 0
-+          ],
+           ],
+-          ref: std::head/op
 +          ref: std::to_stdout/op
          },
          args: [

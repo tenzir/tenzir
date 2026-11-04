@@ -8,17 +8,17 @@
        store: {
          op: {
            path: [
-             `from_duckdb` @ [1]:67..78 from 0
+             `from_duckdb` @ [1]:86..97 from 0
            ],
            ref: std::from_duckdb/op
          },
          args: [
-           located "events.duckdb" @ [1]:79..94 from 0
+           located "events.duckdb" @ [1]:98..113 from 0
          ],
          named_args: [
            {
              index: 2,
-             value: located "events" @ [1]:102..110 from 0
+             value: located "events" @ [1]:121..129 from 0
            }
          ]
        },
@@ -30,46 +30,47 @@
 +      projection: [
 +        {
 +          expr: root_field {
-+            id: `src_ip` @ [1]:121..127 from 0,
++            id: `src_ip` @ [1]:140..146 from 0,
 +            has_question_mark: false
 +          },
 +          has_this: false,
 +          path: [
 +            {
-+              id: `src_ip` @ [1]:121..127 from 0,
++              id: `src_ip` @ [1]:140..146 from 0,
 +              has_question_mark: false
 +            }
 +          ]
 +        },
 +        {
 +          expr: root_field {
-+            id: `bytes` @ [1]:139..144 from 0,
++            id: `bytes` @ [1]:158..163 from 0,
 +            has_question_mark: false
 +          },
 +          has_this: false,
 +          path: [
 +            {
-+              id: `bytes` @ [1]:139..144 from 0,
++              id: `bytes` @ [1]:158..163 from 0,
 +              has_question_mark: false
 +            }
 +          ]
 +        }
-+      ]
++      ],
++      declined: "DuckDB cannot spell the stage"
      },
      summarize {
-       self: [1]:111..120 from 0,
+       self: [1]:130..139 from 0,
        cfg: {
          aggregates: [
            {
              dest: {
                expr: root_field {
-                 id: `bytes` @ [1]:129..134 from 0,
+                 id: `bytes` @ [1]:148..153 from 0,
                  has_question_mark: false
                },
                has_this: false,
                path: [
                  {
-                   id: `bytes` @ [1]:129..134 from 0,
+                   id: `bytes` @ [1]:148..153 from 0,
                    has_question_mark: false
                  }
                ]
@@ -77,18 +78,18 @@
              call: {
                fn: {
                  path: [
-                   `sum` @ [1]:135..138 from 0
+                   `sum` @ [1]:154..157 from 0
                  ],
                  ref: std::sum/fn
                },
                args: [
                  root_field {
-                   id: `bytes` @ [1]:139..144 from 0,
+                   id: `bytes` @ [1]:158..163 from 0,
                    has_question_mark: false
                  }
                ],
                method: false,
-               location: [1]:135..145 from 0
+               location: [1]:154..164 from 0
              }
            }
          ],
@@ -96,13 +97,13 @@
            {
              expr: {
                expr: root_field {
-                 id: `src_ip` @ [1]:121..127 from 0,
+                 id: `src_ip` @ [1]:140..146 from 0,
                  has_question_mark: false
                },
                has_this: false,
                path: [
                  {
-                   id: `src_ip` @ [1]:121..127 from 0,
+                   id: `src_ip` @ [1]:140..146 from 0,
                    has_question_mark: false
                  }
                ]
@@ -124,7 +125,7 @@
 +      store: {
 +        op: {
 +          path: [
-+            `to_stdout` @ [1]:145..145 from 0
++            `to_stdout` @ [1]:164..164 from 0
 +          ],
 +          ref: std::to_stdout/op
 +        },
@@ -141,5 +142,5 @@
 +      order: "ordered"
      }
    ],
-   definition_location: [1]:67..145 from 0
+   definition_location: [1]:86..164 from 0
  }

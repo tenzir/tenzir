@@ -152,10 +152,18 @@ private:
         }
       },
       [&](nova::RowView<nova::Int> v) {
-        put_number(options_.style.number, *v);
+        if (options_.stringify_integers) {
+          put_string(options_.style.number, fmt::to_string(*v));
+        } else {
+          put_number(options_.style.number, *v);
+        }
       },
       [&](nova::RowView<nova::UInt> v) {
-        put_number(options_.style.number, *v);
+        if (options_.stringify_integers) {
+          put_string(options_.style.number, fmt::to_string(*v));
+        } else {
+          put_number(options_.style.number, *v);
+        }
       },
       [&](nova::RowView<nova::Float> v) {
         print_double(*v);

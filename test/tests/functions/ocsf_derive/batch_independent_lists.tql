@@ -1,0 +1,13 @@
+// An enum pair with a list ID and a null name stays unchanged, regardless
+// of other events in the batch. Moving the filter ahead of the assignment
+// by substitution must not change the result: `expected` stays true.
+from {xs: [
+  {id: 1, class_uid: 3002, metadata: {version: "1.5.0"}, activity_id: [1], activity_name: ["Logon"]},
+  {id: 2, class_uid: 3002, metadata: {version: "1.5.0"}, activity_id: [1], activity_name: null},
+]}
+unroll xs
+this = xs
+this = {id: id, r: ocsf_derive(this)}
+expected = r.activity_name == null
+where r.activity_name == null
+select id, expected

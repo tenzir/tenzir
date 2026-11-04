@@ -1,5 +1,6 @@
-// A predicate that DuckDB cannot evaluate keeps all rows but stays local, so
-// the operators run locally, with the result of `table_summarize_transforms.tql`.
+// A predicate that DuckDB cannot spell ends the stages that the query takes,
+// so the operators run in the pipeline, with the result of
+// `table_summarize_transforms.tql`.
 from_duckdb env("DUCKDB_SEED"), table="events"
 where id.string() != ""
 select key=ok, id, when=ts, port=meta.port, name

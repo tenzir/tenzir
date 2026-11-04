@@ -1,0 +1,8 @@
+// Fields that need a profile read the event's profiles, which fold, too.
+export
+class_uid = 3002
+metadata = {version: "1.5.0"}
+metadata.profiles = ["host"]
+device.hostname = Computer
+this = ocsf_cast(this)
+where device.hostname == "dc01"

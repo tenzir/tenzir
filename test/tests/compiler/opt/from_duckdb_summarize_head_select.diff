@@ -26,14 +26,33 @@
          
        ],
 -      order: "ordered"
+-    },
+-    SetIr {
+-      assignments: [
 +      order: "ordered",
-+      limit: 10,
 +      projection: [
-+        {
+         {
+-          left: this_ [0]:0..0 from 0,
+-          right: record {
+-            begin: [0]:0..0 from 0,
+-            items: [
+-              
+-            ],
+-            end: [0]:0..0 from 0
+-          },
+-          location: [0]:0..0 from 0
+-        },
+-        {
+-          left: root_field {
 +          expr: root_field {
-+            id: `src_ip` @ [1]:160..166 from 0,
-+            has_question_mark: false
-+          },
+             id: `src_ip` @ [1]:160..166 from 0,
+             has_question_mark: false
+           },
+-          right: root_field {
+-            id: `src_ip` @ [1]:160..166 from 0,
+-            has_question_mark: false
+-          },
+-          location: [1]:160..166 from 0
 +          has_this: false,
 +          path: [
 +            {
@@ -41,47 +60,62 @@
 +              has_question_mark: false
 +            }
 +          ]
-+        }
-+      ]
-     },
-     SetIr {
-       assignments: [
-         {
-           left: this_ [0]:0..0 from 0,
-           right: record {
-             begin: [0]:0..0 from 0,
-             items: [
-               
-             ],
-             end: [0]:0..0 from 0
-           },
-           location: [0]:0..0 from 0
-         },
-         {
-           left: root_field {
-             id: `src_ip` @ [1]:160..166 from 0,
-             has_question_mark: false
-           },
-           right: root_field {
-             id: `src_ip` @ [1]:160..166 from 0,
-             has_question_mark: false
-           },
-           location: [1]:160..166 from 0
          }
        ],
-       order: "ordered"
+-      order: "ordered"
++      plan: [
++        Select {
++          fields: [
++            {
++              output: [
++                "src_ip"
++              ],
++              input: [
++                "src_ip"
++              ]
++            }
++          ]
++        },
++        Limit {
++          count: 10
++        },
++        Aggregate {
++          columns: [
++            {
++              output: [
++                "src_ip"
++              ],
++              input: [
++                "src_ip"
++              ]
++            },
++            {
++              output: [
++                "events"
++              ],
++              function: "count"
++            }
++          ],
++          schema_name: "tenzir.summarize"
++        }
++      ],
++      declined: "`to_stdout` is no stage"
      },
      GenericIr {
-       desc: "head",
+-      desc: "head",
++      desc: "to_stdout",
        store: {
          op: {
            path: [
-             `head` @ [1]:167..171 from 0
+-            `head` @ [1]:167..171 from 0
++            `to_stdout` @ [1]:207..207 from 0
            ],
-           ref: std::head/op
+-          ref: std::head/op
++          ref: std::to_stdout/op
          },
          args: [
-           located 10 @ [1]:172..174 from 0
+-          located 10 @ [1]:172..174 from 0
++          
          ],
          named_args: [
            
@@ -91,87 +125,66 @@
          
        ],
        order: "ordered"
-     },
-     summarize {
-       self: [1]:175..184 from 0,
-       cfg: {
-         aggregates: [
-           {
-             dest: {
-               expr: root_field {
-                 id: `events` @ [1]:193..199 from 0,
-                 has_question_mark: false
-               },
-               has_this: false,
-               path: [
-                 {
-                   id: `events` @ [1]:193..199 from 0,
-                   has_question_mark: false
-                 }
-               ]
-             },
-             call: {
-               fn: {
-                 path: [
-                   `count` @ [1]:200..205 from 0
-                 ],
-                 ref: std::count/fn
-               },
-               args: [
-                 
-               ],
-               method: false,
-               location: [1]:200..207 from 0
-             }
-           }
-         ],
-         groups: [
-           {
-             expr: {
-               expr: root_field {
-                 id: `src_ip` @ [1]:185..191 from 0,
-                 has_question_mark: false
-               },
-               has_this: false,
-               path: [
-                 {
-                   id: `src_ip` @ [1]:185..191 from 0,
-                   has_question_mark: false
-                 }
-               ]
-             }
-           }
-         ],
-         indices: [
-           -1,
-           0
-         ],
-         emission: "final",
-         mode: "reset",
-         output: "summary",
-         emit_every: 1
-       }
-+    },
-+    GenericIr {
-+      desc: "to_stdout",
-+      store: {
-+        op: {
-+          path: [
-+            `to_stdout` @ [1]:207..207 from 0
-+          ],
-+          ref: std::to_stdout/op
-+        },
-+        args: [
-+          
-+        ],
-+        named_args: [
-+          
-+        ]
-+      },
-+      filter: [
-+        
-+      ],
-+      order: "ordered"
+-    },
+-    summarize {
+-      self: [1]:175..184 from 0,
+-      cfg: {
+-        aggregates: [
+-          {
+-            dest: {
+-              expr: root_field {
+-                id: `events` @ [1]:193..199 from 0,
+-                has_question_mark: false
+-              },
+-              has_this: false,
+-              path: [
+-                {
+-                  id: `events` @ [1]:193..199 from 0,
+-                  has_question_mark: false
+-                }
+-              ]
+-            },
+-            call: {
+-              fn: {
+-                path: [
+-                  `count` @ [1]:200..205 from 0
+-                ],
+-                ref: std::count/fn
+-              },
+-              args: [
+-                
+-              ],
+-              method: false,
+-              location: [1]:200..207 from 0
+-            }
+-          }
+-        ],
+-        groups: [
+-          {
+-            expr: {
+-              expr: root_field {
+-                id: `src_ip` @ [1]:185..191 from 0,
+-                has_question_mark: false
+-              },
+-              has_this: false,
+-              path: [
+-                {
+-                  id: `src_ip` @ [1]:185..191 from 0,
+-                  has_question_mark: false
+-                }
+-              ]
+-            }
+-          }
+-        ],
+-        indices: [
+-          -1,
+-          0
+-        ],
+-        emission: "final",
+-        mode: "reset",
+-        output: "summary",
+-        emit_every: 1
+-      }
      }
    ],
    definition_location: [1]:109..207 from 0

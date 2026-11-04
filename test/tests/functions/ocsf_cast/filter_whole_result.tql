@@ -1,0 +1,5 @@
+// A comparison of the whole result keeps the call.
+from {class_uid: 3002, metadata: {version: "1.5.0"}}
+r = ocsf_cast(this)
+where r == null
+select class_uid

@@ -1,0 +1,7 @@
+// With `pushdown=false`, the filter stays in the pipeline and compares as TQL
+// does: the row where `name` is null passes `name != "alpha"`, unlike in
+// `table_filter.tql`.
+from_duckdb env("DUCKDB_SEED"), table="events", pushdown=false
+where name != "alpha"
+where score < 0 or score == null
+select id, name

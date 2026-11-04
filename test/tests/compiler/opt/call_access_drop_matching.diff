@@ -1,0 +1,135 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "export",
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:80..86 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+-        
++        binary_expr {
++          left: root_field {
++            id: `a` @ [1]:131..132 from 0,
++            has_question_mark: false
++          },
++          op: "eq",
++          right: constant int64 1 @ [1]:136..137 from 0,
++          location: [1]:129..137 from 0
++        }
+       ],
+       order: "ordered"
+     },
+     SetIr {
+       assignments: [
+         {
+           left: root_field {
+             id: `x` @ [1]:87..88 from 0,
+             has_question_mark: false
+           },
+           right: function_call {
+             fn: {
+               path: [
+                 `drop_matching` @ [1]:91..104 from 0
+               ],
+               ref: std::drop_matching/fn
+             },
+             args: [
+               this_ [1]:105..109 from 0,
+               constant string "^secret_" @ [1]:111..121 from 0
+             ],
+             method: false,
+             location: [1]:91..122 from 0
+           },
+           location: [1]:87..122 from 0
+         }
+       ],
+       order: "ordered"
+     },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:123..128 from 0
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:162..162 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
+         ],
+-        ref: std::where/op
++        named_args: [
++          
++        ]
+       },
+-      args: [
+-        expression binary_expr {
+-          left: field_access {
+-            left: root_field {
+-              id: `x` @ [1]:129..130 from 0,
+-              has_question_mark: false
+-            },
+-            has_question_mark: false,
+-            name: `a` @ [1]:131..132 from 0,
+-            location: [1]:129..132 from 0
+-          },
+-          op: "eq",
+-          right: constant int64 1 @ [1]:136..137 from 0,
+-          location: [1]:129..137 from 0
+-        }
++      filter: [
++        
+       ],
+-      named_args: [
+-        
+-      ]
+-    },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:138..143 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
+-          left: field_access {
+-            left: root_field {
+-              id: `x` @ [1]:144..145 from 0,
+-              has_question_mark: false
+-            },
+-            has_question_mark: false,
+-            name: `secret_b` @ [1]:146..154 from 0,
+-            location: [1]:144..154 from 0
+-          },
+-          op: "eq",
+-          right: constant none_t {} @ [1]:158..162 from 0,
+-          location: [1]:144..162 from 0
+-        }
+-      ],
+-      named_args: [
+-        
+-      ]
++      order: "ordered"
+     }
+   ],
+   definition_location: [1]:80..162 from 0
+ }
