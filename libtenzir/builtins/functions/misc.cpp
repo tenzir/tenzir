@@ -172,10 +172,6 @@ public:
     return true;
   }
 
-  auto is_cheap() const -> bool override {
-    return true;
-  }
-
   auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     emit_type_of_deprecation(inv.call.get_location(), ctx);

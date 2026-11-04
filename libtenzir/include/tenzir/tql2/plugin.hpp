@@ -157,10 +157,12 @@ public:
 
   virtual auto is_deterministic() const -> bool = 0;
 
-  /// Returns whether a call costs about as much as an arithmetic operator,
-  /// such as a type conversion. The optimizer may then evaluate a call once
-  /// more to move a filter towards the source, which it does not do for
-  /// expensive functions, such as parsers.
+  /// Returns whether a call costs about as much as an arithmetic operator or a
+  /// comparison, such as a type conversion. Its cost must not grow with the
+  /// size of nested values, and it must not build new strings or other large
+  /// values. The optimizer may then evaluate a call once more to move a filter
+  /// towards the source, which it does not do for expensive functions, such as
+  /// parsers.
   virtual auto is_cheap() const -> bool {
     return false;
   }
