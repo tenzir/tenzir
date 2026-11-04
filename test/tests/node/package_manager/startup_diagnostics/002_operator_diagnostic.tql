@@ -2,13 +2,13 @@
 every 10ms {
   from_file env("TENZIR_NODE_STDERR_LOG") { read_lines }
   summarize lines=collect(line)
-  where lines.search("warning: failed to parse operator `broken` in package `brokenpkg`")
+  where lines.search("error: failed to parse operator `broken` in package `brokenpkg`")
 }
 head 1
 unroll lines
 line = lines
-where line.search("warning: expected expression") or line.search("warning: failed to parse operator `broken`") or line.search("operators/broken.tql:") or line.search("1 | from") or line.search("~ got")
-line = line.replace_regex("^.*warning: ", "warning: ")
+where line.search("error: expected expression") or line.search("error: failed to parse operator `broken`") or line.search("operators/broken.tql:") or line.search("1 | from") or line.search("^ got")
+line = line.replace_regex("^.*error: ", "error: ")
 line = line.replace_regex("^ --> .*package-startup-diagnostics/", " --> inputs/package-startup-diagnostics/")
 select line
 write_lines
