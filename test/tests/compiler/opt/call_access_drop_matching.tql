@@ -1,0 +1,5 @@
+// Fields that `drop_matching` keeps read the input, and the others are `null`.
+export
+x = drop_matching(this, "^secret_")
+where x.a == 1
+where x.secret_b == null

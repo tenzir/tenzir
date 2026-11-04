@@ -1,0 +1,8 @@
+---
+error: true
+---
+
+// A rewrite does not drop an argument that fails, like a negative stride for a
+// string.
+from {s: "abc"}
+where select_matching(slice(s, stride=-1), "^keep$").gone != "x"

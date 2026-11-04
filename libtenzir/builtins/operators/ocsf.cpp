@@ -34,6 +34,7 @@
 #include <boost/unordered/unordered_flat_set.hpp>
 
 #include <limits>
+#include <unordered_map>
 
 namespace tenzir::plugins::ocsf {
 namespace {
@@ -716,6 +717,32 @@ struct ocsf_schema {
   std::string mangled_class_name;
 };
 
+/// Returns the schema of the given OCSF version and class, if there is one.
+/// Shared by the runtime and the optimizer, so that both agree on which events
+/// resolve.
+auto find_ocsf_schema(std::string_view version, int64_t class_uid)
+  -> Option<ocsf_schema> {
+  auto parsed_version = parse_ocsf_version(version);
+  if (not parsed_version) {
+    return None{};
+  }
+  auto class_name = ocsf_class_name(*parsed_version, class_uid);
+  if (not class_name) {
+    return None{};
+  }
+  auto mangled_class_name = mangle_class_name(*class_name);
+  auto ty = modules::get_schema(
+    fmt::format("_ocsf.{}.{}", mangle_version(version), mangled_class_name));
+  if (not ty) {
+    return None{};
+  }
+  return ocsf_schema{
+    std::move(*ty),
+    *class_name,
+    std::move(mangled_class_name),
+  };
+}
+
 auto get_ocsf_schema(Option<std::string_view> version,
                      Option<int64_t> class_uid, location self,
                      diagnostic_handler& dh) -> Option<ocsf_schema> {
@@ -747,22 +774,14 @@ auto get_ocsf_schema(Option<std::string_view> version,
       .emit(dh);
     return {};
   }
-  auto mangled_class_name = mangle_class_name(*class_name);
-  auto schema
-    = fmt::format("_ocsf.{}.{}", mangle_version(*version), mangled_class_name);
-  auto ty = modules::get_schema(schema);
-  if (not ty) {
+  auto schema = find_ocsf_schema(*version, *class_uid);
+  if (not schema) {
     diagnostic::warning("could not find schema for the given event")
       .primary(self)
       .note("tried to find version {:?} for class {:?}", *version, *class_name)
       .emit(dh);
-    return {};
   }
-  return ocsf_schema{
-    std::move(*ty),
-    *class_name,
-    std::move(mangled_class_name),
-  };
+  return schema;
 }
 
 auto process_trim_slice(const table_slice& slice, location self,
@@ -1632,6 +1651,56 @@ struct Group {
   storage::BitMap rows;
 };
 
+/// Why `read_ocsf_names` ignored the names of an event.
+enum class NamesProblem {
+  none,
+  not_a_list,
+  not_records,
+  missing_name,
+  not_strings,
+};
+
+/// Reads the names in `metadata.profiles`, or in `metadata.extensions` if
+/// `extension` is set, from `value`. Ignores all names if they are malformed.
+/// Shared by the runtime and the optimizer, so that both agree on which fields
+/// are enabled.
+auto read_ocsf_names(Option<RowView<Data>> value, bool extension)
+  -> std::pair<std::vector<std::string>, NamesProblem> {
+  auto names = std::vector<std::string>{};
+  if (not value or is<RowView<Null>>(*value)) {
+    return {std::move(names), NamesProblem::none};
+  }
+  auto list = try_as<RowView<List>>(*value);
+  if (not list) {
+    return {std::vector<std::string>{}, NamesProblem::not_a_list};
+  }
+  for (auto item : *list) {
+    if (is<RowView<Null>>(item)) {
+      continue;
+    }
+    if (extension) {
+      auto record = try_as<RowView<Record>>(item);
+      if (not record) {
+        return {std::vector<std::string>{}, NamesProblem::not_records};
+      }
+      auto name = field(*record, "name");
+      if (not name) {
+        return {std::vector<std::string>{}, NamesProblem::missing_name};
+      }
+      item = *name;
+      if (is<RowView<Null>>(item)) {
+        continue;
+      }
+    }
+    auto text = try_as<RowView<String>>(item);
+    if (not text) {
+      return {std::vector<std::string>{}, NamesProblem::not_strings};
+    }
+    names.emplace_back(**text);
+  }
+  return {std::move(names), NamesProblem::none};
+}
+
 auto groups(Array<Record> const& input, storage::BitMap& active, location self,
             diagnostic_handler& dh, bool with_profiles = false)
   -> std::vector<Group> {
@@ -1682,49 +1751,33 @@ auto groups(Array<Record> const& input, storage::BitMap& active, location self,
       class_value = **value;
     }
     auto read_names = [&](std::string_view name, bool extension) {
-      auto names = std::vector<std::string>{};
-      auto value = field(*metadata, name);
-      if (not value or is<RowView<Null>>(*value)) {
-        return names;
-      }
-      auto list = try_as<RowView<List>>(*value);
-      if (not list) {
-        diagnostic::warning("ignoring {} for events where `metadata.{}` is not "
-                            "a list",
-                            name, name)
-          .primary(self)
-          .emit(dh);
-        return names;
-      }
-      for (auto item : *list) {
-        if (is<RowView<Null>>(item)) {
-          continue;
-        }
-        if (extension) {
-          auto record = try_as<RowView<Record>>(item);
-          if (not record) {
-            diagnostic::warning(
-              "ignoring extensions for events where `metadata.extensions` is "
-              "not a list of records")
-              .primary(self)
-              .emit(dh);
-            return std::vector<std::string>{};
-          }
-          auto name = field(*record, "name");
-          if (not name) {
-            diagnostic::warning("ignoring extensions for events where "
-                                "`metadata.extensions[].name` does not exist")
-              .primary(self)
-              .emit(dh);
-            return std::vector<std::string>{};
-          }
-          item = *name;
-          if (is<RowView<Null>>(item)) {
-            continue;
-          }
-        }
-        auto text = try_as<RowView<String>>(item);
-        if (not text) {
+      auto [names, problem]
+        = read_ocsf_names(field(*metadata, name), extension);
+      switch (problem) {
+        case NamesProblem::none:
+          break;
+        case NamesProblem::not_a_list:
+          diagnostic::warning("ignoring {} for events where `metadata.{}` is "
+                              "not "
+                              "a list",
+                              name, name)
+            .primary(self)
+            .emit(dh);
+          break;
+        case NamesProblem::not_records:
+          diagnostic::warning(
+            "ignoring extensions for events where `metadata.extensions` is "
+            "not a list of records")
+            .primary(self)
+            .emit(dh);
+          break;
+        case NamesProblem::missing_name:
+          diagnostic::warning("ignoring extensions for events where "
+                              "`metadata.extensions[].name` does not exist")
+            .primary(self)
+            .emit(dh);
+          break;
+        case NamesProblem::not_strings:
           diagnostic::warning(
             "{}", extension ? "ignoring extensions for events where "
                               "`metadata.extensions[].name` is not a string"
@@ -1732,11 +1785,9 @@ auto groups(Array<Record> const& input, storage::BitMap& active, location self,
                               "`metadata.profiles` is not a list of strings")
             .primary(self)
             .emit(dh);
-          return std::vector<std::string>{};
-        }
-        names.emplace_back(**text);
+          break;
       }
-      return names;
+      return std::move(names);
     };
     auto profiles = with_profiles ? read_names("profiles", false)
                                   : std::vector<std::string>{};
@@ -1876,37 +1927,44 @@ struct CastOptions {
   bool validate;
 };
 
-auto enabled(type const& ty, Group const& group) -> bool {
+/// Returns whether a field of type `ty` is enabled for an event with the given
+/// profiles and extensions.
+auto enabled(type const& ty, std::span<std::string const> profiles,
+             std::span<std::string const> extensions) -> bool {
   auto has = [](auto const& names, std::string_view name) {
     return std::ranges::find(names, name) != names.end();
   };
   if (auto profile = ty.attribute("profile");
-      profile and not has(group.profiles, *profile)) {
+      profile and not has(profiles, *profile)) {
     return false;
   }
-  if (auto profiles = ty.attribute("profiles")) {
+  if (auto alternatives = ty.attribute("profiles")) {
     auto found = false;
-    for (auto profile : detail::split(*profiles, "|")) {
-      found |= has(group.profiles, profile);
+    for (auto profile : detail::split(*alternatives, "|")) {
+      found |= has(profiles, profile);
     }
     if (not found) {
       return false;
     }
   }
   if (auto extension = ty.attribute("extension");
-      extension and not has(group.extensions, *extension)) {
+      extension and not has(extensions, *extension)) {
     return false;
   }
   if (auto pairs = ty.attribute("profile_extensions")) {
     for (auto pair : detail::split(*pairs, "|")) {
       auto [profile, extension] = detail::split_once(pair, ":");
-      if (has(group.profiles, profile) and has(group.extensions, extension)) {
+      if (has(profiles, profile) and has(extensions, extension)) {
         return true;
       }
     }
     return false;
   }
   return true;
+}
+
+auto enabled(type const& ty, Group const& group) -> bool {
+  return enabled(ty, group.profiles, group.extensions);
 }
 
 auto null_rows(Array<Data> const& array) -> storage::BitMap {
@@ -2457,17 +2515,18 @@ auto derive_record(Array<Record> input, record_type const& schema,
       continue;
     }
     auto nulls = Array<Data>{Array<Null>{storage::NullStorage{input.length()}}};
-    // Preserve incompatible list pairs without suppressing other rows.
+    // Preserve incompatible list pairs without suppressing other rows. Whether
+    // a pair is incompatible depends on its event only, so that the result
+    // does not depend on the other events of the batch.
     if (value and other) {
       auto lhs = value->data.get_alternative<List>();
       auto rhs = other->data.get_alternative<List>();
-      if (lhs and rhs and (selected & lhs->present).any()
-          and (selected & rhs->present).any()) {
+      if (lhs or rhs) {
         auto incompatible = storage::BitMap::Mutable{input.length()};
         auto paired = selected & value->present & other->present;
         for (auto row : storage::true_bits(paired)) {
-          auto l = lhs->present.get(row);
-          auto r = rhs->present.get(row);
+          auto l = lhs and lhs->present.get(row);
+          auto r = rhs and rhs->present.get(row);
           if (l != r
               or (l
                   and lhs->data.get(row).length()
@@ -2685,6 +2744,745 @@ private:
   DeriveArgs args_;
 };
 
+/// Describes the fields of the result of `ocsf_cast` over its input, so that
+/// predicates on the result can move to where the input is computed. See
+/// `nova::FunctionPlugin::rewrite_field_access`.
+///
+/// A field of the result depends on the schema that an event resolves to. The
+/// descriptions therefore first read the field through `_ocsf_cast_field`,
+/// which computes it from the few input fields that it depends on:
+/// `metadata.version`, `class_uid`, `metadata.profiles`, `metadata.extensions`,
+/// and the field itself. This call computes exactly what `ocsf_cast` does.
+/// Once a mapping assigns the version and the class as constants, it
+/// describes the field as a plain comparison for the one schema that remains.
+namespace ocsf_rewrite {
+
+using namespace nova;
+
+/// The kind that `type_kind` reports for the values that pass a cast to `ty`
+/// unchanged, or `None` if values of no kind do.
+auto scalar_kind(type const& ty) -> Option<std::string_view> {
+  return match(
+    ty,
+    [](bool_type const&) -> Option<std::string_view> {
+      return Type<Bool>::static_name;
+    },
+    [](int64_type const&) -> Option<std::string_view> {
+      return Type<Int>::static_name;
+    },
+    [](uint64_type const&) -> Option<std::string_view> {
+      return Type<UInt>::static_name;
+    },
+    [](double_type const&) -> Option<std::string_view> {
+      return Type<Float>::static_name;
+    },
+    [](duration_type const&) -> Option<std::string_view> {
+      return Type<Duration>::static_name;
+    },
+    [](time_type const&) -> Option<std::string_view> {
+      return Type<Time>::static_name;
+    },
+    [](string_type const&) -> Option<std::string_view> {
+      return Type<String>::static_name;
+    },
+    [](ip_type const&) -> Option<std::string_view> {
+      return Type<Ip>::static_name;
+    },
+    [](subnet_type const&) -> Option<std::string_view> {
+      return Type<Subnet>::static_name;
+    },
+    [](blob_type const&) -> Option<std::string_view> {
+      return Type<Blob>::static_name;
+    },
+    [](auto const&) -> Option<std::string_view> {
+      return None{};
+    });
+}
+
+/// Whether a field has profile or extension requirements, see `enabled`.
+auto has_requirements(type const& ty) -> bool {
+  return ty.attribute("profile") or ty.attribute("profiles")
+         or ty.attribute("extension") or ty.attribute("profile_extensions");
+}
+
+/// The profiles and extensions of an event.
+struct Names {
+  std::vector<std::string> profiles;
+  std::vector<std::string> extensions;
+};
+
+/// What a cast makes of a field.
+enum class CastPath {
+  /// The cast drops the field, or the event does not resolve.
+  absent,
+  /// The field keeps its value, as below a variant.
+  keep,
+  /// The field is cast to `leaf`.
+  cast,
+  /// Whether the cast keeps the field depends on the event's profiles or
+  /// extensions, which are unknown.
+  unknown,
+};
+
+/// Returns what a cast to `schema` makes of the field `path`, for an event
+/// with the given profiles and extensions, or with unknown ones.
+auto resolve_cast(type const& schema, std::span<std::string const> path,
+                  Option<Names const&> names, bool encode_variants)
+  -> std::pair<CastPath, Option<type>> {
+  if (schema.attribute("extension")) {
+    if (not names) {
+      return {CastPath::unknown, None{}};
+    }
+    if (std::ranges::find(names->extensions, *schema.attribute("extension"))
+        == names->extensions.end()) {
+      return {CastPath::absent, None{}};
+    }
+  }
+  auto current = schema;
+  for (auto i = size_t{0}; i < path.size(); ++i) {
+    // A field below a value other than a record is `null`, also below a list.
+    auto const* record = try_as<record_type>(current);
+    if (not record) {
+      return {CastPath::absent, None{}};
+    }
+    auto field = record->field(path[i]);
+    if (not field) {
+      return {CastPath::absent, None{}};
+    }
+    if (has_requirements(*field)) {
+      if (not names) {
+        return {CastPath::unknown, None{}};
+      }
+      if (not nova_ocsf::enabled(*field, names->profiles, names->extensions)) {
+        return {CastPath::absent, None{}};
+      }
+    }
+    if (field->attribute("variant") and i + 1 < path.size()) {
+      // An encoded variant is a string, which has no fields.
+      return {encode_variants ? CastPath::absent : CastPath::keep, None{}};
+    }
+    current = std::move(*field);
+  }
+  return {CastPath::cast, std::move(current)};
+}
+
+/// Returns the strings of a list, or `None` if it is not a list of strings.
+auto strings_of(ast::expression const& expr)
+  -> Option<std::vector<std::string>> {
+  auto const* constant = try_as<ast::constant>(expr);
+  auto const* values = constant ? try_as<list>(constant->value) : nullptr;
+  if (not values) {
+    return None{};
+  }
+  auto result = std::vector<std::string>{};
+  for (auto const& value : *values) {
+    auto const* text = try_as<std::string>(value);
+    if (not text) {
+      return None{};
+    }
+    result.push_back(*text);
+  }
+  return result;
+}
+
+auto strings_of(RowView<Data> value) -> std::vector<std::string> {
+  auto result = std::vector<std::string>{};
+  if (auto const* items = try_as<RowView<List>>(value)) {
+    for (auto item : *items) {
+      if (auto const* text = try_as<RowView<String>>(item)) {
+        result.emplace_back(**text);
+      }
+    }
+  }
+  return result;
+}
+
+auto cast_options(std::span<std::string const> names)
+  -> nova_ocsf::CastOptions {
+  auto const has = [&](std::string_view name) {
+    return std::ranges::find(names, name) != names.end();
+  };
+  return {
+    .encode_variants = has("encode_variants"),
+    .null_fill = has("null_fill"),
+    .timestamp_to_ms = has("timestamp_to_ms"),
+    .validate = false,
+  };
+}
+
+/// Returns the schema that a call's constant version and class resolve to,
+/// `None` inside if they resolve to none, or `None` outside if they are not
+/// constants.
+auto constant_schema(ast::expression const& version,
+                     ast::expression const& class_uid)
+  -> Option<Option<ocsf_schema>> {
+  auto const* v = try_as<ast::constant>(version);
+  auto const* c = try_as<ast::constant>(class_uid);
+  if (not v or not c) {
+    return None{};
+  }
+  auto const* text = try_as<std::string>(v->value);
+  auto const* id = try_as<int64_t>(c->value);
+  if (not text or not id) {
+    return Option<ocsf_schema>{};
+  }
+  return Option<ocsf_schema>{find_ocsf_schema(*text, *id)};
+}
+
+/// Reads constant profiles and extensions as `ocsf_cast` does, or returns
+/// `None` if they are not constants.
+auto constant_names(ast::expression const& profiles,
+                    ast::expression const& extensions, registry const& reg)
+  -> Option<Names> {
+  auto const read = [&](ast::expression const& expr,
+                        bool extension) -> Option<std::vector<std::string>> {
+    // Lists of constants stay list literals.
+    auto dh = null_diagnostic_handler{};
+    auto array = const_eval_array(expr, InstantiateCtx{dh, reg});
+    if (not array) {
+      return None{};
+    }
+    return nova_ocsf::read_ocsf_names(array->get(0), extension).first;
+  };
+  auto p = read(profiles, false);
+  auto e = read(extensions, true);
+  if (not p or not e) {
+    return None{};
+  }
+  return Names{std::move(*p), std::move(*e)};
+}
+
+/// Builds the expressions of descriptions.
+class Builder {
+public:
+  Builder(location source, registry const& reg) : source_{source}, reg_{reg} {
+  }
+
+  auto constant(data value) const -> ast::expression {
+    return ast::constant::make(located{std::move(value), source_});
+  }
+
+  auto strings(std::span<std::string const> values) const -> ast::expression {
+    auto result = list{};
+    for (auto const& value : values) {
+      result.emplace_back(value);
+    }
+    return constant(std::move(result));
+  }
+
+  auto call(std::string_view name, std::vector<ast::expression> args) const
+    -> ast::expression {
+    auto result = make_call(name, std::move(args), source_, reg_);
+    TENZIR_ASSERT(result);
+    return std::move(*result);
+  }
+
+  auto binary(ast::expression left, ast::binary_op op,
+              ast::expression right) const -> ast::expression {
+    return ast::binary_expr{std::move(left), op, std::move(right)};
+  }
+
+  auto conjoin(ast::expression left, ast::expression right) const
+    -> ast::expression {
+    return binary(std::move(left), ast::binary_op::and_, std::move(right));
+  }
+
+  /// Whether `type_kind(value)` is one of `kinds`.
+  auto has_kind(ast::expression value, std::span<std::string const> kinds) const
+    -> ast::expression {
+    auto kind = call("type_kind", {std::move(value)});
+    if (kinds.size() == 1) {
+      return binary(std::move(kind), ast::binary_op::eq,
+                    constant(kinds.front()));
+    }
+    return binary(std::move(kind), ast::binary_op::in, strings(kinds));
+  }
+
+  /// The field `names` of `base`, without warnings if it is missing.
+  auto quiet(ast::expression const& base,
+             std::span<std::string const> names) const -> ast::expression {
+    auto segments = std::vector<ast::field_path::segment>{};
+    for (auto const& name : names) {
+      segments.push_back({ast::identifier{name, source_}, true});
+    }
+    return access_field(base, segments);
+  }
+
+private:
+  location source_;
+  registry const& reg_;
+};
+
+/// Returns the single positional argument and the constant named `bool`
+/// arguments of a call, or `None` if an argument is neither.
+auto parse_args(ast::function_call const& call)
+  -> Option<std::pair<ast::expression, std::vector<std::string>>> {
+  auto positional = std::vector<ast::expression>{};
+  auto options = std::vector<std::string>{};
+  for (auto const& arg : call.args) {
+    auto const* assignment = try_as<ast::assignment>(arg);
+    if (not assignment) {
+      positional.push_back(arg);
+      continue;
+    }
+    auto const* name = try_as<ast::root_field>(assignment->left);
+    auto const* value = try_as<ast::constant>(assignment->right);
+    auto const* flag = value ? try_as<bool>(value->value) : nullptr;
+    if (not name or not flag) {
+      return None{};
+    }
+    if (*flag) {
+      options.push_back(name->id.name);
+    }
+  }
+  if (positional.size() != 1) {
+    return None{};
+  }
+  return std::pair{std::move(positional.front()), std::move(options)};
+}
+
+auto path_names(std::span<ast::field_path::segment const> path)
+  -> std::vector<std::string> {
+  auto result = std::vector<std::string>{};
+  for (auto const& segment : path) {
+    result.push_back(segment.id.name);
+  }
+  return result;
+}
+
+/// Describes `ocsf_cast(x, …).path` as `_ocsf_cast_field(…)`.
+auto rewrite_cast_access(ast::function_call const& call,
+                         std::span<ast::field_path::segment const> path,
+                         FieldRewriteCtx ctx)
+  -> Option<std::vector<FieldCase>> {
+  // The whole result is a record that the description does not cover.
+  auto args = parse_args(call);
+  if (path.empty() or not args) {
+    return None{};
+  }
+  auto const& [input, options] = *args;
+  auto b = Builder{call.get_location(), *ctx.reg};
+  auto names = path_names(path);
+  auto value = b.call(
+    "_ocsf_cast_field",
+    {
+      b.quiet(input, std::array{std::string{"metadata"}, std::string{"versio"
+                                                                     "n"}}),
+      b.quiet(input, std::array{std::string{"class_uid"}}),
+      b.quiet(input, std::array{std::string{"metadata"}, std::string{"profile"
+                                                                     "s"}}),
+      b.quiet(input, std::array{std::string{"metadata"}, std::string{"extension"
+                                                                     "s"}}),
+      b.quiet(input, names),
+      b.strings(names),
+      b.strings(options),
+    });
+  auto result = std::vector<FieldCase>{};
+  result.push_back({.guard = b.constant(true), .value = std::move(value)});
+  return result;
+}
+
+/// The kind of a constant that a comparison may compare a field with.
+auto constant_kind(data const& value) -> Option<std::string_view> {
+  return match(
+    value,
+    [](bool) -> Option<std::string_view> {
+      return Type<Bool>::static_name;
+    },
+    [](int64_t) -> Option<std::string_view> {
+      return Type<Int>::static_name;
+    },
+    [](std::string const&) -> Option<std::string_view> {
+      return Type<String>::static_name;
+    },
+    [](ip const&) -> Option<std::string_view> {
+      return Type<Ip>::static_name;
+    },
+    [](subnet const&) -> Option<std::string_view> {
+      return Type<Subnet>::static_name;
+    },
+    [](time const&) -> Option<std::string_view> {
+      return Type<Time>::static_name;
+    },
+    [](duration const&) -> Option<std::string_view> {
+      return Type<Duration>::static_name;
+    },
+    [](auto const&) -> Option<std::string_view> {
+      return None{};
+    });
+}
+
+/// Returns the constants of the right operand of `==` or `in`.
+auto constants(ast::binary_op op, ast::expression const& rhs)
+  -> Option<std::vector<data>> {
+  auto result = std::vector<data>{};
+  if (op == ast::binary_op::eq) {
+    result.push_back(as<ast::constant>(rhs).as_data());
+    return result;
+  }
+  if (op != ast::binary_op::in) {
+    return None{};
+  }
+  if (auto const* constant = try_as<ast::constant>(rhs)) {
+    auto const* values = try_as<list>(constant->value);
+    if (not values) {
+      return None{};
+    }
+    result.assign(values->begin(), values->end());
+    return result;
+  }
+  for (auto const& item : as<ast::list>(rhs).items) {
+    result.push_back(as<ast::constant>(as<ast::expression>(item)).as_data());
+  }
+  return result;
+}
+
+/// Returns the kind of all `values` if they share one for which comparisons
+/// are only `true` for values of the same kind, or for other numbers if the
+/// kind is `int`.
+auto comparable_kind(std::span<data const> values) -> Option<std::string_view> {
+  auto result = Option<std::string_view>{};
+  for (auto const& value : values) {
+    auto kind = constant_kind(value);
+    if (not kind or (result and *result != *kind)) {
+      return None{};
+    }
+    result = kind;
+  }
+  return result;
+}
+
+/// The arguments of `_ocsf_cast_field` whose version and class are constants,
+/// resolved to what the cast makes of the field.
+struct CastField {
+  CastPath path;
+  Option<type> leaf;
+  nova_ocsf::CastOptions options;
+  ast::expression const& value;
+};
+
+auto resolve_cast_field(ast::function_call const& call, registry const& reg)
+  -> Option<CastField> {
+  if (call.args.size() != 7) {
+    return None{};
+  }
+  auto schema = constant_schema(call.args[0], call.args[1]);
+  auto path = strings_of(call.args[5]);
+  auto options = strings_of(call.args[6]);
+  if (not schema or not path or path->empty() or not options) {
+    return None{};
+  }
+  auto const cast = cast_options(*options);
+  if (not *schema) {
+    return CastField{CastPath::absent, None{}, cast, call.args[4]};
+  }
+  auto names = constant_names(call.args[2], call.args[3], reg);
+  auto [result, leaf] = resolve_cast((*schema)->type, *path,
+                                     names ? Option<Names const&>{*names}
+                                           : Option<Names const&>{},
+                                     cast.encode_variants);
+  if (result == CastPath::unknown) {
+    return None{};
+  }
+  return CastField{result, std::move(leaf), cast, call.args[4]};
+}
+
+/// Returns the kind of the scalar `leaf` if a cast keeps its values of that
+/// kind unchanged, and `None` for other leaves, such as records.
+auto kept_kind(CastField const& field) -> Option<std::string_view> {
+  if (field.leaf->attribute("variant")) {
+    return None{};
+  }
+  if (field.options.timestamp_to_ms and field.leaf->attribute("epochtime")) {
+    return None{};
+  }
+  return scalar_kind(*field.leaf);
+}
+
+/// Whether a cast keeps all values of the variant `leaf` unchanged.
+auto keeps_variant(CastField const& field) -> bool {
+  return field.leaf->attribute("variant") and not field.options.encode_variants
+         and not field.leaf->attribute("must_be_record")
+         and not field.leaf->attribute("nullify_empty_records");
+}
+
+auto max_int() -> data {
+  return static_cast<int64_t>(std::numeric_limits<int64_t>::max());
+}
+
+/// Describes `_ocsf_cast_field(…)` for a known schema.
+auto rewrite_cast_field(ast::function_call const& call, FieldRewriteCtx ctx)
+  -> Option<std::vector<FieldCase>> {
+  auto field = resolve_cast_field(call, *ctx.reg);
+  if (not field) {
+    return None{};
+  }
+  auto b = Builder{call.get_location(), *ctx.reg};
+  auto result = std::vector<FieldCase>{};
+  switch (field->path) {
+    case CastPath::absent:
+      return result;
+    case CastPath::keep:
+      result.push_back({b.constant(true), field->value});
+      return result;
+    case CastPath::unknown:
+      TENZIR_UNREACHABLE();
+    case CastPath::cast:
+      break;
+  }
+  if (keeps_variant(*field)) {
+    result.push_back({b.constant(true), field->value});
+    return result;
+  }
+  auto kind = kept_kind(*field);
+  if (not kind) {
+    return None{};
+  }
+  auto const kinds = std::array{std::string{*kind}};
+  result.push_back({b.has_kind(field->value, kinds), field->value});
+  // A cast turns `uint` values that fit into `int`s.
+  if (*kind == Type<Int>::static_name) {
+    auto const uint = std::array{std::string{Type<UInt>::static_name}};
+    result.push_back({
+      b.conjoin(b.has_kind(field->value, uint),
+                b.binary(field->value, ast::binary_op::leq,
+                         b.constant(max_int()))),
+      b.call("int", {field->value}),
+    });
+  }
+  return result;
+}
+
+/// Describes `_ocsf_cast_field(…) <op> rhs` for a known schema, so that the
+/// comparison of the field comes first, where sources see it.
+auto rewrite_cast_field_comparison(ast::function_call const& call,
+                                   ast::binary_op op,
+                                   ast::expression const& rhs,
+                                   FieldRewriteCtx ctx)
+  -> Option<ast::expression> {
+  auto values = constants(op, rhs);
+  if (not values) {
+    return None{};
+  }
+  auto kind = comparable_kind(*values);
+  auto field = resolve_cast_field(call, *ctx.reg);
+  if (not kind or not field or field->path == CastPath::absent) {
+    return None{};
+  }
+  auto b = Builder{call.get_location(), *ctx.reg};
+  auto comparison = b.binary(field->value, op, rhs);
+  if (field->path == CastPath::keep or keeps_variant(*field)) {
+    return comparison;
+  }
+  auto leaf_kind = kept_kind(*field);
+  if (not leaf_kind) {
+    return None{};
+  }
+  auto const integer = *kind == Type<Int>::static_name;
+  auto const numeric = *leaf_kind == Type<Int>::static_name
+                       or *leaf_kind == Type<UInt>::static_name
+                       or *leaf_kind == Type<Float>::static_name;
+  // Values of other kinds never compare equal, except numbers.
+  if (*leaf_kind != *kind and not(integer and numeric)) {
+    return b.constant(false);
+  }
+  // A cast keeps the values of the field's kind, and turns `uint` values that
+  // fit into `int`s. Those that do not fit compare unequal to an `int64`
+  // constant anyway. The cast nulls values of other kinds, which compare
+  // unequal, too, and secrets, whose comparison is `null`.
+  auto kinds = std::vector{std::string{*leaf_kind}};
+  if (*leaf_kind == Type<Int>::static_name) {
+    kinds.emplace_back(Type<UInt>::static_name);
+  }
+  return b.conjoin(std::move(comparison), b.has_kind(field->value, kinds));
+}
+
+/// A batch of events grouped by the schema that they resolve to.
+template <class Key>
+struct Grouping {
+  std::vector<Key> keys;
+  std::vector<storage::BitMap::Mutable> rows;
+
+  auto add(Key key, storage::Index row, storage::Index length) -> void {
+    auto it = std::ranges::find(keys, key);
+    if (it == keys.end()) {
+      keys.push_back(std::move(key));
+      rows.emplace_back(length);
+      it = keys.end() - 1;
+    }
+    rows[it - keys.begin()].set(row, true);
+  }
+};
+
+struct CastKey {
+  std::string version;
+  int64_t class_uid;
+  Names names;
+
+  friend auto operator==(CastKey const& x, CastKey const& y) -> bool {
+    return x.version == y.version and x.class_uid == y.class_uid
+           and x.names.profiles == y.names.profiles
+           and x.names.extensions == y.names.extensions;
+  }
+};
+
+struct CastFieldArgs {
+  ValueArgument version;
+  ValueArgument class_uid;
+  ValueArgument profiles;
+  ValueArgument extensions;
+  ValueArgument value;
+  ValueArgument path;
+  ValueArgument options;
+  location call;
+};
+
+/// Implements `_ocsf_cast_field(version, class_uid, profiles, extensions,
+/// value, path, options)`: the field `path` of the result of casting an event
+/// with the given `metadata.version`, `class_uid`, `metadata.profiles`,
+/// `metadata.extensions`, and field `value` at `path`, with the given cast
+/// options. It never fails and never warns.
+struct CastFieldFunction {
+  static auto eval(CastFieldArgs const& args, EvalFrame frame) -> Array<Data> {
+    auto const length = frame.length();
+    auto grouping = Grouping<CastKey>{};
+    for (auto row : storage::true_bits(frame.mask())) {
+      auto version = args.version.data.get(row);
+      auto class_uid = args.class_uid.data.get(row);
+      auto const* text = try_as<RowView<String>>(version);
+      auto const* id = try_as<RowView<Int>>(class_uid);
+      if (not text or not id) {
+        continue;
+      }
+      auto key = CastKey{
+        std::string{**text},
+        **id,
+        {
+          nova_ocsf::read_ocsf_names(args.profiles.data.get(row), false).first,
+          nova_ocsf::read_ocsf_names(args.extensions.data.get(row), true).first,
+        },
+      };
+      grouping.add(std::move(key), row, length);
+    }
+    auto result = Array<Data>{Array<Null>{storage::NullStorage{length}}};
+    auto dh = null_diagnostic_handler{};
+    for (auto i = size_t{0}; i < grouping.keys.size(); ++i) {
+      auto& key = grouping.keys[i];
+      auto rows = std::move(grouping.rows[i]).finish();
+      auto schema = find_ocsf_schema(key.version, key.class_uid);
+      if (not schema) {
+        continue;
+      }
+      // The path and options are constants in practice, but may vary.
+      auto first = storage::Index{-1};
+      for (auto row : storage::true_bits(rows)) {
+        first = row;
+        break;
+      }
+      auto const path = strings_of(args.path.data.get(first));
+      auto const options
+        = cast_options(strings_of(args.options.data.get(first)));
+      if (path.empty()) {
+        continue;
+      }
+      auto [outcome, leaf]
+        = resolve_cast(schema->type, path, key.names, options.encode_variants);
+      auto part = Option<Array<Data>>{};
+      switch (outcome) {
+        case CastPath::absent:
+        case CastPath::unknown:
+          break;
+        case CastPath::keep:
+          part = args.value.data;
+          break;
+        case CastPath::cast: {
+          auto group = nova_ocsf::Group{
+            std::move(*schema), key.version,          key.class_uid,
+            key.names.profiles, key.names.extensions, rows,
+          };
+          part = nova_ocsf::cast_value(args.value.data, *leaf, rows, group,
+                                       options, args.call, dh, {});
+          break;
+        }
+      }
+      if (part) {
+        result = with_merged({result, storage::BitMap{length, true}},
+                             {std::move(*part), rows});
+      }
+    }
+    return result;
+  }
+};
+
+/// The plugin of an internal function that only the optimizer emits.
+template <class Args, class Function>
+class InternalPlugin : public FunctionPlugin {
+public:
+  auto is_deterministic() const -> bool override {
+    return true;
+  }
+
+  auto make_function(function_invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
+    TRY(auto array,
+        const_eval_array(ast::expression{inv.call}, {ctx.dh(), ctx.reg()}));
+    auto value = materialize_legacy(array.get(0));
+    return function_use::make(
+      [value = std::move(value)](evaluator eval, session ctx) -> multi_series {
+        TENZIR_UNUSED(ctx);
+        auto builder = series_builder{};
+        for (auto i = int64_t{0}; i < eval.length(); ++i) {
+          builder.data(value);
+        }
+        return multi_series{builder.finish()};
+      });
+  }
+};
+
+class CastFieldPlugin final
+  : public InternalPlugin<CastFieldArgs, CastFieldFunction> {
+public:
+  auto name() const -> std::string override {
+    return "_ocsf_cast_field";
+  }
+
+  auto describe() const -> FunctionDescription override {
+    auto d = FunctionDescriber<CastFieldArgs, CastFieldFunction>{};
+    d.positional("version", &CastFieldArgs::version, "any");
+    d.positional("class_uid", &CastFieldArgs::class_uid, "any");
+    d.positional("profiles", &CastFieldArgs::profiles, "any");
+    d.positional("extensions", &CastFieldArgs::extensions, "any");
+    d.positional("value", &CastFieldArgs::value, "any");
+    d.positional("path", &CastFieldArgs::path, "any");
+    d.positional("options", &CastFieldArgs::options, "any");
+    d.call_location(&CastFieldArgs::call);
+    return std::move(d).finish();
+  }
+
+  auto rewrite_field_access(ast::function_call const& call,
+                            std::span<ast::field_path::segment const> path,
+                            FieldRewriteCtx ctx) const
+    -> Option<std::vector<FieldCase>> override {
+    if (not path.empty()) {
+      return None{};
+    }
+    return rewrite_cast_field(call, ctx);
+  }
+
+  auto rewrite_field_comparison(ast::function_call const& call,
+                                std::span<ast::field_path::segment const> path,
+                                ast::binary_op op, ast::expression const& rhs,
+                                FieldRewriteCtx ctx) const
+    -> Option<ast::expression> override {
+    if (not path.empty()) {
+      return None{};
+    }
+    return rewrite_cast_field_comparison(call, op, rhs, ctx);
+  }
+};
+
+} // namespace ocsf_rewrite
+
 enum class NovaTransform { cast, trim, derive };
 
 struct OcsfFunctionArgs {
@@ -2769,6 +3567,17 @@ public:
       d.named_optional("drop_recommended", &OcsfFunctionArgs::drop_recommended);
     }
     return std::move(d).finish();
+  }
+
+  auto rewrite_field_access(ast::function_call const& call,
+                            std::span<ast::field_path::segment const> path,
+                            nova::FieldRewriteCtx ctx) const
+    -> Option<std::vector<nova::FieldCase>> override {
+    if constexpr (Mode == NovaTransform::cast) {
+      return ocsf_rewrite::rewrite_cast_access(call, path, ctx);
+    } else {
+      return None{};
+    }
   }
 
   auto make_function(function_invocation inv, session ctx) const
@@ -2890,6 +3699,7 @@ public:
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::ocsf::cast_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::ocsf::trim_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::ocsf::derive_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::ocsf::ocsf_rewrite::CastFieldPlugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::ocsf::OcsfFunctionPlugin<
                        tenzir::plugins::ocsf::NovaTransform::cast>)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::ocsf::OcsfFunctionPlugin<

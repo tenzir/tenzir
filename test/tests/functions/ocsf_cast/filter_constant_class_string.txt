@@ -1,0 +1,69 @@
+warning: dropping field which does not exist in schema
+  --> tests/functions/ocsf_cast/filter_constant_class_string.tql:14:20
+   |
+14 | this = {id: id, r: ocsf_cast(this)}
+   |                    ~~~~~~~~~~~~~~~
+   |
+   = note: found `id`
+
+warning: required field `category_uid` is missing
+  --> tests/functions/ocsf_cast/filter_constant_class_string.tql:14:20
+   |
+14 | this = {id: id, r: ocsf_cast(this)}
+   |                    ~~~~~~~~~~~~~~~
+   |
+
+warning: required field `metadata.product` is missing
+  --> tests/functions/ocsf_cast/filter_constant_class_string.tql:14:20
+   |
+14 | this = {id: id, r: ocsf_cast(this)}
+   |                    ~~~~~~~~~~~~~~~
+   |
+
+warning: required field `severity_id` is missing
+  --> tests/functions/ocsf_cast/filter_constant_class_string.tql:14:20
+   |
+14 | this = {id: id, r: ocsf_cast(this)}
+   |                    ~~~~~~~~~~~~~~~
+   |
+
+warning: required field `time` is missing
+  --> tests/functions/ocsf_cast/filter_constant_class_string.tql:14:20
+   |
+14 | this = {id: id, r: ocsf_cast(this)}
+   |                    ~~~~~~~~~~~~~~~
+   |
+
+warning: required field `type_uid` is missing
+  --> tests/functions/ocsf_cast/filter_constant_class_string.tql:14:20
+   |
+14 | this = {id: id, r: ocsf_cast(this)}
+   |                    ~~~~~~~~~~~~~~~
+   |
+
+warning: required field `user` is missing
+  --> tests/functions/ocsf_cast/filter_constant_class_string.tql:14:20
+   |
+14 | this = {id: id, r: ocsf_cast(this)}
+   |                    ~~~~~~~~~~~~~~~
+   |
+
+warning: class "Authentication" needs at least one of `service`, `dst_endpoint`, but has none
+  --> tests/functions/ocsf_cast/filter_constant_class_string.tql:14:20
+   |
+14 | this = {id: id, r: ocsf_cast(this)}
+   |                    ~~~~~~~~~~~~~~~
+   |
+
+warning: event does not have field
+  --> tests/functions/ocsf_cast/filter_constant_class_string.tql:12:30
+   |
+12 | src_endpoint.hostname = move name
+   |                              ~~~~
+   |
+   = hint: did you mean `num`?
+   = hint: append `?` to suppress this warning
+{
+  id: 1,
+  expected: true,
+}

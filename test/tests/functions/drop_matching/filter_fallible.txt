@@ -1,0 +1,17 @@
+error: `stride` must be greater 0, but got -1
+ --> tests/functions/drop_matching/filter_fallible.tql:8:39
+  |
+8 | where select_matching(slice(s, stride=-1), "^keep$").gone != "x"
+  |                                       ^^
+  |
+
+warning: record does not have field
+ --> tests/functions/drop_matching/filter_fallible.tql:8:7
+  |
+8 | where select_matching(slice(s, stride=-1), "^keep$").gone != "x"
+  |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  ⋮
+8 | where select_matching(slice(s, stride=-1), "^keep$").gone != "x"
+  |                                                      ---- field does not exist
+  |
+  = hint: append `?` to suppress this warning

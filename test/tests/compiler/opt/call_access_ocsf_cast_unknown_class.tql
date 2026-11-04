@@ -1,0 +1,4 @@
+// Without constants for the class and version, the schema guards remain.
+export
+this = ocsf_cast(this)
+where activity_id == 1

@@ -1,0 +1,175 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "export",
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:77..83 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+-        
++        binary_expr {
++          left: binary_expr {
++            left: root_field {
++              id: `EventID` @ [1]:145..152 from 0,
++              has_question_mark: false
++            },
++            op: "eq",
++            right: constant int64 1 @ [1]:197..198 from 0,
++            location: [1]:145..198 from 0
++          },
++          op: "and_",
++          right: binary_expr {
++            left: function_call {
++              fn: {
++                path: [
++                  `type_kind` @ [1]:160..175 from 0
++                ],
++                ref: std::type_kind/fn
++              },
++              args: [
++                root_field {
++                  id: `EventID` @ [1]:145..152 from 0,
++                  has_question_mark: false
++                }
++              ],
++              method: false,
++              location: [1]:160..175 from 0
++            },
++            op: "in",
++            right: constant vector [string "int", string "uint"] @ [1]:160..175 from 0,
++            location: [1]:160..175 from 0
++          },
++          location: [1]:145..198 from 0
++        }
+       ],
+       order: "ordered"
+     },
+     SetIr {
+       assignments: [
+         {
+           left: root_field {
+             id: `class_uid` @ [1]:84..93 from 0,
+             has_question_mark: false
+           },
+           right: constant int64 3002 @ [1]:96..100 from 0,
+           location: [1]:84..100 from 0
+         }
+       ],
+       order: "ordered"
+     },
+     SetIr {
+       assignments: [
+         {
+           left: root_field {
+             id: `metadata` @ [1]:101..109 from 0,
+             has_question_mark: false
+           },
+           right: record {
+             begin: [1]:112..113 from 0,
+             items: [
+               field {
+                 name: `version` @ [1]:113..120 from 0,
+                 expr: constant string "1.5.0" @ [1]:122..129 from 0
+               }
+             ],
+             end: [1]:129..130 from 0
+           },
+           location: [1]:101..130 from 0
+         }
+       ],
+       order: "ordered"
+     },
+     SetIr {
+       assignments: [
+         {
+           left: root_field {
+             id: `activity_id` @ [1]:131..142 from 0,
+             has_question_mark: false
+           },
+           right: root_field {
+             id: `EventID` @ [1]:145..152 from 0,
+             has_question_mark: false
+           },
+           location: [1]:131..152 from 0
+         }
+       ],
+       order: "ordered"
+     },
+     SetIr {
+       assignments: [
+         {
+           left: this_ [1]:153..157 from 0,
+           right: function_call {
+             fn: {
+               path: [
+                 `ocsf_cast` @ [1]:160..169 from 0
+               ],
+               ref: std::ocsf_cast/fn
+             },
+             args: [
+               this_ [1]:170..174 from 0
+             ],
+             method: false,
+             location: [1]:160..175 from 0
+           },
+           location: [1]:153..175 from 0
+         }
+       ],
+       order: "ordered"
+     },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:176..181 from 0
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:198..198 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
+         ],
+-        ref: std::where/op
++        named_args: [
++          
++        ]
+       },
+-      args: [
+-        expression binary_expr {
+-          left: root_field {
+-            id: `activity_id` @ [1]:182..193 from 0,
+-            has_question_mark: false
+-          },
+-          op: "eq",
+-          right: constant int64 1 @ [1]:197..198 from 0,
+-          location: [1]:182..198 from 0
+-        }
++      filter: [
++        
+       ],
+-      named_args: [
+-        
+-      ]
++      order: "ordered"
+     }
+   ],
+   definition_location: [1]:77..198 from 0
+ }

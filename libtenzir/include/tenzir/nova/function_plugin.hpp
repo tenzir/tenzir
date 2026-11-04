@@ -194,6 +194,36 @@ private:
   _::CallSite::Kernel kernel_ = nullptr;
 };
 
+/// One case of the value of a field of a call's result, see
+/// `FunctionPlugin::rewrite_field_access`.
+struct FieldCase {
+  /// A `bool` that is never `null`, deterministic, and evaluates without
+  /// errors.
+  ast::expression guard;
+  /// The value of the field for the events for which `guard` is `true`.
+  ast::expression value;
+};
+
+/// What a function needs to describe a field of its result over its
+/// arguments.
+struct FieldRewriteCtx {
+  /// The registry that the call resolves against.
+  Ref<registry const> reg;
+};
+
+/// Returns an expression that reads the field `path` of `base`, for use in
+/// `FunctionPlugin::rewrite_field_access`. A `this` base turns into a plain
+/// field path.
+auto access_field(ast::expression const& base,
+                  std::span<ast::field_path::segment const> path)
+  -> ast::expression;
+
+/// Returns a call of the built-in function `name` with `args`, for use in
+/// `FunctionPlugin::rewrite_field_access`, or `None` if `reg` does not have
+/// the function.
+auto make_call(std::string_view name, std::vector<ast::expression> args,
+               location source, registry const& reg) -> Option<ast::expression>;
+
 /// A nova function plugin only registers its arguments. The returned
 /// description turns concrete calls into `CallSite`s.
 class FunctionPlugin : public virtual function_plugin {
@@ -209,6 +239,44 @@ public:
   /// name. See `FunctionDescription::instantiate`.
   auto instantiate(ast::function_call& call, InstantiateCtx ctx) const
     -> failure_or<FunctionDescription::Instantiation>;
+
+  /// Describes the field `path` of the result of `call` over the arguments
+  /// of `call`, so that predicates over the field can move to where the
+  /// arguments are computed.
+  ///
+  /// The field is the `value` of the case whose `guard` is `true`, or
+  /// `null` if no guard is. At most one guard is `true` for every event. The
+  /// description must give the same value for every event, including those for
+  /// which the call returns `null` or warns, but it may warn differently. It
+  /// must not fail where evaluating the call does not.
+  ///
+  /// The caller ensures that `call` is deterministic and has arguments that
+  /// cannot fail, so that a description may evaluate arguments more often or
+  /// not at all. It checks that `call` instantiates only after a function
+  /// describes it, so a description must not rely on valid arguments. An empty
+  /// `path` describes the result itself. Returns `None` if there is no
+  /// description.
+  virtual auto
+  rewrite_field_access(ast::function_call const& call,
+                       std::span<ast::field_path::segment const> path,
+                       FieldRewriteCtx ctx) const
+    -> Option<std::vector<FieldCase>>;
+
+  /// Returns a predicate over the arguments of `call` with the same result,
+  /// `true`, `false`, or `null`, as `call.path <op> rhs` for every event,
+  /// or `None` if there is none. `op` is `==`, `!=`, or `in`. `rhs` is a
+  /// constant, or a list of constants for `in`. The same requirements as for
+  /// `rewrite_field_access` apply.
+  ///
+  /// Functions implement this where comparing the description of
+  /// `rewrite_field_access` does not give a predicate that sources can
+  /// evaluate, such as for integer equality across `int` and `uint`.
+  virtual auto
+  rewrite_field_comparison(ast::function_call const& call,
+                           std::span<ast::field_path::segment const> path,
+                           ast::binary_op op, ast::expression const& rhs,
+                           FieldRewriteCtx ctx) const
+    -> Option<ast::expression>;
 };
 
 namespace _ {

@@ -1,0 +1,6 @@
+{
+  activity_id: 1,
+  src_endpoint: {
+    hostname: "value",
+  },
+}

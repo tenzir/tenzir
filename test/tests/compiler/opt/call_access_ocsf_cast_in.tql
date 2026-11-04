@@ -1,0 +1,6 @@
+export
+class_uid = 3002
+metadata = {version: "1.5.0"}
+activity_id = EventID
+this = ocsf_cast(this)
+where activity_id in [1, 2]

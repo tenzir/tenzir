@@ -1,0 +1,15 @@
+// A fragment of the Windows mapping in the library: the metadata record mixes
+// constants with `now()`, and the host name is moved from the input.
+export
+ocsf = {}
+ocsf.metadata = {
+  extensions: [{name: "win"}],
+  processed_time: now(),
+  product: {name: System.Provider.Name, vendor_name: "Microsoft"},
+  profiles: ["host"],
+  version: "1.9.0",
+}
+ocsf.class_uid = 1007
+ocsf.device = {hostname: move System.Computer}
+this = ocsf_cast(ocsf)
+where device.hostname == "dc01"

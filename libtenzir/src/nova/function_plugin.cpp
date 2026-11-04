@@ -11,6 +11,8 @@
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/enumerate.hpp"
 #include "tenzir/detail/similarity.hpp"
+#include "tenzir/tql2/entity_path.hpp"
+#include "tenzir/tql2/registry.hpp"
 #include "tenzir/try.hpp"
 #include "tenzir/type.hpp"
 
@@ -315,7 +317,48 @@ auto FunctionDescription::instantiate(std::string_view name,
   };
 }
 
+auto access_field(ast::expression const& base,
+                  std::span<ast::field_path::segment const> path)
+  -> ast::expression {
+  auto result = base;
+  if (is<ast::this_>(base) and not path.empty()) {
+    result = ast::root_field{path.front().id, path.front().has_question_mark};
+    path = path.subspan(1);
+  }
+  for (auto const& segment : path) {
+    result = ast::field_access{std::move(result), segment.id.location,
+                               segment.has_question_mark, segment.id};
+  }
+  return result;
+}
+
+auto make_call(std::string_view name, std::vector<ast::expression> args,
+               location source, registry const& reg)
+  -> Option<ast::expression> {
+  auto path = entity_path{
+    std::string{entity_pkg_std}, {std::string{name}}, entity_ns::fn};
+  if (not is<entity_ref>(reg.try_get(path))) {
+    return None{};
+  }
+  auto fn = ast::entity{{ast::identifier{std::string{name}, source}}};
+  fn.ref = std::move(path);
+  return ast::function_call{std::move(fn), std::move(args), source, false};
+}
+
 FunctionPlugin::~FunctionPlugin() = default;
+
+auto FunctionPlugin::rewrite_field_access(
+  ast::function_call const&, std::span<ast::field_path::segment const>,
+  FieldRewriteCtx) const -> Option<std::vector<FieldCase>> {
+  return None{};
+}
+
+auto FunctionPlugin::rewrite_field_comparison(
+  ast::function_call const&, std::span<ast::field_path::segment const>,
+  ast::binary_op, ast::expression const&, FieldRewriteCtx) const
+  -> Option<ast::expression> {
+  return None{};
+}
 
 auto FunctionPlugin::instantiate(ast::function_call& call,
                                  InstantiateCtx ctx) const

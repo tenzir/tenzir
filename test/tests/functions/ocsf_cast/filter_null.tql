@@ -1,0 +1,18 @@
+// Fields that the cast nulls compare equal to `null`.
+// `expected` evaluates the predicate as a value, which the optimizer never
+// rewrites, so it must be `true` for every event that the filter keeps.
+from {id: 1, class_uid: 3002, metadata: {version: "1.5.0"}, activity_id: 1, src_endpoint: {hostname: "x"}},
+     {id: 2, class_uid: 3002, metadata: {version: "1.5.0"}, activity_id: uint(1), src_endpoint: {hostname: 42}},
+     {id: 3, class_uid: 3002, metadata: {version: "1.5.0"}, activity_id: 1.0, src_endpoint: {hostname: null}},
+     {id: 4, class_uid: 3002, metadata: {version: "9.9.9"}, activity_id: 1, src_endpoint: {hostname: "x"}},
+     {id: 5, class_uid: uint(3002), metadata: {version: "1.5.0"}, activity_id: 1, src_endpoint: {hostname: "x"}},
+     {id: 6, class_uid: 3002, metadata: "1.5.0", activity_id: 1, src_endpoint: {hostname: "x"}},
+     {id: 7, class_uid: 4001, metadata: {version: "1.5.0"}, activity_id: 2, src_endpoint: {hostname: "x"}},
+     {id: 8, class_uid: 3002, metadata: {version: "1.5.0"}, activity_id: uint(9223372036854775808), src_endpoint: "x"},
+     {id: 9, class_uid: 3002, metadata: {version: "1.1.0"}, activity_id: 1, src_endpoint: {hostname: "x"}},
+     {id: 10, class_uid: 3002, metadata: {version: "1.5.0"}, activity_id: [1], src_endpoint: {hostname: ["x"]}},
+     {id: 11, metadata: {version: "1.5.0"}, activity_id: 1, src_endpoint: {hostname: "x"}}
+this = {id: id, r: ocsf_cast(this)}
+expected = r.src_endpoint.hostname == null
+where r.src_endpoint.hostname == null
+select id, expected

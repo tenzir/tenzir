@@ -1,0 +1,86 @@
+warning: dropping field which does not exist in schema
+  --> tests/functions/ocsf_cast/filter_int_order.tql:15:20
+   |
+15 | this = {id: id, r: ocsf_cast(this)}
+   |                    ~~~~~~~~~~~~~~~
+   |
+   = note: found `id`
+
+warning: required field `category_uid` is missing
+  --> tests/functions/ocsf_cast/filter_int_order.tql:15:20
+   |
+15 | this = {id: id, r: ocsf_cast(this)}
+   |                    ~~~~~~~~~~~~~~~
+   |
+
+warning: required field `metadata.product` is missing
+  --> tests/functions/ocsf_cast/filter_int_order.tql:15:20
+   |
+15 | this = {id: id, r: ocsf_cast(this)}
+   |                    ~~~~~~~~~~~~~~~
+   |
+
+warning: required field `severity_id` is missing
+  --> tests/functions/ocsf_cast/filter_int_order.tql:15:20
+   |
+15 | this = {id: id, r: ocsf_cast(this)}
+   |                    ~~~~~~~~~~~~~~~
+   |
+
+warning: required field `time` is missing
+  --> tests/functions/ocsf_cast/filter_int_order.tql:15:20
+   |
+15 | this = {id: id, r: ocsf_cast(this)}
+   |                    ~~~~~~~~~~~~~~~
+   |
+
+warning: required field `type_uid` is missing
+  --> tests/functions/ocsf_cast/filter_int_order.tql:15:20
+   |
+15 | this = {id: id, r: ocsf_cast(this)}
+   |                    ~~~~~~~~~~~~~~~
+   |
+
+warning: required field `user` is missing
+  --> tests/functions/ocsf_cast/filter_int_order.tql:15:20
+   |
+15 | this = {id: id, r: ocsf_cast(this)}
+   |                    ~~~~~~~~~~~~~~~
+   |
+
+warning: class "Authentication" needs at least one of `service`, `dst_endpoint`, but has none
+  --> tests/functions/ocsf_cast/filter_int_order.tql:15:20
+   |
+15 | this = {id: id, r: ocsf_cast(this)}
+   |                    ~~~~~~~~~~~~~~~
+   |
+
+warning: expected type `string` for `src_endpoint.hostname`, but got `int`
+  --> tests/functions/ocsf_cast/filter_int_order.tql:15:20
+   |
+15 | this = {id: id, r: ocsf_cast(this)}
+   |                    ~~~~~~~~~~~~~~~
+   |
+
+warning: `src_endpoint` needs at least one of `ip`, `uid`, `name`, `hostname`, `svc_name`, `instance_uid`, `interface_uid`, `interface_name`, `domain`, but has none
+  --> tests/functions/ocsf_cast/filter_int_order.tql:15:20
+   |
+15 | this = {id: id, r: ocsf_cast(this)}
+   |                    ~~~~~~~~~~~~~~~
+   |
+{
+  id: 1,
+  expected: true,
+}
+{
+  id: 2,
+  expected: true,
+}
+{
+  id: 7,
+  expected: true,
+}
+{
+  id: 9,
+  expected: true,
+}
