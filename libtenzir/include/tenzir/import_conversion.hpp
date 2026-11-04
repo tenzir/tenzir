@@ -6,6 +6,7 @@
 #pragma once
 
 #include "tenzir/nova/events.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/result.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/type.hpp"
@@ -23,10 +24,14 @@ auto redact_import_secrets(nova::Events events)
 
 /// Retains selected events while null-compatible output schemas are inferred.
 /// A failed add leaves the buffer unchanged. Each output has one concrete
-/// schema and keeps the import times of its selected rows.
+/// schema and keeps the import times of its selected rows. Fields that remain
+/// `null` in every row take their type from `schema`, the registered schema of
+/// the events, if any, so that sparse events do not each produce a distinct
+/// output schema.
 class ImportConversionBuffer {
 public:
-  ImportConversionBuffer(std::string name, bool internal);
+  ImportConversionBuffer(std::string name, bool internal,
+                         Option<type> schema = None{});
 
   auto add(nova::Events events, nova::storage::BitMap selection)
     -> Result<void, std::string>;
@@ -45,8 +50,12 @@ private:
     std::vector<Selection> selections;
   };
 
+  /// Returns the schema under which the rows of `candidate` are output.
+  auto output_schema(Candidate const& candidate) const -> record_type;
+
   std::string name_;
   bool internal_;
+  Option<type> schema_;
   size_t rows_ = 0;
   std::vector<nova::Events> batches_;
   std::vector<Candidate> candidates_;

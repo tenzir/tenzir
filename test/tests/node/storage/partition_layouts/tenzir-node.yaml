@@ -1,0 +1,3 @@
+tenzir:
+  nova: true
+  max-partition-size: 1

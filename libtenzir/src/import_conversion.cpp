@@ -195,8 +195,18 @@ auto redact_import_secrets(nova::Events events)
   return {true, std::move(events)};
 }
 
-ImportConversionBuffer::ImportConversionBuffer(std::string name, bool internal)
-  : name_{std::move(name)}, internal_{internal} {
+ImportConversionBuffer::ImportConversionBuffer(std::string name, bool internal,
+                                               Option<type> schema)
+  : name_{std::move(name)}, internal_{internal}, schema_{std::move(schema)} {
+}
+
+auto ImportConversionBuffer::output_schema(Candidate const& candidate) const
+  -> record_type {
+  if (not schema_) {
+    return candidate.schema;
+  }
+  return as<record_type>(
+    nova::fill_null_types(type{candidate.schema}, *schema_));
 }
 
 auto ImportConversionBuffer::add(nova::Events events,
@@ -317,6 +327,7 @@ auto ImportConversionBuffer::snapshot() const
   -> Result<std::vector<table_slice>, std::string> {
   auto output = std::vector<table_slice>{};
   for (auto const& candidate : candidates_) {
+    auto const schema = output_schema(candidate);
     for (auto const& selection : candidate.selections) {
       auto const& events = batches_[selection.batch];
       auto rows = std::vector<nova::storage::Index>{};
@@ -324,8 +335,8 @@ auto ImportConversionBuffer::snapshot() const
       for (auto index : nova::storage::true_bits(selection.mask)) {
         auto current = *events.meta.import_time.get(index);
         if (not rows.empty() and current != timestamp) {
-          TRY(auto slice, make_slice(events, candidate.schema, rows, name_,
-                                     internal_, timestamp));
+          TRY(auto slice,
+              make_slice(events, schema, rows, name_, internal_, timestamp));
           output.push_back(std::move(slice));
           rows.clear();
         }
@@ -333,8 +344,8 @@ auto ImportConversionBuffer::snapshot() const
         rows.push_back(index);
       }
       if (not rows.empty()) {
-        TRY(auto slice, make_slice(events, candidate.schema, rows, name_,
-                                   internal_, timestamp));
+        TRY(auto slice,
+            make_slice(events, schema, rows, name_, internal_, timestamp));
         output.push_back(std::move(slice));
       }
     }
@@ -351,7 +362,7 @@ auto ImportConversionBuffer::selected_events() const
   auto result = std::vector<std::pair<type, nova::Events>>{};
   for (auto const& candidate : candidates_) {
     auto schema = nova::ArrowMetadata{name_, internal_}.apply(
-      type{name_, candidate.schema});
+      type{name_, output_schema(candidate)});
     for (auto const& selection : candidate.selections) {
       auto events = batches_[selection.batch];
       events.mask = selection.mask;

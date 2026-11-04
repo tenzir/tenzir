@@ -1,0 +1,5 @@
+// Fields that are null in an entire partition still take their type from the
+// schema, so both partitions share one layout.
+partitions
+where schema == "suricata.tls"
+summarize partitions=count(), layouts=count_distinct(schema_id)

@@ -1,0 +1,7 @@
+// Each event fills its own partition, and the events differ in which fields
+// of the schema are null.
+from {line: r#"{"event_type": "tls", "tls": {"sni": "a.com"}}"#},
+     {line: r#"{"event_type": "tls", "tls": {"version": "TLS 1.3", "ja3": {"hash": "x"}, "chain": ["c"]}}"#}
+this = line.parse_json(schema="suricata.tls", schema_only=true)
+@name = "suricata.tls"
+import

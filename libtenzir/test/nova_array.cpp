@@ -22,6 +22,7 @@
 #include "tenzir/nova/drop_null_fields.hpp"
 #include "tenzir/nova/eval_util.hpp"
 #include "tenzir/nova/materialize.hpp"
+#include "tenzir/nova/schema_discovery.hpp"
 #include "tenzir/nova/shape_table.hpp"
 #include "tenzir/nova/storage.hpp"
 #include "tenzir/nova/stringify.hpp"
@@ -4131,6 +4132,92 @@ TEST("import conversion seals unresolved fields as Arrow null") {
               (std::vector<tenzir::data>{tenzir::record{
                 {"unknown", caf::none},
                 {"items", tenzir::list{caf::none}},
+              }}));
+}
+
+TEST("fill null types from a reference schema") {
+  auto reference = tenzir::type{
+    "suricata.tls",
+    tenzir::record_type{
+      {"sni", tenzir::string_type{}},
+      {"port", tenzir::type{"port", tenzir::uint64_type{}}},
+      {"action", tenzir::enumeration_type{{"allowed"}, {"blocked"}}},
+      {"chain", tenzir::list_type{tenzir::string_type{}}},
+      {"ja3", tenzir::record_type{{"hash", tenzir::string_type{}},
+                                  {"string", tenzir::string_type{}}}},
+      {"client",
+       tenzir::record_type{
+         {"version", tenzir::string_type{}},
+         {"kind", tenzir::enumeration_type{{"a"}, {"b"}}},
+       }},
+      {"count", tenzir::string_type{}},
+    }};
+  auto discovered = tenzir::type{tenzir::record_type{
+    {"ja3", tenzir::record_type{{"hash", tenzir::string_type{}},
+                                {"string", tenzir::null_type{}}}},
+    {"sni", tenzir::null_type{}},
+    {"port", tenzir::null_type{}},
+    {"action", tenzir::null_type{}},
+    {"chain", tenzir::list_type{tenzir::null_type{}}},
+    {"client", tenzir::null_type{}},
+    {"count", tenzir::int64_type{}},
+    {"extra", tenzir::null_type{}},
+  }};
+  CHECK_EQUAL(
+    fill_null_types(discovered, reference),
+    (tenzir::type{tenzir::record_type{
+      {"ja3", tenzir::record_type{{"hash", tenzir::string_type{}},
+                                  {"string", tenzir::string_type{}}}},
+      {"sni", tenzir::string_type{}},
+      {"port", tenzir::uint64_type{}},
+      {"action", tenzir::string_type{}},
+      {"chain", tenzir::list_type{tenzir::string_type{}}},
+      {"client", tenzir::record_type{{"version", tenzir::string_type{}},
+                                     {"kind", tenzir::string_type{}}}},
+      {"count", tenzir::int64_type{}},
+      {"extra", tenzir::null_type{}},
+    }}));
+}
+
+TEST("import conversion types remaining nulls from the registered schema") {
+  auto reference = tenzir::type{
+    "suricata.tls",
+    tenzir::record_type{
+      {"sni", tenzir::string_type{}},
+      {"ja3", tenzir::record_type{{"hash", tenzir::string_type{}},
+                                  {"string", tenzir::string_type{}}}},
+      {"chain", tenzir::list_type{tenzir::string_type{}}},
+    }};
+  // Each buffer stands for one partition with a different set of null fields.
+  auto convert = [&](Record row) {
+    auto conversion
+      = tenzir::ImportConversionBuffer{"suricata.tls", false, reference};
+    auto events = export_events(std::move(row));
+    events.meta = Events::Meta::make_empty(1, "suricata.tls");
+    REQUIRE(conversion.add(events, events.mask));
+    auto output = conversion.snapshot();
+    REQUIRE(output);
+    REQUIRE_EQUAL(output.unwrap().size(), 1u);
+    return std::move(output).unwrap();
+  };
+  auto sparse = convert(
+    Record{{"sni", String{"a.com"}}, {"ja3", Null{}}, {"chain", Null{}}});
+  auto dense
+    = convert(Record{{"sni", Null{}},
+                     {"ja3", Record{{"hash", String{"x"}}, {"string", Null{}}}},
+                     {"chain", List{String{"c"}}}});
+  CHECK_EQUAL(sparse[0].schema(), dense[0].schema());
+  CHECK_EQUAL(sparse[0].schema(), reference);
+  CHECK_EQUAL(export_values(sparse), (std::vector<tenzir::data>{tenzir::record{
+                                       {"sni", "a.com"},
+                                       {"ja3", caf::none},
+                                       {"chain", caf::none},
+                                     }}));
+  CHECK_EQUAL(export_values(dense),
+              (std::vector<tenzir::data>{tenzir::record{
+                {"sni", caf::none},
+                {"ja3", tenzir::record{{"hash", "x"}, {"string", caf::none}}},
+                {"chain", tenzir::list{"c"}},
               }}));
 }
 

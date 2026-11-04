@@ -1,0 +1,4 @@
+{
+  partitions: 2,
+  layouts: 1,
+}
