@@ -8,23 +8,20 @@
 
 #include "tenzir/workspace.hpp"
 
-#include "tenzir/compile_ctx.hpp"
+#include "tenzir/detail/assert.hpp"
+#include "tenzir/detail/env.hpp"
 #include "tenzir/diagnostics.hpp"
-#include "tenzir/ir.hpp"
-#include "tenzir/session.hpp"
-#include "tenzir/source.hpp"
+#include "tenzir/test/compile.hpp"
 #include "tenzir/test/registry.hpp"
 #include "tenzir/test/test.hpp"
-#include "tenzir/tql2/parser.hpp"
 #include "tenzir/tql2/registry.hpp"
 #include "tenzir/tql2/resolve.hpp"
-#include "tenzir/tql2/tokens.hpp"
 
-#include <cstdlib>
+#include <fmt/format.h>
+
 #include <fstream>
 #include <pwd.h>
 #include <string>
-#include <tuple>
 #include <unistd.h>
 #include <vector>
 
@@ -58,64 +55,26 @@ struct Scratch {
   std::filesystem::path root;
 };
 
-/// Sets an environment variable for as long as it lives.
+/// Sets an environment variable, or unsets it, for as long as it lives.
 struct Env {
-  Env(char const* name, std::string const& value) : name_{name} {
-    if (auto const* old = std::getenv(name)) {
-      old_ = old;
-    }
-    ::setenv(name, value.c_str(), 1);
-  }
-
-  /// Unsets `name` instead.
-  Env(char const* name, None) : name_{name} {
-    if (auto const* old = std::getenv(name)) {
-      old_ = old;
-    }
-    ::unsetenv(name);
+  Env(std::string_view name, Option<std::string> value)
+    : name_{name}, old_{detail::getenv(name)} {
+    auto error = value ? detail::setenv(name, *value) : detail::unsetenv(name);
+    TENZIR_ASSERT(error == caf::none);
   }
 
   ~Env() {
-    if (old_) {
-      ::setenv(name_, old_->c_str(), 1);
-    } else {
-      ::unsetenv(name_);
-    }
+    auto error = old_ ? detail::setenv(name_, *old_) : detail::unsetenv(name_);
+    TENZIR_ASSERT(error == caf::none);
   }
 
   Env(Env const&) = delete;
   auto operator=(Env const&) -> Env& = delete;
 
 private:
-  char const* name_;
+  std::string name_;
   Option<std::string> old_;
 };
-
-/// The messages of the errors that compiling `text` against `reg` reports.
-/// The messages of the errors that compiling `text` against `reg` reports,
-/// letting it name the packages in `prelude`.
-auto compile_errors(registry const& reg, ExternPrelude const& prelude,
-                    std::string_view text) -> std::vector<std::string> {
-  auto dh = collecting_diagnostic_handler{};
-  auto provider = session_provider::make(dh, reg);
-  auto ctx = provider.as_session();
-  auto source = Source::new_source(std::string{text}, "<test>", false);
-  auto sources = SourceMap{};
-  sources.add_source(source);
-  auto tokens = tokenize_permissive(source->text);
-  auto parsed = parse(tokens, *source, ctx);
-  if (parsed and resolve_entities(*parsed, prelude, ctx)) {
-    auto root = compile_ctx::make_root(base_ctx{ctx.dh(), ctx.reg()}, sources);
-    std::ignore = std::move(*parsed).compile(root);
-  }
-  auto result = std::vector<std::string>{};
-  for (auto& diagnostic : std::move(dh).collect()) {
-    if (diagnostic.severity == severity::error) {
-      result.push_back(std::move(diagnostic.message));
-    }
-  }
-  return result;
-}
 
 constexpr auto acme_hash = std::string_view{
   "0000000000000000000000000000000000000000000000000000000000000a11"};
@@ -147,14 +106,29 @@ TEST("a workspace is where its lock is") {
   auto scratch = Scratch{};
   write_workspace(scratch);
   {
-    auto unset = Env{"TENZIR_WORKSPACE", ""};
-    ::unsetenv("TENZIR_WORKSPACE");
+    auto unset = Env{"TENZIR_WORKSPACE", None{}};
     auto found = find_workspace(scratch.root / "ws" / "pipelines");
     REQUIRE(found);
     CHECK_EQUAL(*found, scratch.root / "ws");
   }
-  auto none = Env{"TENZIR_WORKSPACE", "none"};
+  auto none = Env{"TENZIR_WORKSPACE", std::string{"none"}};
   CHECK(not find_workspace(scratch.root / "ws"));
+}
+
+TEST("a workspace's manifest lists only its dependencies") {
+  auto dh = collecting_diagnostic_handler{};
+  CHECK(workspace_dependencies(data{}, "package.yaml", dh)->empty());
+  auto listed = workspace_dependencies(
+    record{{"dependencies", record{{"acme", data{"^1"}}}}}, "package.yaml", dh);
+  REQUIRE(listed);
+  CHECK(listed->contains("acme"));
+  CHECK(std::move(dh).collect().empty());
+  auto refused_dh = collecting_diagnostic_handler{};
+  CHECK(not workspace_dependencies(record{{"name", data{"Example"}}},
+                                   "package.yaml", refused_dh));
+  auto refused = std::move(refused_dh).collect();
+  REQUIRE(not refused.empty());
+  CHECK(refused.front().message.contains("lists only its `dependencies`"));
 }
 
 TEST("a workspace's pipelines use what it lists, from the cache") {
@@ -177,16 +151,15 @@ TEST("a workspace's pipelines use what it lists, from the cache") {
   REQUIRE(workspace);
   CHECK_EQUAL(workspace->packages.size(), size_t{2});
   auto reg = test::builtin_registry().clone();
-  REQUIRE(require_dependencies("the workspace", workspace->dependencies,
-                               workspace->packages, loaded_dh));
-  REQUIRE(add_packages(*reg, workspace->packages, loaded_dh, nullptr,
-                       PackageVisibility::declared));
-  auto prelude = extern_prelude(workspace->dependencies);
-  CHECK(compile_errors(*reg, prelude, "from {x: 1} | myteam::twice | discard")
+  auto prelude = add_workspace_packages(
+    *reg, workspace->dependencies, workspace->packages, loaded_dh, nullptr);
+  REQUIRE(prelude);
+  CHECK(test::compile_errors(*reg, *prelude,
+                             "from {x: 1} | myteam::twice | discard")
           .empty());
   // `acme` is what `myteam` uses, not what the workspace lists.
-  auto errors
-    = compile_errors(*reg, prelude, "from {x: 1} | acme::double | discard");
+  auto errors = test::compile_errors(*reg, *prelude,
+                                     "from {x: 1} | acme::double | discard");
   REQUIRE(not errors.empty());
   CHECK(errors.front().contains("not among the dependencies"));
 }
@@ -195,7 +168,7 @@ TEST("the package cache ignores a relative XDG cache directory") {
   auto scratch = Scratch{};
   auto home = Env{"HOME", (scratch.root / "home").string()};
   {
-    auto cache = Env{"XDG_CACHE_HOME", "cache"};
+    auto cache = Env{"XDG_CACHE_HOME", std::string{"cache"}};
     auto found = package_cache_directory();
     REQUIRE(found);
     CHECK_EQUAL(*found,
@@ -251,12 +224,45 @@ TEST("a lock names packages in the cache only by their digest") {
   }
 }
 
-TEST("a workspace manifest lists only dependencies") {
+TEST("a workspace needs no local packages") {
+  auto scratch = Scratch{};
+  scratch.write("ws/package.yaml", "dependencies: {}\n");
+  scratch.write("ws/package.lock", "format: 1\npackages: []\n");
+  auto dh = collecting_diagnostic_handler{};
+  auto workspace = load_workspace(scratch.root / "ws", dh);
+  REQUIRE(workspace);
+  CHECK(workspace->packages.empty());
+}
+
+TEST("loading a workspace checks its manifest") {
   auto scratch = Scratch{};
   write_workspace(scratch);
   scratch.write("ws/package.yaml", "id: myteam\n");
   auto dh = collecting_diagnostic_handler{};
   CHECK(not load_workspace(scratch.root / "ws", dh));
+  auto errors = std::move(dh).collect();
+  REQUIRE(not errors.empty());
+  CHECK(errors.front().message.contains("lists only its `dependencies`"));
+}
+
+TEST("a workspace package with a file that does not parse does not load") {
+  auto scratch = Scratch{};
+  write_workspace(scratch);
+  scratch.write("ws/packages/myteam/operators/broken.tql", "x = | =");
+  auto dh = collecting_diagnostic_handler{};
+  CHECK(not load_workspace(scratch.root / "ws", dh));
+}
+
+TEST("a workspace package is named by its directory") {
+  auto scratch = Scratch{};
+  write_workspace(scratch);
+  scratch.write("ws/packages/myteam/package.yaml", "id: other\n"
+                                                   "name: My Team\n");
+  auto dh = collecting_diagnostic_handler{};
+  CHECK(not load_workspace(scratch.root / "ws", dh));
+  auto errors = std::move(dh).collect();
+  REQUIRE(not errors.empty());
+  CHECK(errors.front().message.contains("its id is `other`"));
 }
 
 } // namespace tenzir

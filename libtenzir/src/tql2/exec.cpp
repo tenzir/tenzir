@@ -75,25 +75,10 @@ namespace tenzir {
 using namespace tenzir::si_literals;
 
 namespace {
-/// Publishes the packages a pipeline run here may use, and returns what it
-/// may name of them.
-auto load_packages_for_exec(diagnostic_handler& dh, caf::actor_system& sys,
-                            SourceMap* source_map)
-  -> failure_or<ExternPrelude> {
-  // In a workspace, a pipeline uses the packages the workspace uses, the way
-  // its deployments would, and none installed elsewhere.
-  auto ec = std::error_code{};
-  if (auto root = find_workspace(std::filesystem::current_path(ec))) {
-    TRY(auto workspace, load_workspace(*root, dh));
-    TRY(require_dependencies("the workspace", workspace.dependencies,
-                             workspace.packages, dh));
-    auto guard = begin_registry_update();
-    auto next = guard.current()->clone();
-    TRY(add_packages(*next, workspace.packages, dh, source_map,
-                     PackageVisibility::declared));
-    guard.publish(std::shared_ptr<const registry>{std::move(next)});
-    return extern_prelude(workspace.dependencies);
-  }
+/// The packages installed in the configured package directories, by their
+/// ids, where a later directory's package replaces an earlier one's.
+auto installed_packages(diagnostic_handler& dh, caf::actor_system& sys)
+  -> failure_or<std::vector<package>> {
   auto package_dirs = std::vector<std::filesystem::path>{};
   for (const auto& dir : config_dirs(sys.config())) {
     package_dirs.emplace_back(dir / "packages");
@@ -206,12 +191,38 @@ auto load_packages_for_exec(diagnostic_handler& dh, caf::actor_system& sys,
   for (auto& [id, pkg] : packages_by_id) {
     packages.push_back(std::move(pkg));
   }
+  return packages;
+}
+
+/// Publishes the packages a pipeline run here may use, and returns what it
+/// may name of them.
+auto load_packages_for_exec(diagnostic_handler& dh, caf::actor_system& sys,
+                            SourceMap* source_map)
+  -> failure_or<ExternPrelude> {
+  // In a workspace, a pipeline uses the packages the workspace uses, the way
+  // its deployments would, and none installed elsewhere.
+  auto ec = std::error_code{};
+  auto root = find_workspace(std::filesystem::current_path(ec));
+  auto workspace = Option<Workspace>{};
+  if (root) {
+    TRY(workspace, load_workspace(*root, dh));
+  }
+  auto installed = std::vector<package>{};
+  if (not workspace) {
+    TRY(installed, installed_packages(dh, sys));
+  }
   auto guard = begin_registry_update();
   auto next = guard.current()->clone();
-  TRY(add_packages(*next, packages, dh, source_map,
-                   PackageVisibility::all_deprecated));
+  auto prelude = ExternPrelude::all_packages_deprecated();
+  if (workspace) {
+    TRY(prelude, add_workspace_packages(*next, workspace->dependencies,
+                                        workspace->packages, dh, source_map));
+  } else {
+    TRY(add_packages(*next, installed, dh, source_map,
+                     PackageVisibility::all_deprecated));
+  }
   guard.publish(std::shared_ptr<const registry>{std::move(next)});
-  return ExternPrelude::all_packages_deprecated();
+  return prelude;
 }
 
 } // namespace
