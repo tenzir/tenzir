@@ -3446,6 +3446,12 @@ public:
     return "_ocsf_cast_field";
   }
 
+  /// The call stands in for a field of `ocsf_cast`, and computes only that
+  /// field, so that predicates on it may move like those on a converted field.
+  auto is_cheap() const -> bool override {
+    return true;
+  }
+
   auto describe() const -> FunctionDescription override {
     auto d = FunctionDescriber<CastFieldArgs, CastFieldFunction>{};
     d.positional("version", &CastFieldArgs::version, "any");

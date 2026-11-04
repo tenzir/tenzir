@@ -121,64 +121,68 @@ auto ir::split_filter_by_substitution(OptimizeFilter filter,
   // A replacement that is not plain stands for a value that the operator
   // computes, which a moved predicate computes once more. That is acceptable
   // for a cheap value that the whole chain reads once, but copying it several
-  // times multiplies the work, and copying an expensive function call, such as
-  // a parser, may repeat arbitrarily expensive work.
-  auto substitutions = std::vector<Option<ast::expression>>{};
+  // times multiplies the work. A predicate that ends up with more expensive
+  // parts, such as parsers, than it had may repeat arbitrarily expensive work.
+  // The simplifier may describe an expensive call by its arguments, such as a
+  // field of `ocsf_cast(this)` by the input, in which case it moves.
+  auto simplified = std::vector<Option<ast::expression>>{};
   auto computations = std::vector<std::vector<caf::byte_buffer>>{};
   auto reads = std::map<caf::byte_buffer, size_t>{};
-  substitutions.reserve(filter.size());
+  simplified.reserve(filter.size());
   computations.reserve(filter.size());
   for (auto const& expr : filter) {
     auto computed = std::vector<caf::byte_buffer>{};
     auto const counting = ast::FieldSubstitution{
       [&](ast::field_path const& field) -> Option<ast::expression> {
         auto replacement = fields(field);
-        if (not replacement or is_plain(*replacement)) {
-          return replacement;
+        if (replacement and not is_plain(*replacement)
+            and is_cheap(*replacement, reg)) {
+          computed.push_back(computation_key(*replacement));
         }
-        if (not is_cheap(*replacement, reg)) {
-          return None{};
-        }
-        computed.push_back(computation_key(*replacement));
         return replacement;
       }};
-    auto substituted = ast::substitute_refs(expr, reg, counting, meta);
-    if (substituted) {
+    auto result = Option<ast::expression>{};
+    if (auto substituted = ast::substitute_refs(expr, reg, counting, meta)) {
+      auto predicate = simplify_predicate(std::move(*substituted), reg);
+      if (count_expensive(predicate, reg) <= count_expensive(expr, reg)) {
+        result = std::move(predicate);
+      }
+    }
+    if (result) {
       for (auto const& key : computed) {
         ++reads[key];
       }
     } else {
       computed.clear();
     }
-    substitutions.push_back(std::move(substituted));
+    simplified.push_back(std::move(result));
     computations.push_back(std::move(computed));
   }
   auto result = split_filter_result{};
   for (auto i = size_t{0}; i < filter.size(); ++i) {
     auto& expr = filter[i];
-    auto& substituted = substitutions[i];
     auto const copied
       = std::ranges::any_of(computations[i], [&](caf::byte_buffer const& key) {
           return reads.at(key) > 1;
         });
-    if (not substituted or copied) {
+    if (not simplified[i] or copied) {
       result.dependent.push_back(std::move(expr));
       continue;
     }
-    auto simplified = simplify_predicate(std::move(*substituted), reg);
+    auto& predicate = *simplified[i];
     // A predicate that grows past the bound stays behind the operator.
-    auto const size = expression_size(simplified);
+    auto const size = expression_size(predicate);
     if (size > max_rewritten_predicate_size and size > expression_size(expr)) {
       result.dependent.push_back(std::move(expr));
       continue;
     }
     // As in `split_filter_by_dependents`, a predicate must not move past one
     // that stays if it could fail for the events that the other one drops.
-    if (not result.dependent.empty() and not is_infallible(simplified)) {
+    if (not result.dependent.empty() and not is_infallible(predicate)) {
       result.dependent.push_back(std::move(expr));
       continue;
     }
-    result.independent.push_back(std::move(simplified));
+    result.independent.push_back(std::move(predicate));
   }
   return result;
 }

@@ -926,21 +926,22 @@ public:
 
   auto visit(ast::function_call& x) -> void {
     if (not x.fn.ref.resolved() or not reg_.get(x).is_cheap()) {
-      found = true;
+      ++expensive;
       return;
     }
     enter(x);
   }
 
   auto visit(ast::lambda_expr&) -> void {
-    found = true;
+    ++expensive;
   }
 
   auto visit(ast::pipeline_expr&) -> void {
-    found = true;
+    ++expensive;
   }
 
-  bool found = false;
+  /// The number of expensive parts, not counting those nested in others.
+  size_t expensive = 0;
 
 private:
   registry const& reg_;
@@ -1057,11 +1058,16 @@ auto ir::is_plain(ast::expression const& expr) -> bool {
     });
 }
 
-auto ir::is_cheap(ast::expression const& expr, registry const& reg) -> bool {
+auto ir::count_expensive(ast::expression const& expr, registry const& reg)
+  -> size_t {
   auto finder = CostFinder{reg};
   // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
   finder.visit(const_cast<ast::expression&>(expr));
-  return not finder.found;
+  return finder.expensive;
+}
+
+auto ir::is_cheap(ast::expression const& expr, registry const& reg) -> bool {
+  return count_expensive(expr, reg) == 0;
 }
 
 auto ir::is_infallible(ast::expression const& expr) -> bool {

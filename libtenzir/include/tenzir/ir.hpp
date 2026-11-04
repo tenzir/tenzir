@@ -759,6 +759,11 @@ auto is_plain(ast::expression const& expr) -> bool;
 /// times.
 auto is_cheap(ast::expression const& expr, registry const& reg) -> bool;
 
+/// Returns the number of expensive parts of `expr`, such as calls of expensive
+/// functions, not counting those within others. See `is_cheap`.
+auto count_expensive(ast::expression const& expr, registry const& reg)
+  -> size_t;
+
 /// Returns whether evaluating `expr` cannot fail the pipeline. A function can
 /// fail depending on its input, so `expr` must not call any.
 auto is_infallible(ast::expression const& expr) -> bool;
