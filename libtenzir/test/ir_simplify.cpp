@@ -491,6 +491,24 @@ TEST("substitution does not copy expensive function calls") {
   CHECK(split.independent.empty());
 }
 
+TEST("substitution reads a described member of an expensive value once") {
+  // As for `x = ocsf_cast(this)`, whose members the simplifier describes.
+  auto const cast
+    = [](ast::field_path const& field) -> Option<ast::expression> {
+    return parse(
+      fmt::format("ocsf_cast(this).{}", field.path().back().id.name));
+  };
+  auto split = ir::split_filter_by_substitution(
+    parse_chain({"x.activity_id == 1", "x.severity_id == 2"}),
+    test::builtin_registry(), cast);
+  CHECK_EQUAL(split.independent.size(), size_t{2});
+  CHECK(split.dependent.empty());
+  split = ir::split_filter_by_substitution(parse_chain({"x.activity_id == 1 or "
+                                                        "x.activity_id == 2"}),
+                                           test::builtin_registry(), cast);
+  CHECK(split.independent.empty());
+}
+
 TEST("substitution copies a computed value at most once") {
   // `x` and `w` are computed, `p` is expensive, and the others are plain.
   auto const computed

@@ -1072,10 +1072,6 @@ public:
     return true;
   }
 
-  auto is_cheap() const -> bool override {
-    return true;
-  }
-
   auto describe() const -> nova::FunctionDescription override {
     auto d = nova::FunctionDescriber<ContainsNullArgs, ContainsNullFunction>{};
     d.positional("x", &ContainsNullArgs::x, "any");

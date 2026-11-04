@@ -91,10 +91,11 @@ namespace {
 
 /// Identifies the value that a replacement computes. Replacements for
 /// different members of the same assigned value compute the same value, so the
-/// members do not count.
-auto computation_key(ast::expression const& replacement) -> caf::byte_buffer {
+/// members do not count, unless `members` is set.
+auto computation_key(ast::expression const& replacement, bool members = false)
+  -> caf::byte_buffer {
   auto const* base = &replacement;
-  while (true) {
+  while (not members) {
     if (auto const* access = try_as<ast::field_access>(*base)) {
       base = &access->left;
     } else if (auto const* index = try_as<ast::index_expr>(*base)) {
@@ -125,7 +126,7 @@ auto ir::split_filter_by_substitution(OptimizeFilter filter,
   // with more expensive parts, such as parsers, than it had may repeat
   // arbitrarily expensive work. The simplifier may describe an expensive call
   // by its arguments, such as a field of `ocsf_cast(this)` by the input, in
-  // which case the predicate moves.
+  // which case the predicate moves if it reads that field once.
   auto result = split_filter_result{};
   // The reads of computed values by the predicates that moved.
   auto reads = std::map<caf::byte_buffer, size_t>{};
@@ -134,9 +135,12 @@ auto ir::split_filter_by_substitution(OptimizeFilter filter,
     auto const counting = ast::FieldSubstitution{
       [&](ast::field_path const& field) -> Option<ast::expression> {
         auto replacement = fields(field);
-        if (replacement and not is_plain(*replacement)
-            and is_cheap(*replacement, reg)) {
-          ++computed[computation_key(*replacement)];
+        if (replacement and not is_plain(*replacement)) {
+          // The simplifier may describe a member of an expensive value by a
+          // cheap computation of only that member, such as `ocsf_cast(this).a`
+          // by `_ocsf_cast_field(…)`, so each member counts on its own.
+          auto const cheap = is_cheap(*replacement, reg);
+          ++computed[computation_key(*replacement, not cheap)];
         }
         return replacement;
       }};
