@@ -1092,8 +1092,14 @@ auto read_package_files(std::filesystem::path const& dir,
 
 auto package::load(const std::filesystem::path& dir, diagnostic_handler& dh,
                    bool only_entities) -> failure_or<package> {
+  return load(dir, dir.filename().string(), dh, only_entities);
+}
+
+auto package::load(std::filesystem::path const& dir,
+                   std::string_view default_id, diagnostic_handler& dh,
+                   bool only_entities) -> failure_or<package> {
   TRY(auto files, read_package_files(dir, dh, only_entities));
-  return load(files, dir.string(), dir.filename().string(), dh, only_entities);
+  return load(files, dir.string(), default_id, dh, only_entities);
 }
 
 auto package::load(package_files const& files, std::string_view origin,

@@ -41,6 +41,7 @@
 #include "tenzir/tql2/resolve.hpp"
 #include "tenzir/tql2/tokens.hpp"
 #include "tenzir/try.hpp"
+#include "tenzir/workspace.hpp"
 
 #include <arrow/util/utf8.h>
 #include <caf/actor_from_state.hpp>
@@ -74,8 +75,25 @@ namespace tenzir {
 using namespace tenzir::si_literals;
 
 namespace {
+/// Publishes the packages a pipeline run here may use, and returns what it
+/// may name of them.
 auto load_packages_for_exec(diagnostic_handler& dh, caf::actor_system& sys,
-                            SourceMap* source_map) -> failure_or<void> {
+                            SourceMap* source_map)
+  -> failure_or<ExternPrelude> {
+  // In a workspace, a pipeline uses the packages the workspace uses, the way
+  // its deployments would, and none installed elsewhere.
+  auto ec = std::error_code{};
+  if (auto root = find_workspace(std::filesystem::current_path(ec))) {
+    TRY(auto workspace, load_workspace(*root, dh));
+    TRY(require_dependencies("the workspace", workspace.dependencies,
+                             workspace.packages, dh));
+    auto guard = begin_registry_update();
+    auto next = guard.current()->clone();
+    TRY(add_packages(*next, workspace.packages, dh, source_map,
+                     PackageVisibility::declared));
+    guard.publish(std::shared_ptr<const registry>{std::move(next)});
+    return extern_prelude(workspace.dependencies);
+  }
   auto package_dirs = std::vector<std::filesystem::path>{};
   for (const auto& dir : config_dirs(sys.config())) {
     package_dirs.emplace_back(dir / "packages");
@@ -193,7 +211,7 @@ auto load_packages_for_exec(diagnostic_handler& dh, caf::actor_system& sys,
   TRY(add_packages(*next, packages, dh, source_map,
                    PackageVisibility::all_deprecated));
   guard.publish(std::shared_ptr<const registry>{std::move(next)});
-  return {};
+  return ExternPrelude::all_packages_deprecated();
 }
 
 } // namespace
@@ -2058,7 +2076,7 @@ auto exec2(Arc<const Source> source, diagnostic_handler& dh,
   }
   auto& handler = reporting ? static_cast<diagnostic_handler&>(*reporting) : dh;
   auto result = std::invoke([&]() -> failure_or<bool> {
-    TRY(load_packages_for_exec(handler, sys, &source_map));
+    TRY(auto prelude, load_packages_for_exec(handler, sys, &source_map));
     // The packages are published now, so this snapshot is what the pipeline
     // compiles and runs against.
     auto reg = global_registry();
@@ -2075,8 +2093,7 @@ auto exec2(Arc<const Source> source, diagnostic_handler& dh,
       fmt::print("{:#?}\n", parsed);
       return not ctx.has_failure();
     }
-    TRY(
-      resolve_entities(parsed, ExternPrelude::all_packages_deprecated(), ctx));
+    TRY(resolve_entities(parsed, prelude, ctx));
     auto flag = cfg.parallelism ? Option<std::string_view>{*cfg.parallelism}
                                 : Option<std::string_view>{};
     auto configured = caf::get_or(content(sys.config()),

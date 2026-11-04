@@ -337,6 +337,12 @@ struct package final {
   static auto load(const std::filesystem::path& dir, diagnostic_handler& dh,
                    bool only_entities) -> failure_or<package>;
 
+  /// Loads the package in `dir`, which is `default_id` if its `package.yaml`
+  /// has none, rather than the name of the directory.
+  static auto
+  load(std::filesystem::path const& dir, std::string_view default_id,
+       diagnostic_handler& dh, bool only_entities) -> failure_or<package>;
+
   /// Loads a package from its files, as they would be in its directory.
   /// `origin` names where they come from in diagnostics, and `default_id` is
   /// the package's id if its `package.yaml` has none.
