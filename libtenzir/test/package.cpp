@@ -178,6 +178,27 @@ TEST("a package's dependencies must be well-formed") {
   }
 }
 
+TEST("a package's id is a name code can call it by") {
+  // The tokenizer reads these as keywords or `_`, not as identifiers.
+  for (auto id : {"if", "true", "self", "_", "in"}) {
+    auto dh = collecting_diagnostic_handler{};
+    auto named = package_files{
+      {"package.yaml", fmt::format("id: \"{}\"\nname: A\n", id)}};
+    CHECK(not package::load(named, "packages/acme", "acme", dh, true));
+    auto used = package_files{
+      {"package.yaml",
+       fmt::format("name: A\ndependencies:\n  \"{}\": \"^1\"\n", id)}};
+    CHECK(not package::load(used, "packages/acme", "acme", dh, true));
+  }
+  // Ids that only contain one are fine, and so is a hyphen.
+  for (auto id : {"iff", "self_", "_x", "my-pkg"}) {
+    auto dh = collecting_diagnostic_handler{};
+    auto named = package_files{
+      {"package.yaml", fmt::format("id: \"{}\"\nname: A\n", id)}};
+    CHECK(package::load(named, "packages/acme", "acme", dh, true));
+  }
+}
+
 TEST("a package needs its manifest") {
   auto files = package_files{{"operators/double.tql", "x = x * 2"}};
   auto dh = collecting_diagnostic_handler{};
