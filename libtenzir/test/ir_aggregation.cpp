@@ -463,40 +463,6 @@ TEST("optimizer offers each aggregation to the closest absorber") {
               (std::vector<std::string>{"first"}));
 }
 
-TEST("absorbed fallback receives the bindings of its pipeline") {
-  // Only the Nova operator of `from_mysql` computes aggregations.
-  set_nova_enabled(true);
-  auto dh = collecting_diagnostic_handler{};
-  auto provider = session_provider::make(dh, test::builtin_registry());
-  auto ctx = base_ctx{dh, provider.as_session().reg()};
-  // A `set` that reads a binding never qualifies for the rewrite, because the
-  // unresolved binding could fail. This simulates an operator that does, which
-  // the source absorbs before the pipeline is instantiated, as in `every`.
-  auto pipe = compile(ctx, "let $v = 42\n"
-                           "from_mysql table=\"t\", host=\"h\"\n"
-                           "x = $v\n"
-                           "summarize x, n=count()");
-  REQUIRE_EQUAL(pipe.operators.size(), size_t{3});
-  // As for the subpipeline of `every`, constant arguments resolve before
-  // instantiation, but bindings do not.
-  REQUIRE(pipe.substitute(substitute_ctx{ctx, nullptr}, false));
-  CHECK(not pipe.operators[1]->rewrite_aggregation(
-    *pipe.operators[2]->aggregation(), optimize_ctx()));
-  auto aggregation = pipe.operators[2]->aggregation();
-  REQUIRE(aggregation);
-  aggregation->fallback.operators.insert(
-    aggregation->fallback.operators.begin(), pipe.operators[1]->copy());
-  REQUIRE(pipe.operators[0]->absorb_aggregation(*aggregation));
-  pipe.operators.resize(1);
-  CHECK(fmt::format("{:?}", pipe).contains("dollar_var"));
-  auto instantiated = ir::instantiate(std::move(pipe), ctx);
-  REQUIRE(instantiated);
-  auto rendered = fmt::format("{:?}", *instantiated);
-  CHECK(not rendered.contains("dollar_var"));
-  CHECK(rendered.contains("42"));
-  CHECK(std::move(dh).collect().empty());
-}
-
 TEST("generic operators decline aggregations after absorbing events") {
   set_nova_enabled(true);
   auto dh = collecting_diagnostic_handler{};
@@ -512,13 +478,12 @@ TEST("generic operators decline aggregations after absorbing events") {
                   "drop y\n"
                   "summarize x, n=count()"),
               (std::vector<std::string>{"from_mysql"}));
-  // A limit counts the events before the summary.
-  CHECK_EQUAL(
-    run("from_mysql table=\"t\", host=\"h\"\n"
-        "head 3\n"
-        "drop y\n"
-        "summarize x, n=count()"),
-    (std::vector<std::string>{"from_mysql", "head", "drop", "summarize"}));
+  // MySQL computes a limit before the summary, too.
+  CHECK_EQUAL(run("from_mysql table=\"t\", host=\"h\"\n"
+                  "head 3\n"
+                  "drop y\n"
+                  "summarize x, n=count()"),
+              (std::vector<std::string>{"from_mysql"}));
 }
 
 TEST("optimizer offers the stages after an aggregation") {
@@ -651,22 +616,21 @@ TEST("operators describe the stages after an aggregation") {
              "head 3");
   CHECK_EQUAL(names(pipe),
               (std::vector<std::string>{"from_mysql", "where", "head"}));
-  // A sort that keeps only its first events still goes along without the
-  // limit, as before, when an operator that is no stage separates them.
+  // A sort that keeps only its first events goes along only with the limit,
+  // so an operator that is no stage between them keeps the sort.
   pipe = run("from_mysql table=\"t\", host=\"h\"\n"
              "summarize x, n=count()\n"
              "sort x\n"
              "y = 1\n"
              "head 1");
   CHECK_EQUAL(names(pipe),
-              (std::vector<std::string>{"from_mysql", "set", "head"}));
-  // A limit before the summary keeps it local.
+              (std::vector<std::string>{"from_mysql", "sort", "set", "head"}));
+  // MySQL computes a limit before the summary, too.
   pipe = run("from_mysql table=\"t\", host=\"h\"\n"
              "head 10\n"
              "summarize x, n=count()\n"
              "head 3");
-  CHECK_EQUAL(names(pipe), (std::vector<std::string>{"from_mysql", "head",
-                                                     "summarize", "head"}));
+  CHECK_EQUAL(names(pipe), (std::vector<std::string>{"from_mysql"}));
 }
 
 TEST("stages after an aggregation that read bindings stay in the pipeline") {

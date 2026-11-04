@@ -16,15 +16,15 @@
 #include <tenzir/concept/parseable/numeric/real.hpp>
 #include <tenzir/detail/byteswap.hpp>
 #include <tenzir/detail/narrow.hpp>
+#include <tenzir/logger.hpp>
 #include <tenzir/nova/array_builder.hpp>
-#include <tenzir/nova/eval.hpp>
 #include <tenzir/nova/events.hpp>
 #include <tenzir/nova_flag.hpp>
 #include <tenzir/operator/optimization.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/plugin.hpp>
-#include <tenzir/pushdown/aggregation.hpp>
+#include <tenzir/pushdown/layout.hpp>
 #include <tenzir/pushdown/read.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tls_options.hpp>
@@ -1066,7 +1066,8 @@ struct client_config {
 
 /// Configuration for a query execution.
 struct query_config {
-  std::string_view sql;
+  /// The query, which the result stream owns, since it runs lazily.
+  std::string sql;
   std::string schema_name = "mysql.query";
   int64_t batch_size = 10000;
 };
@@ -1403,13 +1404,10 @@ auto parse_first_optional_int64(std::vector<result_row> const& rows)
 
 /// Output formats of a query: table slices and events.
 ///
-/// A format also applies the predicates that the operator evaluates itself:
-/// `prepare` turns them into `Filters` once, and `apply` evaluates them, and
-/// then the limit, on every batch.
+/// A format also counts the remaining limit on every batch with `apply`.
 struct SliceFormat {
   using Output = table_slice;
   using Builder = series_builder;
-  using Filters = ir::OptimizeFilter;
 
   static auto event(Builder& builder) {
     return builder.record();
@@ -1432,21 +1430,15 @@ struct SliceFormat {
     return output.rows();
   }
 
-  static auto prepare(ir::OptimizeFilter filter, OpCtx&)
-    -> Task<Option<Filters>> {
-    co_return filter;
-  }
-
-  static auto apply(Output output, Filters& filters,
-                    Option<uint64_t>& remaining, base_ctx ctx) -> Output {
-    return pushdown::apply_read(std::move(output), filters, remaining, ctx);
+  /// A restored read of slices restarts from scratch, as before the stages.
+  static auto skip(Output output, uint64_t&) -> Output {
+    return output;
   }
 };
 
 struct EventsFormat {
   using Output = nova::Events;
   using Builder = nova::ArrayBuilder<nova::Record>;
-  using Filters = std::vector<nova::Evaluator>;
 
   static auto event(Builder& builder) {
     return builder.record();
@@ -1474,22 +1466,8 @@ struct EventsFormat {
     return detail::narrow<uint64_t>(output.active_count());
   }
 
-  static auto prepare(ir::OptimizeFilter filter, OpCtx& ctx)
-    -> Task<Option<Filters>> {
-    auto result = Filters{};
-    for (auto& expr : filter) {
-      auto evaluator = co_await nova::Evaluator::make(std::move(expr), ctx);
-      if (not evaluator) {
-        co_return None{};
-      }
-      result.push_back(std::move(*evaluator));
-    }
-    co_return result;
-  }
-
-  static auto apply(Output output, Filters& filters,
-                    Option<uint64_t>& remaining, base_ctx ctx) -> Output {
-    return pushdown::apply_read(std::move(output), filters, remaining, ctx);
+  static auto skip(Output output, uint64_t& count) -> Output {
+    return pushdown::skip_rows(std::move(output), count);
   }
 };
 
@@ -1809,12 +1787,21 @@ struct FromMySQLArgs {
   Option<located<bool>> live;
   Option<located<std::string>> tracking_column;
   Option<located<data>> tls;
-  OptimizationArgs<opt::Filter, opt::Limit, opt::Projection, opt::Aggregation>
-    optimization;
+  Option<located<bool>> pushdown;
+  OptimizationArgs<opt::Projection, opt::Plan> optimization;
 };
 
-/// The key of the subpipeline that aggregates locally.
-constexpr auto aggregation_sub_key = int64_t{0};
+/// How a read of a table selects its columns.
+struct TablePlan {
+  /// The columns to select, as they appear after `SELECT`.
+  std::string selection = "*";
+  /// The names of the columns of the table, or none if the plan did not need
+  /// them.
+  std::vector<std::string> columns;
+  /// The invisible columns that the selection adds only for the stages, which
+  /// the result leaves out.
+  std::vector<std::string> extra;
+};
 
 /// Reads from MySQL in one of the output formats.
 template <class Format>
@@ -1824,99 +1811,65 @@ class FromMySQLOperator final : public Operator<void, typename Format::Output> {
 public:
   FromMySQLOperator() = default;
 
-  explicit FromMySQLOperator(FromMySQLArgs args)
-    : args_{std::move(args)}, remaining_{args_.optimization.limit} {
+  explicit FromMySQLOperator(FromMySQLArgs args) : args_{std::move(args)} {
   }
 
 private:
-  /// Plans a read of the table. Describes the table only if a hint can act on
-  /// its columns.
-  auto plan_table(OpCtx& ctx) -> Task<MysqlResult<TablePlan>> {
-    auto const& filter = args_.optimization.filter;
-    auto const& projection = args_.optimization.projection;
-    if (filter.empty() and not projection
-        and not args_.optimization.aggregation) {
+  /// The stages that the operator took over from the pipeline.
+  auto stages() const -> std::span<ir::QueryStage const> {
+    auto const& plan = args_.optimization.plan;
+    return plan ? std::span{*plan} : std::span<ir::QueryStage const>{};
+  }
+
+  /// Plans a read of the table: projects to the columns that downstream asks
+  /// for, and reads the columns that the stages need. Describes the table
+  /// only if the projection or the stages need its columns.
+  auto plan_table(std::span<std::string const> required)
+    -> Task<MysqlResult<TablePlan>> {
+    if (not args_.optimization.projection and stages().empty()) {
       co_return TablePlan{};
     }
     CO_TRY(auto rows, co_await client_->query_rows_prepared(
                         describe_table_sql, {prepared_param{table_name_}}));
-    auto columns = parse_table_columns(rows);
-    co_return make_table_plan(columns, filter, projection, ctx.reg());
+    auto described = parse_table_columns(rows);
+    auto columns = column_names(described);
+    auto selection
+      = select_columns(args_.optimization.projection, described, required,
+                       stages(), quote_identifier(table_name_));
+    co_return TablePlan{
+      .selection = std::move(selection.selection),
+      .columns = std::move(columns),
+      .extra = std::move(selection.extra),
+    };
   }
 
-  /// Replaces the predicates that the operator evaluates itself.
-  auto set_local(ir::OptimizeFilter local, OpCtx& ctx) -> Task<bool> {
-    auto filters = co_await Format::prepare(std::move(local), ctx);
-    if (not filters) {
-      // Without the predicates, the operator would emit rows that the
-      // pipeline drops.
-      co_return false;
-    }
-    filters_ = std::move(*filters);
-    co_return true;
-  }
-
-  /// Applies the local predicates and the limit to rows read from MySQL and
-  /// emits what remains.
+  /// Arranges rows read from MySQL as the stages that the query computes
+  /// produce them, and emits those that a restored read did not emit before.
   auto emit(Output output, Push<Output>& push, OpCtx& ctx) -> Task<void> {
     events_read_counter_.add(Format::rows(output));
-    output = Format::apply(std::move(output), filters_, remaining_, ctx);
-    if (Format::active_rows(output) == 0) {
+    output = Format::skip(std::move(output), skip_);
+    auto const rows = Format::active_rows(output);
+    if (rows == 0) {
       co_return;
     }
+    if (not live_) {
+      emitted_ += rows;
+    }
     if constexpr (std::same_as<Format, EventsFormat>) {
-      if (aggregated_) {
-        output = pushdown::nest_aggregation(
-          std::move(output), *args_.optimization.aggregation, ctx.dh());
-      } else if (aggregating_locally_) {
-        if (auto sub = ctx.get_sub(aggregation_sub_key)) {
-          // The subpipeline closes its input only when it fails, which it
-          // reports itself.
-          std::ignore = co_await as<SubHandle<nova::Events>>(*sub).push(
-            std::move(output));
-        }
-        co_return;
-      }
+      output = pushdown::apply_layout(std::move(output), layout_, ctx.dh());
     }
     co_await push(std::move(output));
   }
 
-  /// Decides how a table read computes the aggregation, if the operator took
-  /// one over: in the query, or with the aggregation's fallback on the rows.
-  /// Returns whether the read can go ahead.
-  auto plan_aggregation(TablePlan const& plan, OpCtx& ctx) -> Task<bool> {
-    auto const& aggregation = args_.optimization.aggregation;
-    if (not aggregation) {
-      co_return true;
-    }
-    if constexpr (std::same_as<Format, EventsFormat>) {
-      // MySQL computes the aggregation only if it also evaluates every
-      // predicate, which apply to the rows before the aggregation.
-      if (plan.local.empty()) {
-        if (auto query = make_aggregate_query(*aggregation, plan.columns,
-                                              table_name_, plan.pushed)) {
-          query_ = std::move(*query);
-          schema_name_ = aggregation->schema_name;
-          aggregated_ = true;
-          co_return true;
-        }
-      }
-      if (not pushdown::can_aggregate_locally(*aggregation, ctx)
-          or not co_await ctx.plan_and_spawn_sub<nova::Events>(
-            aggregation_sub_key, aggregation->fallback)) {
-        co_return false;
-      }
-      aggregating_locally_ = true;
-      co_return true;
-    } else {
-      // Only the Nova operator takes over aggregations.
-      TENZIR_UNREACHABLE();
-    }
-  }
-
-  /// Whether the pipeline needs no more events.
-  auto limit_reached() const -> bool {
-    return remaining_ == uint64_t{0};
+  /// Runs the query that the operator generated, and logs it without its
+  /// literals.
+  auto query_generated(std::string sql) {
+    TENZIR_DEBUG("from_mysql runs `{}`",
+                 pushdown::redact_query(sql, mysql_lexicon));
+    return client_->query<Format>({
+      .sql = std::move(sql),
+      .schema_name = schema_name_,
+    });
   }
 
   auto format_tracking_candidate_names(
@@ -1929,19 +1882,10 @@ private:
     return fmt::format("{}", fmt::join(names, ", "));
   }
 
-  /// Ends the reads of this run and closes the connection. A subpipeline
-  /// that aggregates locally then emits its result.
+  /// Ends the reads of this run and closes the connection.
   auto finish(OpCtx& ctx) -> Task<void> {
     finished_ = true;
     co_await close_client(ctx);
-    if (aggregating_locally_ and not aggregation_closed_) {
-      aggregation_closed_ = true;
-      if constexpr (std::same_as<Format, EventsFormat>) {
-        if (auto sub = ctx.get_sub(aggregation_sub_key)) {
-          co_await as<SubHandle<nova::Events>>(*sub).close();
-        }
-      }
-    }
   }
 
   auto close_client(OpCtx& ctx) -> Task<void> {
@@ -2207,47 +2151,39 @@ private:
                   or std::is_same_v<Integer, uint64_t>);
     // Columns may come and go while the operator runs, so plan anew for every
     // window, just like `SELECT *` would.
-    auto planned = co_await plan_table(ctx);
+    auto planned = co_await plan_table({});
     if (planned.is_err()) {
       emit_mysql_error(std::move(planned).unwrap_err(), ctx);
       co_return false;
     }
     auto plan = std::move(planned).unwrap();
-    // The local predicates change only with the pushed ones, so the operator
-    // prepares them anew only then.
-    if (not args_.optimization.filter.empty()
-        and (not live_pushed_ or *live_pushed_ != plan.pushed)) {
-      live_pushed_ = plan.pushed;
-      if (not co_await set_local(std::move(plan.local), ctx)) {
-        co_return false;
-      }
-    }
-    auto const tracking = quote_identifier(tracking_column_);
-    auto sql = fmt::format("SELECT {} FROM {} WHERE {} <= {}", plan.selection,
-                           quote_identifier(table_name_), tracking, upper);
-    if (lower) {
-      fmt::format_to(std::back_inserter(sql), " AND {} > {}", tracking, *lower);
-    }
     // The upper bound comes from all rows, so that the watermark also
-    // advances past rows that the pushed predicates drop. The limit never
-    // goes into the query, since it counts events across windows.
-    for (auto const& predicate : plan.pushed) {
-      fmt::format_to(std::back_inserter(sql), " AND {}", predicate);
+    // advances past rows that the filters drop. The operator takes over
+    // filters only: a limit counts events across windows.
+    auto const tracking = quote_identifier(tracking_column_);
+    auto bounds = std::vector{fmt::format("{} <= {}", tracking, upper)};
+    if (lower) {
+      bounds.push_back(fmt::format("{} > {}", tracking, *lower));
     }
-    fmt::format_to(std::back_inserter(sql), " ORDER BY {}", tracking);
-    auto slice_stream = client_->query<Format>({
-      .sql = sql,
-      .schema_name = schema_name_,
-    });
+    auto sql = pushdown::make_window_read(quote_identifier(table_name_),
+                                          plan.selection, bounds, stages(),
+                                          tracking_column_, MysqlDialect{});
+    if (sql.is_err()) {
+      diagnostic::error("{}", sql.unwrap_err()).emit(ctx);
+      co_return false;
+    }
+    layout_ = pushdown::Layout{
+      .fields = None{},
+      .hidden = std::move(plan.extra),
+      .schema_name = None{},
+    };
+    auto slice_stream = query_generated(std::move(sql).unwrap());
     while (auto slice_result = co_await slice_stream.next()) {
       if (slice_result->is_err()) {
         emit_mysql_error(std::move(*slice_result).unwrap_err(), ctx);
         co_return false;
       }
       co_await emit(std::move(*slice_result).unwrap(), push, ctx);
-      if (limit_reached()) {
-        break;
-      }
     }
     co_return true;
   }
@@ -2284,12 +2220,15 @@ private:
 
 public:
   auto start(OpCtx& ctx) -> Task<void> override {
-    // A read that has reached its limit must not run again after a restore.
-    if (done_ or limit_reached()) {
-      done_ = true;
+    // A read that completed must not run again after a restore.
+    if (done_) {
       co_return;
     }
     live_ = args_.live and args_.live->inner;
+    // A restored one-shot read runs its query again and leaves out the rows
+    // that it emitted before, which assumes that the query returns its rows in
+    // the same order, as a sort guarantees.
+    skip_ = live_ ? 0 : emitted_;
     if (args_.table) {
       table_name_ = args_.table->inner;
     }
@@ -2394,32 +2333,43 @@ public:
     }
     client_ = std::move(result).unwrap();
     has_client_ = true;
-    // Live mode plans every window by itself.
-    auto local = ir::OptimizeFilter{};
     if (args_.show or args_.sql) {
-      // A user-provided query is opaque, so the whole filter runs here.
-      local = args_.optimization.filter;
-    } else if (not live_) {
-      auto plan = co_await plan_table(ctx);
-      if (plan.is_err()) {
-        emit_mysql_error(std::move(plan).unwrap_err(), ctx);
-        co_await finish(ctx);
-        co_return;
-      }
-      auto table_plan = std::move(plan).unwrap();
-      query_ = make_table_query(table_plan, table_name_, remaining_);
-      if (not co_await plan_aggregation(table_plan, ctx)) {
-        co_await finish(ctx);
-        co_return;
-      }
-      local = std::move(table_plan.local);
-      if (aggregated_) {
-        local.clear();
-      }
+      // A user-provided query is opaque.
+      co_return;
     }
-    if (not local.empty() and not co_await set_local(std::move(local), ctx)) {
+    // Times in the queries of a table read are in UTC, which MySQL applies to
+    // `TIMESTAMP` columns in the session's time zone.
+    if (auto set = co_await client_->query_rows("SET time_zone = '+00:00'");
+        set.is_err()) {
+      emit_mysql_error(std::move(set).unwrap_err(), ctx);
       co_await finish(ctx);
+      co_return;
     }
+    if (live_) {
+      // Live mode plans every window by itself.
+      co_return;
+    }
+    auto planned = co_await plan_table({});
+    if (planned.is_err()) {
+      emit_mysql_error(std::move(planned).unwrap_err(), ctx);
+      co_await finish(ctx);
+      co_return;
+    }
+    auto plan = std::move(planned).unwrap();
+    auto read
+      = pushdown::make_table_read(quote_identifier(table_name_), plan.selection,
+                                  {}, stages(), plan.columns, MysqlDialect{});
+    if (read.is_err()) {
+      diagnostic::error("{}", read.unwrap_err()).emit(ctx);
+      co_await finish(ctx);
+      co_return;
+    }
+    query_ = std::move(read.unwrap().sql);
+    layout_ = std::move(read.unwrap().layout);
+    if (not layout_.fields) {
+      layout_.hidden.append_range(plan.extra);
+    }
+    generated_ = true;
   }
 
   auto await_task(diagnostic_handler&) const -> Task<Any> override {
@@ -2462,16 +2412,16 @@ public:
           },
           live_watermark_signed_, push, ctx);
       }
-      done_ = limit_reached();
-      if (done_ or not live_ok) {
+      if (not live_ok) {
         co_await finish(ctx);
       }
       co_return;
     }
-    auto slice_stream = client_->query<Format>({
-      .sql = query_,
-      .schema_name = schema_name_,
-    });
+    auto slice_stream = generated_ ? query_generated(query_)
+                                   : client_->query<Format>({
+                                       .sql = query_,
+                                       .schema_name = schema_name_,
+                                     });
     auto completed = true;
     while (auto slice_result = co_await slice_stream.next()) {
       if (slice_result->is_err()) {
@@ -2480,30 +2430,8 @@ public:
         break;
       }
       co_await emit(std::move(*slice_result).unwrap(), push, ctx);
-      // The limit completes the read; the query need not run any further.
-      if (limit_reached()) {
-        break;
-      }
     }
-    if (aggregating_locally_) {
-      // The read completes once the subpipeline emitted the aggregation.
-      completed_locally_ = completed;
-    } else {
-      done_ = completed;
-    }
-    co_await finish(ctx);
-  }
-
-  auto finish_sub(SubKeyView, Push<Output>&, OpCtx&) -> Task<void> override {
-    aggregating_locally_ = false;
-    done_ = done_ or completed_locally_;
-    co_return;
-  }
-
-  auto finish_sub(SubKeyView, failure, Push<Output>&, OpCtx& ctx)
-    -> Task<void> override {
-    // The subpipeline reported its error, so the read cannot complete.
-    aggregating_locally_ = false;
+    done_ = completed;
     co_await finish(ctx);
   }
 
@@ -2521,9 +2449,6 @@ public:
   }
 
   auto state() -> OperatorState override {
-    if (aggregating_locally_) {
-      return OperatorState::normal;
-    }
     return done_ or finished_ ? OperatorState::done : OperatorState::normal;
   }
 
@@ -2536,7 +2461,7 @@ public:
     serde("live_has_watermark", live_has_watermark_);
     serde("live_watermark_signed", live_watermark_signed_);
     serde("live_watermark_unsigned", live_watermark_unsigned_);
-    serde("remaining", remaining_);
+    serde("emitted", emitted_);
   }
 
 private:
@@ -2548,16 +2473,12 @@ private:
   std::string query_;
   std::string schema_name_;
   std::string table_name_;
-  /// Whether the query computes the aggregation that the operator took over.
-  bool aggregated_ = false;
-  /// Whether the read passes its rows to the subpipeline that aggregates
-  /// them, until that subpipeline ends. A restore restarts the read, so this
-  /// is not part of the snapshot.
-  bool aggregating_locally_ = false;
-  /// Whether the subpipeline that aggregates locally has all of its input.
-  bool aggregation_closed_ = false;
-  /// Whether the read that the subpipeline aggregates ran to completion.
-  bool completed_locally_ = false;
+  /// Whether the operator generated `query_`, which then computes the stages
+  /// that it took over.
+  bool generated_ = false;
+  /// How the result of `query_` becomes events.
+  pushdown::Layout layout_
+    = {.fields = None{}, .hidden = {}, .schema_name = None{}};
   std::string tracking_column_;
   bool tracking_column_resolved_ = false;
   bool tracking_column_is_unsigned_ = false;
@@ -2573,12 +2494,10 @@ private:
   /// Whether this run reads no further, for whatever reason, such as a stop
   /// of the pipeline or an error. A restore reads again.
   bool finished_ = false;
-  /// How many more events the pipeline needs, if it has a limit.
-  Option<uint64_t> remaining_;
-  /// The predicates that the operator evaluates itself.
-  typename Format::Filters filters_;
-  /// The predicates that the previous live window pushed.
-  Option<std::vector<std::string>> live_pushed_;
+  /// How many events a one-shot read emitted, which survives restores.
+  uint64_t emitted_ = 0;
+  /// How many rows this run of a restored read leaves out.
+  uint64_t skip_ = 0;
 };
 
 using FromMySQL = FromMySQLOperator<SliceFormat>;
@@ -2693,15 +2612,22 @@ public:
       }
       return {};
     });
+    pushdown::add_pushdown_argument(d, &FromMySQLArgs::pushdown);
     d.optimization(&FromMySQLArgs::optimization);
-    // A one-shot table read can compute an aggregation in its query. Queries
-    // of the user are opaque, and a live read never ends. Only the Nova
-    // operator implements the aggregation.
-    d.aggregation([](FromMySQLArgs const& args,
-                     ir::OptimizeAggregation const& aggregation) -> bool {
-      return nova_enabled() and args.table and not args.sql and not args.show
-             and not(args.live and args.live->inner)
-             and supports_aggregate_functions(aggregation);
+    // A table read takes over the stages that MySQL spells. Queries of the
+    // user are opaque. Only the Nova operator arranges the result of stages.
+    d.query_plan([](FromMySQLArgs const& args,
+                    ir::QueryChain const& chain) -> ir::Absorption {
+      if (not pushdown::pushdown_enabled(args.pushdown)) {
+        return {.prefix = 0, .declined = "`pushdown=false`"};
+      }
+      if (not args.table or args.sql or args.show) {
+        return {.prefix = 0, .declined = "the query of the user is opaque"};
+      }
+      if (not nova_enabled()) {
+        return {.prefix = 0, .declined = "the operator runs without Nova"};
+      }
+      return absorb_stages(chain, args.live and args.live->inner);
     });
     return d.without_optimize();
   }

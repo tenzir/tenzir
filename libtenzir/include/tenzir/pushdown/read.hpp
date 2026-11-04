@@ -68,6 +68,11 @@ auto apply_read(nova::Events events, std::span<nova::Evaluator> filters,
                 Option<uint64_t>& remaining, diagnostic_handler& dh)
   -> nova::Events;
 
+/// Leaves out the first `count` active rows of `events`, and counts down
+/// `count` by the rows that it left out. A restored read that runs its query
+/// again uses this to skip the rows that it emitted before.
+auto skip_rows(nova::Events events, uint64_t& count) -> nova::Events;
+
 /// Drop the top-level fields that `projection` does not reference. A nested
 /// path keeps its whole top-level field, and a path that refers to `this`
 /// keeps every field. Rows, the active mask, and metadata stay intact.

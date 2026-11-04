@@ -1,17 +1,9 @@
 {
   s: "a",
-  count: 2,
-}
-{
-  s: "A",
-  count: 1,
+  count: 4,
 }
 {
   s: "a ",
-  count: 1,
-}
-{
-  s: "ä",
   count: 1,
 }
 {

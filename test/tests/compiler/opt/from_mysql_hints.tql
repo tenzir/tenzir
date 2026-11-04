@@ -1,4 +1,4 @@
-// `from_mysql` takes the filter, the limit, and the projection.
+// `from_mysql` takes over the filter, the selection, and the limit.
 from_mysql table="users", host="localhost"
 where age > 30
 select name

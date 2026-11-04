@@ -1,7 +1,5 @@
-// The stages after the summaries of the earlier tests ran in MySQL, as far as
-// it computes them as TQL does. MySQL sorts strings by a prefix only, so a sort
-// by a string and the limit after it stay local.
-from_mysql sql="SELECT CAST(argument AS CHAR) AS query FROM mysql.general_log WHERE command_type = 'Query' AND argument LIKE 'SELECT%FROM `hits`%' AND argument LIKE '%__tenzir_aggregate%' AND argument NOT LIKE '%general_log%' ORDER BY event_time",
+// The stages after the summaries of the earlier tests ran in MySQL.
+from_mysql sql="SELECT CAST(argument AS CHAR) AS query FROM mysql.general_log WHERE command_type = 'Query' AND argument LIKE 'SELECT%FROM `hits`%' AND argument LIKE '%__tenzir_%' AND argument NOT LIKE '%general_log%' ORDER BY event_time",
            host=env("MYSQL_HOST"),
            port=int(env("MYSQL_PORT")),
            user="root",

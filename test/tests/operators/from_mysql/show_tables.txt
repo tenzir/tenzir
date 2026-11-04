@@ -4,6 +4,10 @@
 }
 {
   database: "tenzir_test",
+  table: "invisible",
+}
+{
+  database: "tenzir_test",
   table: "large_packets",
 }
 {

@@ -1,6 +1,5 @@
-// The source sorts with its own placement of `null`, which decides whether the
-// group without a maximum makes the cut. The `sort` after the `head` orders the
-// result in Tenzir.
+// MySQL sorts `NULL` first, which decides whether the group without a maximum
+// makes the cut, and also sorts the result after the `head`.
 from_mysql table="hits",
            host=env("MYSQL_HOST"),
            port=int(env("MYSQL_PORT")),

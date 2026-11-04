@@ -1,7 +1,5 @@
-// MySQL does not group by a `DOUBLE` column, which the operator finds only
-// once it reads the table's columns. It then aggregates its rows locally, with
-// the rename before the summary. Without it, the summary would read fields
-// that the rows do not have.
+// MySQL groups by a `DOUBLE` column behind a rename, and sorts the groups with
+// `NULL` first.
 from_mysql table="agg",
            host=env("MYSQL_HOST"),
            port=int(env("MYSQL_PORT")),

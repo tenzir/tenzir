@@ -181,6 +181,22 @@ TEST("reader limits count active rows across batches") {
   CHECK(dh.empty());
 }
 
+TEST("restored reads skip the active rows that they emitted before") {
+  // The active rows are 1, 3, and 4.
+  auto count = uint64_t{4};
+  auto first = pushdown::skip_rows(events(), count);
+  CHECK_EQUAL(first.active_count(), 0);
+  CHECK_EQUAL(count, 1u);
+  auto second = pushdown::skip_rows(events(), count);
+  CHECK_EQUAL(second.active_count(), 2);
+  CHECK(not second.mask.get(1));
+  CHECK(second.mask.get(3));
+  CHECK(second.mask.get(4));
+  CHECK_EQUAL(count, 0u);
+  auto third = pushdown::skip_rows(events(), count);
+  CHECK_EQUAL(third.active_count(), 3);
+}
+
 TEST("projection keeps whole top-level fields in each row's order") {
   auto result
     = pushdown::project(nested_events(), projection_from({"b.c", "a"}));

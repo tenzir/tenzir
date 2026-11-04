@@ -1,4 +1,5 @@
-// TQL treats null as a value: `null != "not null"` holds, unlike in SQL.
+// MySQL compares `NULL` with anything as unknown, so the row where
+// `nullable_val` is null does not pass `!= "not null"`, unlike in TQL.
 from_mysql table="types",
            host=env("MYSQL_HOST"),
            port=int(env("MYSQL_PORT")),

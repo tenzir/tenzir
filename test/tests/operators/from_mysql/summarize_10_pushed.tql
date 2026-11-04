@@ -1,9 +1,8 @@
 // MySQL filters, groups, and aggregates the rows: the `where` and the
-// `summarize` go into the query. Text groups by its bytes, as in TQL. The
-// result equals that of `summarize_11_local.tql`, which aggregates the same
-// rows locally.
-// A sort by a computed key stays in Tenzir, which orders deterministically,
-// while the database would order text under its collation.
+// `summarize` go into the query. Text groups under the collation of its column,
+// so `a`, `A`, and `ä` form one group, unlike in `summarize_11_local.tql`, which
+// aggregates the same rows in the pipeline.
+// A sort by a computed key stays in Tenzir.
 from_mysql table="agg",
            host=env("MYSQL_HOST"),
            port=int(env("MYSQL_PORT")),

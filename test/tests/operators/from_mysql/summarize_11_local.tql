@@ -1,5 +1,5 @@
-// A predicate that MySQL cannot evaluate keeps all rows but stays local, so
-// the operator aggregates locally, with the result of `summarize_10_pushed.tql`.
+// A predicate that MySQL cannot spell keeps the summary in the pipeline, which
+// groups text by its bytes, unlike `summarize_10_pushed.tql`.
 from_mysql table="agg",
            host=env("MYSQL_HOST"),
            port=int(env("MYSQL_PORT")),

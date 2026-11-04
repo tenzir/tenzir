@@ -1,19 +1,10 @@
 {
   s: "A",
-  rows: 1,
-  values: 0,
-  lo: null,
+  rows: 3,
+  values: 2,
+  lo: 1,
   hi: {
-    id: 2,
-  },
-}
-{
-  s: "a",
-  rows: 1,
-  values: 1,
-  lo: 9223372036854775807,
-  hi: {
-    id: 5,
+    id: 6,
   },
 }
 {
@@ -23,15 +14,6 @@
   lo: 7,
   hi: {
     id: 3,
-  },
-}
-{
-  s: "ä",
-  rows: 1,
-  values: 1,
-  lo: 1,
-  hi: {
-    id: 6,
   },
 }
 {

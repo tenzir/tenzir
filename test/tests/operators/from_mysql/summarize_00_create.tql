@@ -1,5 +1,6 @@
-// Creates the table of the summarize tests. Its text differs only in case or
-// trailing spaces, which MySQL's default collation would put into one group.
+// Creates the table of the summarize tests. Its text differs only in case,
+// accents, or trailing spaces. MySQL's default collation puts the values that
+// differ in case or accents into one group.
 from_mysql sql="CREATE TABLE agg (id INT, s VARCHAR(20), n BIGINT, d DOUBLE)",
            host=env("MYSQL_HOST"),
            port=int(env("MYSQL_PORT")),

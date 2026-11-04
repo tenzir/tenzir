@@ -1,0 +1,6 @@
+from_mysql sql="INSERT INTO invisible (id, h) VALUES (1, 10), (2, 20), (3, 30)",
+           host=env("MYSQL_HOST"),
+           port=int(env("MYSQL_PORT")),
+           user=env("MYSQL_USER"),
+           password=env("MYSQL_PASSWORD"),
+           database=env("MYSQL_DATABASE")

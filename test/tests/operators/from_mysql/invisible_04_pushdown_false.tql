@@ -1,0 +1,9 @@
+// With `pushdown=false`, the projection keeps what `SELECT *` yields, so the
+// invisible column stays out, and the `select` fills it with `null`.
+from_mysql table="invisible", pushdown=false,
+           host=env("MYSQL_HOST"),
+           port=int(env("MYSQL_PORT")),
+           user=env("MYSQL_USER"),
+           password=env("MYSQL_PASSWORD"),
+           database=env("MYSQL_DATABASE")
+select id, h

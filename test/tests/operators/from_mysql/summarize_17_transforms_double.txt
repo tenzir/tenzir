@@ -1,4 +1,9 @@
 {
+  key: null,
+  rows: 1,
+  hi: 4,
+}
+{
   key: 0.0,
   rows: 2,
   hi: 3,
@@ -17,9 +22,4 @@
   key: 3.5,
   rows: 1,
   hi: 6,
-}
-{
-  key: null,
-  rows: 1,
-  hi: 4,
 }

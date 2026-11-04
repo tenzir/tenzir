@@ -1,0 +1,20 @@
+warning: event does not have field
+ --> tests/operators/from_mysql/invisible_04_pushdown_false.tql:9:12
+  |
+9 | select id, h
+  |            ~
+  |
+  = hint: did you mean `id`?
+  = hint: append `?` to suppress this warning
+{
+  id: 1,
+  h: null,
+}
+{
+  id: 2,
+  h: null,
+}
+{
+  id: 3,
+  h: null,
+}

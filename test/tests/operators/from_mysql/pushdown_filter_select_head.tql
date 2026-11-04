@@ -1,6 +1,6 @@
-// The filter, projection, and limit go into the query. Text compares by bytes,
-// as in TQL, not under MySQL's case-insensitive collation, which would match
-// `Alice` and make it the first row.
+// The filter, projection, and limit go into the query. MySQL compares text under
+// the collation of its column, which ignores case, so `alice` matches `Alice`,
+// the first row.
 from_mysql table="users",
            host=env("MYSQL_HOST"),
            port=int(env("MYSQL_PORT")),

@@ -1,6 +1,5 @@
-// TQL sees a FLOAT with six significant digits and a DECIMAL as a double, so
-// these predicates stay local. MySQL would compare 3.1400001 and an exact
-// decimal and match nothing.
+// MySQL compares the stored `FLOAT` and `DECIMAL` values, `3.1400001` and an
+// exact decimal, so no row matches the doubles, unlike in TQL.
 from_mysql table="numbers",
            host=env("MYSQL_HOST"),
            port=int(env("MYSQL_PORT")),

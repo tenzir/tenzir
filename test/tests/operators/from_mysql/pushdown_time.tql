@@ -1,0 +1,9 @@
+// The query compares times in UTC with `DATE` and `DATETIME` columns.
+from_mysql table="types",
+           host=env("MYSQL_HOST"),
+           port=int(env("MYSQL_PORT")),
+           user=env("MYSQL_USER"),
+           password=env("MYSQL_PASSWORD"),
+           database=env("MYSQL_DATABASE")
+where datetime_val > 2025-01-15T14:00:00 or date_val < 1970-01-02
+select id, date_val, datetime_val

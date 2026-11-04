@@ -1,21 +1,21 @@
 {
-  query: "SELECT ANY_VALUE(`s`) AS `__tenzir_aggregate_0`, CAST(COUNT(*) AS SIGNED) AS `__tenzir_aggregate_1`, CAST(COUNT(`n`) AS SIGNED) AS `__tenzir_aggregate_2`, MIN(`n`) AS `__tenzir_aggregate_3`, MAX(`id`) AS `__tenzir_aggregate_4` FROM `agg` WHERE (`id` > 1 OR `n` IS NULL) GROUP BY CAST(`s` AS BINARY)",
+  query: "SELECT `s` AS `__tenzir_column_0`, COUNT(*) AS `__tenzir_column_1`, COUNT(`n`) AS `__tenzir_column_2`, MIN(`n`) AS `__tenzir_column_3`, MAX(`id`) AS `__tenzir_column_4` FROM (SELECT `s`, `n`, `id` FROM `agg`) AS `__tenzir_table` WHERE ((`id` > 1) OR (`n` IS NULL)) GROUP BY `s`",
 }
 {
-  query: "SELECT * FROM `agg` WHERE (`id` > 1 OR `n` IS NULL)",
+  query: "SELECT * FROM (SELECT `s`, `n`, `id` FROM `agg`) AS `__tenzir_table` WHERE ((`id` > 1) OR (`n` IS NULL))",
 }
 {
-  query: "SELECT CAST(COUNT(*) AS SIGNED) AS `__tenzir_aggregate_0`, MIN(`n`) AS `__tenzir_aggregate_1` FROM `agg` WHERE `id` > 100",
+  query: "SELECT COUNT(*) AS `__tenzir_column_0`, MIN(`n`) AS `__tenzir_column_1` FROM (SELECT `n`, `id` FROM `agg`) AS `__tenzir_table` WHERE (`id` > 100)",
 }
 {
-  query: "SELECT ANY_VALUE(`s`) AS `__tenzir_aggregate_0`, CAST(COUNT(*) AS SIGNED) AS `__tenzir_aggregate_1` FROM `agg` GROUP BY CAST(`s` AS BINARY)",
+  query: "SELECT `s` AS `__tenzir_column_0`, COUNT(*) AS `__tenzir_column_1` FROM (SELECT `s` FROM `agg`) AS `__tenzir_table` GROUP BY `s`",
 }
 {
-  query: "SELECT ANY_VALUE(`s`) AS `__tenzir_aggregate_0`, CAST(COUNT(*) AS SIGNED) AS `__tenzir_aggregate_1`, MAX(`id`) AS `__tenzir_aggregate_2`, MIN(`n`) AS `__tenzir_aggregate_3` FROM `agg` WHERE (`id` > 1 OR `n` IS NULL) GROUP BY CAST(`s` AS BINARY)",
+  query: "SELECT `s` AS `__tenzir_column_0`, COUNT(*) AS `__tenzir_column_1`, MAX(`id`) AS `__tenzir_column_2`, MIN(`n`) AS `__tenzir_column_3` FROM (SELECT `d`, `n`, `id`, `s` FROM `agg`) AS `__tenzir_table` WHERE ((`id` > 1) OR (`n` IS NULL)) GROUP BY `s`",
 }
 {
-  query: "SELECT * FROM `agg` WHERE (`id` > 1 OR `n` IS NULL)",
+  query: "SELECT `d`, `n`, `id`, `s` FROM `agg`",
 }
 {
-  query: "SELECT `id`, `d` FROM `agg`",
+  query: "SELECT * FROM (SELECT `d` AS `__tenzir_column_0`, COUNT(*) AS `__tenzir_column_1`, MAX(`id`) AS `__tenzir_column_2` FROM (SELECT `id`, `d` FROM `agg`) AS `__tenzir_table` GROUP BY `d`) AS `__tenzir_level_3` ORDER BY `__tenzir_column_0` ASC",
 }

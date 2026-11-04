@@ -194,6 +194,18 @@ auto apply_read(nova::Events events, std::span<nova::Evaluator> filters,
   return events;
 }
 
+auto skip_rows(nova::Events events, uint64_t& count) -> nova::Events {
+  if (count == 0) {
+    return events;
+  }
+  auto const active = detail::narrow<uint64_t>(events.active_count());
+  auto const skipped = std::min(active, count);
+  events.mask = events.mask.and_not(
+    events.mask.keep_first(detail::narrow<nova::storage::Index>(skipped)));
+  count -= skipped;
+  return events;
+}
+
 auto project(nova::Events events, ir::OptimizeProjection const& projection)
   -> nova::Events {
   if (std::ranges::any_of(projection, [](auto const& field) {

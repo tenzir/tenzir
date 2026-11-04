@@ -1,18 +1,10 @@
 {
   key: "A",
-  rows: 1,
+  rows: 3,
   hi: {
-    id: 2,
+    id: 6,
   },
-  lo: null,
-}
-{
-  key: "a",
-  rows: 1,
-  hi: {
-    id: 5,
-  },
-  lo: 9223372036854775807,
+  lo: 1,
 }
 {
   key: "a ",
@@ -21,14 +13,6 @@
     id: 3,
   },
   lo: 7,
-}
-{
-  key: "ä",
-  rows: 1,
-  hi: {
-    id: 6,
-  },
-  lo: 1,
 }
 {
   key: null,
