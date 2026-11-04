@@ -303,6 +303,10 @@ public:
     return true;
   }
 
+  auto is_cheap() const -> bool override {
+    return true;
+  }
+
   auto describe() const -> nova::FunctionDescription override {
     auto d = nova::FunctionDescriber<TimeArgs, TimeFunction>{};
     d.positional("x", &TimeArgs::x, "string");
@@ -396,6 +400,10 @@ public:
     return true;
   }
 
+  auto is_cheap() const -> bool override {
+    return true;
+  }
+
   auto describe() const -> nova::FunctionDescription override {
     auto d = nova::FunctionDescriber<SinceEpochArgs, SinceEpochFunction>{};
     d.positional("x", &SinceEpochArgs::x, "time");
@@ -470,6 +478,10 @@ public:
   }
 
   auto is_deterministic() const -> bool override {
+    return true;
+  }
+
+  auto is_cheap() const -> bool override {
     return true;
   }
 
@@ -611,6 +623,10 @@ public:
     return true;
   }
 
+  auto is_cheap() const -> bool override {
+    return true;
+  }
+
   auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
@@ -694,6 +710,10 @@ public:
   }
 
   auto is_deterministic() const -> bool override {
+    return true;
+  }
+
+  auto is_cheap() const -> bool override {
     return true;
   }
 

@@ -128,6 +128,10 @@ public:
     return true;
   }
 
+  auto is_cheap() const -> bool override {
+    return true;
+  }
+
   struct impl final : public function_use {
     auto run(evaluator eval, session ctx) -> multi_series override {
       return map_series(eval(expr), [&](const series& values) -> multi_series {
@@ -188,6 +192,10 @@ public:
   }
 
   auto is_deterministic() const -> bool override {
+    return true;
+  }
+
+  auto is_cheap() const -> bool override {
     return true;
   }
 

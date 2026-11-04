@@ -138,6 +138,10 @@ public:
     return true;
   }
 
+  auto is_cheap() const -> bool override {
+    return true;
+  }
+
   auto describe() const -> FunctionDescription override {
     auto d = FunctionDescriber<IntArgs, IntUintFunction<Signed>>{};
     d.positional("x", &IntArgs::x, "number|string");

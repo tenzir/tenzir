@@ -70,6 +70,10 @@ public:
     return true;
   }
 
+  auto is_cheap() const -> bool override {
+    return true;
+  }
+
   auto describe() const -> nova::FunctionDescription override {
     auto d = nova::FunctionDescriber<TypeIdArgs, TypeIdFunction>{};
     d.positional("x", &TypeIdArgs::x, "any");
@@ -165,6 +169,10 @@ public:
   }
 
   auto is_deterministic() const -> bool override {
+    return true;
+  }
+
+  auto is_cheap() const -> bool override {
     return true;
   }
 
@@ -285,6 +293,10 @@ public:
   }
 
   auto is_deterministic() const -> bool override {
+    return true;
+  }
+
+  auto is_cheap() const -> bool override {
     return true;
   }
 
@@ -543,6 +555,10 @@ public:
     return true;
   }
 
+  auto is_cheap() const -> bool override {
+    return true;
+  }
+
   auto describe() const -> nova::FunctionDescription override {
     auto d = nova::FunctionDescriber<LengthArgs, LengthFunction>{};
     d.positional("x", &LengthArgs::x, "list");
@@ -642,6 +658,10 @@ public:
     return true;
   }
 
+  auto is_cheap() const -> bool override {
+    return true;
+  }
+
   auto describe() const -> nova::FunctionDescription override {
     auto d = nova::FunctionDescriber<IsEmptyArgs, IsEmptyFunction>{};
     d.positional("x", &IsEmptyArgs::x, "string|list|record");
@@ -735,6 +755,10 @@ public:
   }
 
   auto is_deterministic() const -> bool override {
+    return true;
+  }
+
+  auto is_cheap() const -> bool override {
     return true;
   }
 
@@ -878,6 +902,10 @@ public:
   }
 
   auto is_deterministic() const -> bool override {
+    return true;
+  }
+
+  auto is_cheap() const -> bool override {
     return true;
   }
 
@@ -1041,6 +1069,10 @@ public:
   }
 
   auto is_deterministic() const -> bool override {
+    return true;
+  }
+
+  auto is_cheap() const -> bool override {
     return true;
   }
 

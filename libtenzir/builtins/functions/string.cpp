@@ -856,6 +856,10 @@ public:
     return true;
   }
 
+  auto is_cheap() const -> bool override {
+    return true;
+  }
+
   auto describe() const -> nova::FunctionDescription override {
     auto d = nova::FunctionDescriber<StartsEndsWithArgs,
                                      StartsEndsWithFunction<StartsWith>>{};
@@ -1130,6 +1134,10 @@ public:
   }
 
   auto is_deterministic() const -> bool override {
+    return true;
+  }
+
+  auto is_cheap() const -> bool override {
     return true;
   }
 
@@ -1807,6 +1815,10 @@ public:
     return true;
   }
 
+  auto is_cheap() const -> bool override {
+    return true;
+  }
+
   auto function_name() const -> std::string override {
     if (name_.ends_with("()")) {
       return name_.substr(0, name_.size() - 2);
@@ -2243,6 +2255,10 @@ public:
   }
 
   auto is_deterministic() const -> bool override {
+    return true;
+  }
+
+  auto is_cheap() const -> bool override {
     return true;
   }
 
@@ -2910,6 +2926,10 @@ public:
   }
 
   auto is_deterministic() const -> bool override {
+    return true;
+  }
+
+  auto is_cheap() const -> bool override {
     return true;
   }
 

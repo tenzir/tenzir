@@ -156,6 +156,14 @@ public:
   virtual auto function_name() const -> std::string;
 
   virtual auto is_deterministic() const -> bool = 0;
+
+  /// Returns whether a call costs about as much as an arithmetic operator,
+  /// such as a type conversion. The optimizer may then evaluate a call once
+  /// more to move a filter towards the source, which it does not do for
+  /// expensive functions, such as parsers.
+  virtual auto is_cheap() const -> bool {
+    return false;
+  }
 };
 
 class aggregation_instance {
