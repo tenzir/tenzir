@@ -97,6 +97,13 @@ auto SecretCache::clear() -> void {
   ++generation_;
 }
 
+auto SecretCache::erase(std::string_view key) -> void {
+  if (auto it = data_.find(key); it != data_.end()) {
+    data_.erase(it);
+  }
+  ++generation_;
+}
+
 auto SecretStore::run_cache_cleanup() -> Task<void> {
   co_await run_secret_cache_cleanup(*cache_);
 }
@@ -104,6 +111,13 @@ auto SecretStore::run_cache_cleanup() -> Task<void> {
 auto SecretStore::clear_cache() -> Task<void> {
   auto cache = co_await cache_->unique_lock();
   cache->clear();
+}
+
+auto SecretStore::forget(std::vector<std::string> names) -> Task<void> {
+  auto cache = co_await cache_->unique_lock();
+  for (auto const& name : names) {
+    cache->erase(name);
+  }
 }
 
 auto SecretCache::instance() -> SharedMutex<SecretCache>& {

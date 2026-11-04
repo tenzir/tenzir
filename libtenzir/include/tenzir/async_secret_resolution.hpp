@@ -18,6 +18,10 @@
 
 #include <folly/CancellationToken.h>
 
+#include <string>
+#include <string_view>
+#include <vector>
+
 namespace tenzir {
 
 class SecretCache {
@@ -43,6 +47,9 @@ public:
 
   /// Invalidate outstanding resolutions as well as cached values.
   auto clear() -> void;
+  /// Drop the value of `key` and invalidate outstanding resolutions, which
+  /// might otherwise put the old value back.
+  auto erase(std::string_view key) -> void;
   auto generation() const -> uint64_t {
     return generation_;
   }
@@ -86,6 +93,8 @@ public:
   /// Run beside the pipelines, with cancellation tied to their owner's scope.
   auto run_cache_cleanup() -> Task<void>;
   auto clear_cache() -> Task<void>;
+  /// Drop what is cached for `names`, whose values changed.
+  auto forget(std::vector<std::string> names) -> Task<void>;
 
   virtual auto resolve(std::string name, std::string public_key)
     -> Task<secret_resolution_result>
