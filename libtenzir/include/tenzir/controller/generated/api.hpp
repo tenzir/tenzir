@@ -1248,21 +1248,21 @@ struct std::hash<tenzir::SecretName> {
 
 namespace tenzir {
 
-class ResolveSecretPath {
+class DeploymentSecretPath {
 public:
-  ResolveSecretPath(DeploymentId deployment_id, SecretName name)
+  DeploymentSecretPath(DeploymentId deployment_id, SecretName name)
     : deployment_id{std::move(deployment_id)}, name{std::move(name)} {
   }
 
   DeploymentId deployment_id;
   SecretName name;
 
-  friend auto operator==(ResolveSecretPath const&, ResolveSecretPath const&)
-    -> bool
+  friend auto
+  operator==(DeploymentSecretPath const&, DeploymentSecretPath const&) -> bool
     = default;
 
   template <class HashAlgorithm>
-  friend auto hash_append(HashAlgorithm& h, ResolveSecretPath const& value)
+  friend auto hash_append(HashAlgorithm& h, DeploymentSecretPath const& value)
     -> void {
     hash_append(h, value.deployment_id, value.name);
   }
@@ -1271,8 +1271,9 @@ public:
 } // namespace tenzir
 
 template <>
-struct std::hash<tenzir::ResolveSecretPath> {
-  auto operator()(tenzir::ResolveSecretPath const& value) const -> std::size_t {
+struct std::hash<tenzir::DeploymentSecretPath> {
+  auto operator()(tenzir::DeploymentSecretPath const& value) const
+    -> std::size_t {
     return tenzir::hash(value);
   }
 };
@@ -2196,17 +2197,17 @@ auto call(Transport& transport, AttachIngestEndpoint request)
 
 // ── Secrets (deployment → platform) ─────────────────────────────────────────
 
-/// `POST /api/deployments/:deploymentId/secrets/:name`
+/// `POST /api/deployments/:deploymentId/secrets/:name/resolve`
 /// Resolves a secret the deployment can read. The value comes back as base58
 /// ECIES to `transportKey`, a secp256k1 public key the deployment made for this
 /// request alone
 class ResolveSecret {
 public:
-  ResolveSecret(ResolveSecretPath path, SecretResolution payload)
+  ResolveSecret(DeploymentSecretPath path, SecretResolution payload)
     : path{std::move(path)}, payload{std::move(payload)} {
   }
 
-  ResolveSecretPath path;
+  DeploymentSecretPath path;
   SecretResolution payload;
 };
 
@@ -2229,7 +2230,7 @@ public:
   ReadHealth() = default;
 };
 
-/// `PUT /configuration`
+/// `POST /configuration/replace`
 /// Hands the deployment the whole state it should be in, as a tar holding the
 /// workspace files, every locked package, and a `manifest.json` with the
 /// revision, the environment, the variables, the secrets and the labels. Sent
@@ -2391,7 +2392,7 @@ public:
 
 using StartAdhocPipelineFailure = variant<InvalidPipeline, Busy, Suspended>;
 
-/// `PUT /suspension`
+/// `POST /suspend`
 /// Suspends the deployment: it runs nothing until it is resumed, not after a
 /// restart or another instance taking over either. Its pipelines keep the
 /// states they have, and a configuration, a start or a stop changes them as
@@ -2403,7 +2404,7 @@ public:
   Suspend() = default;
 };
 
-/// `DELETE /suspension`
+/// `POST /resume`
 /// Resumes the deployment: it runs its pipelines that are running again, as
 /// after a restart. Resuming a deployment that is not suspended is a no-op, so
 /// a retry is safe.
@@ -2530,8 +2531,8 @@ auto parse_ingest_endpoint_attachment(simdjson::dom::element value)
   -> Result<IngestEndpointAttachment, ParseError>;
 auto parse_secret_name(simdjson::dom::element value)
   -> Result<SecretName, ParseError>;
-auto parse_resolve_secret_path(simdjson::dom::element value)
-  -> Result<ResolveSecretPath, ParseError>;
+auto parse_deployment_secret_path(simdjson::dom::element value)
+  -> Result<DeploymentSecretPath, ParseError>;
 auto parse_secret_resolution(simdjson::dom::element value)
   -> Result<SecretResolution, ParseError>;
 auto parse_resolved_secret(simdjson::dom::element value)
@@ -2615,7 +2616,7 @@ auto write_json(AttachIngestEndpointQuery const& value, std::string& out)
 auto write_json(IngestEndpointAttachment const& value, std::string& out)
   -> void;
 auto write_json(SecretName const& value, std::string& out) -> void;
-auto write_json(ResolveSecretPath const& value, std::string& out) -> void;
+auto write_json(DeploymentSecretPath const& value, std::string& out) -> void;
 auto write_json(SecretResolution const& value, std::string& out) -> void;
 auto write_json(ResolvedSecret const& value, std::string& out) -> void;
 auto write_json(Liveness const& value, std::string& out) -> void;

@@ -1329,18 +1329,18 @@ auto parse_secret_name(simdjson::dom::element value)
   return SecretName::make(std::move(raw));
 }
 
-auto parse_resolve_secret_path(simdjson::dom::element value)
-  -> Result<ResolveSecretPath, ParseError> {
-  TRY(auto object, api::object_of(value, "ResolveSecretPath"));
+auto parse_deployment_secret_path(simdjson::dom::element value)
+  -> Result<DeploymentSecretPath, ParseError> {
+  TRY(auto object, api::object_of(value, "DeploymentSecretPath"));
 
   TRY(auto deployment_id_raw,
-      api::field(object, "deploymentId", "ResolveSecretPath"));
+      api::field(object, "deploymentId", "DeploymentSecretPath"));
   TRY(auto deployment_id, parse_deployment_id(deployment_id_raw));
 
-  TRY(auto name_raw, api::field(object, "name", "ResolveSecretPath"));
+  TRY(auto name_raw, api::field(object, "name", "DeploymentSecretPath"));
   TRY(auto name, parse_secret_name(name_raw));
 
-  return ResolveSecretPath{std::move(deployment_id), std::move(name)};
+  return DeploymentSecretPath{std::move(deployment_id), std::move(name)};
 }
 
 auto parse_secret_resolution(simdjson::dom::element value)
@@ -2349,7 +2349,7 @@ auto write_json(SecretName const& value, std::string& out) -> void {
   api::write_string(value.to_string(), out);
 }
 
-auto write_json(ResolveSecretPath const& value, std::string& out) -> void {
+auto write_json(DeploymentSecretPath const& value, std::string& out) -> void {
   out += '{';
   out += "\"deploymentId\":";
   write_json(value.deployment_id, out);
@@ -3031,7 +3031,7 @@ auto call(Transport& transport, AttachIngestEndpoint request)
 auto call(Transport& transport, ResolveSecret request)
   -> Task<Result<ResolvedSecret, variant<ResolveSecretError, CallError>>> {
   auto path
-    = fmt::format("/api/deployments/{}/secrets/{}",
+    = fmt::format("/api/deployments/{}/secrets/{}/resolve",
                   api::encode_segment(request.path.deployment_id.to_string()),
                   api::encode_segment(request.path.name.to_string()));
   auto body = std::string{};
@@ -3134,14 +3134,14 @@ auto dispatch(DeploymentApi& handler, HttpRequest request)
     co_return HttpResponse{405,
                            R"({"error":"method not allowed","allow":["GET"]})"};
   }
-  if (api::match_path("/configuration", request.path, parameters)) {
-    if (request.method == "PUT") {
+  if (api::match_path("/configuration/replace", request.path, parameters)) {
+    if (request.method == "POST") {
       auto payload = std::move(request.body);
       auto decoded = UpdateConfiguration{std::move(payload)};
       co_return api::encode<204>(co_await handler.handle(std::move(decoded)));
     }
-    co_return HttpResponse{405,
-                           R"({"error":"method not allowed","allow":["PUT"]})"};
+    co_return HttpResponse{
+      405, R"({"error":"method not allowed","allow":["POST"]})"};
   }
   if (api::match_path("/pipelines", request.path, parameters)) {
     if (request.method == "POST") {
@@ -3283,19 +3283,23 @@ auto dispatch(DeploymentApi& handler, HttpRequest request)
     co_return HttpResponse{
       405, R"({"error":"method not allowed","allow":["POST"]})"};
   }
-  if (api::match_path("/suspension", request.path, parameters)) {
-    if (request.method == "PUT") {
+  if (api::match_path("/suspend", request.path, parameters)) {
+    if (request.method == "POST") {
       auto decoded = Suspend{};
       co_await handler.handle(std::move(decoded));
       co_return api::encode<204>();
     }
-    if (request.method == "DELETE") {
+    co_return HttpResponse{
+      405, R"({"error":"method not allowed","allow":["POST"]})"};
+  }
+  if (api::match_path("/resume", request.path, parameters)) {
+    if (request.method == "POST") {
       auto decoded = Resume{};
       co_await handler.handle(std::move(decoded));
       co_return api::encode<204>();
     }
     co_return HttpResponse{
-      405, R"({"error":"method not allowed","allow":["PUT","DELETE"]})"};
+      405, R"({"error":"method not allowed","allow":["POST"]})"};
   }
   co_return HttpResponse{404, R"({"error":"no such route"})"};
 }
