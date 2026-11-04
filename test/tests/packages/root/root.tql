@@ -1,0 +1,3 @@
+// A package of its own may name itself.
+from {x: 1}
+tools::double
