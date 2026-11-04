@@ -10,6 +10,7 @@
 #include "tenzir/pushdown/aggregation.hpp"
 #include "tenzir/pushdown/renderer.hpp"
 #include "tenzir/pushdown/sql.hpp"
+#include "tenzir/pushdown/sql_source.hpp"
 #include "tenzir/session.hpp"
 #include "tenzir/test/registry.hpp"
 #include "tenzir/test/test.hpp"
@@ -406,8 +407,9 @@ auto limit(uint64_t count) -> ir::QueryStage {
 /// Renders `plan` over the table `t`.
 auto plan(std::vector<ir::QueryStage> stages,
           PlanDialect const& dialect = PlanDialect{}) -> Option<SqlPlan> {
-  return render_plan(SqlRelation{.from = "\"t\"", .fields = None{}}, stages,
-                     dialect);
+  return render_plan(
+    SqlRelation{.from = "\"t\"", .fields = None{}, .alias = None{}}, stages,
+    dialect);
 }
 
 auto sql(std::vector<ir::QueryStage> stages, PlanDialect const& dialect
@@ -582,9 +584,10 @@ TEST("plans keep the order of a sort across derived tables") {
   REQUIRE(ordered);
   CHECK_EQUAL(render_select(ordered->select, PlanDialect{}),
               std::string{
-                "SELECT * FROM (SELECT *, \"x\" AS \"__tenzir_order_0\" FROM "
-                "\"t\" ORDER BY \"x\" DESC LIMIT 5) AS \"__tenzir_level_1\" "
-                "WHERE (\"y\" > 1) ORDER BY \"__tenzir_order_0\" DESC"});
+                "SELECT * FROM (SELECT \"__tenzir_source_1\".*, \"x\" AS "
+                "\"__tenzir_order_0\" FROM \"t\" AS \"__tenzir_source_1\" "
+                "ORDER BY \"x\" DESC LIMIT 5) AS \"__tenzir_level_2\" WHERE "
+                "(\"y\" > 1) ORDER BY \"__tenzir_order_0\" DESC"});
   CHECK_EQUAL(layout(ordered->layout),
               std::string{"fields=* hidden=[__tenzir_order_0] schema=-"});
   // The derived table of a selection keeps a sort key that it does not
@@ -602,8 +605,9 @@ TEST("plans keep the order of a sort across derived tables") {
   REQUIRE(selected);
   CHECK_EQUAL(render_select(selected->select, PlanDialect{}),
               std::string{
-                "SELECT * FROM (SELECT *, \"__tenzir_column_0\" AS "
-                "\"__tenzir_order_2\" FROM (SELECT \"a\" AS "
+                "SELECT * FROM (SELECT \"__tenzir_level_1\".*, "
+                "\"__tenzir_column_0\" AS \"__tenzir_order_2\" FROM (SELECT "
+                "\"a\" AS "
                 "\"__tenzir_column_0\" FROM \"t\") AS \"__tenzir_level_1\" "
                 "ORDER BY \"__tenzir_column_0\" ASC LIMIT 5) AS "
                 "\"__tenzir_level_3\" WHERE (\"__tenzir_column_0\" > 1) ORDER "
@@ -611,6 +615,10 @@ TEST("plans keep the order of a sort across derived tables") {
   CHECK_EQUAL(layout(selected->layout),
               std::string{"fields=[x=__tenzir_column_0] "
                           "hidden=[__tenzir_order_2] schema=-"});
+  // Keys that differ only in case may name the same column or not, so the
+  // plan stays in the pipeline.
+  CHECK(not plan({sort({"id", "ID"}), limit(5)}));
+  CHECK(not plan({sort({"id"}), sort({"-Id"}), limit(5)}));
   // A later sort takes precedence over an earlier one by the same key, which
   // the query names only once.
   CHECK_EQUAL(sql({sort({"x", "y"}), sort({"-x", "-x"}), limit(5)},
@@ -625,8 +633,293 @@ TEST("plans keep the order of a sort across derived tables") {
   CHECK_EQUAL(sql({sort({"-x"}), limit(5), filter("y > 1")},
                   PlanDialect{LimitClause::top}),
               std::string{
-                "SELECT * FROM (SELECT TOP (5) *, \"x\" AS "
-                "\"__tenzir_order_0\" FROM \"t\" ORDER BY \"x\" DESC) "
-                "AS \"__tenzir_level_1\" WHERE (\"y\" > 1) ORDER BY "
+                "SELECT * FROM (SELECT TOP (5) \"__tenzir_source_1\".*, \"x\" "
+                "AS \"__tenzir_order_0\" FROM \"t\" AS \"__tenzir_source_1\" "
+                "ORDER BY \"x\" DESC) AS \"__tenzir_level_2\" WHERE (\"y\" > "
+                "1) ORDER BY \"__tenzir_order_0\" DESC"});
+}
+
+TEST("plans qualify every column next to others with the relation") {
+  // A relation with a name keeps it.
+  auto named = render_plan(
+    SqlRelation{
+      .from = "(SELECT * FROM \"t\") AS \"src\"",
+      .fields = None{},
+      .alias = "src",
+    },
+    std::vector{sort({"-x"}), limit(5), filter("y > 1")}, PlanDialect{});
+  REQUIRE(named);
+  CHECK_EQUAL(render_select(named->select, PlanDialect{}),
+              std::string{
+                "SELECT * FROM (SELECT \"src\".*, \"x\" AS "
+                "\"__tenzir_order_0\" FROM (SELECT * FROM \"t\") AS \"src\" "
+                "ORDER BY \"x\" DESC LIMIT 5) AS \"__tenzir_level_1\" WHERE "
+                "(\"y\" > 1) ORDER BY \"__tenzir_order_0\" DESC"});
+  // A plan that needs no `*` next to other columns leaves the relation as it
+  // is.
+  CHECK_EQUAL(sql({filter("y > 1"), sort({"x"}), limit(5)}),
+              std::string{"SELECT * FROM \"t\" WHERE (\"y\" > 1) ORDER BY "
+                          "\"x\" ASC LIMIT 5"});
+}
+
+namespace {
+
+/// A dialect without boolean values whose `starts_with` is a predicate.
+class PredicateDialect final : public SqlQueryDialect {
+public:
+  auto quote_identifier(std::string_view name) const -> std::string override {
+    return fmt::format("[{}]", name);
+  }
+
+  auto boolean_values() const -> bool override {
+    return false;
+  }
+
+  auto bind_field(std::span<std::string const> path) const
+    -> Option<std::string> override {
+    if (path.size() != 1) {
+      return None{};
+    }
+    return quote_identifier(path.front());
+  }
+
+  auto
+  render_call(std::string_view name, std::span<std::string const> args) const
+    -> Option<std::string> override {
+    if (name == "starts_with" and args.size() == 2) {
+      return fmt::format("{} LIKE {} + '%'", args[0], args[1]);
+    }
+    if (name == "length_bytes" and args.size() == 1) {
+      return fmt::format("DATALENGTH({})", args[0]);
+    }
+    return None{};
+  }
+
+  auto call_is_predicate(std::string_view name) const -> bool override {
+    return name == "starts_with";
+  }
+};
+
+} // namespace
+
+TEST("plans leave fields with the names of the query in the pipeline") {
+  // A target may resolve such a name to a relation that the query names, such
+  // as the table that a qualified `*` needs.
+  CHECK(not plan({sort({"-__tenzir_source_1"}), limit(1), filter("x > 1")}));
+  CHECK(not plan({filter("__TENZIR_level_0 > 1")}));
+  CHECK(not plan({select({{{"x"}, {"__tenzir_x"}}})}));
+  // A field that a selection named that way still binds.
+  CHECK(plan({select({{{"__tenzir_x"}, {"a"}}}), filter("__tenzir_x > 1")}));
+}
+
+TEST("plans spell calls as predicates where the dialect says so") {
+  auto const dialect = PredicateDialect{};
+  auto const spell = [&](std::string_view predicate) -> Option<std::string> {
+    TRY(
+      auto result,
+      render_plan(SqlRelation{.from = "[t]", .fields = None{}, .alias = None{}},
+                  std::vector{filter(predicate)}, dialect));
+    return render_select(result.select, dialect);
+  };
+  CHECK_EQUAL(spell("s.starts_with(\"a\")"),
+              Option<std::string>{"SELECT * FROM [t] WHERE [s] LIKE 'a' + "
+                                  "'%'"});
+  CHECK_EQUAL(spell("s.length_bytes() > 1"),
+              Option<std::string>{"SELECT * FROM [t] WHERE (DATALENGTH([s]) > "
+                                  "1)"});
+  // A predicate is no value, and a value is no predicate.
+  CHECK(not spell("s.starts_with(\"a\") == true"));
+  CHECK(not spell("s.length_bytes()"));
+}
+
+TEST("sources resume the final limit of a restored read") {
+  auto const plan = std::vector{filter("i > 0"), limit(5)};
+  CHECK_EQUAL(final_limit(plan), Option<uint64_t>{5});
+  auto resumed = resume_plan(plan, uint64_t{2});
+  REQUIRE_EQUAL(resumed.size(), size_t{2});
+  CHECK_EQUAL(as<ir::QueryStage::Limit>(resumed.back().kind).count,
+              uint64_t{2});
+  // A limit before other stages is no final limit.
+  auto const inner = std::vector{limit(5), filter("i > 0")};
+  CHECK_EQUAL(final_limit(inner), Option<uint64_t>{});
+  CHECK_EQUAL(
+    as<ir::QueryStage::Limit>(resume_plan(inner, uint64_t{2}).front().kind)
+      .count,
+    uint64_t{5});
+  CHECK_EQUAL(final_limit({}), Option<uint64_t>{});
+}
+
+TEST("sources find arithmetic with time literals") {
+  CHECK(computes_with_time(parse("ts - 2024-01-01 > 1h")));
+  CHECK(computes_with_time(parse("x > 0 or -(2024-01-01) > ts")));
+  CHECK(computes_with_time(parse("(2024-01-01 + 1h).string() == \"x\"")));
+  CHECK(not computes_with_time(parse("ts - 1h > 2024-01-01")));
+  CHECK(not computes_with_time(parse("ts in [2024-01-01]")));
+}
+
+TEST("sources take over the longest prefix that the dialect spells") {
+  auto const absorb = [](std::vector<ir::QueryStage> stages,
+                         AbsorbOptions const& options) {
+    return absorb_prefix(ir::QueryChain{.stages = std::move(stages), .end = ""},
+                         PlanDialect{}, options);
+  };
+  auto all = absorb({filter("x > 1"), sort({"x"}), limit(3)},
+                    {.target = "Test", .filters_only = false, .veto = {}});
+  CHECK_EQUAL(all.prefix, size_t{3});
+  CHECK_EQUAL(all.declined, std::string{});
+  // The dialect spells no `ends_with`.
+  auto partial
+    = absorb({filter("x > 1"), filter("s.ends_with(\"a\")"), limit(3)},
+             {.target = "Test", .filters_only = false, .veto = {}});
+  CHECK_EQUAL(partial.prefix, size_t{1});
+  CHECK_EQUAL(partial.declined, std::string{"Test cannot spell the stage"});
+  // A live read takes over filters only.
+  auto live = absorb({filter("x > 1"), sort({"x"})},
+                     {.target = "Test", .filters_only = true, .veto = {}});
+  CHECK_EQUAL(live.prefix, size_t{1});
+  CHECK_EQUAL(live.declined,
+              std::string{"a live read takes over filters only"});
+  // A veto ends the prefix with its reason, also at the first stage.
+  auto const no_limits
+    = [](ir::QueryStage const& stage) -> Option<std::string> {
+    if (is<ir::QueryStage::Limit>(stage.kind)) {
+      return std::string{"no limits"};
+    }
+    return None{};
+  };
+  auto vetoed
+    = absorb({filter("x > 1"), limit(3), filter("y > 1")},
+             {.target = "Test", .filters_only = false, .veto = no_limits});
+  CHECK_EQUAL(vetoed.prefix, size_t{1});
+  CHECK_EQUAL(vetoed.declined, std::string{"no limits"});
+  auto first = absorb(
+    {limit(3)}, {.target = "Test", .filters_only = false, .veto = no_limits});
+  CHECK_EQUAL(first.prefix, size_t{0});
+  CHECK_EQUAL(first.declined, std::string{"no limits"});
+  auto none = absorb({}, {.target = "Test", .filters_only = false, .veto = {}});
+  CHECK_EQUAL(none.prefix, size_t{0});
+  CHECK_EQUAL(none.declined, std::string{});
+}
+
+TEST("sources select the columns that downstream needs") {
+  auto const columns = std::vector<std::string>{"id", "Name", "name", "Host"};
+  auto const projection = [](std::vector<std::string_view> fields) {
+    auto result = ir::OptimizeProjection{};
+    for (auto field : fields) {
+      result.push_back(*ast::field_path::try_from(parse(field)));
+    }
+    return Option<ir::OptimizeProjection>{std::move(result)};
+  };
+  auto const select = [&](Option<ir::OptimizeProjection> const& wanted,
+                          std::vector<std::string> required = {},
+                          std::vector<ir::QueryStage> plan = {}) {
+    return select_projection(wanted, columns, required, plan, PlanDialect{});
+  };
+  CHECK_EQUAL(select(None{}), std::string{"*"});
+  // An exact name selects its column, and a name in another case every
+  // column that matches without regard to case.
+  CHECK_EQUAL(select(projection({"name", "HOST.x", "id"})),
+              std::string{"\"name\", \"Host\", \"id\""});
+  CHECK_EQUAL(select(projection({"NAME"})), std::string{"\"Name\", \"name\""});
+  // Required columns join.
+  CHECK_EQUAL(select(projection({"Name"}), {"id"}),
+              std::string{"\"Name\", \"id\""});
+  // A name beyond ASCII that matches no column may still resolve by rules of
+  // the target, such as a collation that folds `ä` to `Ä`, so the read keeps
+  // every column.
+  CHECK_EQUAL(select(projection({"id", "this[\"ä\"]"})), std::string{"*"});
+  CHECK_EQUAL(select(projection({"id"}), {"ä"}), std::string{"*"});
+  // Other unknown names are left downstream. Without any column left, the
+  // selection keeps the first one for the rows.
+  CHECK_EQUAL(select(projection({"missing", "Host"})), std::string{"\"Host\""});
+  CHECK_EQUAL(select(projection({"missing"})), std::string{"\"id\""});
+  // A collation may also ignore accents, so an ASCII name may resolve to a
+  // column beyond ASCII.
+  CHECK_EQUAL(select_projection(projection({"id", "cafe"}),
+                                std::vector<std::string>{"id", "café"}, {}, {},
+                                PlanDialect{}),
+              std::string{"*"});
+  // A source may spell the selected columns itself.
+  CHECK_EQUAL(select_projection(projection({"id"}), columns, {}, {},
+                                PlanDialect{},
+                                [](std::string const& column) {
+                                  return fmt::format("f({})", column);
+                                }),
+              std::string{"f(id)"});
+  // A drop keeps every other column.
+  CHECK_EQUAL(select(projection({"id"}), {}, {drop({{"Host"}})}),
+              std::string{"*"});
+}
+
+TEST("sources read tables through plans") {
+  auto const columns = std::vector<std::string>{"x", "y"};
+  auto const read
+    = [&](std::string_view selection, std::vector<std::string> where,
+          std::vector<ir::QueryStage> plan) {
+        return make_table_read("\"t\"", selection, where, plan, columns,
+                               PlanDialect{});
+      };
+  auto plain = read("\"x\"", {"\"x\" > 0"}, {});
+  REQUIRE(plain);
+  CHECK_EQUAL(plain.unwrap().sql,
+              std::string{"SELECT \"x\" FROM \"t\" WHERE \"x\" > 0"});
+  // A projection or a predicate becomes a derived table with a name, which
+  // qualifies the `*` next to the sort key.
+  auto ordered
+    = read("\"x\", \"y\"", {}, {sort({"-x"}), limit(5), filter("y > 1")});
+  REQUIRE(ordered);
+  CHECK_EQUAL(ordered.unwrap().sql,
+              std::string{
+                "SELECT * FROM (SELECT \"__tenzir_table\".*, \"x\" AS "
+                "\"__tenzir_order_0\" FROM (SELECT \"x\", \"y\" FROM \"t\") "
+                "AS \"__tenzir_table\" ORDER BY \"x\" DESC LIMIT 5) AS "
+                "\"__tenzir_level_1\" WHERE (\"y\" > 1) ORDER BY "
                 "\"__tenzir_order_0\" DESC"});
+  CHECK_EQUAL(ordered.unwrap().layout.hidden,
+              std::vector<std::string>{"__tenzir_order_0"});
+  // A relation may share its name with a column.
+  auto relation = make_table_read(
+    "\"t\"", "*", {}, std::vector{sort({"-x"}), limit(5), filter("y > 1")},
+    std::vector<std::string>{"x", "y", "__tenzir_source_1", "__tenzir_level_2"},
+    PlanDialect{});
+  REQUIRE(relation);
+  CHECK(relation.unwrap().sql.contains("AS \"__tenzir_source_1\""));
+  // A name that the query introduces must not name a column, in any case.
+  auto clash
+    = make_table_read("\"t\"", "*", {}, std::vector{select({{{"a"}, {"x"}}})},
+                      std::vector<std::string>{"__TENZIR_COLUMN_0"},
+                      PlanDialect{});
+  REQUIRE(not clash);
+  CHECK(clash.unwrap_err().contains("__tenzir_column_0"));
+}
+
+TEST("sources read windows of live reads with filters") {
+  auto const bounds = std::vector<std::string>{"\"id\" <= 5"};
+  auto sql
+    = make_window_read("\"t\"", "\"s\"", bounds, std::vector{filter("x > 1")},
+                       "id", PlanDialect{});
+  REQUIRE(sql);
+  CHECK_EQUAL(sql.unwrap(),
+              std::string{"SELECT \"s\" FROM \"t\" WHERE \"id\" <= 5 AND "
+                          "(\"x\" > 1) ORDER BY \"id\" ASC"});
+}
+
+TEST("sources find the fields that a plan reads") {
+  auto const inputs = [](std::vector<ir::QueryStage> stages) {
+    return plan_inputs(stages);
+  };
+  CHECK_EQUAL(inputs({filter("a > 1 and b.c == 2"),
+                      select({{{"x"}, {"d", "e"}}}), sort({"x"}), limit(1)}),
+              (Option<std::vector<std::string>>{
+                std::vector<std::string>{"a", "b", "d", "x"}}));
+  CHECK_EQUAL(
+    inputs(
+      {aggregate({{.output = {"n"}, .function = "count", .input = None{}},
+                  {.output = {"m"}, .function = "max", .input = Path{"f"}}})}),
+    (Option<std::vector<std::string>>{std::vector<std::string>{"f"}}));
+  CHECK_EQUAL(inputs({}),
+              (Option<std::vector<std::string>>{std::vector<std::string>{}}));
+  // A filter on `this` may read any field.
+  CHECK_EQUAL(inputs({filter("this == {}")}),
+              (Option<std::vector<std::string>>{}));
 }

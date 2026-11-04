@@ -120,6 +120,11 @@ public:
   render_call(std::string_view name, std::span<std::string const> args) const
     -> Option<std::string>;
 
+  /// Whether `render_call` spells the TQL function `name` as a predicate,
+  /// such as `x LIKE 'a%'`, rather than as a value. It matters only where
+  /// `boolean_values()` does not hold. Defaults to `false`.
+  virtual auto call_is_predicate(std::string_view name) const -> bool;
+
   /// Spells a call of the TQL aggregation function `name` on the rendered
   /// value of its argument, if any. Defaults to `COUNT`, `MIN`, and `MAX`.
   /// Only functions whose result does not depend on the order of their input
@@ -260,6 +265,11 @@ struct SqlRelation {
   /// The fields of the relation with their columns, or `None` if the plan
   /// names its fields through `SqlQueryDialect::bind_field`, as for a table.
   Option<SqlFields> fields;
+  /// The name that `from` already gives the relation, as in
+  /// `(SELECT ...) AS name`, or `None` if it gives none. A plan that selects
+  /// every column next to others qualifies the `*` with it, as some dialects
+  /// require, and names the relation itself where `from` does not.
+  Option<std::string> alias = None{};
 };
 
 /// How the result columns of a plan become events, as `apply_layout` arranges
@@ -271,9 +281,10 @@ struct SqlPlan {
   SqlSelect select;
   SqlLayout layout;
   /// The names of the columns that the query introduces, all starting with
-  /// `__tenzir_`. The source must decline the plan if one of them names a
-  /// column of the relation, compared as the target compares identifiers,
-  /// such as without regard to case in DuckDB.
+  /// `__tenzir_`. The names of relations, which may share their name with a
+  /// column, are not among them. The source must decline the plan if one of
+  /// them names a column of the relation, compared as the target compares
+  /// identifiers, such as without regard to case in DuckDB.
   std::vector<std::string> aliases;
 };
 
