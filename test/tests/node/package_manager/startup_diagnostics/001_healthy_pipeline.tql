@@ -1,0 +1,8 @@
+// An unused broken module must not prevent a healthy sibling from running.
+every 10ms {
+  pipeline_list
+  where id == "healthy/main"
+  where state in ["completed", "failed", "stopped"]
+}
+head 1
+select id, state, error

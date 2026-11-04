@@ -1,0 +1,13 @@
+// The constants source must survive module building until errors are printed.
+every 10ms {
+  from_file env("TENZIR_NODE_STDERR_LOG") { read_lines }
+  summarize lines=collect(line)
+  where lines.search("in package `badconstants`")
+}
+head 1
+unroll lines
+line = lines
+where line.search("error: `constants.tql`") or line.search("<packages/badconstants/constants.tql>:") or line.search("1 | pass") or line.search("^^^^") or line.search("in package `badconstants`")
+line = line.replace_regex("^.*error: ", "error: ")
+select line
+write_lines
