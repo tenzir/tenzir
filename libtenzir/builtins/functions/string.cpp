@@ -856,10 +856,6 @@ public:
     return true;
   }
 
-  auto is_cheap() const -> bool override {
-    return true;
-  }
-
   auto describe() const -> nova::FunctionDescription override {
     auto d = nova::FunctionDescriber<StartsEndsWithArgs,
                                      StartsEndsWithFunction<StartsWith>>{};
@@ -2914,10 +2910,6 @@ public:
   }
 
   auto is_deterministic() const -> bool override {
-    return true;
-  }
-
-  auto is_cheap() const -> bool override {
     return true;
   }
 

@@ -901,10 +901,6 @@ public:
     return true;
   }
 
-  auto is_cheap() const -> bool override {
-    return true;
-  }
-
   auto describe() const -> nova::FunctionDescription override {
     auto d = nova::FunctionDescriber<HasArgs, HasFunction>{};
     d.positional("x", &HasArgs::x, "record");
