@@ -261,10 +261,19 @@ private:
       co_return failure::promise();
     }
     auto api = std::move(transport).unwrap();
-    // Both were validated when the pipeline was parsed.
-    auto deployment = DeploymentId::make(platform->deployment_id);
+    auto identity = co_await platform->identity(*api);
+    if (identity.is_err()) {
+      diagnostic::error("failed to learn which workspace this deployment "
+                        "belongs to: {}",
+                        std::move(identity).unwrap_err())
+        .primary(args_.name)
+        .emit(ctx);
+      co_return failure::promise();
+    }
+    auto deployment = identity.unwrap().path();
+    // Validated when the pipeline was parsed.
     auto name = IngestEndpointName::make(args_.name.inner);
-    TENZIR_ASSERT(deployment.is_ok() and name.is_ok());
+    TENZIR_ASSERT(name.is_ok());
     auto group = Option<IngestEndpointGroupName>{};
     if (args_.group) {
       auto made = IngestEndpointGroupName::make(args_.group->inner);
@@ -273,8 +282,9 @@ private:
     }
     auto attached = co_await call(
       *api, AttachIngestEndpoint{
-              AttachIngestEndpointPath{std::move(deployment).unwrap(),
-                                       std::move(name).unwrap()},
+              AttachIngestEndpointPath{
+                std::move(deployment.org), std::move(deployment.workspace),
+                std::move(deployment.deployment_id), std::move(name).unwrap()},
               AttachIngestEndpointQuery{std::move(group)}});
     if (attached.is_err()) {
       diagnostic::error("failed to attach to ingest endpoint `{}`: {}",

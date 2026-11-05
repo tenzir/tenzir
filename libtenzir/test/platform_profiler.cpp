@@ -75,6 +75,30 @@ private:
   bool canceled_ = false;
 };
 
+/// A connection whose identity is known, so that the transports above see
+/// nothing but telemetry.
+auto known() -> PlatformConnection {
+  return PlatformConnection::confirmed_as(DeploymentIdentity{
+    OrganizationId::make("00000000-0000-4000-8000-000000000001").unwrap(),
+    WorkspaceId::make("00000000-0000-4000-8000-000000000002").unwrap(),
+    DeploymentId::make("dev").unwrap()});
+}
+
+class PathTransport final : public Transport {
+public:
+  explicit PathTransport(std::shared_ptr<std::string> path)
+    : path_{std::move(path)} {
+  }
+  auto request(HttpRequest request)
+    -> Task<Result<HttpResponse, RequestError>> override {
+    *path_ = request.path;
+    co_return HttpResponse{204, {}};
+  }
+
+private:
+  std::shared_ptr<std::string> path_;
+};
+
 auto external(uint64_t events, MetricsDirection direction
                                = MetricsDirection::read)
   -> MetricsSnapshotEntry {
@@ -106,11 +130,21 @@ TEST("platform wire counters retain safe numeric bounds") {
   CHECK(parse_telemetry_count(text.root()).is_err());
 }
 
+TEST("platform telemetry goes to the deployment's nested route") {
+  auto path = std::make_shared<std::string>();
+  auto profiler = PlatformProfiler{known(), "pipeline", 1, PathTransport{path}};
+  profiler.transition("finished");
+  folly::coro::blockingWait(profiler.flush());
+  CHECK_EQUAL(*path, "/organizations/00000000-0000-4000-8000-000000000001/"
+                     "workspaces/00000000-0000-4000-8000-000000000002/"
+                     "deployments/dev/telemetry");
+}
+
 TEST("platform profiler differences connector counters and folds diagnostics") {
   auto batches = std::make_shared<std::vector<Batch>>();
   auto run = uint64_t{4'294'967'296};
   auto profiler
-    = PlatformProfiler{{}, "pipeline", run, RecordingTransport{batches}};
+    = PlatformProfiler{known(), "pipeline", run, RecordingTransport{batches}};
   auto counters = std::array{external(5), external(9, MetricsDirection::write)};
   profiler.sample(counters);
   counters[0].value = 8;
@@ -145,7 +179,7 @@ TEST("platform profiler keeps rapid samples distinct at millisecond "
      "precision") {
   auto batches = std::make_shared<std::vector<Batch>>();
   auto profiler
-    = PlatformProfiler{{}, "pipeline", 1, RecordingTransport{batches}};
+    = PlatformProfiler{known(), "pipeline", 1, RecordingTransport{batches}};
   auto copy = profiler;
   for (auto events = uint64_t{1}; events <= 8; ++events) {
     auto counters = std::array{external(events)};
@@ -171,7 +205,7 @@ TEST("platform profiler bounds pending batches and reports drops in final "
      "flush") {
   auto batches = std::make_shared<std::vector<Batch>>();
   auto profiler
-    = PlatformProfiler{{}, "pipeline", 1, RecordingTransport{batches}};
+    = PlatformProfiler{known(), "pipeline", 1, RecordingTransport{batches}};
   for (auto events = uint64_t{1}; events <= 40; ++events) {
     auto counters = std::array{external(events)};
     profiler.sample(counters);
@@ -179,7 +213,8 @@ TEST("platform profiler bounds pending batches and reports drops in final "
   folly::coro::blockingWait(profiler.flush());
   REQUIRE_EQUAL(batches->size(), 17u);
   CHECK((*batches)[16].dropped.value() >= 24);
-  auto other = PlatformProfiler{{}, "other", 2, RecordingTransport{batches}};
+  auto other
+    = PlatformProfiler{known(), "other", 2, RecordingTransport{batches}};
   other.transition("failed");
   folly::coro::blockingWait(other.flush());
   REQUIRE_EQUAL(batches->size(), 18u);
@@ -191,9 +226,7 @@ TEST("platform profiler bounds pending batches and reports drops in final "
 TEST("platform profiler retries the immutable batch") {
   auto batches = std::make_shared<std::vector<Batch>>();
   auto profiler = PlatformProfiler{
-    {},
-    "pipeline",
-    1,
+    known(), "pipeline", 1,
     RecordingTransport{batches, std::vector<uint16_t>{0, 429, 204}}};
   auto counters = std::array{external(5)};
   profiler.sample(counters);
@@ -211,9 +244,7 @@ TEST("platform profiler retries the immutable batch") {
 TEST("platform profiler stops after three transient failures") {
   auto batches = std::make_shared<std::vector<Batch>>();
   auto profiler = PlatformProfiler{
-    {},
-    "pipeline",
-    1,
+    known(), "pipeline", 1,
     RecordingTransport{batches, std::vector<uint16_t>{500, 429, 0}}};
   profiler.transition("running");
   folly::coro::blockingWait(profiler.flush());
@@ -226,7 +257,7 @@ TEST("platform profiler stops after three transient failures") {
 TEST("platform profiler flushes a canceled batch before later samples") {
   auto batches = std::make_shared<std::vector<Batch>>();
   auto profiler
-    = PlatformProfiler{{}, "pipeline", 1, CancelOnceTransport{batches}};
+    = PlatformProfiler{known(), "pipeline", 1, CancelOnceTransport{batches}};
   for (auto events = uint64_t{1}; events <= 2; ++events) {
     auto counters = std::array{external(events)};
     profiler.sample(counters);
@@ -252,8 +283,9 @@ TEST("platform profiler flushes a canceled batch before later samples") {
 
 TEST("platform profiler rejects permanent failures without retrying") {
   auto batches = std::make_shared<std::vector<Batch>>();
-  auto profiler = PlatformProfiler{
-    {}, "pipeline", 1, RecordingTransport{batches, std::vector<uint16_t>{401}}};
+  auto profiler
+    = PlatformProfiler{known(), "pipeline", 1,
+                       RecordingTransport{batches, std::vector<uint16_t>{401}}};
   profiler.transition("running");
   folly::coro::blockingWait(profiler.flush());
   REQUIRE_EQUAL(batches->size(), 1u);
@@ -266,7 +298,7 @@ TEST("platform profiler rejects permanent failures without retrying") {
 TEST("platform profiler ignores unattributed and internal counters") {
   auto batches = std::make_shared<std::vector<Batch>>();
   auto profiler
-    = PlatformProfiler{{}, "pipeline", 1, RecordingTransport{batches}};
+    = PlatformProfiler{known(), "pipeline", 1, RecordingTransport{batches}};
   auto counters = std::array{external(5), external(7), external(9)};
   counters[1].connector = "from_http";
   counters[1].visibility = MetricsVisibility::internal_;
@@ -282,7 +314,8 @@ TEST("platform profiler ignores unattributed and internal counters") {
 
 TEST("platform profiler bounds the final flush while HTTP is stalled") {
   auto calls = std::make_shared<int>(0);
-  auto profiler = PlatformProfiler{{}, "pipeline", 1, SlowTransport{calls}};
+  auto profiler
+    = PlatformProfiler{known(), "pipeline", 1, SlowTransport{calls}};
   profiler.transition("finished");
   auto start = std::chrono::steady_clock::now();
   folly::coro::blockingWait(profiler.flush());
@@ -293,7 +326,7 @@ TEST("platform profiler bounds the final flush while HTTP is stalled") {
 TEST("platform profiler accounts for diagnostic and transition overflow") {
   auto batches = std::make_shared<std::vector<Batch>>();
   auto profiler
-    = PlatformProfiler{{}, "pipeline", 1, RecordingTransport{batches}};
+    = PlatformProfiler{known(), "pipeline", 1, RecordingTransport{batches}};
   auto sources = SourceMap{};
   auto warning = diagnostic{severity::warning, "repeated"};
   for (auto index = 0; index < 600; ++index) {
