@@ -35,6 +35,136 @@ namespace tenzir {
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
+class NoPrincipal {
+public:
+  NoPrincipal() = default;
+
+  friend auto operator==(NoPrincipal const&, NoPrincipal const&) -> bool
+    = default;
+
+  template <class HashAlgorithm>
+  friend auto hash_append(HashAlgorithm& h, NoPrincipal const& value) -> void {
+    hash_append(h, std::string_view{"NoPrincipal"});
+  }
+};
+
+} // namespace tenzir
+
+template <>
+struct std::hash<tenzir::NoPrincipal> {
+  auto operator()(tenzir::NoPrincipal const& value) const -> std::size_t {
+    return tenzir::hash(value);
+  }
+};
+
+namespace tenzir {
+
+/// The platform's own identifier for a user
+class UserId {
+public:
+  static auto make(std::string value) -> Result<UserId, ParseError>;
+
+  auto to_string() const -> std::string_view {
+    return value_;
+  }
+
+  friend auto operator==(UserId const&, UserId const&) -> bool = default;
+
+  template <class HashAlgorithm>
+  friend auto hash_append(HashAlgorithm& h, UserId const& value) -> void {
+    hash_append(h, value.to_string());
+  }
+
+private:
+  explicit UserId(std::string value) : value_{std::move(value)} {
+  }
+
+  std::string value_;
+};
+
+template <>
+inline constexpr auto enable_default_formatter<UserId> = true;
+
+} // namespace tenzir
+
+template <>
+struct std::hash<tenzir::UserId> {
+  auto operator()(tenzir::UserId const& value) const -> std::size_t {
+    return tenzir::hash(value);
+  }
+};
+
+namespace tenzir {
+
+/// A user as the platform knows one: its own id, and the identity a provider
+/// vouched for
+class User {
+public:
+  User(UserId id, std::string issuer, std::string subject,
+       Option<std::string> email, Option<std::string> name)
+    : id{std::move(id)},
+      issuer{std::move(issuer)},
+      subject{std::move(subject)},
+      email{std::move(email)},
+      name{std::move(name)} {
+  }
+
+  UserId id;
+  std::string issuer;
+  std::string subject;
+  /// `email`, may be absent, may be null.
+  Option<std::string> email;
+  /// `name`, may be absent, may be null.
+  Option<std::string> name;
+
+  friend auto operator==(User const&, User const&) -> bool = default;
+
+  template <class HashAlgorithm>
+  friend auto hash_append(HashAlgorithm& h, User const& value) -> void {
+    hash_append(h, value.id, value.issuer, value.subject, value.email,
+                value.name);
+  }
+};
+
+} // namespace tenzir
+
+template <>
+struct std::hash<tenzir::User> {
+  auto operator()(tenzir::User const& value) const -> std::size_t {
+    return tenzir::hash(value);
+  }
+};
+
+namespace tenzir {
+
+class UserPrincipal {
+public:
+  explicit UserPrincipal(User user) : user{std::move(user)} {
+  }
+
+  User user;
+
+  friend auto operator==(UserPrincipal const&, UserPrincipal const&) -> bool
+    = default;
+
+  template <class HashAlgorithm>
+  friend auto hash_append(HashAlgorithm& h, UserPrincipal const& value)
+    -> void {
+    hash_append(h, value.user);
+  }
+};
+
+} // namespace tenzir
+
+template <>
+struct std::hash<tenzir::UserPrincipal> {
+  auto operator()(tenzir::UserPrincipal const& value) const -> std::size_t {
+    return tenzir::hash(value);
+  }
+};
+
+namespace tenzir {
+
 /// A path-safe identifier
 /// Values must match `^[A-Za-z0-9][A-Za-z0-9_-]*$`.
 class DeploymentId {
@@ -68,35 +198,6 @@ inline constexpr auto enable_default_formatter<DeploymentId> = true;
 template <>
 struct std::hash<tenzir::DeploymentId> {
   auto operator()(tenzir::DeploymentId const& value) const -> std::size_t {
-    return tenzir::hash(value);
-  }
-};
-
-namespace tenzir {
-
-class DeploymentPath {
-public:
-  explicit DeploymentPath(DeploymentId deployment_id)
-    : deployment_id{std::move(deployment_id)} {
-  }
-
-  DeploymentId deployment_id;
-
-  friend auto operator==(DeploymentPath const&, DeploymentPath const&) -> bool
-    = default;
-
-  template <class HashAlgorithm>
-  friend auto hash_append(HashAlgorithm& h, DeploymentPath const& value)
-    -> void {
-    hash_append(h, value.deployment_id);
-  }
-};
-
-} // namespace tenzir
-
-template <>
-struct std::hash<tenzir::DeploymentPath> {
-  auto operator()(tenzir::DeploymentPath const& value) const -> std::size_t {
     return tenzir::hash(value);
   }
 };
@@ -178,6 +279,121 @@ public:
 template <>
 struct std::hash<tenzir::DeploymentInfo> {
   auto operator()(tenzir::DeploymentInfo const& value) const -> std::size_t {
+    return tenzir::hash(value);
+  }
+};
+
+namespace tenzir {
+
+/// A UUID
+/// Values must match
+/// `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`.
+class OrganizationId {
+public:
+  static auto make(std::string value) -> Result<OrganizationId, ParseError>;
+
+  auto to_string() const -> std::string_view {
+    return value_;
+  }
+
+  friend auto operator==(OrganizationId const&, OrganizationId const&) -> bool
+    = default;
+
+  template <class HashAlgorithm>
+  friend auto hash_append(HashAlgorithm& h, OrganizationId const& value)
+    -> void {
+    hash_append(h, value.to_string());
+  }
+
+private:
+  explicit OrganizationId(std::string value) : value_{std::move(value)} {
+  }
+
+  std::string value_;
+};
+
+template <>
+inline constexpr auto enable_default_formatter<OrganizationId> = true;
+
+} // namespace tenzir
+
+template <>
+struct std::hash<tenzir::OrganizationId> {
+  auto operator()(tenzir::OrganizationId const& value) const -> std::size_t {
+    return tenzir::hash(value);
+  }
+};
+
+namespace tenzir {
+
+class DeploymentPrincipal {
+public:
+  DeploymentPrincipal(DeploymentInfo deployment, OrganizationId org_id)
+    : deployment{std::move(deployment)}, org_id{std::move(org_id)} {
+  }
+
+  DeploymentInfo deployment;
+  OrganizationId org_id;
+
+  friend auto operator==(DeploymentPrincipal const&, DeploymentPrincipal const&)
+    -> bool
+    = default;
+
+  template <class HashAlgorithm>
+  friend auto hash_append(HashAlgorithm& h, DeploymentPrincipal const& value)
+    -> void {
+    hash_append(h, value.deployment, value.org_id);
+  }
+};
+
+} // namespace tenzir
+
+template <>
+struct std::hash<tenzir::DeploymentPrincipal> {
+  auto operator()(tenzir::DeploymentPrincipal const& value) const
+    -> std::size_t {
+    return tenzir::hash(value);
+  }
+};
+
+namespace tenzir {
+
+using Principal = variant<NoPrincipal, UserPrincipal, DeploymentPrincipal>;
+
+} // namespace tenzir
+
+template <>
+struct std::hash<tenzir::Principal> {
+  auto operator()(tenzir::Principal const& value) const -> std::size_t {
+    return tenzir::hash(value);
+  }
+};
+
+namespace tenzir {
+
+class DeploymentPath {
+public:
+  explicit DeploymentPath(DeploymentId deployment_id)
+    : deployment_id{std::move(deployment_id)} {
+  }
+
+  DeploymentId deployment_id;
+
+  friend auto operator==(DeploymentPath const&, DeploymentPath const&) -> bool
+    = default;
+
+  template <class HashAlgorithm>
+  friend auto hash_append(HashAlgorithm& h, DeploymentPath const& value)
+    -> void {
+    hash_append(h, value.deployment_id);
+  }
+};
+
+} // namespace tenzir
+
+template <>
+struct std::hash<tenzir::DeploymentPath> {
+  auto operator()(tenzir::DeploymentPath const& value) const -> std::size_t {
     return tenzir::hash(value);
   }
 };
@@ -1942,22 +2158,6 @@ namespace tenzir {
 
 // ── Failures ────────────────────────────────────────────────────────────────
 
-/// InternalServerError
-class InternalServerError {
-public:
-  InternalServerError() = default;
-
-  static constexpr auto status = std::uint16_t{500};
-};
-
-/// NotFound
-class NotFound {
-public:
-  NotFound() = default;
-
-  static constexpr auto status = std::uint16_t{404};
-};
-
 class Unauthorized {
 public:
   explicit Unauthorized(std::string message) : message{std::move(message)} {
@@ -1966,6 +2166,14 @@ public:
   static constexpr auto status = std::uint16_t{403};
 
   std::string message;
+};
+
+/// InternalServerError
+class InternalServerError {
+public:
+  InternalServerError() = default;
+
+  static constexpr auto status = std::uint16_t{500};
 };
 
 class Unauthenticated {
@@ -1997,6 +2205,14 @@ public:
   static constexpr auto status = std::uint16_t{400};
 
   std::string message;
+};
+
+/// NotFound
+class NotFound {
+public:
+  NotFound() = default;
+
+  static constexpr auto status = std::uint16_t{404};
 };
 
 class TooLarge {
@@ -2121,6 +2337,22 @@ public:
 /// The three that are not declared anywhere come from `transport.hpp`, which
 /// is where the failures no endpoint declares live.
 using CallError = variant<ParseError, RequestError, ResponseError>;
+
+// ── Account (deployment → platform) ─────────────────────────────────────────
+
+/// `GET /api/account`
+/// Tells you who you are based on the authorization provided
+class ReadAccount {
+public:
+  ReadAccount() = default;
+};
+
+using ReadAccountError
+  = variant<Unauthorized, InternalServerError, Unauthenticated,
+            CredentialConflict, Validation>;
+
+auto call(Transport& transport, ReadAccount)
+  -> Task<Result<Principal, variant<ReadAccountError, CallError>>>;
 
 // ── Deployments (deployment → platform) ─────────────────────────────────────
 
@@ -2470,14 +2702,26 @@ auto dispatch(DeploymentApi& handler, HttpRequest request)
 ///
 /// The element points into the caller's parsed document, which must
 /// outlive the call. The result owns its data.
+auto parse_no_principal(simdjson::dom::element value)
+  -> Result<NoPrincipal, ParseError>;
+auto parse_user_id(simdjson::dom::element value) -> Result<UserId, ParseError>;
+auto parse_user(simdjson::dom::element value) -> Result<User, ParseError>;
+auto parse_user_principal(simdjson::dom::element value)
+  -> Result<UserPrincipal, ParseError>;
 auto parse_deployment_id(simdjson::dom::element value)
   -> Result<DeploymentId, ParseError>;
-auto parse_deployment_path(simdjson::dom::element value)
-  -> Result<DeploymentPath, ParseError>;
 auto parse_workspace_id(simdjson::dom::element value)
   -> Result<WorkspaceId, ParseError>;
 auto parse_deployment_info(simdjson::dom::element value)
   -> Result<DeploymentInfo, ParseError>;
+auto parse_organization_id(simdjson::dom::element value)
+  -> Result<OrganizationId, ParseError>;
+auto parse_deployment_principal(simdjson::dom::element value)
+  -> Result<DeploymentPrincipal, ParseError>;
+auto parse_principal(simdjson::dom::element value)
+  -> Result<Principal, ParseError>;
+auto parse_deployment_path(simdjson::dom::element value)
+  -> Result<DeploymentPath, ParseError>;
 auto parse_telemetry_count(simdjson::dom::element value)
   -> Result<TelemetryCount, ParseError>;
 auto parse_tenzir_telemetry_telemetry_count(simdjson::dom::element value)
@@ -2577,10 +2821,17 @@ auto parse_adhoc_pipeline_definition(simdjson::dom::element value)
 
 /// Appends the type as JSON, in the bytes the API puts on the wire, so a
 /// copy stored elsewhere decodes with the same function.
+auto write_json(NoPrincipal const& value, std::string& out) -> void;
+auto write_json(UserId const& value, std::string& out) -> void;
+auto write_json(User const& value, std::string& out) -> void;
+auto write_json(UserPrincipal const& value, std::string& out) -> void;
 auto write_json(DeploymentId const& value, std::string& out) -> void;
-auto write_json(DeploymentPath const& value, std::string& out) -> void;
 auto write_json(WorkspaceId const& value, std::string& out) -> void;
 auto write_json(DeploymentInfo const& value, std::string& out) -> void;
+auto write_json(OrganizationId const& value, std::string& out) -> void;
+auto write_json(DeploymentPrincipal const& value, std::string& out) -> void;
+auto write_json(Principal const& value, std::string& out) -> void;
+auto write_json(DeploymentPath const& value, std::string& out) -> void;
 auto write_json(TelemetryCount const& value, std::string& out) -> void;
 auto write_json(TenzirTelemetryTelemetryCount const& value, std::string& out)
   -> void;

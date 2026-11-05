@@ -56,18 +56,18 @@ as_response_error(std::uint16_t status, std::string const& body) {
 
 // ── Codecs ──────────────────────────────────────────────────────────────────
 
-auto parse_internal_server_error(simdjson::dom::element value)
-  -> Result<InternalServerError, ParseError>;
-auto parse_not_found(simdjson::dom::element value)
-  -> Result<NotFound, ParseError>;
 auto parse_unauthorized(simdjson::dom::element value)
   -> Result<Unauthorized, ParseError>;
+auto parse_internal_server_error(simdjson::dom::element value)
+  -> Result<InternalServerError, ParseError>;
 auto parse_unauthenticated(simdjson::dom::element value)
   -> Result<Unauthenticated, ParseError>;
 auto parse_credential_conflict(simdjson::dom::element value)
   -> Result<CredentialConflict, ParseError>;
 auto parse_validation(simdjson::dom::element value)
   -> Result<Validation, ParseError>;
+auto parse_not_found(simdjson::dom::element value)
+  -> Result<NotFound, ParseError>;
 auto parse_too_large(simdjson::dom::element value)
   -> Result<TooLarge, ParseError>;
 auto parse_service_unavailable(simdjson::dom::element value)
@@ -89,12 +89,12 @@ auto parse_pipeline_not_found(simdjson::dom::element value)
 auto parse_busy(simdjson::dom::element value) -> Result<Busy, ParseError>;
 auto parse_suspended(simdjson::dom::element value)
   -> Result<Suspended, ParseError>;
-auto write_json(InternalServerError const& value, std::string& out) -> void;
-auto write_json(NotFound const& value, std::string& out) -> void;
 auto write_json(Unauthorized const& value, std::string& out) -> void;
+auto write_json(InternalServerError const& value, std::string& out) -> void;
 auto write_json(Unauthenticated const& value, std::string& out) -> void;
 auto write_json(CredentialConflict const& value, std::string& out) -> void;
 auto write_json(Validation const& value, std::string& out) -> void;
+auto write_json(NotFound const& value, std::string& out) -> void;
 auto write_json(TooLarge const& value, std::string& out) -> void;
 auto write_json(ServiceUnavailable const& value, std::string& out) -> void;
 auto write_json(InvalidConfiguration const& value, std::string& out) -> void;
@@ -108,45 +108,6 @@ auto write_json(Busy const& value, std::string& out) -> void;
 auto write_json(Suspended const& value, std::string& out) -> void;
 
 // ── Failures ────────────────────────────────────────────────────────────────
-
-auto parse_internal_server_error(simdjson::dom::element value)
-  -> Result<InternalServerError, ParseError> {
-  TRY(auto object, api::object_of(value, "InternalServerError"));
-
-  TRY(auto tag_raw, api::field(object, "_tag", "InternalServerError"));
-  TRY(auto tag, api::string_of(tag_raw, "InternalServerError"));
-  if (tag != "InternalServerError") {
-    return Err{ParseError{"InternalServerError",
-                          "expected `_tag` 'InternalServerError'"}};
-  }
-
-  return InternalServerError{};
-}
-
-auto write_json(InternalServerError const&, std::string& out) -> void {
-  out += '{';
-  out += "\"_tag\":\"InternalServerError\"";
-  out += '}';
-}
-
-auto parse_not_found(simdjson::dom::element value)
-  -> Result<NotFound, ParseError> {
-  TRY(auto object, api::object_of(value, "NotFound"));
-
-  TRY(auto tag_raw, api::field(object, "_tag", "NotFound"));
-  TRY(auto tag, api::string_of(tag_raw, "NotFound"));
-  if (tag != "NotFound") {
-    return Err{ParseError{"NotFound", "expected `_tag` 'NotFound'"}};
-  }
-
-  return NotFound{};
-}
-
-auto write_json(NotFound const&, std::string& out) -> void {
-  out += '{';
-  out += "\"_tag\":\"NotFound\"";
-  out += '}';
-}
 
 auto parse_unauthorized(simdjson::dom::element value)
   -> Result<Unauthorized, ParseError> {
@@ -169,6 +130,26 @@ auto write_json(Unauthorized const& value, std::string& out) -> void {
   out += "\"_tag\":\"Unauthorized\"";
   out += ",\"message\":";
   api::write_string(value.message, out);
+  out += '}';
+}
+
+auto parse_internal_server_error(simdjson::dom::element value)
+  -> Result<InternalServerError, ParseError> {
+  TRY(auto object, api::object_of(value, "InternalServerError"));
+
+  TRY(auto tag_raw, api::field(object, "_tag", "InternalServerError"));
+  TRY(auto tag, api::string_of(tag_raw, "InternalServerError"));
+  if (tag != "InternalServerError") {
+    return Err{ParseError{"InternalServerError",
+                          "expected `_tag` 'InternalServerError'"}};
+  }
+
+  return InternalServerError{};
+}
+
+auto write_json(InternalServerError const&, std::string& out) -> void {
+  out += '{';
+  out += "\"_tag\":\"InternalServerError\"";
   out += '}';
 }
 
@@ -243,6 +224,25 @@ auto write_json(Validation const& value, std::string& out) -> void {
   out += "\"_tag\":\"Validation\"";
   out += ",\"message\":";
   api::write_string(value.message, out);
+  out += '}';
+}
+
+auto parse_not_found(simdjson::dom::element value)
+  -> Result<NotFound, ParseError> {
+  TRY(auto object, api::object_of(value, "NotFound"));
+
+  TRY(auto tag_raw, api::field(object, "_tag", "NotFound"));
+  TRY(auto tag, api::string_of(tag_raw, "NotFound"));
+  if (tag != "NotFound") {
+    return Err{ParseError{"NotFound", "expected `_tag` 'NotFound'"}};
+  }
+
+  return NotFound{};
+}
+
+auto write_json(NotFound const&, std::string& out) -> void {
+  out += '{';
+  out += "\"_tag\":\"NotFound\"";
   out += '}';
 }
 
@@ -517,6 +517,72 @@ auto write_json(Suspended const& value, std::string& out) -> void {
 
 // ── Decoding ────────────────────────────────────────────────────────────────
 
+auto parse_no_principal(simdjson::dom::element value)
+  -> Result<NoPrincipal, ParseError> {
+  TRY(auto object, api::object_of(value, "NoPrincipal"));
+
+  TRY(auto tag_raw, api::field(object, "_tag", "NoPrincipal"));
+  TRY(auto tag, api::string_of(tag_raw, "NoPrincipal"));
+  if (tag != "NoPrincipal") {
+    return Err{ParseError{"NoPrincipal", "expected `_tag` 'NoPrincipal'"}};
+  }
+
+  return NoPrincipal{};
+}
+
+auto UserId::make(std::string value) -> Result<UserId, ParseError> {
+  return UserId{std::move(value)};
+}
+
+auto parse_user_id(simdjson::dom::element value) -> Result<UserId, ParseError> {
+  TRY(auto raw, api::string_of(value, "UserId"));
+  return UserId::make(std::move(raw));
+}
+
+auto parse_user(simdjson::dom::element value) -> Result<User, ParseError> {
+  TRY(auto object, api::object_of(value, "User"));
+
+  TRY(auto id_raw, api::field(object, "id", "User"));
+  TRY(auto id, parse_user_id(id_raw));
+
+  TRY(auto issuer_raw, api::field(object, "issuer", "User"));
+  TRY(auto issuer, api::string_of(issuer_raw, "User.issuer"));
+
+  TRY(auto subject_raw, api::field(object, "subject", "User"));
+  TRY(auto subject, api::string_of(subject_raw, "User.subject"));
+
+  auto email = Option<std::string>{None{}};
+  if (auto email_raw = api::optional_field(object, "email")) {
+    TRY(auto email_present, api::string_of(*email_raw, "User.email"));
+    email = std::move(email_present);
+  }
+
+  auto name = Option<std::string>{None{}};
+  if (auto name_raw = api::optional_field(object, "name")) {
+    TRY(auto name_present, api::string_of(*name_raw, "User.name"));
+    name = std::move(name_present);
+  }
+
+  return User{std::move(id), std::move(issuer), std::move(subject),
+              std::move(email), std::move(name)};
+}
+
+auto parse_user_principal(simdjson::dom::element value)
+  -> Result<UserPrincipal, ParseError> {
+  TRY(auto object, api::object_of(value, "UserPrincipal"));
+
+  TRY(auto tag_raw, api::field(object, "_tag", "UserPrincipal"));
+  TRY(auto tag, api::string_of(tag_raw, "UserPrincipal"));
+  if (tag != "UserPrincipal") {
+    return Err{ParseError{"UserPrincipal", "expected `_tag` 'UserPrincipal'"}};
+  }
+
+  TRY(auto user_raw, api::field(object, "user", "UserPrincipal"));
+  TRY(auto user, parse_user(user_raw));
+
+  return UserPrincipal{std::move(user)};
+}
+
 auto DeploymentId::make(std::string value) -> Result<DeploymentId, ParseError> {
   static auto const pattern = std::regex{R"(^[A-Za-z0-9][A-Za-z0-9_-]*$)"};
   if (not std::regex_match(value, pattern)) {
@@ -530,17 +596,6 @@ auto parse_deployment_id(simdjson::dom::element value)
   -> Result<DeploymentId, ParseError> {
   TRY(auto raw, api::string_of(value, "DeploymentId"));
   return DeploymentId::make(std::move(raw));
-}
-
-auto parse_deployment_path(simdjson::dom::element value)
-  -> Result<DeploymentPath, ParseError> {
-  TRY(auto object, api::object_of(value, "DeploymentPath"));
-
-  TRY(auto deployment_id_raw,
-      api::field(object, "deploymentId", "DeploymentPath"));
-  TRY(auto deployment_id, parse_deployment_id(deployment_id_raw));
-
-  return DeploymentPath{std::move(deployment_id)};
 }
 
 auto WorkspaceId::make(std::string value) -> Result<WorkspaceId, ParseError> {
@@ -589,6 +644,78 @@ auto parse_deployment_info(simdjson::dom::element value)
 
   return DeploymentInfo{std::move(id), std::move(workspace_id), std::move(name),
                         std::move(version), std::move(last_seen)};
+}
+
+auto OrganizationId::make(std::string value)
+  -> Result<OrganizationId, ParseError> {
+  static auto const pattern = std::regex{
+    R"(^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$)"};
+  if (not std::regex_match(value, pattern)) {
+    return Err{ParseError{
+      "OrganizationId", fmt::format("`{}` does not match the pattern", value)}};
+  }
+  return OrganizationId{std::move(value)};
+}
+
+auto parse_organization_id(simdjson::dom::element value)
+  -> Result<OrganizationId, ParseError> {
+  TRY(auto raw, api::string_of(value, "OrganizationId"));
+  return OrganizationId::make(std::move(raw));
+}
+
+auto parse_deployment_principal(simdjson::dom::element value)
+  -> Result<DeploymentPrincipal, ParseError> {
+  TRY(auto object, api::object_of(value, "DeploymentPrincipal"));
+
+  TRY(auto tag_raw, api::field(object, "_tag", "DeploymentPrincipal"));
+  TRY(auto tag, api::string_of(tag_raw, "DeploymentPrincipal"));
+  if (tag != "DeploymentPrincipal") {
+    return Err{ParseError{"DeploymentPrincipal",
+                          "expected `_tag` 'DeploymentPrincipal'"}};
+  }
+
+  TRY(auto deployment_raw,
+      api::field(object, "deployment", "DeploymentPrincipal"));
+  TRY(auto deployment, parse_deployment_info(deployment_raw));
+
+  TRY(auto org_id_raw, api::field(object, "orgId", "DeploymentPrincipal"));
+  TRY(auto org_id, parse_organization_id(org_id_raw));
+
+  return DeploymentPrincipal{std::move(deployment), std::move(org_id)};
+}
+
+auto parse_principal(simdjson::dom::element value)
+  -> Result<Principal, ParseError> {
+  TRY(auto object, api::object_of(value, "Principal"));
+  TRY(auto tag_raw, api::field(object, "_tag", "Principal"));
+  TRY(auto tag, api::string_of(tag_raw, "Principal"));
+  if (tag == "NoPrincipal") {
+    TRY(auto member, parse_no_principal(value));
+    return Principal{std::move(member)};
+  }
+  if (tag == "UserPrincipal") {
+    TRY(auto member, parse_user_principal(value));
+    return Principal{std::move(member)};
+  }
+  if (tag == "DeploymentPrincipal") {
+    TRY(auto member, parse_deployment_principal(value));
+    return Principal{std::move(member)};
+  }
+  return Err{ParseError{"Principal",
+                        fmt::format("`_tag` '{}' is not one of NoPrincipal, "
+                                    "UserPrincipal, DeploymentPrincipal",
+                                    tag)}};
+}
+
+auto parse_deployment_path(simdjson::dom::element value)
+  -> Result<DeploymentPath, ParseError> {
+  TRY(auto object, api::object_of(value, "DeploymentPath"));
+
+  TRY(auto deployment_id_raw,
+      api::field(object, "deploymentId", "DeploymentPath"));
+  TRY(auto deployment_id, parse_deployment_id(deployment_id_raw));
+
+  return DeploymentPath{std::move(deployment_id)};
 }
 
 auto TelemetryCount::make(std::int64_t value)
@@ -1946,15 +2073,49 @@ auto parse_adhoc_pipeline_definition(simdjson::dom::element value)
 
 // ── Encoding ────────────────────────────────────────────────────────────────
 
-auto write_json(DeploymentId const& value, std::string& out) -> void {
+auto write_json(NoPrincipal const& value, std::string& out) -> void {
+  out += '{';
+  out += "\"_tag\":\"NoPrincipal\"";
+  out += '}';
+}
+
+auto write_json(UserId const& value, std::string& out) -> void {
   api::write_string(value.to_string(), out);
 }
 
-auto write_json(DeploymentPath const& value, std::string& out) -> void {
+auto write_json(User const& value, std::string& out) -> void {
   out += '{';
-  out += "\"deploymentId\":";
-  write_json(value.deployment_id, out);
+  out += "\"id\":";
+  write_json(value.id, out);
+  out += ",\"issuer\":";
+  api::write_string(value.issuer, out);
+  out += ",\"subject\":";
+  api::write_string(value.subject, out);
+  out += ",\"email\":";
+  if (value.email) {
+    api::write_string(*value.email, out);
+  } else {
+    out += "null";
+  }
+  out += ",\"name\":";
+  if (value.name) {
+    api::write_string(*value.name, out);
+  } else {
+    out += "null";
+  }
   out += '}';
+}
+
+auto write_json(UserPrincipal const& value, std::string& out) -> void {
+  out += '{';
+  out += "\"_tag\":\"UserPrincipal\"";
+  out += ",\"user\":";
+  write_json(value.user, out);
+  out += '}';
+}
+
+auto write_json(DeploymentId const& value, std::string& out) -> void {
+  api::write_string(value.to_string(), out);
 }
 
 auto write_json(WorkspaceId const& value, std::string& out) -> void {
@@ -1981,6 +2142,33 @@ auto write_json(DeploymentInfo const& value, std::string& out) -> void {
   } else {
     out += "null";
   }
+  out += '}';
+}
+
+auto write_json(OrganizationId const& value, std::string& out) -> void {
+  api::write_string(value.to_string(), out);
+}
+
+auto write_json(DeploymentPrincipal const& value, std::string& out) -> void {
+  out += '{';
+  out += "\"_tag\":\"DeploymentPrincipal\"";
+  out += ",\"deployment\":";
+  write_json(value.deployment, out);
+  out += ",\"orgId\":";
+  write_json(value.org_id, out);
+  out += '}';
+}
+
+auto write_json(Principal const& value, std::string& out) -> void {
+  value.match([&](auto const& member) {
+    write_json(member, out);
+  });
+}
+
+auto write_json(DeploymentPath const& value, std::string& out) -> void {
+  out += '{';
+  out += "\"deploymentId\":";
+  write_json(value.deployment_id, out);
   out += '}';
 }
 
@@ -2718,6 +2906,85 @@ auto write_json(AdhocPipelineDefinition const& value, std::string& out)
     }
   }
   out += '}';
+}
+
+// ── Account ─────────────────────────────────────────────────────────────────
+
+auto call(Transport& transport, ReadAccount)
+  -> Task<Result<Principal, variant<ReadAccountError, CallError>>> {
+  auto path = std::string{"/api/account"};
+  auto body = std::string{};
+  CO_TRY(auto response, (co_await transport.request(HttpRequest{
+                           "GET", std::move(path), std::move(body)}))
+                          .map_err(as_call_error));
+  auto* buffered_body = try_as<std::string>(response.body);
+  if (not buffered_body) {
+    co_return Err{
+      CallError{RequestError{"transport returned a streaming response where a "
+                             "buffered body was required"}}};
+  }
+  auto& response_body = *buffered_body;
+  if (response.status != 200) {
+    if (response.status == 403) {
+      CO_TRY(auto failed,
+             api::Document::parse(response_body, "Unauthorized")
+               .map_err(as_response_error(response.status, response_body)));
+      CO_TRY(auto error,
+             parse_unauthorized(failed.root())
+               .map_err(as_response_error(response.status, response_body)));
+      co_return Err{std::move(error)};
+    }
+    if (response.status == 500) {
+      CO_TRY(auto failed,
+             api::Document::parse(response_body, "InternalServerError")
+               .map_err(as_response_error(response.status, response_body)));
+      CO_TRY(auto error,
+             parse_internal_server_error(failed.root())
+               .map_err(as_response_error(response.status, response_body)));
+      co_return Err{std::move(error)};
+    }
+    if (response.status == 401) {
+      CO_TRY(auto failed,
+             api::Document::parse(response_body, "Unauthenticated")
+               .map_err(as_response_error(response.status, response_body)));
+      CO_TRY(auto error,
+             parse_unauthenticated(failed.root())
+               .map_err(as_response_error(response.status, response_body)));
+      co_return Err{std::move(error)};
+    }
+    if (response.status == 400) {
+      auto tag = api::tag_of(response_body);
+      if (tag == "CredentialConflict") {
+        CO_TRY(auto document,
+               api::Document::parse(response_body, "CredentialConflict")
+                 .map_err(as_response_error(response.status, response_body)));
+        CO_TRY(auto error,
+               parse_credential_conflict(document.root())
+                 .map_err(as_response_error(response.status, response_body)));
+        co_return Err{std::move(error)};
+      }
+      if (tag == "Validation") {
+        CO_TRY(auto document,
+               api::Document::parse(response_body, "Validation")
+                 .map_err(as_response_error(response.status, response_body)));
+        CO_TRY(auto error,
+               parse_validation(document.root())
+                 .map_err(as_response_error(response.status, response_body)));
+        co_return Err{std::move(error)};
+      }
+      co_return Err{
+        CallError{ResponseError{ResponseError::Reason::decode, response.status,
+                                std::move(response_body)}}};
+    }
+    co_return Err{
+      CallError{ResponseError{ResponseError::Reason::decode, response.status,
+                              std::move(response_body)}}};
+  }
+  CO_TRY(
+    auto document,
+    api::Document::parse(response_body, "readAccount").map_err(as_parse_error));
+  CO_TRY(auto value, parse_principal(document.root()).map_err(as_parse_error));
+  co_return value;
 }
 
 // ── Deployments ─────────────────────────────────────────────────────────────
