@@ -4,5 +4,5 @@
 }
 {
   k: "odd",
-  events: 3,
+  events: 2,
 }

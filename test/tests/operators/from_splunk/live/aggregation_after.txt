@@ -1,0 +1,5 @@
+{
+  user: "alice",
+  events: 2,
+  first: 1735689600,
+}

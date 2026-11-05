@@ -1,35 +1,21 @@
-warning: event does not have field
-  --> tests/operators/from_splunk/pushdown_aggregation_warning.tql:19:47
+warning: Splunk search returned WARN: results may be incomplete
+  --> tests/operators/from_splunk/pushdown_aggregation_warning.tql:13:10
    |
-19 | summarize user, events=count(), actions=count(action), lo=min(n), hi=max(n)
-   |                                               ~~~~~~
+13 |   search="search index=main", earliest="-15m", latest="-5m",
+   |          ~~~~~~~~~~~~~~~~~~~
    |
-   = hint: append `?` to suppress this warning
-{
-  user: "Alice",
-  events: 1,
-  actions: 1,
-  lo: 50,
-  hi: 50,
-}
+   = note: search: search index=main
+           | stats count as tenzir_column_0, count(action) as tenzir_column_1, min(n) as tenzir_column_2, max(n) as tenzir_column_3 by user
+           | appendpipe [stats count as tenzir_groups_0]
 {
   user: "alice",
-  events: 1,
+  events: 2,
   actions: 1,
   lo: 5,
-  hi: 5,
+  hi: 7,
 }
 {
-  user: "bob",
-  events: 1,
-  actions: 1,
-  lo: -1.5,
-  hi: -1.5,
-}
-{
-  user: "carol",
+  user: 192.0.2.1,
   events: 1,
   actions: 0,
-  lo: 7,
-  hi: 7,
 }

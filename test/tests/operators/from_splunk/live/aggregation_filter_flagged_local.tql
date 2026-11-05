@@ -1,6 +1,6 @@
-// A limit before the filters keeps them and the summary of
-// `aggregation_filter_flagged` in Tenzir, which computes the same events from
-// the unfiltered results of the search.
+// With `pushdown=false`, Tenzir computes the stages of
+// `aggregation_filter_flagged` from the results of the search, with the
+// semantics of TQL.
 from_splunk env("SPLUNK_MGMT_URL"),
   search=r#"| makeresults count=8 | streamstats count as i | eval n=case(i==1, "7", i==2, "7.5", i==3, "+8", i==4, "6.5", i==5, "inf", i==6, "1e3", i==7, "-3", i==8, "5"), k=if(i%2==0, "even", "odd")"#,
   earliest="1735689599",
@@ -8,8 +8,8 @@ from_splunk env("SPLUNK_MGMT_URL"),
   headers={
     Authorization: env("SPLUNK_AUTHORIZATION"),
   },
-  tls={skip_peer_verification: true}
-head 1000000000
+  tls={skip_peer_verification: true},
+  pushdown=false
 where n > 6
 summarize k, events=count()
 sort k

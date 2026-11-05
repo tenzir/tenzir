@@ -11,6 +11,15 @@
   ],
 }
 {
+  _time: 2025-01-01T00:01:00Z,
+  user: "Alice",
+  action: "LOGIN",
+  n: 50,
+  flag: false,
+  src_ip: 2001:db8::1,
+  tags: "c",
+}
+{
   _time: 2025-01-01T00:02:00Z,
   user: "bob",
   action: "logout",

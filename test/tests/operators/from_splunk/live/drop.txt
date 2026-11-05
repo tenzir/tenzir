@@ -1,0 +1,10 @@
+{
+  action: "login",
+  host: "auth-01",
+  outcome: "failure",
+  source: "tenzir-docs-auth",
+  sourcetype: "_json",
+  src_ip: 198.51.100.24,
+  user: "bob",
+  _time: 2025-01-01T00:01:00Z,
+}

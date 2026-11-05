@@ -1,6 +1,6 @@
 // With `format` and `data`, `makeresults` creates results without `_time`, and
-// `fields` removes all of their fields. Splunk returns no results, which
-// `stats` would count, so the summary stays in Tenzir.
+// `fields` removes all of their fields. `stats` runs in Splunk, which still
+// counts them.
 from_splunk env("SPLUNK_MGMT_URL"),
   search="| makeresults format=csv data=\"x\n1\n2\" | fields y",
   earliest="1735689599",

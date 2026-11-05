@@ -1,5 +1,5 @@
-// With `raw=true`, values stay strings, so that every string literal compares
-// exactly.
+// With `raw=true`, Splunk still compares the values with its own rules, and
+// only the decoding of the results changes.
 from_splunk env("SPLUNK_MGMT_URL"),
   search=r#"| makeresults count=6 | streamstats count as i | eval s=case(i==1, "5", i==2, "005", i==3, "true", i==4, "True", i==5, "5.0"), k=if(i%2==0, "even", "odd")"#,
   earliest="1735689599",

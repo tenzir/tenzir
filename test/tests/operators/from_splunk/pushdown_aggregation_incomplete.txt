@@ -1,35 +1,11 @@
-warning: event does not have field
-  --> tests/operators/from_splunk/pushdown_aggregation_incomplete.tql:19:47
+error: Splunk search ended without its last result
+  --> tests/operators/from_splunk/pushdown_aggregation_incomplete.tql:15:10
    |
-19 | summarize user, events=count(), actions=count(action), lo=min(n), hi=max(n)
-   |                                               ~~~~~~
+15 |   search="search index=main", earliest="-15m", latest="-5m",
+   |          ^^^^^^^^^^^^^^^^^^^
    |
-   = hint: append `?` to suppress this warning
-{
-  user: "Alice",
-  events: 1,
-  actions: 1,
-  lo: 50,
-  hi: 50,
-}
-{
-  user: "alice",
-  events: 1,
-  actions: 1,
-  lo: 5,
-  hi: 5,
-}
-{
-  user: "bob",
-  events: 1,
-  actions: 1,
-  lo: -1.5,
-  hi: -1.5,
-}
-{
-  user: "carol",
-  events: 1,
-  actions: 0,
-  lo: 7,
-  hi: 7,
-}
+   = note: search: search index=main
+           | stats count as tenzir_column_0, count(action) as tenzir_column_1, min(n) as tenzir_column_2, max(n) as tenzir_column_3 by user
+           | appendpipe [stats count as tenzir_groups_0]
+   = note: the search may have failed in a stage that the operator took over
+   = hint: use `pushdown=false` to run the stages in Tenzir

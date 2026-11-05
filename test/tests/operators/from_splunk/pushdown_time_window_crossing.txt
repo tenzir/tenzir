@@ -1,8 +1,12 @@
 {
+  user: "alice",
+}
+{
   user: "Alice",
-  events: 1,
+}
+{
+  user: "bob",
 }
 {
   user: "carol",
-  events: 1,
 }

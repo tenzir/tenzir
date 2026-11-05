@@ -58,6 +58,16 @@ struct AbsorbOptions {
   std::function<auto(ir::QueryStage const&)->Option<std::string>> veto = {};
 };
 
+/// Returns whether a source spells all of `stages`, which start right after
+/// the source.
+using SpellsStages = std::function<auto(std::span<ir::QueryStage const>)->bool>;
+
+/// Returns the stages of `chain` that a source takes over: the longest prefix
+/// that `spells` accepts, up to the first stage that `options` rules out, with
+/// the reason for declining the rest.
+auto absorb_prefix(ir::QueryChain const& chain, SpellsStages const& spells,
+                   AbsorbOptions const& options) -> ir::Absorption;
+
 /// Returns the stages of `chain` that a source takes over: the longest prefix
 /// that `dialect` spells over a table, up to the first stage that `options`
 /// rules out, with the reason for declining the rest.

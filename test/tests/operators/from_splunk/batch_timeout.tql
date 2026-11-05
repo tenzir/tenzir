@@ -5,5 +5,7 @@ timeout: 60
 
 from_splunk env("HTTP_FIXTURE_URL") + "/splunk/idle",
   search="fixture", earliest="-15m", latest="-5m",
-  headers={Authorization: "Splunk test-token"}, tls=false
+  headers={Authorization: "Splunk test-token"}, tls=false,
+  // The `head` stays in Tenzir, which ends the search after the first result.
+  pushdown=false
 head 1

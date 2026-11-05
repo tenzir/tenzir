@@ -1,0 +1,17 @@
+---
+fixtures:
+- http_server:
+    expected:
+    - method: POST
+      path: /splunk/strings/services/search/v2/jobs/export
+      body: search=search%20index%3D%22main%22%20_time%3E1735689600%0A%7C%20fields%20user&earliest_time=0&latest_time=1&output_mode=json&preview=false
+---
+
+// Narrowed bounds that would cross keep the bounds of the request as they are,
+// since Splunk rejects crossing bounds. The comparison in the search still
+// holds in Splunk.
+from_splunk env("HTTP_FIXTURE_URL") + "/splunk/strings",
+  index="main", earliest="0", latest="1",
+  headers={Authorization: "Splunk test-token"}, tls=false
+where _time > 2025-01-01
+select user

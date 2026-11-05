@@ -13,6 +13,7 @@
 #include "tenzir/option.hpp"
 #include "tenzir/pushdown/column_model.hpp"
 #include "tenzir/pushdown/expr.hpp"
+#include "tenzir/pushdown/expr_render.hpp"
 #include "tenzir/pushdown/layout.hpp"
 #include "tenzir/pushdown/renderer.hpp"
 #include "tenzir/pushdown/translate.hpp"
@@ -65,10 +66,11 @@ enum class LimitClause {
 };
 
 /// The spelling of the parts of a `SELECT` that SQL dialects disagree on.
-class SqlQueryDialect {
+///
+/// Expressions spell as in standard SQL by default: `NULL`, `=` and `<>`,
+/// `AND`, `OR`, `NOT`, `IS NULL`, and `IN (...)`.
+class SqlQueryDialect : public ExpressionDialect {
 public:
-  virtual ~SqlQueryDialect() = default;
-
   /// Quotes an identifier, such as a column name or the alias of a result
   /// column.
   virtual auto quote_identifier(std::string_view name) const -> std::string = 0;
@@ -82,48 +84,49 @@ public:
 
   /// Spells a string literal, or returns `None` if the dialect cannot spell
   /// `text`. Defaults to single quotes, which doubles a quote inside.
-  virtual auto quote_string(std::string_view text) const -> Option<std::string>;
+  auto quote_string(std::string_view text) const
+    -> Option<std::string> override;
 
   /// Spells a finite `double` so that the target reads it as a floating-point
   /// number, also where its value is integral, as in `2.0`. Defaults to the
   /// shortest decimal spelling with an exponent, such as `2e0` or `1.5e0`.
-  virtual auto render_double(double value) const -> std::string;
+  auto render_double(double value) const -> std::string override;
 
   /// Spells a boolean literal. Defaults to `TRUE` or `FALSE`.
-  virtual auto render_bool(bool value) const -> std::string;
+  auto render_bool(bool value) const -> std::string override;
 
   /// Whether a boolean value may stand where the dialect expects a predicate,
   /// as in `WHERE flag`, and a predicate where it expects a value, as in
   /// `(x > 1) = TRUE`. Defaults to `true`.
-  virtual auto boolean_values() const -> bool;
+  auto boolean_values() const -> bool override;
+
+  auto render_null() const -> Option<std::string> override;
+  auto render_int(int64_t value) const -> Option<std::string> override;
+  auto render_uint(uint64_t value) const -> Option<std::string> override;
+  auto binary_operator(ast::binary_op op) const
+    -> Option<std::string_view> override;
+  auto render_not(std::string_view operand) const
+    -> Option<std::string> override;
+  auto render_negate(std::string_view operand) const
+    -> Option<std::string> override;
+  auto render_null_check(std::string_view operand, bool negated) const
+    -> Option<std::string> override;
+  auto render_in(std::string_view operand,
+                 std::span<std::string const> elements) const
+    -> Option<std::string> override;
 
   // -- Plans ------------------------------------------------------------------
   //
   // The hooks below let `render_plan` spell stages. Each defaults to vetoing,
-  // except where noted, so that a dialect opts in to what it spells.
+  // except where noted, so that a dialect opts in to what it spells. Times,
+  // durations, IP addresses, subnets, and calls spell through the hooks of
+  // `ExpressionDialect`, which veto by default.
 
   /// Spells the field at `path` of a relation whose columns the plan does not
   /// list, such as a table. Defaults to quoting a single segment, and vetoes
   /// nested fields.
   virtual auto bind_field(std::span<std::string const> path) const
     -> Option<std::string>;
-
-  /// Spells a time, a duration, an IP address, or a subnet literal.
-  virtual auto render_time(time value) const -> Option<std::string>;
-  virtual auto render_duration(duration value) const -> Option<std::string>;
-  virtual auto render_ip(ip value) const -> Option<std::string>;
-  virtual auto render_subnet(subnet value) const -> Option<std::string>;
-
-  /// Spells a call of the TQL function `name` on its rendered arguments, with
-  /// the receiver of a method call first.
-  virtual auto
-  render_call(std::string_view name, std::span<std::string const> args) const
-    -> Option<std::string>;
-
-  /// Whether `render_call` spells the TQL function `name` as a predicate,
-  /// such as `x LIKE 'a%'`, rather than as a value. It matters only where
-  /// `boolean_values()` does not hold. Defaults to `false`.
-  virtual auto call_is_predicate(std::string_view name) const -> bool;
 
   /// Spells a call of the TQL aggregation function `name` on the rendered
   /// value of its argument, if any. Defaults to `COUNT`, `MIN`, and `MAX`.

@@ -1,5 +1,6 @@
-// Filters with an exact spelling go into a `where` stage before the summary,
-// which Splunk then computes.
+// Filters before the summary extend the base search where `search` spells them,
+// and become `where` stages otherwise. Splunk computes the summary of the
+// results that pass them.
 from_splunk env("SPLUNK_MGMT_URL"),
   index="main",
   earliest="1735689599",

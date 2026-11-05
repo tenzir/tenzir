@@ -60,14 +60,18 @@ struct SqlLexicon {
   /// Whether `$tag$...$tag$` delimits a string literal, with an optional
   /// identifier as `tag`, as in DuckDB and PostgreSQL.
   bool dollar_quoted_strings = false;
+  /// Whether triple backticks delimit a comment, as in SPL, where single
+  /// backticks delimit macros, which stay as they are.
+  bool triple_backtick_comments = false;
 };
 
 /// Returns `query` with the contents of its string literals and comments
-/// replaced by `***`, for logs. Single quotes delimit a literal, which spells a
-/// quote inside doubled, or after a backslash where `lexicon` says so. `--`
-/// and `/*` start comments, and block comments nest. Quoted identifiers stay
-/// as they are. `lexicon` adds the string syntaxes of the dialect. An
-/// unterminated literal or comment is redacted to the end.
+/// replaced by `***`, for logs. Log a query only through the lexicon of its
+/// language, since another one may miss its literals. Single quotes delimit a
+/// literal, which spells a quote inside doubled, or after a backslash where
+/// `lexicon` says so. `--` and `/*` start comments, and block comments nest.
+/// Quoted identifiers stay as they are. `lexicon` adds the string syntaxes of
+/// the dialect. An unterminated literal or comment is redacted to the end.
 auto redact_query(std::string_view query, SqlLexicon lexicon = {})
   -> std::string;
 

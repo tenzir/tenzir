@@ -1,3 +1,6 @@
 {
   name: "tenzir.splunk",
 }
+{
+  name: "tenzir.splunk",
+}

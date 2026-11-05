@@ -1,6 +1,5 @@
-// In a list of several types, values that Tenzir reads as numbers other than
-// integers of up to 15 digits, such as `1.0`, `+1`, or `inf`, make the
-// operator summarize in Tenzir.
+// Memberships in lists of several types compare each value with Splunk's rules
+// for numbers and text.
 from_splunk env("SPLUNK_MGMT_URL"),
   search=r#"| makeresults count=12 | streamstats count as i | eval m=case(i==1, "1", i==2, "1.0", i==3, "+1", i==4, "1e0", i==5, "0.0", i==6, "a", i==7, "false", i==8, "true", i==9, "0", i==10, "inf", i==11, "01", true(), "zzz")"#,
   earliest="1735689599",

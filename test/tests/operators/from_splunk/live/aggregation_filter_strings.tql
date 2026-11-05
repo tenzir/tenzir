@@ -1,6 +1,5 @@
-// Splunk compares strings byte by byte, as Tenzir does, keeps results without
-// the field and with several values for negations, and drops them for
-// equality.
+// `where` compares strings exactly. A multivalue field passes `in()` if any
+// value matches, and `!=` drops results without the field.
 from_splunk env("SPLUNK_MGMT_URL"),
   search=r#"| makeresults count=14 | streamstats count as i | eval s=case(i==1, "alice", i==2, "Alice", i==3, " alice", i==4, "alice ", i==5, "", i==6, "a\"b", i==7, "a*b", i==8, "café", i==9, mvappend("alice", "bob"), i==10, "5", i==11, "true", i==12, "True", i==13, "null"), k=if(i%2==0, "even", "odd")"#,
   earliest="1735689599",

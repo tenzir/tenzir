@@ -129,45 +129,26 @@ _SPLUNK_STRINGS = (
 )
 
 
-# The results of the `stats` stages that `from_splunk` appends for
+# The results of the `stats` stage that `from_splunk` appends for
 # `summarize user, events=count(), actions=count(action), lo=min(n), hi=max(n)`,
-# by route. The routes answer other searches with `_SPLUNK_STRINGS`, so that
-# tests see whether the operator aggregated these results locally.
+# followed by the row that counts the groups, by route. Splunk drops results
+# whose group key is null. The routes answer searches without `stats` with
+# `_SPLUNK_STRINGS`.
 _SPLUNK_AGGREGATE_ROWS = (
-    b'{"preview":false,"result":{"tenzir_aggregate_0":"valice",'
-    b'"tenzir_count":"2","tenzir_aggregate_2":"1","tenzir_aggregate_3":"5",'
-    b'"tenzir_check_3":"0","tenzir_aggregate_4":"7","tenzir_check_4":"0"}}\n'
-    b'{"preview":false,"result":{"tenzir_aggregate_0":"v192.0.2.1",'
-    b'"tenzir_count":"1","tenzir_aggregate_2":"0","tenzir_check_3":"0",'
-    b'"tenzir_check_4":"0"}}\n'
-    b'{"preview":false,"result":{"tenzir_aggregate_0":"n",'
-    b'"tenzir_count":"1","tenzir_aggregate_2":"1","tenzir_aggregate_3":"-3",'
-    b'"tenzir_check_3":"0","tenzir_aggregate_4":"-3","tenzir_check_4":"0"}}\n'
+    b'{"preview":false,"result":{"user":"alice","tenzir_column_0":"2",'
+    b'"tenzir_column_1":"1","tenzir_column_2":"5","tenzir_column_3":"7"}}\n'
+    b'{"preview":false,"result":{"user":"192.0.2.1","tenzir_column_0":"1",'
+    b'"tenzir_column_1":"0"}}\n'
 )
 _SPLUNK_AGGREGATES = {
     "ok": _SPLUNK_AGGREGATE_ROWS
-    + b'{"preview":false,"lastrow":true,"result":{"tenzir_groups":"3"}}\n',
-    # Splunk keeps `5` and `005` apart, while type inference merges them.
-    "merged": (
-        b'{"result":{"tenzir_aggregate_0":"v5","tenzir_count":"1",'
-        b'"tenzir_aggregate_2":"1","tenzir_check_3":"0","tenzir_check_4":"0"}}\n'
-        b'{"result":{"tenzir_aggregate_0":"v005","tenzir_count":"1",'
-        b'"tenzir_aggregate_2":"1","tenzir_check_3":"0","tenzir_check_4":"0"}}\n'
-        b'{"lastrow":true,"result":{"tenzir_groups":"2"}}\n'
-    ),
-    # A warning may tell that results are missing.
+    + b'{"preview":false,"lastrow":true,"result":{"tenzir_groups_0":"2"}}\n',
+    # A warning, such as one about truncated results, comes with the rows.
     "warning": _SPLUNK_AGGREGATE_ROWS
     + b'{"messages":[{"type":"WARN","text":"results may be incomplete"}]}\n'
-    + b'{"preview":false,"lastrow":true,"result":{"tenzir_groups":"3"}}\n',
+    + b'{"preview":false,"lastrow":true,"result":{"tenzir_groups_0":"2"}}\n',
     # Splunk answers a search that fails in `eval` with an empty response.
     "incomplete": b"",
-    # A filter compares a number with a value other than an integer, which
-    # Splunk and Tenzir may compare differently.
-    "flagged": (
-        b'{"preview":false,"result":{"tenzir_aggregate_0":"vcarol",'
-        b'"tenzir_count":"1","tenzir_filter_check":"1"}}\n'
-        b'{"preview":false,"lastrow":true,"result":{"tenzir_groups":"1"}}\n'
-    ),
 }
 
 
@@ -248,8 +229,6 @@ def _make_handler(
     retry_503_backoff_second_gap_at = [0.0]
     splunk_warnings_ready = threading.Event()
     splunk_warnings_finished = threading.Event()
-    # The `now` of the first search of each `/splunk/aggregate-*` route.
-    splunk_aggregate_now: dict[str, str] = {}
 
     class RecordingEchoHandler(BaseHTTPRequestHandler):
         def _validate_request(self, path: str, body: bytes) -> None:
@@ -596,13 +575,6 @@ def _make_handler(
                 variant = path[len("/splunk/aggregate-") : -len(_SPLUNK_EXPORT)]
                 form = parse_qs(body.decode("utf-8", errors="replace"))
                 search = form.get("search", [""])[0]
-                # A search that may run twice resolves relative times against
-                # the same `now` both times.
-                now = form.get("now", [""])[0]
-                if now:
-                    first = splunk_aggregate_now.setdefault(variant, now)
-                    if now != first:
-                        errors.append(f"expected `now` {first}, got {now}")
                 if variant in _SPLUNK_AGGREGATES and "\n| stats " in search:
                     self._reply(_SPLUNK_AGGREGATES[variant])
                 else:

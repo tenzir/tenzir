@@ -1,0 +1,12 @@
+// `head 0` would end the search before its sentinel, so the limit stays in
+// Tenzir.
+from_splunk env("SPLUNK_MGMT_URL"),
+  search="| makeresults count=3",
+  earliest="0",
+  latest="now",
+  headers={
+    Authorization: env("SPLUNK_AUTHORIZATION"),
+  },
+  tls={skip_peer_verification: true}
+summarize n=count()
+head 0

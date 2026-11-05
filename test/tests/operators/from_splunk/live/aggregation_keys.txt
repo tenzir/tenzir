@@ -1,23 +1,12 @@
 {
-  k: 5,
+  k: "",
   events: 1,
   c: 1,
-  lo: null,
-  hi: null,
 }
 {
   k: 1s,
   events: 1,
   c: 1,
-  lo: null,
-  hi: null,
-}
-{
-  k: "",
-  events: 1,
-  c: 1,
-  lo: null,
-  hi: null,
 }
 {
   k: " 5",
@@ -25,6 +14,16 @@
   c: 0,
   lo: 3,
   hi: 3,
+}
+{
+  k: 5,
+  events: 1,
+  c: 1,
+}
+{
+  k: 192.0.2.1,
+  events: 1,
+  c: 0,
 }
 {
   k: "Alice",
@@ -37,8 +36,6 @@
   k: "True",
   events: 1,
   c: 0,
-  lo: null,
-  hi: null,
 }
 {
   k: "alice",
@@ -51,20 +48,4 @@
   k: "null",
   events: 1,
   c: 1,
-  lo: null,
-  hi: null,
-}
-{
-  k: 192.0.2.1,
-  events: 1,
-  c: 0,
-  lo: null,
-  hi: null,
-}
-{
-  k: null,
-  events: 1,
-  c: 0,
-  lo: 999999999999999,
-  hi: 999999999999999,
 }

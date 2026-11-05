@@ -1,6 +1,6 @@
-// A limit keeps the summary in Tenzir, which computes the same events from the
-// results of the search as Splunk. `?` only silences warnings about missing
-// fields.
+// With `pushdown=false`, Tenzir computes the stages of `aggregation_raw` from
+// the results of the search, with the semantics of TQL. `?` only silences
+// warnings about missing fields.
 from_splunk env("SPLUNK_MGMT_URL"),
   search=r#"| makeresults count=6 | streamstats count as i | eval k=case(i<=2, "5", i==3, "005", i==4, "5.0", i==5, "five")"#,
   earliest="1735689599",
@@ -9,7 +9,7 @@ from_splunk env("SPLUNK_MGMT_URL"),
     Authorization: env("SPLUNK_AUTHORIZATION"),
   },
   tls={skip_peer_verification: true},
-  raw=true
-head 1000000000
+  raw=true,
+  pushdown=false
 summarize k=k?, events=count()
 sort k

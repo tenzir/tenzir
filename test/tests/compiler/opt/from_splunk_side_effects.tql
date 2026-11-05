@@ -1,0 +1,7 @@
+// A `head` stage could cut `outputlookup` short, so the limit stays in Tenzir
+// while the filter before it goes into the search.
+from_splunk "https://splunk.example.com",
+  search="index=main | outputlookup users.csv", earliest="-15m", latest="-5m",
+  headers={Authorization: "Splunk t"}
+where user == "alice"
+head 3

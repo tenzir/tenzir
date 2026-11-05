@@ -1,5 +1,5 @@
-// Splunk returns no results for a search whose results have no fields, which
-// `stats` would count, so the summary stays in Tenzir.
+// `stats` runs in Splunk, which counts results without fields that its export
+// endpoint would not return.
 from_splunk env("SPLUNK_MGMT_URL"),
   search=r#"| makeresults count=2 | fields - _time"#,
   earliest="1735689599",

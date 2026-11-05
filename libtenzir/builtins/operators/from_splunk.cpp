@@ -22,6 +22,7 @@
 #include "tenzir/location.hpp"
 #include "tenzir/multi_series_builder.hpp"
 #include "tenzir/nova/array_builder.hpp"
+#include "tenzir/nova/data_array_builder.hpp"
 #include "tenzir/nova/events.hpp"
 #include "tenzir/nova/json_parser.hpp"
 #include "tenzir/nova_flag.hpp"
@@ -29,9 +30,10 @@
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/plugin.hpp"
-#include "tenzir/pushdown/aggregation.hpp"
-#include "tenzir/pushdown/read.hpp"
+#include "tenzir/pushdown/layout.hpp"
+#include "tenzir/pushdown/plan.hpp"
 #include "tenzir/pushdown/splunk.hpp"
+#include "tenzir/pushdown/sql_source.hpp"
 #include "tenzir/startup_argument.hpp"
 #include "tenzir/tls_options.hpp"
 #include "tenzir/try.hpp"
@@ -47,9 +49,12 @@
 #include <folly/coro/Invoke.h>
 #include <folly/coro/WithCancellation.h>
 
+#include <charconv>
 #include <chrono>
+#include <cmath>
 #include <limits>
 #include <memory>
+#include <span>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -61,9 +66,6 @@ namespace {
 
 constexpr auto export_path
   = std::string_view{"/services/search/v2/jobs/export"};
-
-/// The key of the subpipeline that aggregates locally.
-constexpr auto aggregation_sub_key = int64_t{0};
 
 struct FromSplunkArgs {
   located<std::string> url;
@@ -80,15 +82,12 @@ struct FromSplunkArgs {
   Option<located<uint64_t>> max_retry_count;
   Option<located<duration>> retry_delay;
   Option<location> raw;
+  Option<located<bool>> pushdown;
   location operator_location = location::unknown;
-  // Filters, a limit, a projection, and an aggregation from downstream
-  // operators. Prefilters, a projection, and a limit go into the search as
-  // trailing stages (see `pushdown::plan_spl_search`), and the operator applies
-  // all of them locally. An aggregation goes into the search as `stats` stages
-  // after exact spellings of the filters (see
-  // `pushdown::plan_spl_aggregation`), or runs locally.
-  OptimizationArgs<opt::Filter, opt::Limit, opt::Projection, opt::Aggregation>
-    optimization;
+  // The stages that the operator took over, which run in Splunk after the
+  // search (see `pushdown::plan_spl_query`), and the fields that downstream
+  // needs from events that no stage reshapes.
+  OptimizationArgs<opt::Projection, opt::Plan> optimization;
 };
 
 struct SplunkMessage {
@@ -375,71 +374,119 @@ auto search_source(FromSplunkArgs const& args) -> location {
   return args.index->source;
 }
 
-/// The search to send: the user's search or one for the indexes, with the
-/// optimizer hints as trailing stages.
-auto plan_search(FromSplunkArgs const& args, registry const& reg)
-  -> std::string {
-  auto const& hints = args.optimization;
+/// What the operator searches.
+auto spl_source(FromSplunkArgs const& args) -> pushdown::SplSource {
   if (args.search) {
-    return pushdown::plan_spl_search(
-             pushdown::spl_search_command(args.search->inner), hints.filter,
-             hints.projection, hints.limit, not args.raw, reg)
-      .query;
+    return {.search = args.search->inner, .indexes = {}};
   }
   TENZIR_ASSERT(args.index);
   auto names = index_names(args.index->inner);
   TENZIR_ASSERT(names);
-  auto plan = pushdown::plan_spl_indexes(*names, hints.filter, hints.projection,
-                                         hints.limit, not args.raw, reg);
-  TENZIR_ASSERT(plan);
-  return std::move(plan->query);
+  return {.search = None{}, .indexes = std::move(*names)};
 }
 
-/// The search to which the operator appends the stages of an aggregation: the
-/// user's search or one for the indexes, or `None` if an index name has no
-/// spelling.
-auto aggregation_base_search(FromSplunkArgs const& args)
-  -> Option<std::string> {
-  if (args.search) {
-    return pushdown::spl_search_command(args.search->inner);
+/// The stages that the operator took over.
+auto taken_stages(FromSplunkArgs const& args)
+  -> std::span<ir::QueryStage const> {
+  if (auto const& plan = args.optimization.plan) {
+    return *plan;
   }
-  auto names = args.index ? index_names(args.index->inner) : None{};
-  if (not names or names->empty()) {
+  return {};
+}
+
+/// The search to send: the user's search or one for the indexes, followed by
+/// the stages that the operator took over.
+auto plan_query(FromSplunkArgs const& args) -> Option<pushdown::SplQuery> {
+  return pushdown::plan_spl_query(spl_source(args), taken_stages(args),
+                                  args.optimization.projection);
+}
+
+/// Returns `bound` as an absolute time, if it is one: a time, or a string of
+/// epoch seconds. Splunk resolves other strings, such as `-1h`, itself.
+auto absolute_bound(data const& bound) -> Option<time> {
+  if (auto const* x = try_as<time>(bound)) {
+    return *x;
+  }
+  auto const* text = try_as<std::string>(bound);
+  if (not text) {
     return None{};
   }
-  return pushdown::spl_index_search(*names);
-}
-
-/// The searches that compute `aggregation` in Splunk, or `None` if Splunk
-/// cannot compute it as `summarize` does, for example because a filter has no
-/// exact spelling.
-auto plan_aggregate_search(FromSplunkArgs const& args,
-                           ir::OptimizeAggregation const& aggregation,
-                           registry const& reg)
-  -> Option<pushdown::SplAggregation> {
-  // Options may change how Splunk runs the search in ways that the
-  // aggregation does not account for. The plan already rules them out.
-  if (args.options) {
+  auto digits = detail::trim(*text);
+  auto value = double{};
+  auto [end, error]
+    = std::from_chars(digits.data(), digits.data() + digits.size(), value);
+  if (digits.empty() or error != std::errc{}
+      or end != digits.data() + digits.size() or not std::isfinite(value)
+      or digits.find_first_of("eEnN") != std::string_view::npos) {
     return None{};
   }
-  TRY(auto search, aggregation_base_search(args));
-  return pushdown::plan_spl_aggregation(search, args.optimization.filter,
-                                        args.optimization.projection,
-                                        aggregation, args.raw.is_some(), reg);
+  // Epoch seconds beyond what a `time` holds are no bound that the operator
+  // can narrow, and converting them would overflow.
+  constexpr auto limit = std::chrono::duration<double>{duration::max()};
+  if (std::abs(value) >= limit.count()) {
+    return None{};
+  }
+  return time{
+    std::chrono::duration_cast<duration>(std::chrono::duration<double>{value})};
 }
 
-/// The form body of a search request. `now`, in epoch seconds, anchors the
-/// relative times of the request, such as `-1h` or `now`, instead of the time
-/// at which Splunk receives it.
+/// Narrows the time bound `bound` of the request to `filter`, the bound of
+/// `_time` that the filters of the search imply, if both are absolute.
+/// Splunk includes `earliest_time` and excludes `latest_time`, so the bounds
+/// round outwards to whole seconds.
+auto narrow_bound(data const& bound, Option<time> filter, bool lower) -> data {
+  auto current = absolute_bound(bound);
+  if (not filter or not current) {
+    return bound;
+  }
+  using std::chrono::seconds;
+  auto const since_epoch = filter->time_since_epoch();
+  auto const narrowed
+    = lower ? std::chrono::floor<seconds>(since_epoch)
+            : std::chrono::floor<seconds>(since_epoch) + seconds{1};
+  // Rounding outwards can leave what a `time` holds at either end, where the
+  // operator keeps the bound rather than overflow.
+  constexpr auto first = std::chrono::ceil<seconds>(duration::min());
+  constexpr auto last = std::chrono::floor<seconds>(duration::max());
+  if (narrowed < first or narrowed > last) {
+    return bound;
+  }
+  if (lower ? time{narrowed} <= *current : time{narrowed} >= *current) {
+    return bound;
+  }
+  return fmt::to_string(narrowed.count());
+}
+
+/// Narrows the time bounds `earliest` and `latest` to the bounds `window` that
+/// the filters of a search imply. Narrows only bounds that are absolute on
+/// both sides, since a relative bound resolves on the server, and keeps both
+/// bounds if the narrowed ones would cross, as when the filters admit no event:
+/// Splunk rejects crossing bounds, while the filters in the search still hold.
+auto narrow_bounds(data const& earliest, data const& latest,
+                   pushdown::TimeWindow const& window)
+  -> std::pair<data, data> {
+  if (not absolute_bound(earliest) or not absolute_bound(latest)) {
+    return {earliest, latest};
+  }
+  auto lower = narrow_bound(earliest, window.begin, true);
+  auto upper = narrow_bound(latest, window.end, false);
+  auto const begin = absolute_bound(lower);
+  auto const end = absolute_bound(upper);
+  TENZIR_ASSERT(begin and end);
+  if (*begin >= *end) {
+    return {earliest, latest};
+  }
+  return {std::move(lower), std::move(upper)};
+}
+
+/// The form body of a search request, within the time bounds `earliest` and
+/// `latest`.
 auto make_form_body(FromSplunkArgs const& args, std::string search,
-                    Option<int64_t> now = None{}) -> std::string {
+                    data earliest, data latest) -> std::string {
   auto body = record{};
   body.emplace("search", std::move(search));
-  body.emplace("earliest_time", args.earliest.inner);
-  body.emplace("latest_time", args.latest.inner);
-  if (now) {
-    body.emplace("now", fmt::to_string(*now));
-  }
+  body.emplace("earliest_time", std::move(earliest));
+  body.emplace("latest_time", std::move(latest));
   body.emplace("output_mode", std::string{"json"});
   body.emplace("preview", std::string{"false"});
   if (args.options) {
@@ -450,6 +497,19 @@ auto make_form_body(FromSplunkArgs const& args, std::string search,
     }
   }
   return curl::escape(flatten(body));
+}
+
+/// Logs the search that the operator sends, without its literals. A user's
+/// search shows only as `<search>`, followed by the generated stages.
+auto log_query(FromSplunkArgs const& args, pushdown::SplQuery const& query)
+  -> void {
+  auto const generated
+    = pushdown::redact_query(query.generated, pushdown::spl_lexicon);
+  if (args.search) {
+    TENZIR_DEBUG("from_splunk sends <search>{}", generated);
+  } else {
+    TENZIR_DEBUG("from_splunk sends {}", generated);
+  }
 }
 
 // Renders a JSON parse error without the caf boilerplate, mirroring what
@@ -643,17 +703,12 @@ auto run_export_request(std::string url, std::string target, std::string body,
 
 class FromSplunk final : public Operator<void, table_slice> {
 public:
-  explicit FromSplunk(FromSplunkArgs args)
-    : args_{std::move(args)}, hints_{args_.optimization.limit} {
-    // Only `FromSplunkEvents` takes over aggregations.
-    TENZIR_ASSERT(not args_.optimization.aggregation);
+  explicit FromSplunk(FromSplunkArgs args) : args_{std::move(args)} {
+    // Only `FromSplunkEvents` takes over stages.
+    TENZIR_ASSERT(not args_.optimization.plan);
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    if (not co_await hints_.prepare(args_.optimization.filter, ctx)) {
-      done_ = true;
-      co_return;
-    }
     events_read_
       = ctx.make_counter(MetricsLabel{"operator", "from_splunk"},
                          MetricsDirection::read, MetricsVisibility::external_,
@@ -728,12 +783,13 @@ public:
                      }
                    }));
       });
-    search_ = plan_search(args_, ctx.reg());
-    TENZIR_DEBUG("from_splunk: submitting streaming search without "
-                 "pagination: {}",
-                 search_);
+    auto query = plan_query(args_);
+    TENZIR_ASSERT(query);
+    log_query(args_, *query);
+    search_ = std::move(query->search);
     ctx.spawn_task([url = std::move(url), target = std::move(*target),
-                    body = make_form_body(args_, search_),
+                    body = make_form_body(args_, search_, args_.earliest.inner,
+                                          args_.latest.inner),
                     headers = std::move(resolved_headers),
                     config = std::move(*config), queue = std::move(queue),
                     executor = ctx.io_executor(),
@@ -838,20 +894,15 @@ public:
     }
   }
 
-  // Applies the local hints and stops the search once the limit is reached.
   auto emit(table_slice slice, Push<table_slice>& push, OpCtx& ctx)
     -> Task<void> {
+    TENZIR_UNUSED(ctx);
     if (done_) {
       co_return;
     }
     events_read_.add(slice.rows());
-    slice = hints_.apply(std::move(slice), ctx);
     if (slice.rows() > 0) {
       co_await push(std::move(slice));
-    }
-    if (hints_.exhausted()) {
-      cancel_.requestCancellation();
-      done_ = true;
     }
   }
 
@@ -875,7 +926,6 @@ public:
 
 private:
   FromSplunkArgs args_;
-  pushdown::LocalHints<table_slice> hints_;
   std::string search_;
   std::string url_;
   mutable Option<Arc<StreamQueue>> queue_;
@@ -1026,20 +1076,25 @@ auto run_export_request_events(
 
 class FromSplunkEvents final : public Operator<void, nova::Events> {
 public:
-  explicit FromSplunkEvents(FromSplunkArgs args)
-    : args_{std::move(args)}, hints_{args_.optimization.limit} {
-    hints_.set_projection(args_.optimization.projection);
+  explicit FromSplunkEvents(FromSplunkArgs args) : args_{std::move(args)} {
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    if (not co_await hints_.prepare(args_.optimization.filter, ctx)) {
-      done_ = true;
-      co_return;
-    }
     events_read_
       = ctx.make_counter(MetricsLabel{"operator", "from_splunk"},
                          MetricsDirection::read, MetricsVisibility::external_,
                          MetricsUnit::events);
+    auto query = plan_query(args_);
+    if (not query) {
+      diagnostic::error("failed to spell the stages that the operator took "
+                        "over in SPL")
+        .primary(search_source(args_))
+        .hint("use `pushdown=false` to run them in Tenzir")
+        .emit(ctx);
+      done_ = true;
+      co_return;
+    }
+    query_ = std::move(*query);
     auto headers = co_await resolve_headers(args_.headers, ctx);
     if (not headers) {
       done_ = true;
@@ -1089,32 +1144,27 @@ public:
     config->on_retry = [queue](std::string_view message) mutable {
       std::ignore = queue->try_enqueue(RetryWarning{std::string{message}});
     };
-    url_ = std::move(url);
-    target_ = std::move(*target);
-    headers_ = std::move(resolved_headers);
-    config_ = std::move(*config);
-    if (auto const& aggregation = args_.optimization.aggregation) {
-      if (auto plan = plan_aggregate_search(args_, *aggregation, ctx.reg())) {
-        aggregating_remotely_ = true;
-        // If the result of the aggregation might differ from `summarize`, the
-        // operator sends the search again without it. Both requests resolve
-        // relative times, such as `-1h`, against the same current time, as a
-        // single request would. The `options` that could set `now` themselves
-        // keep the aggregation local.
-        now_ = std::chrono::floor<std::chrono::seconds>(
-                 time::clock::now().time_since_epoch())
-                 .count();
-        aggregation_plan_ = std::move(plan);
-        launch(aggregation_plan_->search, ctx);
-        co_return;
-      }
-      // A filter without an exact spelling keeps the aggregation local.
-      if (not co_await aggregate_locally(ctx)) {
-        done_ = true;
-        co_return;
-      }
-    }
-    launch(plan_search(args_, ctx.reg()), ctx);
+    url_ = url;
+    log_query(args_, *query_);
+    // The filters of a search for indexes may narrow its time bounds.
+    auto [earliest, latest]
+      = narrow_bounds(args_.earliest.inner, args_.latest.inner, query_->window);
+    auto body = make_form_body(args_, query_->search, std::move(earliest),
+                               std::move(latest));
+    ctx.spawn_task([url = std::move(url), target = std::move(*target),
+                    body = std::move(body),
+                    headers = std::move(resolved_headers),
+                    config = std::move(*config), queue = std::move(queue),
+                    executor = ctx.io_executor(), raw = args_.raw.is_some(),
+                    cancel = cancel_.getToken()]() mutable -> Task<void> {
+      auto token = folly::cancellation_token_merge(
+        co_await folly::coro::co_current_cancellation_token, cancel);
+      co_await folly::coro::co_withCancellation(
+        token, run_export_request_events(std::move(url), std::move(target),
+                                         std::move(body), std::move(headers),
+                                         std::move(config), std::move(queue),
+                                         std::move(executor), raw));
+    });
   }
 
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
@@ -1141,18 +1191,19 @@ public:
     co_await co_match(
       std::move(result).as<EventStreamMessage>(),
       [&](EventResultBatch msg) -> Task<void> {
-        if (aggregating_remotely_) {
-          std::ranges::move(msg.records, std::back_inserter(aggregation_rows_));
-          co_return;
-        }
         for (auto const& value : msg.records) {
+          auto row_view = value.get(0);
+          if (is_sentinel(row_view)) {
+            sentinel_seen_ = true;
+            continue;
+          }
           if (not next_flush_) {
             next_flush_ = std::chrono::steady_clock::now()
                           + defaults::import::batch_timeout;
           }
           auto row = builder_.record();
-          for (auto const& [name, field] : value.get(0)) {
-            nova::append_row(row.field(name), field);
+          for (auto const& [name, field] : row_view) {
+            append_field(row.field(name), name, field);
           }
           if (builder_.length() >= detail::narrow<nova::storage::Index>(
                 defaults::import::table_slice_size)) {
@@ -1164,15 +1215,9 @@ public:
         co_await flush(push, ctx);
       },
       [&](StreamWarning msg) -> Task<void> {
-        // A warning may tell that the result of the aggregation is incomplete.
-        if (aggregating_remotely_) {
-          reject_aggregation(
-            fmt::format("Splunk search returned {}: {}", msg.type, msg.text));
-          co_return;
-        }
         diagnostic::warning("Splunk search returned {}: {}", msg.type, msg.text)
           .primary(search_source(args_))
-          .note("search: {}", search_)
+          .note("search: {}", query_->search)
           .emit(ctx);
         co_return;
       },
@@ -1183,36 +1228,22 @@ public:
         co_return;
       },
       [&](SearchFailed msg) -> Task<void> {
-        if (aggregating_remotely_) {
-          reject_aggregation(fmt::format("Splunk search failed: {}", msg.text));
-          co_return;
-        }
         diagnostic::error("Splunk search failed: {}", msg.text)
           .primary(search_source(args_))
-          .note("search: {}", search_)
+          .note("search: {}", query_->search)
           .emit(ctx);
         done_ = true;
         co_return;
       },
       [&](SearchRejected msg) -> Task<void> {
-        if (aggregating_remotely_) {
-          reject_aggregation(
-            fmt::format("Splunk rejected the search: {}", msg.text));
-          co_return;
-        }
         diagnostic::error("Splunk rejected the search: {}", msg.text)
           .primary(search_source(args_))
-          .note("search: {}", search_)
+          .note("search: {}", query_->search)
           .emit(ctx);
         done_ = true;
         co_return;
       },
       [&](RequestFailed msg) -> Task<void> {
-        if (aggregating_remotely_) {
-          reject_aggregation(
-            fmt::format("HTTP request failed: {}", msg.message));
-          co_return;
-        }
         diagnostic::error("HTTP request to `{}` failed: {}", url_, msg.message)
           .primary(args_.url.source)
           .emit(ctx);
@@ -1220,10 +1251,6 @@ public:
         co_return;
       },
       [&](ParseFailed msg) -> Task<void> {
-        if (aggregating_remotely_) {
-          reject_aggregation(std::move(msg.message));
-          co_return;
-        }
         auto builder
           = diagnostic::error("{}", msg.message).primary(args_.url.source);
         if (msg.detail) {
@@ -1234,13 +1261,19 @@ public:
         co_return;
       },
       [&](StreamDone) -> Task<void> {
-        if (aggregating_remotely_) {
-          co_await finish_aggregation(push, ctx);
-          co_return;
-        }
         co_await flush(push, ctx);
+        if (query_->sentinel and not sentinel_seen_) {
+          // Splunk answers a search that fails in `eval` or `stats` with an
+          // empty response, which only the missing sentinel row reveals.
+          diagnostic::error("Splunk search ended without its last result")
+            .primary(search_source(args_))
+            .note("search: {}", query_->search)
+            .note("the search may have failed in a stage that the operator "
+                  "took over")
+            .hint("use `pushdown=false` to run the stages in Tenzir")
+            .emit(ctx);
+        }
         done_ = true;
-        co_await close_sub(ctx);
         co_return;
       });
     // Any continuously ready message kind can starve the latency deadline.
@@ -1249,21 +1282,6 @@ public:
         and std::chrono::steady_clock::now() >= *next_flush_) {
       co_await flush(push, ctx);
     }
-  }
-
-  auto finish_sub(SubKeyView, Push<nova::Events>&, OpCtx&)
-    -> Task<void> override {
-    aggregating_locally_ = false;
-    co_return;
-  }
-
-  auto finish_sub(SubKeyView, failure, Push<nova::Events>&, OpCtx&)
-    -> Task<void> override {
-    // The subpipeline reported its error, so the search cannot complete.
-    aggregating_locally_ = false;
-    cancel_.requestCancellation();
-    done_ = true;
-    co_return;
   }
 
   auto flush(Push<nova::Events>& push, OpCtx& ctx) -> Task<void> {
@@ -1278,41 +1296,24 @@ public:
     auto events
       = nova::Events{std::move(data), nova::storage::BitMap{length, true},
                      nova::Events::Meta::make_empty(length, "tenzir.splunk")};
+    events
+      = pushdown::apply_layout(std::move(events), query_->layout, ctx.dh());
     events_read_.add(events.active_count());
-    events = hints_.apply(std::move(events), ctx);
-    if (events.mask.any()) {
-      if (aggregating_locally_) {
-        if (auto sub = ctx.get_sub(aggregation_sub_key)) {
-          // The subpipeline closes its input only when it fails, which it
-          // reports itself.
-          std::ignore = co_await as<SubHandle<nova::Events>>(*sub).push(
-            std::move(events));
-        }
-      } else {
-        co_await push(std::move(events));
-      }
-    }
-    // Stop the search once the limit is reached.
-    if (hints_.exhausted()) {
-      cancel_.requestCancellation();
-      done_ = true;
-    }
+    co_await push(std::move(events));
   }
 
   auto state() -> OperatorState override {
-    if (aggregating_locally_) {
-      return OperatorState::normal;
-    }
     return done_ ? OperatorState::done : OperatorState::normal;
   }
 
   auto stop(OpCtx& ctx) -> Task<void> override {
+    TENZIR_UNUSED(ctx);
     cancel_.requestCancellation();
     if (queue_) {
       std::ignore = (*queue_)->try_enqueue(StreamDone{});
     }
     done_ = true;
-    co_await close_sub(ctx);
+    co_return;
   }
 
   auto snapshot(Serde&) -> void override {
@@ -1323,127 +1324,44 @@ public:
   }
 
 private:
-  /// Sends `search` and streams its results into the queue.
-  auto launch(std::string search, OpCtx& ctx) -> void {
-    TENZIR_ASSERT(queue_ and config_);
-    search_ = std::move(search);
-    TENZIR_DEBUG("from_splunk: submitting streaming search without "
-                 "pagination{}: {}",
-                 now_ ? fmt::format(" at {}", *now_) : std::string{}, search_);
-    // The decoder of an aggregation types the values of its strings itself.
-    auto raw = aggregating_remotely_ or args_.raw.is_some();
-    ctx.spawn_task([url = url_, target = target_,
-                    body = make_form_body(args_, search_, now_),
-                    headers = headers_, config = *config_, queue = *queue_,
-                    executor = ctx.io_executor(), raw,
-                    cancel = cancel_.getToken()]() mutable -> Task<void> {
-      auto token = folly::cancellation_token_merge(
-        co_await folly::coro::co_current_cancellation_token, cancel);
-      co_await folly::coro::co_withCancellation(
-        token, run_export_request_events(std::move(url), std::move(target),
-                                         std::move(body), std::move(headers),
-                                         std::move(config), std::move(queue),
-                                         std::move(executor), raw));
-    });
+  /// Whether `row` is the last row of a search with a sentinel, which has only
+  /// the sentinel field.
+  auto is_sentinel(nova::RowView<nova::Record> const& row) const -> bool {
+    if (not query_->sentinel) {
+      return false;
+    }
+    auto fields = size_t{0};
+    auto found = false;
+    for (auto const& [name, field] : row) {
+      TENZIR_UNUSED(field);
+      ++fields;
+      found = found or name == *query_->sentinel;
+    }
+    return found and fields == 1;
   }
 
-  /// Spawns the subpipeline that aggregates the results of the search.
-  auto aggregate_locally(OpCtx& ctx) -> Task<bool> {
-    TENZIR_ASSERT(args_.optimization.aggregation);
-    auto const& aggregation = *args_.optimization.aggregation;
-    if (not pushdown::can_aggregate_locally(aggregation, ctx)) {
-      co_return false;
-    }
-    auto sub = co_await ctx.plan_and_spawn_sub<nova::Events>(
-      aggregation_sub_key, aggregation.fallback);
-    if (not sub) {
-      co_return false;
-    }
-    aggregating_locally_ = true;
-    co_return true;
-  }
-
-  /// Ends the input of the subpipeline that aggregates locally, which then
-  /// emits the aggregation and finishes.
-  auto close_sub(OpCtx& ctx) -> Task<void> {
-    if (not aggregating_locally_ or sub_closed_) {
-      co_return;
-    }
-    sub_closed_ = true;
-    if (auto sub = ctx.get_sub(aggregation_sub_key)) {
-      co_await as<SubHandle<nova::Events>>(*sub).close();
-    }
-  }
-
-  /// Records why the result of the aggregation in Splunk may be incomplete.
-  /// The search still runs to its end.
-  auto reject_aggregation(std::string reason) -> void {
-    if (not aggregation_error_) {
-      aggregation_error_ = std::move(reason);
-    }
-  }
-
-  /// Emits the result of the aggregation in Splunk, or sends the search
-  /// without it, but with the same filters, and aggregates its results
-  /// locally if the result might differ from what `summarize` computes.
-  auto finish_aggregation(Push<nova::Events>& push, OpCtx& ctx) -> Task<void> {
-    aggregating_remotely_ = false;
-    TENZIR_ASSERT(aggregation_plan_);
-    auto plan = std::move(*aggregation_plan_);
-    aggregation_plan_ = None{};
-    auto rows = std::exchange(aggregation_rows_, {});
-    auto const& aggregation = *args_.optimization.aggregation;
-    auto dh = collecting_diagnostic_handler{};
-    auto result = aggregation_error_
-                    ? Result<std::vector<nova::Events>, std::string>{Err{
-                        std::move(*aggregation_error_)}}
-                    : pushdown::decode_spl_aggregation(rows, aggregation,
-                                                       args_.raw.is_some(),
-                                                       plan.checked, dh);
-    if (result.is_err()) {
-      TENZIR_DEBUG("from_splunk aggregates locally: {}", result.unwrap_err());
-      if (not co_await aggregate_locally(ctx)) {
-        done_ = true;
-        co_return;
+  /// Appends a field of a result row. A count decodes as an integer also
+  /// without type inference.
+  auto append_field(nova::FieldBuilder builder, std::string_view name,
+                    nova::RowView<nova::Data> const& field) const -> void {
+    if (auto const* text = try_as<nova::RowView<nova::String>>(field);
+        text and std::ranges::contains(query_->counts, name)) {
+      if (auto count = pushdown::parse_spl_count(**text)) {
+        builder.data(*count);
+        return;
       }
-      launch(std::move(plan.fallback), ctx);
-      co_return;
     }
-    std::move(dh).forward_to(ctx.dh());
-    for (auto& events : std::move(result).unwrap()) {
-      events_read_.add(events.active_count());
-      co_await push(std::move(events));
-    }
-    done_ = true;
+    nova::append_row(builder, field);
   }
 
   FromSplunkArgs args_;
-  pushdown::LocalHints<nova::Events> hints_;
-  std::string search_;
+  Option<pushdown::SplQuery> query_;
   std::string url_;
-  std::string target_;
-  std::vector<http::Header> headers_;
-  Option<HttpPoolConfig> config_;
   mutable Option<Arc<EventStreamQueue>> queue_;
   nova::ArrayBuilder<nova::Record> builder_;
   Option<std::chrono::steady_clock::time_point> next_flush_;
-  /// The current time of every request, in epoch seconds, if the operator may
-  /// send the search twice.
-  Option<int64_t> now_;
-  /// Whether the current search computes the aggregation in Splunk.
-  bool aggregating_remotely_ = false;
-  /// The searches of the aggregation in Splunk, until the operator receives
-  /// the result.
-  Option<pushdown::SplAggregation> aggregation_plan_;
-  /// Why the result of the aggregation in Splunk may be incomplete.
-  Option<std::string> aggregation_error_;
-  /// The rows of the result of the aggregation in Splunk.
-  std::vector<nova::Array<nova::Record>> aggregation_rows_;
-  /// Whether the results of the search go to the subpipeline that aggregates
-  /// them, until it finishes.
-  bool aggregating_locally_ = false;
-  /// Whether the input of that subpipeline ended.
-  bool sub_closed_ = false;
+  /// Whether the sentinel row of the search arrived.
+  bool sentinel_seen_ = false;
   folly::CancellationSource cancel_;
   MetricsCounter events_read_;
   bool done_ = false;
@@ -1475,26 +1393,56 @@ public:
     auto retry_delay = d.named("retry_delay", &FromSplunkArgs::retry_delay);
     d.named("raw", &FromSplunkArgs::raw);
     d.operator_location(&FromSplunkArgs::operator_location);
+    pushdown::add_pushdown_argument(d, &FromSplunkArgs::pushdown);
     d.optimization(&FromSplunkArgs::optimization);
-    // Splunk can compute a summary of the results of a search in `stats`
-    // stages, after a `where` stage with the filters that apply to them if
-    // each has an exact spelling. Translating the filters needs the registry,
-    // so the operator decides on them at runtime, as on every other reason
-    // why the result might differ from `summarize`, and aggregates locally
-    // then. Only the Nova operator implements the aggregation.
-    d.aggregation([](FromSplunkArgs const& args,
-                     ir::OptimizeAggregation const& aggregation) -> bool {
-      // The result is exact only if it holds every group, which the search
-      // counts, so the stages after the aggregation, which drop groups, stay
-      // local.
-      if (not nova_enabled() or args.options
-          or not aggregation.stages.empty()) {
-        return false;
+    // The stages after the search run in Splunk, with Splunk's semantics.
+    // Options may change how Splunk runs the search, and only the Nova
+    // operator takes over stages.
+    d.query_plan([](FromSplunkArgs const& args,
+                    ir::QueryChain const& chain) -> ir::Absorption {
+      if (not pushdown::pushdown_enabled(args.pushdown)) {
+        return {.prefix = 0, .declined = "`pushdown=false`"};
       }
-      auto search = aggregation_base_search(args);
-      return search
-             and pushdown::can_plan_spl_aggregation(*search, aggregation,
-                                                    args.raw.is_some());
+      if (not nova_enabled()) {
+        return {.prefix = 0, .declined = "the operator runs without Nova"};
+      }
+      if (args.options) {
+        return {.prefix = 0,
+                .declined = "`options` may change how Splunk runs the search"};
+      }
+      if (args.search and args.index) {
+        return {.prefix = 0, .declined = "invalid arguments"};
+      }
+      if (not args.search) {
+        auto names = args.index ? index_names(args.index->inner) : None{};
+        if (not names or names->empty()) {
+          return {.prefix = 0, .declined = "invalid arguments"};
+        }
+      }
+      auto source = spl_source(args);
+      if (auto declined = pushdown::spl_declines(source)) {
+        return {.prefix = 0, .declined = std::move(*declined)};
+      }
+      auto const limitable
+        = not source.search
+          or pushdown::spl_stages(pushdown::spl_search_command(*source.search))
+               .limitable;
+      return pushdown::absorb_prefix(
+        chain,
+        [&](std::span<ir::QueryStage const> stages) {
+          return pushdown::plan_spl_query(source, stages, None{}).is_some();
+        },
+        {
+          .target = "Splunk",
+          .filters_only = false,
+          .veto = [&](ir::QueryStage const& stage) -> Option<std::string> {
+            if (not limitable and is<ir::QueryStage::Limit>(stage.kind)) {
+              return std::string{"a `head` stage could cut the side effects "
+                                 "of the search short"};
+            }
+            return None{};
+          },
+        });
     });
     d.validate([=](DescribeCtx& ctx) -> Empty {
       // Fail fast so that one invalid argument yields one diagnostic.
@@ -1584,8 +1532,8 @@ public:
       std::ignore = run();
       return {};
     });
-    // The optimization inputs above absorb the downstream filters, limit, and
-    // projection; only the remaining, empty request reaches this callback.
+    // The optimization inputs above take the projection, and the stages that
+    // the operator takes over.
     return d.without_optimize();
   }
 };

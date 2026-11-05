@@ -1,5 +1,4 @@
 {
   events: 0,
   present: 0,
-  lo: null,
 }

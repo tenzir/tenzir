@@ -8,6 +8,7 @@
 
 #include "tenzir/pushdown/sql.hpp"
 
+#include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/string.hpp"
 #include "tenzir/pushdown/aggregation.hpp"
 #include "tenzir/pushdown/read.hpp"
@@ -104,6 +105,76 @@ auto SqlQueryDialect::render_bool(bool value) const -> std::string {
 
 auto SqlQueryDialect::boolean_values() const -> bool {
   return true;
+}
+
+auto SqlQueryDialect::render_null() const -> Option<std::string> {
+  return "NULL";
+}
+
+auto SqlQueryDialect::render_int(int64_t value) const -> Option<std::string> {
+  return fmt::to_string(value);
+}
+
+auto SqlQueryDialect::render_uint(uint64_t value) const -> Option<std::string> {
+  return fmt::to_string(value);
+}
+
+auto SqlQueryDialect::binary_operator(ast::binary_op op) const
+  -> Option<std::string_view> {
+  using enum ast::binary_op;
+  switch (op) {
+    case eq:
+      return "=";
+    case neq:
+      return "<>";
+    case lt:
+      return "<";
+    case leq:
+      return "<=";
+    case gt:
+      return ">";
+    case geq:
+      return ">=";
+    case add:
+      return "+";
+    case sub:
+      return "-";
+    case mul:
+      return "*";
+    case div:
+      return "/";
+    case and_:
+      return "AND";
+    case or_:
+      return "OR";
+    case in:
+    case if_:
+    case else_:
+      return None{};
+  }
+  TENZIR_UNREACHABLE();
+}
+
+auto SqlQueryDialect::render_not(std::string_view operand) const
+  -> Option<std::string> {
+  return fmt::format("(NOT {})", operand);
+}
+
+auto SqlQueryDialect::render_negate(std::string_view operand) const
+  -> Option<std::string> {
+  return fmt::format("(-{})", operand);
+}
+
+auto SqlQueryDialect::render_null_check(std::string_view operand,
+                                        bool negated) const
+  -> Option<std::string> {
+  return fmt::format("({} IS {}NULL)", operand, negated ? "NOT " : "");
+}
+
+auto SqlQueryDialect::render_in(std::string_view operand,
+                                std::span<std::string const> elements) const
+  -> Option<std::string> {
+  return fmt::format("({} IN ({}))", operand, fmt::join(elements, ", "));
 }
 
 auto render_select(SqlSelect const& select, SqlQueryDialect const& dialect)
@@ -232,248 +303,6 @@ auto make_aggregate_select(AggregationPlan const& plan,
 }
 
 namespace {
-
-/// Spells expressions of TQL in a SQL dialect, with the semantics of the
-/// target, as far as their syntax allows. Fields bind through `bind`.
-class ExpressionRenderer {
-public:
-  using Binder
-    = std::function<auto(std::span<std::string const>)->Option<std::string>>;
-
-  ExpressionRenderer(SqlQueryDialect const& dialect, Binder bind)
-    : dialect_{dialect}, bind_{std::move(bind)} {
-  }
-
-  /// Spells `expr` as a predicate.
-  auto predicate(ast::expression const& expr) const -> Option<std::string> {
-    TRY(auto result, render(expr));
-    if (not result.predicate and not dialect_->boolean_values()) {
-      return None{};
-    }
-    return std::move(result.text);
-  }
-
-  /// Spells `expr` as a value.
-  auto value(ast::expression const& expr) const -> Option<std::string> {
-    TRY(auto result, render(expr));
-    if (result.predicate and not dialect_->boolean_values()) {
-      return None{};
-    }
-    return std::move(result.text);
-  }
-
-private:
-  /// Rendered text, and whether it is a predicate rather than a value.
-  struct Fragment {
-    std::string text;
-    bool predicate = false;
-  };
-
-  auto literal(ast::constant::kind const& value) const -> Option<Fragment> {
-    auto wrap = [](Option<std::string> text) -> Option<Fragment> {
-      TRY(auto x, std::move(text));
-      return Fragment{std::move(x)};
-    };
-    return match(
-      value,
-      [](caf::none_t) -> Option<Fragment> {
-        return Fragment{"NULL"};
-      },
-      [&](bool x) -> Option<Fragment> {
-        return Fragment{dialect_->render_bool(x)};
-      },
-      [](int64_t x) -> Option<Fragment> {
-        return Fragment{fmt::to_string(x)};
-      },
-      [](uint64_t x) -> Option<Fragment> {
-        return Fragment{fmt::to_string(x)};
-      },
-      [&](double x) -> Option<Fragment> {
-        if (not std::isfinite(x)) {
-          return None{};
-        }
-        return Fragment{dialect_->render_double(x)};
-      },
-      [&](std::string const& x) -> Option<Fragment> {
-        return wrap(dialect_->quote_string(x));
-      },
-      [&](time x) -> Option<Fragment> {
-        return wrap(dialect_->render_time(x));
-      },
-      [&](duration x) -> Option<Fragment> {
-        return wrap(dialect_->render_duration(x));
-      },
-      [&](ip const& x) -> Option<Fragment> {
-        return wrap(dialect_->render_ip(x));
-      },
-      [&](subnet const& x) -> Option<Fragment> {
-        return wrap(dialect_->render_subnet(x));
-      },
-      [](auto const&) -> Option<Fragment> {
-        return None{};
-      });
-  }
-
-  auto field(ast::expression const& expr) const -> Option<Fragment> {
-    TRY(auto path, ast::field_path::try_from(expr));
-    auto names = std::vector<std::string>{};
-    for (auto const& segment : path.path()) {
-      if (segment.has_question_mark) {
-        return None{};
-      }
-      names.push_back(segment.id.name);
-    }
-    if (names.empty()) {
-      return None{};
-    }
-    TRY(auto text, bind_(names));
-    return Fragment{std::move(text)};
-  }
-
-  auto list(ast::expression const& expr) const -> Option<std::string> {
-    auto elements = std::vector<std::string>{};
-    if (auto const* xs = try_as<ast::list>(expr)) {
-      for (auto const& item : xs->items) {
-        auto const* element = try_as<ast::expression>(item);
-        if (not element) {
-          return None{};
-        }
-        auto const* constant = try_as<ast::constant>(*element);
-        if (not constant) {
-          return None{};
-        }
-        TRY(auto x, literal(constant->value));
-        elements.push_back(std::move(x.text));
-      }
-    } else if (auto const* constant = try_as<ast::constant>(expr)) {
-      // The optimizer folds a list of constants into one constant.
-      auto const* xs = try_as<tenzir::list>(constant->value);
-      if (not xs) {
-        return None{};
-      }
-      for (auto const& element : *xs) {
-        auto folded = ast::constant::make(located{element, location::unknown});
-        TRY(auto x, literal(folded.value));
-        elements.push_back(std::move(x.text));
-      }
-    } else {
-      return None{};
-    }
-    if (elements.empty()) {
-      return None{};
-    }
-    return fmt::format("({})", fmt::join(elements, ", "));
-  }
-
-  static auto is_null(ast::expression const& expr) -> bool {
-    auto const* constant = try_as<ast::constant>(expr);
-    return constant and is<caf::none_t>(constant->value);
-  }
-
-  auto binary(ast::binary_expr const& x) const -> Option<Fragment> {
-    using enum ast::binary_op;
-    auto const spell = [&](std::string_view op, bool predicate,
-                           bool logical) -> Option<Fragment> {
-      auto operand = [&](ast::expression const& e) {
-        return logical ? this->predicate(e) : value(e);
-      };
-      TRY(auto left, operand(x.left));
-      TRY(auto right, operand(x.right));
-      return Fragment{fmt::format("({} {} {})", left, op, right), predicate};
-    };
-    switch (x.op) {
-      case eq:
-      case neq: {
-        auto const negated = x.op == neq;
-        for (auto const* side : {&x.left, &x.right}) {
-          if (is_null(*side)) {
-            TRY(auto operand, value(side == &x.left ? x.right : x.left));
-            return Fragment{fmt::format("({} IS {}NULL)", operand,
-                                        negated ? "NOT " : ""),
-                            true};
-          }
-        }
-        return spell(negated ? "<>" : "=", true, false);
-      }
-      case lt:
-        return spell("<", true, false);
-      case leq:
-        return spell("<=", true, false);
-      case gt:
-        return spell(">", true, false);
-      case geq:
-        return spell(">=", true, false);
-      case add:
-        return spell("+", false, false);
-      case sub:
-        return spell("-", false, false);
-      case mul:
-        return spell("*", false, false);
-      case div:
-        return spell("/", false, false);
-      case and_:
-        return spell("AND", true, true);
-      case or_:
-        return spell("OR", true, true);
-      case in: {
-        TRY(auto left, value(x.left));
-        TRY(auto right, list(x.right));
-        return Fragment{fmt::format("({} IN {})", left, right), true};
-      }
-      case if_:
-      case else_:
-        return None{};
-    }
-    TENZIR_UNREACHABLE();
-  }
-
-  auto call(ast::function_call const& x) const -> Option<Fragment> {
-    auto const& ref = x.fn.ref;
-    if (not ref.resolved() or ref.pkg() != entity_pkg_std
-        or ref.segments().size() != 1) {
-      return None{};
-    }
-    auto args = std::vector<std::string>{};
-    for (auto const& arg : x.args) {
-      // Named arguments are assignments, which no dialect spells.
-      if (is<ast::assignment>(arg)) {
-        return None{};
-      }
-      TRY(auto rendered, value(arg));
-      args.push_back(std::move(rendered));
-    }
-    auto const& name = ref.segments().front();
-    TRY(auto text, dialect_->render_call(name, args));
-    return Fragment{std::move(text), dialect_->call_is_predicate(name)};
-  }
-
-  auto render(ast::expression const& expr) const -> Option<Fragment> {
-    if (auto const* constant = try_as<ast::constant>(expr)) {
-      return literal(constant->value);
-    }
-    if (auto const* x = try_as<ast::binary_expr>(expr)) {
-      return binary(*x);
-    }
-    if (auto const* x = try_as<ast::unary_expr>(expr)) {
-      if (x->op == ast::unary_op::not_) {
-        TRY(auto operand, predicate(x->expr));
-        return Fragment{fmt::format("(NOT {})", operand), true};
-      }
-      if (x->op == ast::unary_op::neg) {
-        TRY(auto operand, value(x->expr));
-        return Fragment{fmt::format("(-{})", operand)};
-      }
-      return None{};
-    }
-    if (auto const* x = try_as<ast::function_call>(expr)) {
-      return call(*x);
-    }
-    return field(expr);
-  }
-
-  Ref<SqlQueryDialect const> dialect_;
-  Binder bind_;
-};
 
 /// The `SELECT` that `render_plan` assembles, stage by stage.
 class PlanBuilder {
@@ -931,39 +760,6 @@ auto SqlQueryDialect::bind_field(std::span<std::string const> path) const
     return None{};
   }
   return quote_identifier(path.front());
-}
-
-auto SqlQueryDialect::render_time(time value) const -> Option<std::string> {
-  TENZIR_UNUSED(value);
-  return None{};
-}
-
-auto SqlQueryDialect::render_duration(duration value) const
-  -> Option<std::string> {
-  TENZIR_UNUSED(value);
-  return None{};
-}
-
-auto SqlQueryDialect::render_ip(ip value) const -> Option<std::string> {
-  TENZIR_UNUSED(value);
-  return None{};
-}
-
-auto SqlQueryDialect::render_subnet(subnet value) const -> Option<std::string> {
-  TENZIR_UNUSED(value);
-  return None{};
-}
-
-auto SqlQueryDialect::render_call(std::string_view name,
-                                  std::span<std::string const> args) const
-  -> Option<std::string> {
-  TENZIR_UNUSED(name, args);
-  return None{};
-}
-
-auto SqlQueryDialect::call_is_predicate(std::string_view name) const -> bool {
-  TENZIR_UNUSED(name);
-  return false;
 }
 
 auto SqlQueryDialect::render_aggregate(std::string_view name,

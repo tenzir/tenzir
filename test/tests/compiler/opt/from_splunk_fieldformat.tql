@@ -1,0 +1,6 @@
+// After `fieldformat`, stages would see other values than the results show,
+// so they stay in Tenzir.
+from_splunk "https://splunk.example.com",
+  search="index=main | fieldformat n=n*2", earliest="-15m", latest="-5m",
+  headers={Authorization: "Splunk t"}
+where n > 6

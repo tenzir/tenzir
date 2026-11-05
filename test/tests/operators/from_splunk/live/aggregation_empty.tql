@@ -1,4 +1,5 @@
-// Without group keys, the summary of no results has one event.
+// Without group keys, `stats` returns one row also for no results. A `min`
+// without values leaves its field out.
 from_splunk env("SPLUNK_MGMT_URL"),
   search=r#"| makeresults count=3 | where i > 5"#,
   earliest="1735689599",

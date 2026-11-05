@@ -1,0 +1,17 @@
+---
+fixtures:
+- http_server:
+    expected:
+    - method: POST
+      path: /splunk/strings/services/search/v2/jobs/export
+      body: search=search%20index%3D%22main%22%20_time%3E%3D1735689630.5%20_time%3C1735689720%0A%7C%20fields%20user%2C%20_time&earliest_time=1735689599&latest_time=999999999999999999&output_mode=json&preview=false
+---
+
+// Epoch seconds beyond what a time holds are no absolute bound, so the operator
+// keeps both bounds as they are, which Splunk then resolves. The comparisons
+// stay in the search.
+from_splunk env("HTTP_FIXTURE_URL") + "/splunk/strings",
+  index="main", earliest="1735689599", latest="999999999999999999",
+  headers={Authorization: "Splunk test-token"}, tls=false
+where _time >= 2025-01-01T00:00:30.5Z and _time < 2025-01-01T00:02:00Z
+select user, _time

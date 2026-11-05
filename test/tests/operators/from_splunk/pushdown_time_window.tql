@@ -1,0 +1,16 @@
+---
+fixtures:
+- http_server:
+    expected:
+    - method: POST
+      path: /splunk/strings/services/search/v2/jobs/export
+      body: search=search%20index%3D%22main%22%20_time%3E%3D1735689630.5%20_time%3C1735689720%0A%7C%20fields%20user%2C%20_time&earliest_time=1735689630&latest_time=1735689721&output_mode=json&preview=false
+---
+
+// With `index`, comparisons of `_time` extend the base search and narrow the
+// absolute time bounds of the request, rounded outwards to whole seconds.
+from_splunk env("HTTP_FIXTURE_URL") + "/splunk/strings",
+  index="main", earliest="1735689599", latest="1735689780",
+  headers={Authorization: "Splunk test-token"}, tls=false
+where _time >= 2025-01-01T00:00:30.5Z and _time < 2025-01-01T00:02:00Z
+select user, _time

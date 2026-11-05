@@ -1,0 +1,32 @@
+{
+  name: "alice",
+  n: 5,
+  copy: "alice",
+  nested: {
+    n: 5,
+  },
+}
+{
+  name: "Alice",
+  n: 50,
+  copy: "Alice",
+  nested: {
+    n: 50,
+  },
+}
+{
+  name: "bob",
+  n: -1.5,
+  copy: "bob",
+  nested: {
+    n: -1.5,
+  },
+}
+{
+  name: "carol",
+  n: 7,
+  copy: "carol",
+  nested: {
+    n: 7,
+  },
+}

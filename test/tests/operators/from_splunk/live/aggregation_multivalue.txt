@@ -1,13 +1,10 @@
 {
-  k: [
-    "a",
-    "b",
-  ],
+  k: "b",
   events: 1,
-  present: 1,
+  present: 2,
 }
 {
   k: "a",
-  events: 3,
-  present: 3,
+  events: 4,
+  present: 5,
 }

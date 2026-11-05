@@ -1,6 +1,5 @@
-// Splunk would put a result with several values into the group of each value,
-// where Tenzir groups by the list. The operator then summarizes the results of
-// the search in Tenzir.
+// `stats` puts a result with several values into the group of each value, and
+// `count` counts the values.
 from_splunk env("SPLUNK_MGMT_URL"),
   search=r#"| makeresults count=4 | streamstats count as i | eval k=if(i==1, mvappend("a", "b"), "a")"#,
   earliest="1735689599",

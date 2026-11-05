@@ -1,5 +1,5 @@
-// With `index`, Tenzir writes the search and adds the prefilters to it.
-// Without a `select`, every result still carries all of its fields.
+// With `index`, Tenzir writes the search and extends it with the filters that
+// `search` spells. The others become `where` stages.
 from_splunk env("SPLUNK_MGMT_URL"),
   index="main",
   earliest="1735689599",
