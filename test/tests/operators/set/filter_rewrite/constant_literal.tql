@@ -1,0 +1,21 @@
+// A filter that reads a constant literal in several `match` arms keeps the
+// events of both arms whose user matches.
+from {n: "sign_in", id: 1, userId: "u", targetId: "x"},
+     {n: "sign_in", id: 2, userId: "v", targetId: "u"},
+     {n: "audit", id: 3, userId: "u", targetId: "w"},
+     {n: "audit", id: 4, userId: "w", targetId: "u"}
+@name = move n
+ocsf = {metadata: {profiles: ["cloud"], version: "1.9.0"}}
+match @name {
+  "sign_in" => {
+    ocsf.class_uid = 3002
+    ocsf.user = {uid: userId, name: f"{id}"}
+  }
+  _ => {
+    ocsf.class_uid = 3001
+    ocsf.user = {uid: targetId, name: f"{id}"}
+  }
+}
+this = ocsf_cast(ocsf)
+where user.uid == "u"
+select class_uid, user

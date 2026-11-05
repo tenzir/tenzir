@@ -1,0 +1,4 @@
+// Reading a record literal of constants as a whole twice folds as well.
+export
+m = {v: 1}
+where m == {v: 2} or m == {v: 3}

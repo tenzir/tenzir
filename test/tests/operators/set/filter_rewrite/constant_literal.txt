@@ -1,0 +1,69 @@
+warning: required field `activity_id` is missing
+  --> tests/operators/set/filter_rewrite/constant_literal.tql:19:8
+   |
+19 | this = ocsf_cast(ocsf)
+   |        ~~~~~~~~~~~~~~~
+   |
+
+warning: required field `category_uid` is missing
+  --> tests/operators/set/filter_rewrite/constant_literal.tql:19:8
+   |
+19 | this = ocsf_cast(ocsf)
+   |        ~~~~~~~~~~~~~~~
+   |
+
+warning: required field `cloud` is missing
+  --> tests/operators/set/filter_rewrite/constant_literal.tql:19:8
+   |
+19 | this = ocsf_cast(ocsf)
+   |        ~~~~~~~~~~~~~~~
+   |
+
+warning: required field `metadata.product` is missing
+  --> tests/operators/set/filter_rewrite/constant_literal.tql:19:8
+   |
+19 | this = ocsf_cast(ocsf)
+   |        ~~~~~~~~~~~~~~~
+   |
+
+warning: required field `severity_id` is missing
+  --> tests/operators/set/filter_rewrite/constant_literal.tql:19:8
+   |
+19 | this = ocsf_cast(ocsf)
+   |        ~~~~~~~~~~~~~~~
+   |
+
+warning: required field `time` is missing
+  --> tests/operators/set/filter_rewrite/constant_literal.tql:19:8
+   |
+19 | this = ocsf_cast(ocsf)
+   |        ~~~~~~~~~~~~~~~
+   |
+
+warning: required field `type_uid` is missing
+  --> tests/operators/set/filter_rewrite/constant_literal.tql:19:8
+   |
+19 | this = ocsf_cast(ocsf)
+   |        ~~~~~~~~~~~~~~~
+   |
+
+warning: class "Authentication" needs at least one of `service`, `dst_endpoint`, but has none
+  --> tests/operators/set/filter_rewrite/constant_literal.tql:19:8
+   |
+19 | this = ocsf_cast(ocsf)
+   |        ~~~~~~~~~~~~~~~
+   |
+{
+  class_uid: 3002,
+  user: {
+    uid: "u",
+    name: "1",
+  },
+}
+{
+  class_uid: 3001,
+  user: {
+    uid: "u",
+    name: "4",
+  },
+}

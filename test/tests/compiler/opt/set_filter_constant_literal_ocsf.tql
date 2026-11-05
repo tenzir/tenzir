@@ -1,0 +1,17 @@
+// As in the library's OCSF mappings, `ocsf_cast` reads the profiles of the
+// metadata in every `match` arm. The filter still reaches the source, because
+// the profiles are a literal of constants.
+export
+ocsf = {metadata: {profiles: ["cloud"], version: "1.9.0"}}
+match @name {
+  "sign_in" => {
+    ocsf.class_uid = 3002
+    ocsf.user = {uid: userId}
+  }
+  _ => {
+    ocsf.class_uid = 3001
+    ocsf.user = {uid: targetId}
+  }
+}
+this = ocsf_cast(ocsf)
+where user.uid == "u"

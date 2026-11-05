@@ -67,14 +67,18 @@ auto _::EvalRun::eval(const ast::list& x, EvalFrame frame) -> Array<Data> {
   auto const length = frame.length();
 
   if (x.items.empty()) {
-    return Array<Data>{make_empty_lists(length)};
+    return repeat(List{}, length);
   }
 
   if (x.items.size() == 1) {
     if (auto const* item = try_as<ast::expression>(x.items.front())) {
+      auto value = frame.eval(*item);
+      // A constant item makes a constant list, which `ir::is_plain` relies on.
+      if (auto constant = _::repeated_value(value)) {
+        return repeat(List{std::move(*constant)}, length);
+      }
       // Fast path: a single non-spread item becomes one list per row,
       // wrapping the evaluated array without copying its data.
-      auto value = frame.eval(*item);
       auto spans
         = storage::DataOwner<storage::Span[]>::make_uninitialized(length);
       for (auto i = storage::Index{0}; i < length; ++i) {
@@ -114,6 +118,23 @@ auto _::EvalRun::eval(const ast::list& x, EvalFrame frame) -> Array<Data> {
     auto const& expr = as<ast::expression>(item);
     items.push_back(
       {.is_spread = false, .value = frame.eval(expr), .spread_shape = {}});
+  }
+
+  // Constant items without spreads make a constant list, which `ir::is_plain`
+  // relies on.
+  auto constant = Option<List>{List{}};
+  constant->reserve(items.size());
+  for (auto const& item : items) {
+    auto value
+      = item.is_spread ? Option<Data>{} : _::repeated_value(item.value);
+    if (not value) {
+      constant = None{};
+      break;
+    }
+    constant->push_back(std::move(*value));
+  }
+  if (constant) {
+    return repeat(std::move(*constant), length);
   }
 
   auto builder = ArrayBuilder<List>{};

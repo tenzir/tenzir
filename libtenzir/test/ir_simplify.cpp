@@ -438,9 +438,18 @@ TEST("plain and cheap expressions") {
   CHECK(ir::is_plain(parse("this")));
   CHECK(ir::is_plain(parse("@name")));
   CHECK(ir::is_plain(parse("42")));
+  CHECK(ir::is_plain(parse("[]")));
+  CHECK(ir::is_plain(parse("[1, \"a\"]")));
+  CHECK(ir::is_plain(parse("{a: 1, b: {c: [2.0]}}")));
+  CHECK(ir::is_plain(parse("{a: [1]}.a")));
   CHECK(not ir::is_plain(parse("x + 1")));
   CHECK(not ir::is_plain(parse("x[y]")));
   CHECK(not ir::is_plain(parse("{a: x}")));
+  CHECK(not ir::is_plain(parse("[1, x]")));
+  CHECK(not ir::is_plain(parse("{a: {b: x}}")));
+  CHECK(not ir::is_plain(parse("[1, [1 + 1]]")));
+  CHECK(not ir::is_plain(parse("[...x]")));
+  CHECK(not ir::is_plain(parse("{...x}")));
   auto const& reg = test::builtin_registry();
   CHECK(ir::is_cheap(parse("x + 1 == y.z"), reg));
   CHECK(ir::is_cheap(parse("{a: x, b: [y, 1]}"), reg));
@@ -460,6 +469,23 @@ TEST("substitution copies plain values freely") {
     rename);
   CHECK_EQUAL(render_chain(split.independent),
               render_filter({"y.z == 1 or y.z == 2", "y.z != 3"}));
+  CHECK(split.dependent.empty());
+}
+
+TEST("substitution copies literals of constants freely") {
+  // As for `metadata = {profiles: ["cloud"], version: "1.9.0"}`.
+  auto const literal
+    = [](ast::field_path const& field) -> Option<ast::expression> {
+    if (field.path().front().id.name == "m") {
+      return parse(R"({profiles: ["cloud"], version: "1.9.0"})");
+    }
+    return field.inner();
+  };
+  auto split = ir::split_filter_by_substitution(
+    parse_chain({R"(m.profiles == ["a"] or m.profiles == ["b"])",
+                 R"(x in m.profiles or y in m.profiles)"}),
+    test::builtin_registry(), literal);
+  CHECK_EQUAL(split.independent.size(), size_t{2});
   CHECK(split.dependent.empty());
 }
 

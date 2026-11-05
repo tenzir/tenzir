@@ -1,0 +1,146 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "export",
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:144..150 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+-        
++        binary_expr {
++          left: binary_expr {
++            left: root_field {
++              id: `x` @ [1]:171..172 from 0,
++              has_question_mark: false
++            },
++            op: "in",
++            right: list {
++              begin: [1]:155..156 from 0,
++              items: [
++                expression constant int64 1 @ [1]:156..157 from 0,
++                expression constant int64 2 @ [1]:159..160 from 0,
++                expression constant int64 3 @ [1]:162..163 from 0
++              ],
++              end: [1]:163..164 from 0
++            },
++            location: [1]:171..177 from 0
++          },
++          op: "or_",
++          right: binary_expr {
++            left: root_field {
++              id: `y` @ [1]:181..182 from 0,
++              has_question_mark: false
++            },
++            op: "in",
++            right: list {
++              begin: [1]:155..156 from 0,
++              items: [
++                expression constant int64 1 @ [1]:156..157 from 0,
++                expression constant int64 2 @ [1]:159..160 from 0,
++                expression constant int64 3 @ [1]:162..163 from 0
++              ],
++              end: [1]:163..164 from 0
++            },
++            location: [1]:181..187 from 0
++          },
++          location: [1]:171..187 from 0
++        }
+       ],
+       order: "ordered"
+     },
+     SetIr {
+       assignments: [
+         {
+           left: root_field {
+             id: `q` @ [1]:151..152 from 0,
+             has_question_mark: false
+           },
+           right: list {
+             begin: [1]:155..156 from 0,
+             items: [
+               expression constant int64 1 @ [1]:156..157 from 0,
+               expression constant int64 2 @ [1]:159..160 from 0,
+               expression constant int64 3 @ [1]:162..163 from 0
+             ],
+             end: [1]:163..164 from 0
+           },
+           location: [1]:151..164 from 0
+         }
+       ],
+       order: "ordered"
+     },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:165..170 from 0
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:187..187 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
+         ],
+-        ref: std::where/op
++        named_args: [
++          
++        ]
+       },
+-      args: [
+-        expression binary_expr {
+-          left: binary_expr {
+-            left: root_field {
+-              id: `x` @ [1]:171..172 from 0,
+-              has_question_mark: false
+-            },
+-            op: "in",
+-            right: root_field {
+-              id: `q` @ [1]:176..177 from 0,
+-              has_question_mark: false
+-            },
+-            location: [1]:171..177 from 0
+-          },
+-          op: "or_",
+-          right: binary_expr {
+-            left: root_field {
+-              id: `y` @ [1]:181..182 from 0,
+-              has_question_mark: false
+-            },
+-            op: "in",
+-            right: root_field {
+-              id: `q` @ [1]:186..187 from 0,
+-              has_question_mark: false
+-            },
+-            location: [1]:181..187 from 0
+-          },
+-          location: [1]:171..187 from 0
+-        }
++      filter: [
++        
+       ],
+-      named_args: [
+-        
+-      ]
++      order: "ordered"
+     }
+   ],
+   definition_location: [1]:144..187 from 0
+ }

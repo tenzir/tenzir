@@ -1,0 +1,402 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "export",
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:199..205 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+-        
++        binary_expr {
++          left: binary_expr {
++            left: binary_expr {
++              left: binary_expr {
++                left: root_field {
++                  id: `userId` @ [1]:344..350 from 0,
++                  has_question_mark: false
++                },
++                op: "eq",
++                right: constant string "u" @ [1]:470..473 from 0,
++                location: [1]:344..473 from 0
++              },
++              op: "and_",
++              right: binary_expr {
++                left: function_call {
++                  fn: {
++                    path: [
++                      `type_kind` @ [1]:436..451 from 0
++                    ],
++                    ref: std::type_kind/fn
++                  },
++                  args: [
++                    root_field {
++                      id: `userId` @ [1]:344..350 from 0,
++                      has_question_mark: false
++                    }
++                  ],
++                  method: false,
++                  location: [1]:436..451 from 0
++                },
++                op: "eq",
++                right: constant string "string" @ [1]:436..451 from 0,
++                location: [1]:436..451 from 0
++              },
++              location: [1]:344..473 from 0
++            },
++            op: "if_",
++            right: binary_expr {
++              left: meta {
++                kind: "name",
++                source: [1]:271..276 from 0
++              },
++              op: "eq",
++              right: constant string "sign_in" @ [1]:281..290 from 0,
++              location: [1]:271..290 from 0
++            },
++            location: [1]:458..473 from 0
++          },
++          op: "else_",
++          right: binary_expr {
++            left: binary_expr {
++              left: root_field {
++                id: `targetId` @ [1]:413..421 from 0,
++                has_question_mark: false
++              },
++              op: "eq",
++              right: constant string "u" @ [1]:470..473 from 0,
++              location: [1]:413..473 from 0
++            },
++            op: "and_",
++            right: binary_expr {
++              left: function_call {
++                fn: {
++                  path: [
++                    `type_kind` @ [1]:436..451 from 0
++                  ],
++                  ref: std::type_kind/fn
++                },
++                args: [
++                  root_field {
++                    id: `targetId` @ [1]:413..421 from 0,
++                    has_question_mark: false
++                  }
++                ],
++                method: false,
++                location: [1]:436..451 from 0
++              },
++              op: "eq",
++              right: constant string "string" @ [1]:436..451 from 0,
++              location: [1]:436..451 from 0
++            },
++            location: [1]:413..473 from 0
++          },
++          location: [1]:458..473 from 0
++        }
+       ],
+-      order: "ordered"
++      order: "ordered",
++      projection: [
++        {
++          expr: root_field {
++            id: `userId` @ [1]:344..350 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `userId` @ [1]:344..350 from 0,
++              has_question_mark: false
++            }
++          ]
++        },
++        {
++          expr: root_field {
++            id: `targetId` @ [1]:413..421 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `targetId` @ [1]:413..421 from 0,
++              has_question_mark: false
++            }
++          ]
++        }
++      ]
+     },
+     SetIr {
+       assignments: [
+         {
+           left: root_field {
+             id: `ocsf` @ [1]:206..210 from 0,
+             has_question_mark: false
+           },
+           right: record {
+             begin: [1]:213..214 from 0,
+             items: [
+               field {
+                 name: `metadata` @ [1]:214..222 from 0,
+                 expr: record {
+                   begin: [1]:224..225 from 0,
+                   items: [
+                     field {
+                       name: `profiles` @ [1]:225..233 from 0,
+                       expr: list {
+                         begin: [1]:235..236 from 0,
+                         items: [
+                           expression constant string "cloud" @ [1]:236..243 from 0
+                         ],
+                         end: [1]:243..244 from 0
+                       }
+                     },
+                     field {
+                       name: `version` @ [1]:246..253 from 0,
+                       expr: constant string "1.9.0" @ [1]:255..262 from 0
+                     }
+                   ],
+                   end: [1]:262..263 from 0
+                 }
+               }
+             ],
+             end: [1]:263..264 from 0
+           },
+           location: [1]:206..264 from 0
+         }
+       ],
+       order: "ordered"
+     },
+     Match {
+       match_keyword: [1]:265..270 from 0,
+       scrutinee: meta {
+         kind: "name",
+         source: [1]:271..276 from 0
+       },
+       arms: [
+         {
+           source: [1]:281..290 from 0,
+           pattern_exprs: [
+             {
+               kind: expression_pattern {
+                 expr: constant string "sign_in" @ [1]:281..290 from 0
+               }
+             }
+           ],
+           patterns: [
+             {
+               kind: Constant {
+                 value: string "sign_in"
+               }
+             }
+           ],
+           pipeline: {
+             lets: [
+               
+             ],
+             operators: [
+               SetIr {
+                 assignments: [
+                   {
+                     left: field_access {
+                       left: root_field {
+                         id: `ocsf` @ [1]:300..304 from 0,
+                         has_question_mark: false
+                       },
+                       has_question_mark: false,
+                       name: `class_uid` @ [1]:305..314 from 0,
+                       location: [1]:300..314 from 0
+                     },
+                     right: constant int64 3002 @ [1]:317..321 from 0,
+                     location: [1]:300..321 from 0
+                   }
+                 ],
+                 order: "ordered"
+               },
+               SetIr {
+                 assignments: [
+                   {
+                     left: field_access {
+                       left: root_field {
+                         id: `ocsf` @ [1]:326..330 from 0,
+                         has_question_mark: false
+                       },
+                       has_question_mark: false,
+                       name: `user` @ [1]:331..335 from 0,
+                       location: [1]:326..335 from 0
+                     },
+                     right: record {
+                       begin: [1]:338..339 from 0,
+                       items: [
+                         field {
+                           name: `uid` @ [1]:339..342 from 0,
+                           expr: root_field {
+                             id: `userId` @ [1]:344..350 from 0,
+                             has_question_mark: false
+                           }
+                         }
+                       ],
+                       end: [1]:350..351 from 0
+                     },
+                     location: [1]:326..351 from 0
+                   }
+                 ],
+                 order: "ordered"
+               }
+             ],
+             definition_location: [1]:300..351 from 0
+           },
+           wildcard: false
+         },
+         {
+           source: [1]:358..359 from 0,
+           pattern_exprs: [
+             
+           ],
+           patterns: [
+             
+           ],
+           pipeline: {
+             lets: [
+               
+             ],
+             operators: [
+               SetIr {
+                 assignments: [
+                   {
+                     left: field_access {
+                       left: root_field {
+                         id: `ocsf` @ [1]:369..373 from 0,
+                         has_question_mark: false
+                       },
+                       has_question_mark: false,
+                       name: `class_uid` @ [1]:374..383 from 0,
+                       location: [1]:369..383 from 0
+                     },
+                     right: constant int64 3001 @ [1]:386..390 from 0,
+                     location: [1]:369..390 from 0
+                   }
+                 ],
+                 order: "ordered"
+               },
+               SetIr {
+                 assignments: [
+                   {
+                     left: field_access {
+                       left: root_field {
+                         id: `ocsf` @ [1]:395..399 from 0,
+                         has_question_mark: false
+                       },
+                       has_question_mark: false,
+                       name: `user` @ [1]:400..404 from 0,
+                       location: [1]:395..404 from 0
+                     },
+                     right: record {
+                       begin: [1]:407..408 from 0,
+                       items: [
+                         field {
+                           name: `uid` @ [1]:408..411 from 0,
+                           expr: root_field {
+                             id: `targetId` @ [1]:413..421 from 0,
+                             has_question_mark: false
+                           }
+                         }
+                       ],
+                       end: [1]:421..422 from 0
+                     },
+                     location: [1]:395..422 from 0
+                   }
+                 ],
+                 order: "ordered"
+               }
+             ],
+             definition_location: [1]:369..422 from 0
+           },
+           wildcard: true
+         }
+       ]
+     },
+     SetIr {
+       assignments: [
+         {
+           left: this_ [1]:429..433 from 0,
+           right: function_call {
+             fn: {
+               path: [
+                 `ocsf_cast` @ [1]:436..445 from 0
+               ],
+               ref: std::ocsf_cast/fn
+             },
+             args: [
+               root_field {
+                 id: `ocsf` @ [1]:446..450 from 0,
+                 has_question_mark: false
+               }
+             ],
+             method: false,
+             location: [1]:436..451 from 0
+           },
+           location: [1]:429..451 from 0
+         }
+       ],
+       order: "ordered"
+     },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:452..457 from 0
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:473..473 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
+         ],
+-        ref: std::where/op
++        named_args: [
++          
++        ]
+       },
+-      args: [
+-        expression binary_expr {
+-          left: field_access {
+-            left: root_field {
+-              id: `user` @ [1]:458..462 from 0,
+-              has_question_mark: false
+-            },
+-            has_question_mark: false,
+-            name: `uid` @ [1]:463..466 from 0,
+-            location: [1]:458..466 from 0
+-          },
+-          op: "eq",
+-          right: constant string "u" @ [1]:470..473 from 0,
+-          location: [1]:458..473 from 0
+-        }
++      filter: [
++        
+       ],
+-      named_args: [
+-        
+-      ]
++      order: "ordered"
+     }
+   ],
+   definition_location: [1]:199..473 from 0
+ }

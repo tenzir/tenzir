@@ -178,4 +178,9 @@ private:
   EvalCtx ctx_;
 };
 
+/// Returns the value of an array that stores one value for all of its rows,
+/// as `repeat` constructs it. Returns `None` for other arrays, even if their
+/// rows happen to be equal.
+auto repeated_value(Array<Data> const& array) -> Option<Data>;
+
 } // namespace tenzir::nova::_
