@@ -1,0 +1,5 @@
+// A literal of constants is plain, so a predicate may read it several times.
+// This one folds to `false` at the source.
+export
+o.p = ["cloud"]
+where o.p == ["a"] or o.p == ["b"]

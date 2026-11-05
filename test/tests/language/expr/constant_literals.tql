@@ -1,0 +1,9 @@
+// Literals of constants evaluate to the same values as other literals, for
+// every event, nested in other literals, and next to computed values.
+from {x: 1}, {x: 2}, {x: 3}
+where x != 2
+empty = [[], {}]
+mixed = [1, "a", null, [2.5], {b: 3s}]
+nested = {a: {b: [1, 2]}, c: {}}
+duplicate = {a: 1, b: 2, a: 3}
+partly = {a: [1, x], b: [1, 2], c: {d: x, e: [3]}}

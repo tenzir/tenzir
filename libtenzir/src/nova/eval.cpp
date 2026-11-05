@@ -224,6 +224,59 @@ private:
   InstantiateCtx ctx_;
 };
 
+/// Replaces every list or record literal that holds only constants, such as
+/// `["cloud"]` or `{version: "1.9.0"}`, by a constant of its value. The
+/// evaluator repeats a constant without per-row work, whereas it builds a
+/// literal row by row. Nested literals fold from the inside out.
+class ConstantLiteralFolder final : public ast::visitor<ConstantLiteralFolder> {
+public:
+  template <class T>
+  auto visit(T& x) -> void {
+    enter(x);
+  }
+
+  auto visit(ast::expression& x) -> void {
+    enter(x);
+    auto value = x.match(
+      [](ast::list const& list) -> Option<data> {
+        auto result = tenzir::list{};
+        result.reserve(list.items.size());
+        for (auto const& item : list.items) {
+          auto const* element = try_as<ast::expression>(item);
+          auto const* constant
+            = element ? try_as<ast::constant>(*element) : nullptr;
+          if (not constant) {
+            return None{};
+          }
+          result.push_back(constant->as_data());
+        }
+        return data{std::move(result)};
+      },
+      [](ast::record const& record) -> Option<data> {
+        auto result = tenzir::record{};
+        for (auto const& item : record.items) {
+          auto const* field = try_as<ast::record::field>(item);
+          auto const* constant
+            = field ? try_as<ast::constant>(field->expr) : nullptr;
+          if (not constant) {
+            return None{};
+          }
+          // As in the evaluation of the literal, a later field overwrites an
+          // earlier one with the same name and keeps its position.
+          result[field->name.name] = constant->as_data();
+        }
+        return data{std::move(result)};
+      },
+      [](auto const&) -> Option<data> {
+        return None{};
+      });
+    if (value) {
+      x = ast::constant::make(
+        located<data>{std::move(*value), x.get_location()});
+    }
+  }
+};
+
 } // namespace
 
 auto resolve_secrets(ast::expression& expression, OpCtx& ctx,
@@ -253,6 +306,7 @@ Evaluator::~Evaluator() = default;
 auto Evaluator::make(ast::expression expression, InstantiateCtx ctx)
   -> failure_or<Evaluator> {
   auto result = Evaluator{std::move(expression)};
+  ConstantLiteralFolder{}.visit(*result.expression_);
   TRY(result.prepare(*result.expression_, ctx));
   return result;
 }

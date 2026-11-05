@@ -1,0 +1,5 @@
+// The evaluator repeats a literal of constants without per-row work, so a
+// predicate that copies it twice still moves before the assignment.
+export
+q = [1, 2, 3]
+where x in q or y in q

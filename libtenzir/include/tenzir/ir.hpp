@@ -747,9 +747,10 @@ auto constant_condition(ast::expression const& condition, registry const& reg)
 auto expression_size(ast::expression const& expr) -> size_t;
 
 /// Returns whether evaluating `expr` costs about as much as reading a field,
-/// which holds for constants, metadata, and fields, including their members
-/// and constant indexes. A rewrite may evaluate such an expression any number
-/// of times in place of a value that the pipeline computes once.
+/// which holds for constants, list and record literals of constants, metadata,
+/// and fields, including their members and constant indexes. A rewrite may
+/// evaluate such an expression any number of times in place of a value that the
+/// pipeline computes once.
 auto is_plain(ast::expression const& expr) -> bool;
 
 /// Returns whether `expr` combines its values with operators and cheap

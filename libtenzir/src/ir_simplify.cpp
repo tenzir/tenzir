@@ -66,6 +66,30 @@ auto is_operation(ast::expression const& expr) -> bool {
          or is<ast::index_expr>(expr) or is<ast::format_expr>(expr);
 }
 
+/// Returns whether `expr` is a constant, or a list or record literal that holds
+/// only such values. The evaluator folds such a literal into a constant.
+auto is_constant_literal(ast::expression const& expr) -> bool {
+  return expr.match(
+    [](ast::constant const&) {
+      return true;
+    },
+    [](ast::list const& x) {
+      return std::ranges::all_of(x.items, [](auto const& item) {
+        auto const* element = try_as<ast::expression>(item);
+        return element and is_constant_literal(*element);
+      });
+    },
+    [](ast::record const& x) {
+      return std::ranges::all_of(x.items, [](auto const& item) {
+        auto const* field = try_as<ast::record::field>(item);
+        return field and is_constant_literal(field->expr);
+      });
+    },
+    [](auto const&) {
+      return false;
+    });
+}
+
 /// Returns whether the evaluator accepts `x` when the pipeline starts. It
 /// instantiates every function call up front, even in operands that it never
 /// evaluates, and a call that it rejects, such as `int(x, base=3)`, fails the
@@ -1044,6 +1068,12 @@ auto ir::is_plain(ast::expression const& expr) -> bool {
   return expr.match(
     [](ast::constant const&) {
       return true;
+    },
+    [&](ast::list const&) {
+      return is_constant_literal(expr);
+    },
+    [&](ast::record const&) {
+      return is_constant_literal(expr);
     },
     [](ast::meta const&) {
       return true;
