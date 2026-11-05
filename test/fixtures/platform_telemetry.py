@@ -1,7 +1,9 @@
 """Platform fixture that receives standalone pipeline telemetry.
 
-The fixture serves platform discovery and the buffered telemetry endpoint, and
-answers the first telemetry request with 503 to exercise retries. It exports:
+The fixture serves platform discovery, the account a deployment learns its
+organization and workspace from, and the buffered telemetry endpoint nested
+under them. It answers the first telemetry request with 503 to exercise
+retries. It exports:
 
 - **PLATFORM_TELEMETRY_URL** - Platform URL to pass to ``--platform``.
 - **PLATFORM_TELEMETRY_KEY_FILE** - Key file to pass to ``--key-file``.
@@ -25,7 +27,18 @@ from tenzir_test import FixtureHandle, fixture
 
 _HOST = "127.0.0.1"
 _KEY = "fixture-key"
-_TELEMETRY_PATH = "/api/deployments/test-deployment/telemetry"
+_DEPLOYMENT = "test-deployment"
+_ORG = "00000000-0000-0000-0000-000000000001"
+_WORKSPACE = "00000000-0000-0000-0000-000000000002"
+_ACCOUNT = {
+    "_tag": "DeploymentPrincipal",
+    "orgId": _ORG,
+    "deployment": {"id": _DEPLOYMENT, "workspaceId": _WORKSPACE, "name": _DEPLOYMENT},
+}
+_TELEMETRY_PATH = (
+    f"/api/organizations/{_ORG}/workspaces/{_WORKSPACE}"
+    f"/deployments/{_DEPLOYMENT}/telemetry"
+)
 
 
 def _check(requests: list[tuple[str, dict[str, Any]]], errors: list[str]) -> None:
@@ -96,6 +109,16 @@ def platform_telemetry() -> FixtureHandle:
             if self.path == "/failed.json":
                 self.send_response(400)
                 self.end_headers()
+                return
+            if self.path == "/api/account":
+                if self.headers["x-tenzir-deployment-key"] != _KEY:
+                    self.send_response(401)
+                    self.end_headers()
+                    return
+                self.send_response(200)
+                self.send_header("content-type", "application/json")
+                self.end_headers()
+                self.wfile.write(json.dumps(_ACCOUNT).encode())
                 return
             if self.path != "/.well-known/tenzir-platform":
                 self.send_response(404)
