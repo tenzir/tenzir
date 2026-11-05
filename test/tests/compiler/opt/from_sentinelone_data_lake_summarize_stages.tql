@@ -1,5 +1,5 @@
-// `from_sentinelone_data_lake` shows that its summary is complete by the
-// counts of all groups, so the stages after it stay local.
+// `from_sentinelone_data_lake` takes over the summary and the stages after
+// it, which run in SentinelOne with SentinelOne's semantics.
 from_sentinelone_data_lake "https://example.sentinelone.net", token="t"
 summarize event.type, events=count()
 where events >= 10

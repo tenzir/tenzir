@@ -1,18 +1,7 @@
-{
-  event: {
-    type: "DNS Resolved",
-  },
-  n: 3,
-}
-{
-  event: {
-    type: "IP Connect",
-  },
-  n: 2,
-}
-{
-  event: {
-    type: "Process Creation",
-  },
-  n: 1,
-}
+error: query response is missing non-negative step counts
+ --> tests/operators/from_sentinelone_data_lake/summarize/22_no_steps.tql:5:1
+  |
+5 | from_sentinelone_data_lake env("S1_FIXTURE_URL"),
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: {"data": {}}

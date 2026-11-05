@@ -1,5 +1,6 @@
-// PowerQuery groups the text "true" apart from the boolean `true`, which
-// type inference turns the text into. The operator aggregates locally.
+// PowerQuery groups the text "true" apart from the boolean `true`, and type
+// inference then turns the text into a boolean, so two groups show `true`.
+// This is SentinelOne's semantics, not TQL's.
 from_sentinelone_data_lake env("S1_FIXTURE_URL"),
   token=env("S1_FIXTURE_TOKEN"),
   start=2024-01-01, end=2024-01-02,

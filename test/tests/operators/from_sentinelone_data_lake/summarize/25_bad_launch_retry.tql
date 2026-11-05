@@ -1,6 +1,8 @@
+---
+error: true
+---
 // The launch of the aggregate query is rate-limited with an invalid
-// `Retry-After` header, so no query exists. The operator falls back to
-// aggregating locally, with the result of `01_pushed.tql`.
+// `Retry-After` header, which fails the read.
 from_sentinelone_data_lake env("S1_FIXTURE_URL"),
   token=env("S1_FIXTURE_TOKEN"),
   start=2024-01-01, end=2024-01-02,

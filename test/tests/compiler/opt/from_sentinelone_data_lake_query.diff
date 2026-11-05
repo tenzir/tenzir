@@ -1,0 +1,223 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "from_sentinelone_data_lake",
+       store: {
+         op: {
+           path: [
+             `from_sentinelone_data_lake` @ [1]:96..122 from 0
+           ],
+           ref: std::from_sentinelone_data_lake/op
+         },
+         args: [
+           located "https://example.sentinelone.net" @ [1]:123..156 from 0
+         ],
+         named_args: [
+           {
+             index: 0,
+             value: expression constant string "t" @ [1]:164..167 from 0
+           },
+           {
+             index: 1,
+             value: located "dataSource.name == 'SentinelOne'" @ [1]:177..211 from 0
+           }
+         ]
+       },
+       filter: [
+         
+       ],
+-      order: "ordered"
+-    },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:212..217 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
+-          left: field_access {
++      order: "ordered",
++      projection: [
++        {
++          expr: field_access {
++            left: root_field {
++              id: `src` @ [1]:257..260 from 0,
++              has_question_mark: false
++            },
++            has_question_mark: false,
++            name: `ip` @ [1]:261..263 from 0,
++            location: [1]:257..263 from 0
++          },
++          has_this: false,
++          path: [
++            {
++              id: `src` @ [1]:257..260 from 0,
++              has_question_mark: false
++            },
++            {
++              id: `ip` @ [1]:261..263 from 0,
++              has_question_mark: false
++            }
++          ]
++        },
++        {
++          expr: field_access {
+             left: root_field {
+               id: `event` @ [1]:218..223 from 0,
+               has_question_mark: false
+             },
+             has_question_mark: false,
+             name: `type` @ [1]:224..228 from 0,
+             location: [1]:218..228 from 0
+           },
+-          op: "eq",
+-          right: constant string "DNS Resolved" @ [1]:232..246 from 0,
+-          location: [1]:218..246 from 0
++          has_this: false,
++          path: [
++            {
++              id: `event` @ [1]:218..223 from 0,
++              has_question_mark: false
++            },
++            {
++              id: `type` @ [1]:224..228 from 0,
++              has_question_mark: false
++            }
++          ]
+         }
+       ],
+-      named_args: [
+-        
+-      ]
+-    },
+-    summarize {
+-      self: [1]:247..256 from 0,
+-      cfg: {
+-        aggregates: [
+-          {
+-            dest: {
+-              expr: root_field {
+-                id: `events` @ [1]:265..271 from 0,
++      plan: [
++        Filter {
++          predicate: binary_expr {
++            left: field_access {
++              left: root_field {
++                id: `event` @ [1]:218..223 from 0,
+                 has_question_mark: false
+               },
+-              has_this: false,
+-              path: [
+-                {
+-                  id: `events` @ [1]:265..271 from 0,
+-                  has_question_mark: false
+-                }
++              has_question_mark: false,
++              name: `type` @ [1]:224..228 from 0,
++              location: [1]:218..228 from 0
++            },
++            op: "eq",
++            right: constant string "DNS Resolved" @ [1]:232..246 from 0,
++            location: [1]:218..246 from 0
++          }
++        },
++        Aggregate {
++          columns: [
++            {
++              output: [
++                "src",
++                "ip"
++              ],
++              input: [
++                "src",
++                "ip"
+               ]
+             },
+-            call: {
+-              fn: {
+-                path: [
+-                  `count` @ [1]:272..277 from 0
+-                ],
+-                ref: std::count/fn
+-              },
+-              args: [
+-                
++            {
++              output: [
++                "events"
+               ],
+-              method: false,
+-              location: [1]:272..279 from 0
++              function: "count"
+             }
+-          }
++          ],
++          schema_name: "tenzir.summarize"
++        }
++      ],
++      declined: "`to_stdout` is no stage"
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:279..279 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
+         ],
+-        groups: [
+-          {
+-            expr: {
+-              expr: field_access {
+-                left: root_field {
+-                  id: `src` @ [1]:257..260 from 0,
+-                  has_question_mark: false
+-                },
+-                has_question_mark: false,
+-                name: `ip` @ [1]:261..263 from 0,
+-                location: [1]:257..263 from 0
+-              },
+-              has_this: false,
+-              path: [
+-                {
+-                  id: `src` @ [1]:257..260 from 0,
+-                  has_question_mark: false
+-                },
+-                {
+-                  id: `ip` @ [1]:261..263 from 0,
+-                  has_question_mark: false
+-                }
+-              ]
+-            }
+-          }
+-        ],
+-        indices: [
+-          -1,
+-          0
+-        ],
+-        emission: "final",
+-        mode: "reset",
+-        output: "summary",
+-        emit_every: 1
+-      }
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ],
+   definition_location: [1]:96..279 from 0
+ }

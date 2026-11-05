@@ -33,13 +33,6 @@ namespace tenzir::pushdown {
 /// stage is a limit.
 auto final_limit(std::span<ir::QueryStage const> plan) -> Option<uint64_t>;
 
-/// Returns `plan` for a read that still owes `remaining` events: a restored
-/// read restarts its query, which then needs only as many rows as its final
-/// limit has left. This bounds what the read emits, but the restarted query
-/// may return rows that the read emitted before it was restored.
-auto resume_plan(std::span<ir::QueryStage const> plan,
-                 Option<uint64_t> remaining) -> std::vector<ir::QueryStage>;
-
 /// Returns whether `expr` computes with a time literal, as in
 /// `ts - 2024-01-01`. A dialect that spells a time as a string, which the
 /// target casts to the type of the other operand of a comparison, cannot

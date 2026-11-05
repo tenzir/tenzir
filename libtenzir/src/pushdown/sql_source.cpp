@@ -28,15 +28,6 @@ auto final_limit(std::span<ir::QueryStage const> plan) -> Option<uint64_t> {
   return limit ? Option<uint64_t>{limit->count} : None{};
 }
 
-auto resume_plan(std::span<ir::QueryStage const> plan,
-                 Option<uint64_t> remaining) -> std::vector<ir::QueryStage> {
-  auto result = std::vector<ir::QueryStage>{plan.begin(), plan.end()};
-  if (remaining and final_limit(plan)) {
-    as<ir::QueryStage::Limit>(result.back().kind).count = *remaining;
-  }
-  return result;
-}
-
 auto computes_with_time(ast::expression const& expr) -> bool {
   auto const is_time = [](ast::expression const& x) {
     auto const* constant = try_as<ast::constant>(x);

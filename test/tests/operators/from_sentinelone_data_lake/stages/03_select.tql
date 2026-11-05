@@ -1,0 +1,21 @@
+---
+assertions:
+  fixtures:
+    sentinelone:
+      queries_cancelled: true
+      expected_requests:
+        - type: PQ
+          query: '| filter (event.type == "DNS Resolved") | columns __tenzir_column_0 = event.type, __tenzir_column_1 = timestamp | sort -__tenzir_column_1 | limit 2'
+---
+// A select becomes a `columns` stage with generated names, which the stages
+// after it read, and which nest into the output fields. An alias of
+// `timestamp` still decodes as a time. The optimizer moves the filter before
+// the select.
+from_sentinelone_data_lake env("S1_FIXTURE_URL"),
+  token=env("S1_FIXTURE_TOKEN"),
+  start=2024-01-01, end=2024-01-02,
+  account_ids=["aggregate"]
+select event.kind=event.type, t=timestamp
+where event.kind == "DNS Resolved"
+sort -t
+head 2

@@ -434,86 +434,6 @@ auto search_term(ast::expression const& expr) -> Option<std::string> {
   }
 }
 
-/// Whether `expr` holds a time literal.
-auto mentions_time(ast::expression const& expr) -> bool {
-  if (auto const* constant = try_as<ast::constant>(expr)) {
-    if (is<time>(constant->value)) {
-      return true;
-    }
-    // The optimizer folds a list of constants into one constant.
-    if (auto const* xs = try_as<tenzir::list>(constant->value)) {
-      return std::ranges::any_of(*xs, [](auto const& x) {
-        return is<time>(x);
-      });
-    }
-    return false;
-  }
-  if (auto const* x = try_as<ast::binary_expr>(expr)) {
-    return mentions_time(x->left) or mentions_time(x->right);
-  }
-  if (auto const* x = try_as<ast::unary_expr>(expr)) {
-    return mentions_time(x->expr);
-  }
-  if (auto const* x = try_as<ast::function_call>(expr)) {
-    return std::ranges::any_of(x->args, [](ast::expression const& arg) {
-      return mentions_time(arg);
-    });
-  }
-  if (auto const* x = try_as<ast::list>(expr)) {
-    return std::ranges::any_of(x->items, [](auto const& item) {
-      auto const* element = try_as<ast::expression>(item);
-      return element and mentions_time(*element);
-    });
-  }
-  return false;
-}
-
-/// Whether every time literal in `expr` is an operand of a comparison with
-/// the top-level field `_time`, which Splunk holds as epoch seconds. Other
-/// fields hold times as text, which a number does not compare with.
-auto times_compare_with_time_field(ast::expression const& expr) -> bool {
-  if (try_as<ast::constant>(expr)) {
-    // Also a list of constants, which the optimizer folds into one constant.
-    return not mentions_time(expr);
-  }
-  if (auto const* x = try_as<ast::binary_expr>(expr)) {
-    using enum ast::binary_op;
-    // A list with times tests membership of `_time` only.
-    if (x->op == in and mentions_time(x->right)) {
-      auto const field = top_level_field(x->left);
-      return field and *field == "_time";
-    }
-    auto const comparison = x->op == eq or x->op == neq or x->op == lt
-                            or x->op == leq or x->op == gt or x->op == geq;
-    for (auto const* side : {&x->left, &x->right}) {
-      auto const* constant = try_as<ast::constant>(*side);
-      if (not constant or not is<time>(constant->value)) {
-        continue;
-      }
-      auto const& other = side == &x->left ? x->right : x->left;
-      auto const field = top_level_field(other);
-      return comparison and field and *field == "_time";
-    }
-    return times_compare_with_time_field(x->left)
-           and times_compare_with_time_field(x->right);
-  }
-  if (auto const* x = try_as<ast::unary_expr>(expr)) {
-    return times_compare_with_time_field(x->expr);
-  }
-  if (auto const* x = try_as<ast::function_call>(expr)) {
-    return std::ranges::all_of(x->args, [](ast::expression const& arg) {
-      return times_compare_with_time_field(arg);
-    });
-  }
-  if (auto const* x = try_as<ast::list>(expr)) {
-    return std::ranges::all_of(x->items, [](auto const& item) {
-      auto const* element = try_as<ast::expression>(item);
-      return not element or times_compare_with_time_field(*element);
-    });
-  }
-  return true;
-}
-
 /// Commands whose effects a `head` stage could cut short.
 auto has_side_effects(std::string_view command) -> bool {
   constexpr auto commands = std::array<std::string_view, 14>{
@@ -1007,8 +927,19 @@ auto plan_spl_query(SplSource const& source,
   -> Option<SplQuery> {
   auto const dialect = SplQueryDialect{};
   auto base = std::string{};
-  auto options = PipeOptions{};
+  // Only Splunk's own `_time` holds epoch seconds, which a time literal
+  // compares with. A stage may make the field `_time` hold another field, as
+  // `select _time=event_time` does, after which a time literal has no
+  // spelling. So may any command of a user's search after the first one, as
+  // `| rename event* AS _*` does, so only a plain search keeps Splunk's own.
+  auto options = PipeOptions{
+    .extend_base = false,
+    .time_column = std::string{"_time"},
+    .native_time = true,
+    .narrow = false,
+  };
   if (source.search) {
+    options.native_time = spl_stages(spl_search_command(*source.search)).plain;
     base = spl_search_command(*source.search);
     auto guard = spl_stages(base);
     if (not stages.empty()) {
@@ -1035,58 +966,7 @@ auto plan_spl_query(SplSource const& source,
   } else {
     TRY(base, spl_index_search(source.indexes));
     options.extend_base = true;
-    options.time_column = "_time";
-  }
-  // Only Splunk's own `_time` holds epoch seconds, which a time literal
-  // compares with. A stage may make the field `_time` hold another field, as
-  // `select _time=event_time` does, after which a time literal has no
-  // spelling. So may any command of a user's search after the first one, as
-  // `| rename event* AS _*` does, so only a plain search keeps Splunk's own.
-  auto native_time
-    = not source.search or spl_stages(spl_search_command(*source.search)).plain;
-  for (auto const& stage : stages) {
-    auto const ok = match(
-      stage.kind,
-      [&](ir::QueryStage::Filter const& x) {
-        return times_compare_with_time_field(x.predicate)
-               and (native_time or not mentions_time(x.predicate));
-      },
-      [&](ir::QueryStage::Select const& x) {
-        native_time
-          = native_time
-            and std::ranges::any_of(x.fields, [](auto const& field) {
-                  return field.output == std::vector<std::string>{"_time"}
-                         and field.input == std::vector<std::string>{"_time"};
-                });
-        return true;
-      },
-      [&](ir::QueryStage::Drop const& x) {
-        if (std::ranges::any_of(x.fields, [](auto const& path) {
-              return path == std::vector<std::string>{"_time"};
-            })) {
-          native_time = false;
-        }
-        return true;
-      },
-      [&](ir::QueryStage::Aggregate const& x) {
-        // A group key keeps the epoch seconds of `_time`, and so do its
-        // extremes.
-        native_time
-          = native_time
-            and std::ranges::any_of(x.columns, [](auto const& column) {
-                  return column.output == std::vector<std::string>{"_time"}
-                         and column.input == std::vector<std::string>{"_time"}
-                         and (not column.function or *column.function == "min"
-                              or *column.function == "max");
-                });
-        return true;
-      },
-      [](auto const&) {
-        return true;
-      });
-    if (not ok) {
-      return None{};
-    }
+    options.narrow = true;
   }
   TRY(auto query, render_pipe(stages, dialect, options));
   auto generated = std::string{};

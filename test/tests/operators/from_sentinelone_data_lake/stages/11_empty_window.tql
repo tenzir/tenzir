@@ -1,0 +1,12 @@
+---
+assertions:
+  fixtures:
+    sentinelone:
+      queries_cancelled: true
+      expected_requests: []
+---
+// Filters that no time passes need no request.
+from_sentinelone_data_lake env("S1_FIXTURE_URL"),
+  token=env("S1_FIXTURE_TOKEN"),
+  account_ids=["aggregate"]
+where timestamp > 2024-01-01T13:00:00Z and timestamp < 2024-01-01T12:00:00Z

@@ -1,0 +1,19 @@
+---
+assertions:
+  fixtures:
+    sentinelone:
+      queries_cancelled: true
+      expected_requests:
+        - type: LOG
+          query: '(event.type == "DNS Resolved") and (timestamp >= 1704067201000000000) and (timestamp < 1704067205000000000)'
+          start: "2024-01-01T00:00:00.999Z"
+          end: "2024-01-01T00:00:05.002Z"
+---
+// Filters of whole events go to SentinelOne as the filter of a LOG query.
+// Their comparisons of `timestamp` also narrow the request window, whose end
+// moves past the millisecond that holds the inclusive bound.
+from_sentinelone_data_lake env("S1_FIXTURE_URL"),
+  token=env("S1_FIXTURE_TOKEN"),
+  account_ids=["aggregate"]
+where event.type == "DNS Resolved"
+where timestamp >= 2024-01-01T00:00:01Z and timestamp < 2024-01-01T00:00:05Z

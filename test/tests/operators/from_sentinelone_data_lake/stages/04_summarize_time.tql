@@ -1,0 +1,18 @@
+---
+assertions:
+  fixtures:
+    sentinelone:
+      queries_cancelled: true
+      expected_requests:
+        - type: PQ
+          query: "| group __tenzir_column_2 = count(event.type) by __tenzir_column_0 = timestamp | sort __tenzir_column_0 | limit 3"
+---
+// A group key of `timestamp` decodes as a time, and `count(x)` counts the
+// events where SentinelOne has the field.
+from_sentinelone_data_lake env("S1_FIXTURE_URL"),
+  token=env("S1_FIXTURE_TOKEN"),
+  start=2024-01-01, end=2024-01-02,
+  account_ids=["aggregate_sparse"]
+summarize timestamp, n=count(event.type)
+sort timestamp
+head 3

@@ -1,0 +1,18 @@
+---
+error: true
+assertions:
+  fixtures:
+    sentinelone:
+      queries_cancelled: true
+      expected_requests:
+        - type: PQ
+          query: "launch_error == 1 | filter (x == 1) | limit 1600000"
+          status: 500
+---
+// A query with appended stages that SentinelOne rejects fails the read,
+// without another query.
+from_sentinelone_data_lake env("S1_FIXTURE_URL"),
+  token=env("S1_FIXTURE_TOKEN"),
+  start=2024-01-01, end=2024-01-02,
+  query="launch_error == 1"
+where x == 1

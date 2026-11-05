@@ -1,0 +1,18 @@
+---
+assertions:
+  fixtures:
+    sentinelone:
+      queries_cancelled: true
+      expected_requests:
+        - type: PQ
+          query: "| columns __tenzir_column_0 = x | limit 1600000"
+---
+// A PowerQuery returns at most 1,600,000 rows, so a result of that size comes
+// with a warning.
+from_sentinelone_data_lake env("S1_FIXTURE_URL"),
+  token=env("S1_FIXTURE_TOKEN"),
+  start=2024-01-01, end=2024-01-02,
+  account_ids=["pq_maximum"]
+select x
+head 2000000
+summarize n=count()

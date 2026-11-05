@@ -8,180 +8,203 @@
        store: {
          op: {
            path: [
-             `from_sentinelone_data_lake` @ [1]:102..128 from 0
+             `from_sentinelone_data_lake` @ [1]:85..111 from 0
            ],
            ref: std::from_sentinelone_data_lake/op
          },
          args: [
-           located "https://example.sentinelone.net" @ [1]:129..162 from 0
+           located "https://example.sentinelone.net" @ [1]:112..145 from 0
          ],
          named_args: [
            {
              index: 0,
-             value: expression constant string "t" @ [1]:170..173 from 0
+             value: expression constant string "t" @ [1]:153..156 from 0
            }
          ]
        },
        filter: [
--        
--      ],
+         
+       ],
 -      order: "ordered"
 -    },
 -    where_ir {
 -      op: {
 -        path: [
--          `where` @ [1]:174..179 from 0
+-          `where` @ [1]:157..162 from 0
 -        ],
 -        ref: std::where/op
 -      },
 -      args: [
 -        expression binary_expr {
-+        binary_expr {
-           left: field_access {
-             left: root_field {
-               id: `event` @ [1]:180..185 from 0,
-               has_question_mark: false
-             },
-             has_question_mark: false,
-             name: `type` @ [1]:186..190 from 0,
-             location: [1]:180..190 from 0
-           },
-           op: "eq",
-           right: constant string "DNS Resolved" @ [1]:194..208 from 0,
-           location: [1]:180..208 from 0
-         }
-       ],
--      named_args: [
--        
+-          left: field_access {
 +      order: "ordered",
 +      projection: [
 +        {
 +          expr: field_access {
 +            left: root_field {
-+              id: `src` @ [1]:219..222 from 0,
++              id: `src` @ [1]:202..205 from 0,
 +              has_question_mark: false
 +            },
 +            has_question_mark: false,
-+            name: `ip` @ [1]:223..225 from 0,
-+            location: [1]:219..225 from 0
++            name: `ip` @ [1]:206..208 from 0,
++            location: [1]:202..208 from 0
 +          },
 +          has_this: false,
 +          path: [
 +            {
-+              id: `src` @ [1]:219..222 from 0,
++              id: `src` @ [1]:202..205 from 0,
 +              has_question_mark: false
 +            },
 +            {
-+              id: `ip` @ [1]:223..225 from 0,
++              id: `ip` @ [1]:206..208 from 0,
 +              has_question_mark: false
 +            }
 +          ]
 +        },
 +        {
 +          expr: field_access {
-+            left: root_field {
-+              id: `event` @ [1]:180..185 from 0,
-+              has_question_mark: false
-+            },
-+            has_question_mark: false,
-+            name: `type` @ [1]:186..190 from 0,
-+            location: [1]:180..190 from 0
-+          },
+             left: root_field {
+               id: `event` @ [1]:163..168 from 0,
+               has_question_mark: false
+             },
+             has_question_mark: false,
+             name: `type` @ [1]:169..173 from 0,
+             location: [1]:163..173 from 0
+           },
+-          op: "eq",
+-          right: constant string "DNS Resolved" @ [1]:177..191 from 0,
+-          location: [1]:163..191 from 0
 +          has_this: false,
 +          path: [
 +            {
-+              id: `event` @ [1]:180..185 from 0,
++              id: `event` @ [1]:163..168 from 0,
 +              has_question_mark: false
 +            },
 +            {
-+              id: `type` @ [1]:186..190 from 0,
++              id: `type` @ [1]:169..173 from 0,
 +              has_question_mark: false
 +            }
 +          ]
-+        }
-       ]
-     },
-     summarize {
-       self: [1]:209..218 from 0,
-       cfg: {
-         aggregates: [
-           {
-             dest: {
-               expr: root_field {
-                 id: `events` @ [1]:227..233 from 0,
+         }
+       ],
+-      named_args: [
+-        
+-      ]
+-    },
+-    summarize {
+-      self: [1]:192..201 from 0,
+-      cfg: {
+-        aggregates: [
+-          {
+-            dest: {
+-              expr: root_field {
+-                id: `events` @ [1]:210..216 from 0,
++      plan: [
++        Filter {
++          predicate: binary_expr {
++            left: field_access {
++              left: root_field {
++                id: `event` @ [1]:163..168 from 0,
                  has_question_mark: false
                },
-               has_this: false,
-               path: [
-                 {
-                   id: `events` @ [1]:227..233 from 0,
-                   has_question_mark: false
-                 }
+-              has_this: false,
+-              path: [
+-                {
+-                  id: `events` @ [1]:210..216 from 0,
+-                  has_question_mark: false
+-                }
++              has_question_mark: false,
++              name: `type` @ [1]:169..173 from 0,
++              location: [1]:163..173 from 0
++            },
++            op: "eq",
++            right: constant string "DNS Resolved" @ [1]:177..191 from 0,
++            location: [1]:163..191 from 0
++          }
++        },
++        Aggregate {
++          columns: [
++            {
++              output: [
++                "src",
++                "ip"
++              ],
++              input: [
++                "src",
++                "ip"
                ]
              },
-             call: {
-               fn: {
-                 path: [
-                   `count` @ [1]:234..239 from 0
-                 ],
-                 ref: std::count/fn
-               },
-               args: [
-                 
+-            call: {
+-              fn: {
+-                path: [
+-                  `count` @ [1]:217..222 from 0
+-                ],
+-                ref: std::count/fn
+-              },
+-              args: [
+-                
++            {
++              output: [
++                "events"
                ],
-               method: false,
-               location: [1]:234..241 from 0
+-              method: false,
+-              location: [1]:217..224 from 0
++              function: "count"
              }
-           }
-         ],
-         groups: [
-           {
-             expr: {
-               expr: field_access {
-                 left: root_field {
-                   id: `src` @ [1]:219..222 from 0,
-                   has_question_mark: false
-                 },
-                 has_question_mark: false,
-                 name: `ip` @ [1]:223..225 from 0,
-                 location: [1]:219..225 from 0
-               },
-               has_this: false,
-               path: [
-                 {
-                   id: `src` @ [1]:219..222 from 0,
-                   has_question_mark: false
-                 },
-                 {
-                   id: `ip` @ [1]:223..225 from 0,
-                   has_question_mark: false
-                 }
-               ]
-             }
-           }
-         ],
-         indices: [
-           -1,
-           0
-         ],
-         emission: "final",
-         mode: "reset",
-         output: "summary",
-         emit_every: 1
-       }
+-          }
++          ],
++          schema_name: "tenzir.summarize"
++        }
++      ],
++      declined: "`to_stdout` is no stage"
 +    },
 +    GenericIr {
 +      desc: "to_stdout",
 +      store: {
 +        op: {
 +          path: [
-+            `to_stdout` @ [1]:241..241 from 0
++            `to_stdout` @ [1]:224..224 from 0
 +          ],
 +          ref: std::to_stdout/op
 +        },
 +        args: [
 +          
-+        ],
+         ],
+-        groups: [
+-          {
+-            expr: {
+-              expr: field_access {
+-                left: root_field {
+-                  id: `src` @ [1]:202..205 from 0,
+-                  has_question_mark: false
+-                },
+-                has_question_mark: false,
+-                name: `ip` @ [1]:206..208 from 0,
+-                location: [1]:202..208 from 0
+-              },
+-              has_this: false,
+-              path: [
+-                {
+-                  id: `src` @ [1]:202..205 from 0,
+-                  has_question_mark: false
+-                },
+-                {
+-                  id: `ip` @ [1]:206..208 from 0,
+-                  has_question_mark: false
+-                }
+-              ]
+-            }
+-          }
+-        ],
+-        indices: [
+-          -1,
+-          0
+-        ],
+-        emission: "final",
+-        mode: "reset",
+-        output: "summary",
+-        emit_every: 1
+-      }
 +        named_args: [
 +          
 +        ]
@@ -192,5 +215,5 @@
 +      order: "ordered"
      }
    ],
-   definition_location: [1]:102..241 from 0
+   definition_location: [1]:85..224 from 0
  }

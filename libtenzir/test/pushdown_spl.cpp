@@ -316,7 +316,18 @@ TEST("spl narrows the time window of indexes") {
   REQUIRE(lower.end);
   CHECK(*lower.begin == at("2025-01-01T00:01:00Z"));
   CHECK(*lower.end == at("2025-01-01T00:02:00Z"));
-  // A disjunction tells nothing, and neither does a filter after a limit.
+  // A disjunction encloses its operands, if they all bound a side.
+  auto enclosed
+    = window(main_index(), {filter("(_time >= 2025-01-01T00:01:00Z and _time < "
+                                   "2025-01-01T00:02:00Z) or (_time >= "
+                                   "2025-01-01T00:03:00Z and _time < "
+                                   "2025-01-01T00:04:00Z)")});
+  REQUIRE(enclosed.begin);
+  REQUIRE(enclosed.end);
+  CHECK(*enclosed.begin == at("2025-01-01T00:01:00Z"));
+  CHECK(*enclosed.end == at("2025-01-01T00:04:00Z"));
+  // A disjunction with an unbounded operand tells nothing, and neither does a
+  // filter after a limit.
   auto none
     = window(main_index(), {filter("_time >= 2025-01-01T00:01:00Z or n > 1"),
                             limit(5), filter("_time < 2025-01-01T00:02:00Z")});

@@ -732,20 +732,12 @@ TEST("plans spell calls as predicates where the dialect says so") {
   CHECK(not spell("s.length_bytes()"));
 }
 
-TEST("sources resume the final limit of a restored read") {
-  auto const plan = std::vector{filter("i > 0"), limit(5)};
-  CHECK_EQUAL(final_limit(plan), Option<uint64_t>{5});
-  auto resumed = resume_plan(plan, uint64_t{2});
-  REQUIRE_EQUAL(resumed.size(), size_t{2});
-  CHECK_EQUAL(as<ir::QueryStage::Limit>(resumed.back().kind).count,
-              uint64_t{2});
+TEST("sources find the final limit of a read") {
+  CHECK_EQUAL(final_limit(std::vector{filter("i > 0"), limit(5)}),
+              Option<uint64_t>{5});
   // A limit before other stages is no final limit.
-  auto const inner = std::vector{limit(5), filter("i > 0")};
-  CHECK_EQUAL(final_limit(inner), Option<uint64_t>{});
-  CHECK_EQUAL(
-    as<ir::QueryStage::Limit>(resume_plan(inner, uint64_t{2}).front().kind)
-      .count,
-    uint64_t{5});
+  CHECK_EQUAL(final_limit(std::vector{limit(5), filter("i > 0")}),
+              Option<uint64_t>{});
   CHECK_EQUAL(final_limit({}), Option<uint64_t>{});
 }
 

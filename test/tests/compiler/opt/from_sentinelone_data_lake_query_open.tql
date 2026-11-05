@@ -1,0 +1,4 @@
+// Stages cannot follow a query that ends in `|`, so they stay in Tenzir.
+from_sentinelone_data_lake "https://example.sentinelone.net", token="t",
+  query="dataSource.name == 'SentinelOne' |"
+where event.type == "DNS Resolved"

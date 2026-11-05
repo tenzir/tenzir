@@ -1,18 +1,10 @@
-{
-  event: {
-    type: "DNS Resolved",
-  },
-  n: 3,
-}
-{
-  event: {
-    type: "IP Connect",
-  },
-  n: 2,
-}
-{
-  event: {
-    type: "Process Creation",
-  },
-  n: 1,
-}
+error: error when parsing response: expected a JSON object
+ --> tests/operators/from_sentinelone_data_lake/summarize/21_bad_poll.tql:6:1
+  |
+6 | from_sentinelone_data_lake env("S1_FIXTURE_URL"),
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: context:
+          not json
+          ^
+  = note: total buffer size: 8

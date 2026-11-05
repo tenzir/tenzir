@@ -1,0 +1,9 @@
+warning: SentinelOne: Result set limited to 1000 rows by default
+  --> tests/operators/from_sentinelone_data_lake/stages/09_query_cap.tql:12:1
+   |
+12 | from_sentinelone_data_lake env("S1_FIXTURE_URL"),
+   | ~~~~~~~~~~~~~~~~~~~~~~~~~~
+   |
+{
+  n: 1000,
+}

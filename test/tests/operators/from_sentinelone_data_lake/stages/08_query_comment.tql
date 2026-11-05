@@ -1,0 +1,17 @@
+---
+assertions:
+  fixtures:
+    sentinelone:
+      queries_cancelled: true
+      expected_requests:
+        - type: PQ
+          query: "dataSource.name == 'SentinelOne' // only SentinelOne"
+---
+// Stages appended to a query that ends in a `//` comment would be part of the
+// comment, so they stay in Tenzir, and the query goes out unchanged.
+from_sentinelone_data_lake env("S1_FIXTURE_URL"),
+  token=env("S1_FIXTURE_TOKEN"),
+  start=2024-01-01, end=2024-01-02,
+  account_ids=["aggregate"],
+  query="dataSource.name == 'SentinelOne' // only SentinelOne"
+summarize n=count()

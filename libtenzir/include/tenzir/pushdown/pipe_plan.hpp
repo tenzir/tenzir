@@ -28,8 +28,9 @@
 /// each field that the next stage sees, as a name environment:
 ///
 /// - Before any stage that enumerates its output, the fields are the unknown
-///   fields of the events of the base query, and a field binds by its
-///   top-level name. A drop excludes names from them.
+///   fields of the events of the base query, and a field binds through
+///   `PipeQueryDialect::bind_path`, by default by its top-level name. A drop
+///   excludes names from them.
 /// - A select or an aggregation enumerates its output fields, each with the
 ///   column that holds it. A rename only changes the environment, and a
 ///   column that a command cannot name gets an alias first.
@@ -37,6 +38,19 @@
 /// The result of a plan becomes events as its `Layout` describes. Every
 /// absorbed stage runs with the semantics of the target, and a filter renders
 /// as a whole or not at all.
+///
+/// A plan also tracks the time column of the base query, if any
+/// (`PipeOptions::time_column`), in three ways:
+///
+/// - Which result columns hold the target's own time, through every alias and
+///   group key, so that a source decodes them as times (`PipeQuery::times`).
+/// - Whether a time literal may appear in a filter: only as an operand of a
+///   comparison with the field named after the time column, and only while
+///   that field still holds the target's own time. A select keeps that only
+///   for an identity of the field, an aggregation only for a group key or an
+///   extremum of it, and a drop of it ends it for good.
+/// - Which time window the leading filters select (`PipeQuery::window`), if
+///   `PipeOptions::narrow` holds.
 namespace tenzir::pushdown {
 
 /// A column that a stage assigns from another column before it uses it, as
@@ -71,6 +85,13 @@ struct PipeSortKey {
 /// `name_column` or `bind_column`.
 class PipeQueryDialect : public ExpressionDialect {
 public:
+  /// Returns the column of the base query that holds the field at `path`,
+  /// before any stage that enumerates its output, or `None` if no column
+  /// holds it. Defaults to the name of a top-level field, so that a nested
+  /// field binds to nothing.
+  virtual auto bind_path(std::span<std::string const> path) const
+    -> Option<std::string>;
+
   /// Spells a reference to `column` in an expression, or returns `None` if an
   /// expression cannot read it.
   virtual auto bind_column(std::string_view column) const -> Option<std::string>
@@ -131,7 +152,8 @@ public:
     = 0;
 
   /// Spells the stage that orders the rows by `keys`, which are not empty,
-  /// and keeps at most `bound` rows, if set.
+  /// and keeps at most `bound` rows, if set. A dialect that orders only by
+  /// columns that a command can name checks them with `name_column`.
   virtual auto
   sort_stage(std::span<PipeSortKey const> keys, Option<uint64_t> bound) const
     -> Option<std::string>
@@ -146,9 +168,17 @@ struct PipeOptions {
   /// Whether the conjuncts of the filters that precede every other stage may
   /// extend the base query, as terms from `PipeQueryDialect::base_term`.
   bool extend_base = false;
-  /// The column of the base query that holds the time of its events, whose
-  /// comparisons with time literals narrow `PipeQuery::window`.
+  /// The column of the base query that holds the time of its events, as the
+  /// target holds it. A time literal compares only with the field of this
+  /// name, as long as it holds the target's own time. Without one, the plan
+  /// leaves time literals to the dialect.
   Option<std::string> time_column = None{};
+  /// Whether the time column of the events of the base query holds the
+  /// target's own time. A base query that may redefine it does not.
+  bool native_time = true;
+  /// Whether the comparisons of the time column in the leading filters narrow
+  /// `PipeQuery::window`.
+  bool narrow = false;
 };
 
 /// The bounds of the time of the input events that pass the filters of a
@@ -171,8 +201,13 @@ struct PipeQuery {
   bool aggregates = false;
   /// The columns that hold the result of a `count`, which decode as integers.
   std::vector<std::string> counts;
+  /// The result columns that hold the target's own time, from the time column
+  /// of the base query through aliases and group keys, which decode as times.
+  std::vector<std::string> times;
   /// The time window of the input events from the filters that precede every
-  /// aggregation, sort, and limit, if `PipeOptions::time_column` is set.
+  /// aggregation, sort, and limit, if `PipeOptions::narrow` holds. Within a
+  /// filter, a conjunction intersects the windows of its operands, and a
+  /// disjunction encloses them.
   TimeWindow window;
   /// The names that the stages reference or introduce, which a name that the
   /// source adds to the query must avoid.
@@ -192,8 +227,7 @@ auto fresh_name(PipeQuery& query, PipeQueryDialect const& dialect,
 /// against the fields before it, and a select without fields has no
 /// spelling, since a row without fields may vanish. A drop of enumerated
 /// fields only changes the layout, and one that leaves no field has no
-/// spelling either. A sort orders by fields that a command can name, and
-/// needs a positive bound, if any.
+/// spelling either. A sort needs a positive bound, if any.
 auto render_pipe(std::span<ir::QueryStage const> stages,
                  PipeQueryDialect const& dialect, PipeOptions const& options)
   -> Option<PipeQuery>;

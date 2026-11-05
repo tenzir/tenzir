@@ -1,0 +1,89 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "from_sentinelone_data_lake",
+       store: {
+         op: {
+           path: [
+             `from_sentinelone_data_lake` @ [1]:74..100 from 0
+           ],
+           ref: std::from_sentinelone_data_lake/op
+         },
+         args: [
+           located "https://example.sentinelone.net" @ [1]:101..134 from 0
+         ],
+         named_args: [
+           {
+             index: 0,
+             value: expression constant string "t" @ [1]:142..145 from 0
+           },
+           {
+             index: 1,
+             value: located "dataSource.name == 'SentinelOne' |" @ [1]:155..191 from 0
+           }
+         ]
+       },
+       filter: [
+         
+       ],
+-      order: "ordered"
++      order: "ordered",
++      declined: "the query does not end where stages may follow"
+     },
+     where_ir {
+       op: {
+         path: [
+-          `where` @ [1]:192..197 from 0
++          
+         ],
+-        ref: std::where/op
++        ref: unresolved
+       },
+       args: [
+-        expression binary_expr {
++        Incomplete binary_expr {
+           left: field_access {
+             left: root_field {
+               id: `event` @ [1]:198..203 from 0,
+               has_question_mark: false
+             },
+             has_question_mark: false,
+             name: `type` @ [1]:204..208 from 0,
+             location: [1]:198..208 from 0
+           },
+           op: "eq",
+           right: constant string "DNS Resolved" @ [1]:212..226 from 0,
+           location: [1]:198..226 from 0
+         }
+       ],
+       named_args: [
+         
+       ]
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:226..226 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ],
+   definition_location: [1]:74..226 from 0
+ }

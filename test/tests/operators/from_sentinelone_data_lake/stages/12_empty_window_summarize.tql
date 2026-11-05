@@ -1,0 +1,19 @@
+---
+assertions:
+  fixtures:
+    sentinelone:
+      queries_cancelled: true
+      expected_requests:
+        - type: PQ
+          query: "| filter (timestamp > 1704114000000000000) | filter (timestamp < 1704110400000000000) | group __tenzir_column_0 = count() | limit 1600000"
+          start: "2024-01-01T00:00:00Z"
+          end: "2024-01-02T00:00:00Z"
+---
+// A summary yields a row also without events, so filters that no time passes
+// keep the window of the arguments.
+from_sentinelone_data_lake env("S1_FIXTURE_URL"),
+  token=env("S1_FIXTURE_TOKEN"),
+  start=2024-01-01, end=2024-01-02,
+  account_ids=["aggregate"]
+where timestamp > 2024-01-01T13:00:00Z and timestamp < 2024-01-01T12:00:00Z
+summarize n=count()

@@ -1,0 +1,20 @@
+---
+assertions:
+  fixtures:
+    sentinelone:
+      queries_cancelled: true
+      expected_requests:
+        - type: LOG
+          query: ""
+          limit: 1000
+          cursor: null
+---
+// A LOG read counts its limit after it drops the match that a continuation
+// repeats, and stops once the limit is reached. All events have the same
+// timestamp, and a page holds at most 1,000 events and at least 2.
+from_sentinelone_data_lake env("S1_FIXTURE_URL"),
+  token=env("S1_FIXTURE_TOKEN"),
+  start=2024-01-01, end=2024-01-02,
+  account_ids=["hybrid_dense"]
+head 1000
+summarize n=count(), first=min(id), last=max(id)

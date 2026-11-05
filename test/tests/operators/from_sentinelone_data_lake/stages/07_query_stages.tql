@@ -1,0 +1,20 @@
+---
+assertions:
+  fixtures:
+    sentinelone:
+      queries_cancelled: true
+      expected_requests:
+        - type: PQ
+          query: "dataSource.name == 'SentinelOne' | filter (event.type == \"DNS Resolved\") | group __tenzir_column_0 = count() | limit 1600000"
+          start: "2024-01-01T00:00:00Z"
+          end: "2024-01-02T00:00:00Z"
+---
+// The stages after a user's query run in SentinelOne, too, and see the result
+// of the query. The query keeps its window.
+from_sentinelone_data_lake env("S1_FIXTURE_URL"),
+  token=env("S1_FIXTURE_TOKEN"),
+  start=2024-01-01, end=2024-01-02,
+  account_ids=["aggregate"],
+  query="dataSource.name == 'SentinelOne'"
+where event.type == "DNS Resolved"
+summarize n=count()

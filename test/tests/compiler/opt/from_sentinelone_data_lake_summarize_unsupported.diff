@@ -8,17 +8,17 @@
        store: {
          op: {
            path: [
-             `from_sentinelone_data_lake` @ [1]:91..117 from 0
+             `from_sentinelone_data_lake` @ [1]:114..140 from 0
            ],
            ref: std::from_sentinelone_data_lake/op
          },
          args: [
-           located "https://example.sentinelone.net" @ [1]:118..151 from 0
+           located "https://example.sentinelone.net" @ [1]:141..174 from 0
          ],
          named_args: [
            {
              index: 0,
-             value: expression constant string "t" @ [1]:159..162 from 0
+             value: expression constant string "t" @ [1]:182..185 from 0
            }
          ]
        },
@@ -31,21 +31,34 @@
 +        {
 +          expr: field_access {
 +            left: root_field {
-+              id: `event` @ [1]:173..178 from 0,
++              id: `event` @ [1]:196..201 from 0,
 +              has_question_mark: false
 +            },
 +            has_question_mark: false,
-+            name: `type` @ [1]:179..183 from 0,
-+            location: [1]:173..183 from 0
++            name: `type` @ [1]:202..206 from 0,
++            location: [1]:196..206 from 0
 +          },
 +          has_this: false,
 +          path: [
 +            {
-+              id: `event` @ [1]:173..178 from 0,
++              id: `event` @ [1]:196..201 from 0,
 +              has_question_mark: false
 +            },
 +            {
-+              id: `type` @ [1]:179..183 from 0,
++              id: `type` @ [1]:202..206 from 0,
++              has_question_mark: false
++            }
++          ]
++        },
++        {
++          expr: root_field {
++            id: `timestamp` @ [1]:218..227 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `timestamp` @ [1]:218..227 from 0,
 +              has_question_mark: false
 +            }
 +          ]
@@ -53,41 +66,42 @@
 +        {
 +          expr: field_access {
 +            left: root_field {
-+              id: `src` @ [1]:198..201 from 0,
++              id: `src` @ [1]:243..246 from 0,
 +              has_question_mark: false
 +            },
 +            has_question_mark: false,
-+            name: `ip` @ [1]:202..204 from 0,
-+            location: [1]:198..204 from 0
++            name: `ip` @ [1]:247..249 from 0,
++            location: [1]:243..249 from 0
 +          },
 +          has_this: false,
 +          path: [
 +            {
-+              id: `src` @ [1]:198..201 from 0,
++              id: `src` @ [1]:243..246 from 0,
 +              has_question_mark: false
 +            },
 +            {
-+              id: `ip` @ [1]:202..204 from 0,
++              id: `ip` @ [1]:247..249 from 0,
 +              has_question_mark: false
 +            }
 +          ]
 +        }
-+      ]
++      ],
++      declined: "SentinelOne cannot spell the stage"
      },
      summarize {
-       self: [1]:163..172 from 0,
+       self: [1]:186..195 from 0,
        cfg: {
          aggregates: [
            {
              dest: {
                expr: root_field {
-                 id: `events` @ [1]:185..191 from 0,
+                 id: `first` @ [1]:208..213 from 0,
                  has_question_mark: false
                },
                has_this: false,
                path: [
                  {
-                   id: `events` @ [1]:185..191 from 0,
+                   id: `first` @ [1]:208..213 from 0,
                    has_question_mark: false
                  }
                ]
@@ -95,23 +109,54 @@
              call: {
                fn: {
                  path: [
-                   `count` @ [1]:192..197 from 0
+                   `min` @ [1]:214..217 from 0
+                 ],
+                 ref: std::min/fn
+               },
+               args: [
+                 root_field {
+                   id: `timestamp` @ [1]:218..227 from 0,
+                   has_question_mark: false
+                 }
+               ],
+               method: false,
+               location: [1]:214..228 from 0
+             }
+           },
+           {
+             dest: {
+               expr: root_field {
+                 id: `events` @ [1]:230..236 from 0,
+                 has_question_mark: false
+               },
+               has_this: false,
+               path: [
+                 {
+                   id: `events` @ [1]:230..236 from 0,
+                   has_question_mark: false
+                 }
+               ]
+             },
+             call: {
+               fn: {
+                 path: [
+                   `count` @ [1]:237..242 from 0
                  ],
                  ref: std::count/fn
                },
                args: [
                  field_access {
                    left: root_field {
-                     id: `src` @ [1]:198..201 from 0,
+                     id: `src` @ [1]:243..246 from 0,
                      has_question_mark: false
                    },
                    has_question_mark: false,
-                   name: `ip` @ [1]:202..204 from 0,
-                   location: [1]:198..204 from 0
+                   name: `ip` @ [1]:247..249 from 0,
+                   location: [1]:243..249 from 0
                  }
                ],
                method: false,
-               location: [1]:192..205 from 0
+               location: [1]:237..250 from 0
              }
            }
          ],
@@ -120,21 +165,21 @@
              expr: {
                expr: field_access {
                  left: root_field {
-                   id: `event` @ [1]:173..178 from 0,
+                   id: `event` @ [1]:196..201 from 0,
                    has_question_mark: false
                  },
                  has_question_mark: false,
-                 name: `type` @ [1]:179..183 from 0,
-                 location: [1]:173..183 from 0
+                 name: `type` @ [1]:202..206 from 0,
+                 location: [1]:196..206 from 0
                },
                has_this: false,
                path: [
                  {
-                   id: `event` @ [1]:173..178 from 0,
+                   id: `event` @ [1]:196..201 from 0,
                    has_question_mark: false
                  },
                  {
-                   id: `type` @ [1]:179..183 from 0,
+                   id: `type` @ [1]:202..206 from 0,
                    has_question_mark: false
                  }
                ]
@@ -143,7 +188,8 @@
          ],
          indices: [
            -1,
-           0
+           0,
+           1
          ],
          emission: "final",
          mode: "reset",
@@ -156,7 +202,7 @@
 +      store: {
 +        op: {
 +          path: [
-+            `to_stdout` @ [1]:205..205 from 0
++            `to_stdout` @ [1]:250..250 from 0
 +          ],
 +          ref: std::to_stdout/op
 +        },
@@ -173,5 +219,5 @@
 +      order: "ordered"
      }
    ],
-   definition_location: [1]:91..205 from 0
+   definition_location: [1]:114..250 from 0
  }
