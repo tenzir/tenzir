@@ -131,14 +131,35 @@ TEST("inspection locates both fork_merge output ports at its keyword") {
   check_eq(ports, (std::vector<size_t>{0, 1}));
 }
 
+TEST("custom operators preserve their source keyword through compilation") {
+  for (auto text :
+       {"match x { 1 => { y = 1 } _ => { y = 2 } }", "fork { discard }",
+        "from {x: 1}", "where flag", "merge { from {x: 1} }"}) {
+    auto fixture = CompileFixture{};
+    auto prefix = std::string{"// source offset\n"};
+    auto compiled = fixture.compile(prefix + text);
+    require_eq(compiled.operators.size(), 1u);
+    // Planning copies operators when binding nested pipelines.
+    auto copy = compiled;
+    auto source = copy.operators.front()->main_location();
+    auto file = fixture.sources.source(source.source_index);
+    require(file.is_some());
+    check_eq(source.begin, prefix.size());
+    check_eq(file->text.substr(source.begin, source.end - source.begin),
+             std::string_view{text}.substr(0,
+                                           std::string_view{text}.find(' ')));
+  }
+}
+
 TEST("inspection source locations resolve through nested package calls") {
   auto fixture = CompileFixture{};
   auto pkg = package{};
   pkg.id = "sourcepkg";
   pkg.name = "Inspection Source Package";
   auto inner = package_operator{};
-  auto inner_file = Source::new_source("---\nname: Inner\n---\nx = 1",
-                                       "operators/inner.tql", false);
+  auto inner_file
+    = Source::new_source("---\nname: Inner\n---\nx = 1\nif flag { y = 2 }",
+                         "operators/inner.tql", false);
   inner.file_source = inner_file;
   inner.tql_body
     = std::string_view{inner_file->text}.substr(inner_file->text.find("x = 1"));
@@ -168,9 +189,20 @@ TEST("inspection source locations resolve through nested package calls") {
   auto current = snapshot(graph);
   require(current.sources.is_some());
   require_eq(current.graphs.size(), 1u);
-  require_eq(current.graphs.front()->operators.size(), 1u);
-  auto const& op = current.graphs.front()->operators.front();
+  auto const& operators = current.graphs.front()->operators;
+  require(not operators.empty());
+  auto const& op = operators.front();
   check_eq(op.name, "set");
+  auto branch = std::ranges::find_if(operators, [](auto const& candidate) {
+    return candidate.name == "If";
+  });
+  require(branch != operators.end());
+  check_eq(branch->source.begin, inner_file->text.find("if flag"));
+  check_eq(inner_file->text.substr(branch->source.begin,
+                                   branch->source.end - branch->source.begin),
+           "if flag { y = 2");
+  check_eq(branch->source.source_index, op.source.source_index);
+  check_eq(branch->source.callsite_index, op.source.callsite_index);
   auto const& sources = **current.sources;
   auto definition = sources.source(op.source.source_index);
   require(definition.is_some());

@@ -49,6 +49,7 @@
 +      ]
      },
      If {
+       source: [1]:150..188 from 0,
        condition: binary_expr {
          left: root_field {
            id: `y` @ [1]:153..154 from 0,

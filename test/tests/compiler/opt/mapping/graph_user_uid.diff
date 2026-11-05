@@ -553,6 +553,7 @@
                  order: "ordered"
                },
                If {
+                 source: [4]:1011..1062 from 1,
                  condition: binary_expr {
                    left: field_access {
                      left: root_field {
@@ -979,6 +980,7 @@
                  order: "ordered"
                },
                If {
+                 source: [4]:1578..1680 from 1,
                  condition: binary_expr {
                    left: field_access {
                      left: field_access {

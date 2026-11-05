@@ -159,6 +159,10 @@ public:
     return "fork_ir";
   }
 
+  auto main_location() const -> location override {
+    return args_.keyword;
+  }
+
   auto copy() const -> Box<ir::Operator> override {
     return ForkIr{args_};
   }

@@ -263,6 +263,7 @@
        order: "ordered"
      },
      If {
+       source: [1]:150..186 from 0,
        condition: binary_expr {
          left: root_field {
            id: `x` @ [1]:153..154 from 0,
@@ -344,6 +345,7 @@
 -      ]
 -    },
      If {
+       source: [1]:203..217 from 0,
        condition: root_field {
          id: `c` @ [1]:206..207 from 0,
          has_question_mark: false
@@ -808,6 +810,7 @@
        ]
      },
      If {
+       source: [1]:490..523 from 0,
        condition: root_field {
          id: `d` @ [1]:493..494 from 0,
          has_question_mark: false

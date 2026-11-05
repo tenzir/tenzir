@@ -191,6 +191,10 @@ public:
     return "from_ir";
   }
 
+  auto main_location() const -> location override {
+    return self_;
+  }
+
   auto substitute(substitute_ctx ctx, bool instantiate)
     -> failure_or<void> override {
     TENZIR_UNUSED(instantiate);
