@@ -4,12 +4,14 @@ fixtures:
     expected:
     - method: POST
       path: /splunk/strings/services/search/v2/jobs/export
-      body: search=search%20index%3Dmain%0A%7C%20search%20_time%3E%3D1735689630%20_time%3C%3D1735689720%0A%7C%20fields%20_time%2C%20user&earliest_time=-15m&latest_time=-5m&output_mode=json&preview=false
+      body: search=search%20index%3Dmain%0A%7C%20where%20%28%27_time%27%20%3E%3D%201735689630.5%29%0A%7C%20where%20%28%27_time%27%20%3C%201735689720%29%0A%7C%20fields%20user%2C%20_time&earliest_time=1735689599&latest_time=1735689780&output_mode=json&preview=false
 ---
 
-// `_time` bounds round outwards to whole seconds.
+// After a user's search, comparisons of `_time` become `where` stages on
+// epoch seconds, and the time bounds of the request stay as they are, since
+// the search may assign `_time` itself.
 from_splunk env("HTTP_FIXTURE_URL") + "/splunk/strings",
-  search="search index=main", earliest="-15m", latest="-5m",
+  search="search index=main", earliest="1735689599", latest="1735689780",
   headers={Authorization: "Splunk test-token"}, tls=false
 where _time >= 2025-01-01T00:00:30.5Z and _time < 2025-01-01T00:02:00Z
 select user, _time

@@ -1,8 +1,0 @@
-{
-  user: "Alice",
-  events: 1,
-}
-{
-  user: "carol",
-  events: 1,
-}

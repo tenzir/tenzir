@@ -1,5 +1,8 @@
-// The final poll of the aggregate query is not valid JSON. The operator falls back to
-// aggregating locally, with the result of `01_pushed.tql`.
+---
+error: true
+---
+// The final poll of the aggregate query is not valid JSON, which fails the
+// read.
 from_sentinelone_data_lake env("S1_FIXTURE_URL"),
   token=env("S1_FIXTURE_TOKEN"),
   start=2024-01-01, end=2024-01-02,

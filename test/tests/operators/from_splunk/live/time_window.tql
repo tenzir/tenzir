@@ -1,0 +1,12 @@
+// Comparisons of `_time` narrow the absolute time bounds of the request and
+// still run in the search, which keeps exactly the events after bob's login.
+from_splunk env("SPLUNK_MGMT_URL"),
+  index="main",
+  earliest="1735689000",
+  latest="1735689780",
+  headers={
+    Authorization: env("SPLUNK_AUTHORIZATION"),
+  },
+  tls={skip_peer_verification: true}
+where _time > 2025-01-01T00:01:00Z
+select _time, user

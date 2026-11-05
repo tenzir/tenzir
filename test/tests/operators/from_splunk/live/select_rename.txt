@@ -1,0 +1,21 @@
+{
+  who: "alice",
+  copy: "alice",
+  net: {
+    src: 192.0.2.10,
+  },
+}
+{
+  who: "bob",
+  copy: "bob",
+  net: {
+    src: 198.51.100.24,
+  },
+}
+{
+  who: "alice",
+  copy: "alice",
+  net: {
+    src: 192.0.2.10,
+  },
+}

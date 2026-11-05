@@ -643,7 +643,8 @@ public:
   explicit TestExecCtx(Arc<registry const> reg, Profiler const& profiler,
                        bool has_terminal = false, bool is_hidden = false,
                        Option<Ref<PipelineObserver>> observer = None{},
-                       Option<SecretStore&> secrets = None{})
+                       Option<SecretStore&> secrets = None{},
+                       Option<Ref<ContextHandles const>> contexts = None{})
     : reg_{std::move(reg)},
       profiling_{is<NodeProfiler>(profiler) or is<PerfettoProfiler>(profiler)},
       record_backpressure_{is<PerfettoProfiler>(profiler)},
@@ -653,7 +654,8 @@ public:
       has_terminal_{has_terminal},
       is_hidden_{is_hidden},
       observer_{std::move(observer)},
-      secrets_{secrets} {
+      secrets_{secrets},
+      contexts_{contexts} {
   }
 
   auto inspection() const -> Option<Ref<PipelineObserver>> override {
@@ -735,6 +737,10 @@ public:
 
   auto reg() const -> registry const& override {
     return *reg_;
+  }
+
+  auto contexts() const -> Option<Ref<ContextHandles const>> override {
+    return contexts_;
   }
 
 protected:
@@ -902,6 +908,7 @@ private:
   bool is_hidden_;
   Option<Ref<PipelineObserver>> observer_;
   Option<SecretStore&> secrets_;
+  Option<Ref<ContextHandles const>> contexts_;
   std::mutex mutex_;
   std::vector<ChannelProfile> channels_;
   std::vector<ExecutorProfile> executors_;
@@ -1670,13 +1677,14 @@ auto run_plan_impl(ir::Plan plan, Arc<registry const> reg,
                    caf::actor_system& sys, DiagHandler& dh, Profiler profiler,
                    bool has_terminal, bool is_hidden, Notify* graceful_stop,
                    Option<Ref<PipelineObserver>> observer = None{},
-                   Option<SecretStore&> secrets = None{})
+                   Option<SecretStore&> secrets = None{},
+                   Option<Ref<ContextHandles const>> contexts = None{})
   -> Task<failure_or<PlanCompletion>> {
   auto num_ops = plan.size();
   LOGW("spawning plan with {} operators", num_ops);
   auto exec_ctx
     = TestExecCtx{std::move(reg),      profiler, has_terminal, is_hidden,
-                  std::move(observer), secrets};
+                  std::move(observer), secrets,  contexts};
   // The side task may never start for a sub-second pipeline. Sample after all
   // its tasks join, even when execution unwinds through cancellation.
   auto final_sample = detail::scope_guard{[&]() noexcept {
@@ -1707,7 +1715,9 @@ auto run_plan(ir::Plan plan, Arc<registry const> reg, caf::actor_system& sys,
               DiagHandler& dh, Profiler profiler, bool is_hidden,
               Notify* graceful_stop, Option<Ref<PipelineObserver>> observer,
               Option<Ref<SourceMap const>> sources,
-              Option<SecretStore&> secrets) -> Task<failure_or<void>> {
+              Option<SecretStore&> secrets,
+              Option<Ref<ContextHandles const>> contexts)
+  -> Task<failure_or<void>> {
   auto finish = detail::scope_guard{[&]() noexcept {
     if (observer) {
       (*observer)->finish(ExecutionOutcome::cancelled);
@@ -1719,7 +1729,7 @@ auto run_plan(ir::Plan plan, Arc<registry const> reg, caf::actor_system& sys,
   }
   auto execution = run_plan_impl(std::move(plan), std::move(reg), sys, dh,
                                  std::move(profiler), false, is_hidden,
-                                 graceful_stop, observer, secrets);
+                                 graceful_stop, observer, secrets, contexts);
   if (not observer) {
     CO_TRY(co_await std::move(execution));
     co_return {};

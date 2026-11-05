@@ -1,12 +1,8 @@
-{
-  kind: "DNS Resolved",
-  n: 3,
-}
-{
-  kind: "IP Connect",
-  n: 2,
-}
-{
-  kind: "Process Creation",
-  n: 1,
-}
+error: SentinelOne rejected the generated query
+ --> tests/operators/from_sentinelone_data_lake/summarize/28_transforms_rejected.tql:5:1
+  |
+5 | from_sentinelone_data_lake env("S1_FIXTURE_URL"),
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: {"error": "Don't understand [group]"}
+  = hint: set `pushdown=false` to run the stages after the operator in Tenzir

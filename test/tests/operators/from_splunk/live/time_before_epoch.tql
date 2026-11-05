@@ -1,0 +1,11 @@
+// Times before the epoch are negative epoch seconds with their fraction.
+from_splunk env("SPLUNK_MGMT_URL"),
+  search="| makeresults | eval _time=-0.5, value=1",
+  earliest="0",
+  latest="now",
+  headers={
+    Authorization: env("SPLUNK_AUTHORIZATION"),
+  },
+  tls={skip_peer_verification: true}
+where _time == 1969-12-31T23:59:59.5Z
+select value

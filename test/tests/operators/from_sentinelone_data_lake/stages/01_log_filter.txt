@@ -1,0 +1,27 @@
+{
+  timestamp: 2024-01-01T00:00:02Z,
+  severity: 3,
+  threadId: "worker",
+  event: {
+    type: "DNS Resolved",
+  },
+  dataSource: {
+    name: "Other",
+  },
+  flag: true,
+}
+{
+  timestamp: 2024-01-01T00:00:03Z,
+  severity: 3,
+  threadId: "worker",
+  event: {
+    type: "DNS Resolved",
+  },
+  dataSource: {
+    name: "SentinelOne",
+  },
+  flag: true,
+  endpoint: {
+    name: "host-a",
+  },
+}

@@ -1,10 +1,10 @@
 {
   k: "even",
-  events: 3,
+  events: 2,
   values: 2,
 }
 {
   k: "odd",
-  events: 4,
-  values: 4,
+  events: 5,
+  values: 6,
 }

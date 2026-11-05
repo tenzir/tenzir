@@ -2033,6 +2033,22 @@ auto parse_channel_tap_request(simdjson::dom::element value)
                            std::move(channel_index), std::move(limit)};
 }
 
+auto parse_context_status(simdjson::dom::element value)
+  -> Result<ContextStatus, ParseError> {
+  TRY(auto object, api::object_of(value, "ContextStatus"));
+
+  TRY(auto name_raw, api::field(object, "name", "ContextStatus"));
+  TRY(auto name, api::string_of(name_raw, "ContextStatus.name"));
+
+  TRY(auto type_raw, api::field(object, "type", "ContextStatus"));
+  TRY(auto type, api::string_of(type_raw, "ContextStatus.type"));
+
+  TRY(auto details_raw, api::field(object, "details", "ContextStatus"));
+  TRY(auto details, api::record_of(details_raw, "ContextStatus.details"));
+
+  return ContextStatus{std::move(name), std::move(type), std::move(details)};
+}
+
 auto AdhocPipelineId::make(std::string value)
   -> Result<AdhocPipelineId, ParseError> {
   static auto const pattern = std::regex{
@@ -2913,6 +2929,17 @@ auto write_json(ChannelTapRequest const& value, std::string& out) -> void {
   out += '}';
 }
 
+auto write_json(ContextStatus const& value, std::string& out) -> void {
+  out += '{';
+  out += "\"name\":";
+  api::write_string(value.name, out);
+  out += ",\"type\":";
+  api::write_string(value.type, out);
+  out += ",\"details\":";
+  api::write_record(value.details, out);
+  out += '}';
+}
+
 auto write_json(AdhocPipelineId const& value, std::string& out) -> void {
   api::write_string(value.to_string(), out);
 }
@@ -3532,6 +3559,14 @@ auto dispatch(DeploymentApi& handler, HttpRequest request)
     }
     co_return HttpResponse{
       405, R"({"error":"method not allowed","allow":["POST"]})"};
+  }
+  if (api::match_path("/contexts", request.path, parameters)) {
+    if (request.method == "GET") {
+      auto decoded = InspectContexts{};
+      co_return api::encode<200>(co_await handler.handle(std::move(decoded)));
+    }
+    co_return HttpResponse{405,
+                           R"({"error":"method not allowed","allow":["GET"]})"};
   }
   if (api::match_path("/pipelines/:pipelineId/start", request.path,
                       parameters)) {

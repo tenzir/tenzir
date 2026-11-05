@@ -1,6 +1,6 @@
-// A limit before the filters keeps them and the summary of
-// `aggregation_filter_not_in` in Tenzir, which computes the same events from
-// the unfiltered results of the search.
+// With `pushdown=false`, Tenzir computes the stages of
+// `aggregation_filter_not_in` from the results of the search, with the
+// semantics of TQL.
 from_splunk env("SPLUNK_MGMT_URL"),
   search=r#"| makeresults count=26 | streamstats count as i | eval v=case(i==1, "true", i==2, "false", i==3, "True", i==4, "TRUE", i==5, "1", i==6, "0", i==7, mvappend("true", "false"), i==8, "", true(), "zzz"), n=case(i==9, "0", i==10, "1", i==11, "-0", i==12, "001", i==13, "true", i==14, "false", i==15, "2", i==16, mvappend("0", "1"), true(), "zzz"), m=case(i==17, "1", i==18, "a", i==19, "A", i==20, "false", i==21, "False", i==22, "true", i==23, "0", i==24, "01", i==25, mvappend("a", "b"), true(), "zzz")"#,
   earliest="1735689599",
@@ -8,8 +8,8 @@ from_splunk env("SPLUNK_MGMT_URL"),
   headers={
     Authorization: env("SPLUNK_AUTHORIZATION"),
   },
-  tls={skip_peer_verification: true}
-head 1000000000
+  tls={skip_peer_verification: true},
+  pushdown=false
 where not (v in [false]) and not (n in [0, 1])
 where not (m in [1, "a", false])
 summarize i

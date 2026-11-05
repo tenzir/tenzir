@@ -1,0 +1,11 @@
+error: Splunk search ended without its last result
+ --> tests/operators/from_splunk/live/aggregation_failure.tql:8:10
+  |
+8 |   search=r#"| makeresults count=2 | eval x=tonumber("a", 99)"#,
+  |          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: search: | makeresults count=2 | eval x=tonumber("a", 99)
+          | stats count as tenzir_column_0 by x
+          | appendpipe [stats count as tenzir_groups_0]
+  = note: the search may have failed in a stage that the operator took over
+  = hint: use `pushdown=false` to run the stages in Tenzir

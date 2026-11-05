@@ -1,0 +1,16 @@
+---
+fixtures:
+- http_server:
+    expected:
+    - method: POST
+      path: /splunk/strings/services/search/v2/jobs/export
+      body: search=search%20index%3D%22main%22%20_time%3C%3D9223372036.5%0A%7C%20fields%20user%2C%20_time&earliest_time=0&latest_time=9223372036&output_mode=json&preview=false
+---
+
+// A bound that rounds outwards beyond what a time holds stays as it is, rather
+// than overflow. The comparison stays in the search.
+from_splunk env("HTTP_FIXTURE_URL") + "/splunk/strings",
+  index="main", earliest="0", latest="9223372036",
+  headers={Authorization: "Splunk test-token"}, tls=false
+where _time <= 2262-04-11T23:47:16.5Z
+select user, _time

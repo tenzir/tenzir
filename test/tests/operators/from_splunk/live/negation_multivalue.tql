@@ -1,5 +1,5 @@
-// Negations keep multivalue fields, which TQL sees as lists that differ from
-// every string. `search` would drop alice's events because one value matches.
+// A negation in a `where` stage drops a multivalue field if any value matches,
+// so alice's events with `a` among their tags vanish.
 from_splunk env("SPLUNK_MGMT_URL"),
   search=r#"index=main source="tenzir-docs-auth" | eval tags=if(user="alice", split("a,b", ","), "a")"#,
   earliest="1735689599",

@@ -14,7 +14,3 @@
   k: "five",
   events: 1,
 }
-{
-  k: null,
-  events: 1,
-}

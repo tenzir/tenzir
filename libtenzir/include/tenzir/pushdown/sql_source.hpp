@@ -33,13 +33,6 @@ namespace tenzir::pushdown {
 /// stage is a limit.
 auto final_limit(std::span<ir::QueryStage const> plan) -> Option<uint64_t>;
 
-/// Returns `plan` for a read that still owes `remaining` events: a restored
-/// read restarts its query, which then needs only as many rows as its final
-/// limit has left. This bounds what the read emits, but the restarted query
-/// may return rows that the read emitted before it was restored.
-auto resume_plan(std::span<ir::QueryStage const> plan,
-                 Option<uint64_t> remaining) -> std::vector<ir::QueryStage>;
-
 /// Returns whether `expr` computes with a time literal, as in
 /// `ts - 2024-01-01`. A dialect that spells a time as a string, which the
 /// target casts to the type of the other operand of a comparison, cannot
@@ -57,6 +50,16 @@ struct AbsorbOptions {
   /// if it may. It applies before the dialect.
   std::function<auto(ir::QueryStage const&)->Option<std::string>> veto = {};
 };
+
+/// Returns whether a source spells all of `stages`, which start right after
+/// the source.
+using SpellsStages = std::function<auto(std::span<ir::QueryStage const>)->bool>;
+
+/// Returns the stages of `chain` that a source takes over: the longest prefix
+/// that `spells` accepts, up to the first stage that `options` rules out, with
+/// the reason for declining the rest.
+auto absorb_prefix(ir::QueryChain const& chain, SpellsStages const& spells,
+                   AbsorbOptions const& options) -> ir::Absorption;
 
 /// Returns the stages of `chain` that a source takes over: the longest prefix
 /// that `dialect` spells over a table, up to the first stage that `options`

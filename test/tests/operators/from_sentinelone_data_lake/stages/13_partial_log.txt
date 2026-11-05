@@ -1,0 +1,11 @@
+warning: SentinelOne returned an incomplete result
+ --> tests/operators/from_sentinelone_data_lake/stages/13_partial_log.tql:2:1
+  |
+2 | from_sentinelone_data_lake env("S1_FIXTURE_URL"),
+  | ~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+  = note: the response sets `partialResultsDueToTimeLimit`
+  = hint: narrow the time window or the query
+{
+  n: 2,
+}

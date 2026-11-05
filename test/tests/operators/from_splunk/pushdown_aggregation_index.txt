@@ -9,13 +9,4 @@
   user: 192.0.2.1,
   events: 1,
   actions: 0,
-  lo: null,
-  hi: null,
-}
-{
-  user: null,
-  events: 1,
-  actions: 1,
-  lo: -3,
-  hi: -3,
 }

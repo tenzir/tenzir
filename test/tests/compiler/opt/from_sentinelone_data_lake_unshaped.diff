@@ -1,0 +1,162 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "from_sentinelone_data_lake",
+       store: {
+         op: {
+           path: [
+             `from_sentinelone_data_lake` @ [1]:205..231 from 0
+           ],
+           ref: std::from_sentinelone_data_lake/op
+         },
+         args: [
+           located "https://example.sentinelone.net" @ [1]:232..265 from 0
+         ],
+         named_args: [
+           {
+             index: 0,
+             value: expression constant string "t" @ [1]:273..276 from 0
+           }
+         ]
+       },
+       filter: [
+         
+       ],
+-      order: "ordered"
+-    },
+-    GenericIr {
+-      desc: "head",
+-      store: {
+-        op: {
+-          path: [
+-            `head` @ [1]:277..281 from 0
+-          ],
+-          ref: std::head/op
+-        },
+-        args: [
+-          located 10 @ [1]:282..284 from 0
+-        ],
+-        named_args: [
+-          
+-        ]
+-      },
+-      filter: [
+-        
++      order: "ordered",
++      plan: [
++        Limit {
++          count: 10
++        }
+       ],
+-      order: "ordered"
++      declined: "SentinelOne cannot spell the stage"
+     },
+     where_ir {
+       op: {
+         path: [
+-          `where` @ [1]:285..290 from 0
++          
+         ],
+-        ref: std::where/op
++        ref: unresolved
+       },
+       args: [
+-        expression binary_expr {
++        Incomplete binary_expr {
+           left: field_access {
+             left: root_field {
+               id: `event` @ [1]:291..296 from 0,
+               has_question_mark: false
+             },
+             has_question_mark: false,
+             name: `type` @ [1]:297..301 from 0,
+             location: [1]:291..301 from 0
+           },
+           op: "eq",
+           right: constant string "DNS Resolved" @ [1]:305..319 from 0,
+           location: [1]:291..319 from 0
+         }
+       ],
+       named_args: [
+         
+       ]
+     },
+     sort {
+       args: {
+         op: {
+           path: [
+             `sort` @ [1]:320..324 from 0
+           ],
+           ref: std::sort/op
+         },
+         args: [
+           expression root_field {
+             id: `timestamp` @ [1]:325..334 from 0,
+             has_question_mark: false
+           }
+         ],
+         named_args: [
+           
+         ]
+       }
+     },
+     GenericIr {
+       desc: "drop",
+       store: {
+         op: {
+           path: [
+             `drop` @ [1]:335..339 from 0
+           ],
+           ref: std::drop/op
+         },
+         args: [
+           field_path {
+             expr: root_field {
+               id: `message` @ [1]:340..347 from 0,
+               has_question_mark: false
+             },
+             has_this: false,
+             path: [
+               {
+                 id: `message` @ [1]:340..347 from 0,
+                 has_question_mark: false
+               }
+             ]
+           }
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:347..347 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ],
+   definition_location: [1]:205..347 from 0
+ }

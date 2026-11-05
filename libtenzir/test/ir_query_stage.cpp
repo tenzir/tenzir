@@ -438,6 +438,7 @@ TEST("queries in logs lose their string literals") {
     .hash_comments = false,
     .escape_strings = false,
     .dollar_quoted_strings = false,
+    .triple_backtick_comments = false,
   };
   CHECK_EQUAL(pushdown::redact_query("SELECT 'a\\'b', 'secret'", escapes),
               std::string{"SELECT '***', '***'"});
@@ -450,6 +451,7 @@ TEST("queries in logs lose their string literals") {
     .hash_comments = false,
     .escape_strings = false,
     .dollar_quoted_strings = false,
+    .triple_backtick_comments = false,
   };
   CHECK_EQUAL(pushdown::redact_query("SELECT \"secret\" FROM `t`", mysql),
               std::string{"SELECT \"***\" FROM `t`"});
@@ -463,6 +465,7 @@ TEST("queries in logs lose their string literals") {
     .hash_comments = false,
     .escape_strings = false,
     .dollar_quoted_strings = false,
+    .triple_backtick_comments = false,
   };
   CHECK_EQUAL(pushdown::redact_query("SELECT [a'b] FROM t", brackets),
               std::string{"SELECT [a'b] FROM t"});
@@ -481,6 +484,7 @@ TEST("queries in logs lose their string literals") {
     .hash_comments = true,
     .escape_strings = false,
     .dollar_quoted_strings = false,
+    .triple_backtick_comments = false,
   };
   CHECK_EQUAL(pushdown::redact_query("SELECT 1 # it's\n, 'secret'", hashes),
               std::string{"SELECT 1 # ***\n, '***'"});
@@ -499,6 +503,7 @@ TEST("queries in logs lose their string literals") {
     .hash_comments = false,
     .escape_strings = false,
     .dollar_quoted_strings = false,
+    .triple_backtick_comments = false,
   };
   CHECK_EQUAL(pushdown::redact_query("SELECT `with\\`tick`, 'secret'",
                                      clickhouse),
@@ -515,6 +520,7 @@ TEST("queries in logs lose their string literals") {
     .hash_comments = false,
     .escape_strings = true,
     .dollar_quoted_strings = true,
+    .triple_backtick_comments = false,
   };
   CHECK_EQUAL(pushdown::redact_query("SELECT E'a\\'secret', 'b\\', "
                                      "$$it's$$, $tag$x $$ y$tag$, $1, a$b$",
@@ -526,4 +532,21 @@ TEST("queries in logs lose their string literals") {
   // Without the syntaxes, `E` is an identifier, and `$` is a character.
   CHECK_EQUAL(pushdown::redact_query("SELECT E'a\\'secret'"),
               std::string{"SELECT E'***'secret'***'"});
+  // SPL writes comments between triple backticks, which may hold quotes,
+  // while single backticks delimit macros.
+  auto const spl = pushdown::SqlLexicon{
+    .backslash_escapes = true,
+    .double_quoted_strings = true,
+    .bracket_identifiers = false,
+    .identifier_backslash_escapes = false,
+    .hash_comments = false,
+    .escape_strings = false,
+    .dollar_quoted_strings = false,
+    .triple_backtick_comments = true,
+  };
+  CHECK_EQUAL(pushdown::redact_query(
+                "search x=\"a\\\"b\" ```it's \"secret\"``` | `macro`", spl),
+              std::string{"search x=\"***\" ``` *** ``` | `macro`"});
+  CHECK_EQUAL(pushdown::redact_query("search ```it's", spl),
+              std::string{"search ``` *** ```"});
 }

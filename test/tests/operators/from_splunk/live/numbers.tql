@@ -1,5 +1,6 @@
-// Splunk returns numbers as strings. The operator infers them, and numeric
-// comparisons run in Splunk as well.
+// Splunk returns numbers as strings, which the operator infers. The comparison
+// runs in Splunk, while the bare field `success`, which SPL does not read as a
+// predicate, and the stages after it run in Tenzir.
 from_splunk env("SPLUNK_MGMT_URL"),
   search=r#"search index=main source="tenzir-docs-auth" | eval length=len(user), success=if(outcome="success", "true", "false")"#,
   earliest="1735689599",

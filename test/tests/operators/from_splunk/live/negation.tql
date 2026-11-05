@@ -1,5 +1,5 @@
-// Negations and networks go into the search. `NOT user=CASE("alice")` keeps
-// events without `user`, and the network matches the address text.
+// Equality and networks extend the base search, and negations become `where`
+// stages, which drop results without the field.
 from_splunk env("SPLUNK_MGMT_URL"),
   index="main",
   earliest="1735689599",

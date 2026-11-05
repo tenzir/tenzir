@@ -1,0 +1,5 @@
+// With `pushdown=false`, the stages stay in Tenzir.
+from_splunk "https://splunk.example.com", index="main", earliest="-15m",
+  latest="-5m", headers={Authorization: "Splunk t"}, pushdown=false
+where user == "alice"
+head 3

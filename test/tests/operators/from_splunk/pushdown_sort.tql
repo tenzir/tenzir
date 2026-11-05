@@ -1,0 +1,17 @@
+---
+fixtures:
+- http_server:
+    expected:
+    - method: POST
+      path: /splunk/strings/services/search/v2/jobs/export
+      body: search=search%20index%3D%22main%22%0A%7C%20sort%203%20-n%2C%20user%0A%7C%20head%203%0A%7C%20fields%20%2A&earliest_time=-15m&latest_time=-5m&output_mode=json&preview=false
+---
+
+// A sort becomes `sort` with an explicit count: the bound of the limit after
+// it, or `0` for all results, since `sort` keeps only 10,000 results by
+// default.
+from_splunk env("HTTP_FIXTURE_URL") + "/splunk/strings",
+  index="main", earliest="-15m", latest="-5m",
+  headers={Authorization: "Splunk test-token"}, tls=false
+sort -n, user
+head 3

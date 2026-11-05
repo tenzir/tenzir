@@ -1,6 +1,6 @@
 # runner: python
 # timeout: 300
-"""Keep an explicit PowerQuery's capped result and request window unchanged."""
+"""Append the stages after an explicit PowerQuery, keeping its request window."""
 
 from __future__ import annotations
 
@@ -28,6 +28,7 @@ def run(
     start: str = START,
     end: str = END,
     raw: bool = False,
+    expected: str | None = None,
 ) -> list[dict]:
     offset = len(calls())
     pipeline = f"""
@@ -56,7 +57,9 @@ write_ndjson
     posts = [r for r in requests if r["method"] == "POST"]
     assert len(posts) == 1, requests
     post = posts[0]
-    assert post["payload"]["pq"]["query"] == query, requests
+    if expected is None:
+        expected = f"{query} | columns __tenzir_column_0 = id | limit 1600000"
+    assert post["payload"]["pq"]["query"] == expected, requests
     assert post["payload"]["startTime"] == start, requests
     assert post["payload"]["endTime"] == end, requests
     deletes = [r for r in requests if r["method"] == "DELETE"]
@@ -65,40 +68,60 @@ write_ndjson
 
 
 def main() -> None:
-    capped = [{"id": i} for i in range(1000)]
+    # The stages after the query run in SentinelOne, before its cap, and the
+    # appended limit lifts the default cap of 1,000 rows.
+    rows = [{"id": i} for i in range(1005)]
+    columns = " | columns __tenzir_column_0 = id | limit 1600000"
     for raw in (False, True):
-        assert run(raw=raw) == capped
-        # Filtering before the cap would expose five additional matching rows.
-        assert run("where id >= 995", raw=raw) == capped[995:]
-        # Narrowing either bound would also admit rows outside the original cap.
-        assert run(f"where timestamp >= {LATE}", raw=raw) == []
+        assert run(raw=raw) == rows
+        assert (
+            run(
+                "where id >= 995",
+                raw=raw,
+                expected="pushdown_capped | filter (id >= 995)" + columns,
+            )
+            == rows[995:]
+        )
+        # The request window stays as it is, while the stages compare with
+        # SentinelOne's own timestamp.
+        late = "1704068200000000000"
+        assert (
+            run(
+                f"where timestamp >= {LATE}",
+                raw=raw,
+                expected=f"pushdown_capped | filter (timestamp >= {late})" + columns,
+            )
+            == rows[1000:]
+        )
         assert (
             run(
                 f"where timestamp >= {LATE} and timestamp < 2024-01-01T00:16:45Z",
                 raw=raw,
+                expected=f"pushdown_capped | filter (timestamp >= {late}) | "
+                "filter (timestamp < 1704068205000000000)" + columns,
             )
-            == []
+            == rows[1000:]
         )
+        assert run(
+            "where timestamp < 2024-01-01T00:00:05Z",
+            query="pushdown_capped_reverse",
+            raw=raw,
+            expected="pushdown_capped_reverse | filter (timestamp < "
+            "1704067205000000000)" + columns,
+        ) == [{"id": i} for i in range(1000, 1005)]
+        # A filter or a select must not follow a limit of whole events, so
+        # only the limit runs in SentinelOne.
         assert (
-            run(
-                "where timestamp < 2024-01-01T00:00:05Z",
-                query="pushdown_capped_reverse",
-                raw=raw,
-            )
-            == []
+            run("head 1001", raw=raw, expected="pushdown_capped | limit 1001")
+            == rows[:1001]
         )
-        # A remote limit above 1,000 must not raise the implicit source cap.
-        assert run("head 1001", raw=raw) == capped
-        assert run("head 1", raw=raw) == capped[:1]
-    # Controls prove that the fixture distinguishes the old unsafe rewrites.
-    assert run(query="pushdown_capped | filter ((id) >= (995))") == [
-        {"id": i} for i in range(995, 1005)
-    ]
-    assert run(start=LATE) == [{"id": i} for i in range(1000, 1005)]
+        assert run("head 1", raw=raw, expected="pushdown_capped | limit 1") == rows[:1]
+    assert run(query="pushdown_capped | filter ((id) >= (995))") == rows[995:]
+    assert run(start=LATE) == rows[1000:]
     assert run(query="pushdown_capped_reverse", end="2024-01-01T00:00:05Z") == [
         {"id": i} for i in range(1000, 1005)
     ]
-    assert run(query="pushdown_capped | limit 1001") == [{"id": i} for i in range(1001)]
+    assert run(query="pushdown_capped | limit 1001") == rows[:1001]
     print("ok")
 
 

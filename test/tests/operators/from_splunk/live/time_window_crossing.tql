@@ -1,0 +1,13 @@
+// Narrowed bounds that would cross keep the bounds of the request as the user
+// set them, since Splunk rejects crossing bounds with an error. The comparison
+// in the search still holds.
+from_splunk env("SPLUNK_MGMT_URL"),
+  index="main",
+  earliest="0",
+  latest="1",
+  headers={
+    Authorization: env("SPLUNK_AUTHORIZATION"),
+  },
+  tls={skip_peer_verification: true}
+where _time > 2025-01-01
+summarize n=count()

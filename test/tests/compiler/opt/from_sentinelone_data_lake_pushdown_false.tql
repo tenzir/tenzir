@@ -1,0 +1,5 @@
+// With `pushdown=false`, the stages stay in Tenzir.
+from_sentinelone_data_lake "https://example.sentinelone.net", token="t",
+  pushdown=false
+where event.type == "DNS Resolved"
+head 3

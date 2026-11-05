@@ -1,5 +1,5 @@
-// Values that Tenzir reads as numbers other than integers of up to 15 digits,
-// such as `7.5`, `+8`, or `inf`, make the operator summarize in Tenzir.
+// Splunk compares values with numbers by its own rules, also spellings such as
+// `+8`, `1e3`, or `inf`, which Tenzir would infer differently.
 from_splunk env("SPLUNK_MGMT_URL"),
   search=r#"| makeresults count=8 | streamstats count as i | eval n=case(i==1, "7", i==2, "7.5", i==3, "+8", i==4, "6.5", i==5, "inf", i==6, "1e3", i==7, "-3", i==8, "5"), k=if(i%2==0, "even", "odd")"#,
   earliest="1735689599",

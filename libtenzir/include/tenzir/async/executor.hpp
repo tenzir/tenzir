@@ -183,6 +183,11 @@ public:
   /// resolve and compile anything they create at runtime against it.
   virtual auto reg() const -> registry const& = 0;
 
+  /// Returns the contexts the host provides for the pipeline, if any.
+  virtual auto contexts() const -> Option<Ref<ContextHandles const>> {
+    return None{};
+  }
+
 protected:
   virtual auto make_void(ChannelId id) -> PushPull<OperatorMsg<void>> = 0;
 

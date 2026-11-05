@@ -1,0 +1,20 @@
+---
+assertions:
+  fixtures:
+    sentinelone:
+      queries_cancelled: true
+      expected_requests:
+        - type: LOG
+          query: ""
+          start: "2024-01-01T00:00:00Z"
+          end: "2024-01-02T00:00:00Z"
+---
+// With `pushdown=false`, the stages stay in Tenzir, which reads every event of
+// the window.
+from_sentinelone_data_lake env("S1_FIXTURE_URL"),
+  token=env("S1_FIXTURE_TOKEN"),
+  start=2024-01-01, end=2024-01-02,
+  account_ids=["aggregate"],
+  pushdown=false
+where event.type == "DNS Resolved"
+summarize n=count()

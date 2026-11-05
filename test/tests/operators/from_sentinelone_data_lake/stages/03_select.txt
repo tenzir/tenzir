@@ -1,0 +1,12 @@
+{
+  event: {
+    kind: "DNS Resolved",
+  },
+  t: 2024-01-01T00:00:03Z,
+}
+{
+  event: {
+    kind: "DNS Resolved",
+  },
+  t: 2024-01-01T00:00:02Z,
+}

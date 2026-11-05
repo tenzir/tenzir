@@ -28,15 +28,6 @@ auto final_limit(std::span<ir::QueryStage const> plan) -> Option<uint64_t> {
   return limit ? Option<uint64_t>{limit->count} : None{};
 }
 
-auto resume_plan(std::span<ir::QueryStage const> plan,
-                 Option<uint64_t> remaining) -> std::vector<ir::QueryStage> {
-  auto result = std::vector<ir::QueryStage>{plan.begin(), plan.end()};
-  if (remaining and final_limit(plan)) {
-    as<ir::QueryStage::Limit>(result.back().kind).count = *remaining;
-  }
-  return result;
-}
-
 auto computes_with_time(ast::expression const& expr) -> bool {
   auto const is_time = [](ast::expression const& x) {
     auto const* constant = try_as<ast::constant>(x);
@@ -62,7 +53,7 @@ auto computes_with_time(ast::expression const& expr) -> bool {
   return false;
 }
 
-auto absorb_prefix(ir::QueryChain const& chain, SqlQueryDialect const& dialect,
+auto absorb_prefix(ir::QueryChain const& chain, SpellsStages const& spells,
                    AbsorbOptions const& options) -> ir::Absorption {
   if (chain.stages.empty()) {
     return {.prefix = 0, .declined = ""};
@@ -89,9 +80,7 @@ auto absorb_prefix(ir::QueryChain const& chain, SqlQueryDialect const& dialect,
   auto const declined
     = fmt::format("{} cannot spell the stage", options.target);
   for (auto n = candidates; n > 0; --n) {
-    auto relation = SqlRelation{.from = "t", .fields = None{}, .alias = None{}};
-    if (render_plan(std::move(relation), std::span{chain.stages}.first(n),
-                    dialect)) {
+    if (spells(std::span{chain.stages}.first(n))) {
       if (n == chain.stages.size()) {
         return {.prefix = n, .declined = ""};
       }
@@ -99,6 +88,18 @@ auto absorb_prefix(ir::QueryChain const& chain, SqlQueryDialect const& dialect,
     }
   }
   return {.prefix = 0, .declined = candidates == 0 ? reason : declined};
+}
+
+auto absorb_prefix(ir::QueryChain const& chain, SqlQueryDialect const& dialect,
+                   AbsorbOptions const& options) -> ir::Absorption {
+  return absorb_prefix(
+    chain,
+    [&](std::span<ir::QueryStage const> stages) {
+      auto relation
+        = SqlRelation{.from = "t", .fields = None{}, .alias = None{}};
+      return render_plan(std::move(relation), stages, dialect).is_some();
+    },
+    options);
 }
 
 auto plan_inputs(std::span<ir::QueryStage const> plan)

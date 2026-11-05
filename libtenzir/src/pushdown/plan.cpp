@@ -74,6 +74,12 @@ auto redact_query(std::string_view query, SqlLexicon lexicon) -> std::string {
     auto const c = query[i];
     auto const rest = query.substr(i);
     // A comment may hold anything, including quotes, so it goes as a whole.
+    if (lexicon.triple_backtick_comments and rest.starts_with("```")) {
+      auto const end = query.find("```", i + 3);
+      result += "``` *** ```";
+      i = end == std::string_view::npos ? query.size() : end + 3;
+      continue;
+    }
     if (rest.starts_with("--") or (c == '#' and lexicon.hash_comments)) {
       auto const end = query.find('\n', i);
       result += rest.starts_with("--") ? "-- ***" : "# ***";

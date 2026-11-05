@@ -1,6 +1,6 @@
 # runner: python
 # timeout: 180
-"""Transparent complete-event discovery, projected PQ, and LOG continuation."""
+"""Complete-event discovery in LOG, selects in PQ, and LOG continuation."""
 
 from __future__ import annotations
 
@@ -70,7 +70,6 @@ def main() -> None:
     for tail in (
         "",
         'where event.type == "DNS Resolved"',
-        "where event != null",
         'where severity == 3 and threadId == "worker"',
     ):
         rows, posts = run(tail, modes=["LOG"])
@@ -83,11 +82,11 @@ def main() -> None:
         assert rows[0]["items"] == [1, {"nested": False}], rows
         assert rows[0]["flag"] is True, rows
         assert rows[0]["timestamp"] == "2024-01-01T00:00:00Z", rows
-        if tail == "where event != null":
-            assert posts[0]["payload"]["log"]["filter"] == "", posts
+    # SentinelOne has no flat `event` field, only `event.type` and others.
+    rows, posts = run("where event != null", modes=["LOG"])
+    assert rows == [], rows
+    assert posts[0]["payload"]["log"]["filter"] == "(event = *)", posts
     rows, _ = run("select id", modes=["PQ"])
-    assert rows == [{"id": i} for i in range(3)], rows
-    rows, _ = run("select id", scope="hybrid_partial", modes=["PQ", "LOG"])
     assert rows == [{"id": i} for i in range(3)], rows
     rows, posts = run(scope="hybrid_inline", modes=["LOG"])
     assert [row["event_id"] for row in rows] == [42, 43], rows
@@ -98,15 +97,11 @@ def main() -> None:
         for call in all_calls
         if call["method"] == "GET" and call["id"] == posts[0]["id"]
     ], all_calls
-    # A null parent column cannot distinguish an absent field from a subtree.
-    rows, _ = run("select event", modes=["PQ", "LOG"])
-    assert [row["event"]["dns"]["request"] for row in rows] == [
-        f"host-{i}" for i in range(3)
-    ], rows
-    rows, _ = run('where event.type == "DNS Resolved"\nselect event', modes=["LOG"])
-    assert all(row["event"]["extra"] == "kept" for row in rows), rows
-    rows, _ = run("select items", modes=["PQ", "LOG"])
-    assert rows == [{"items": [1, {"nested": False}]}] * 3, rows
+    # SentinelOne has no flat `event` field, so a select of it is `null`.
+    rows, _ = run("select event", modes=["PQ"])
+    assert rows == [{"event": None}] * 3, rows
+    rows, _ = run('where event.type == "DNS Resolved"\nselect event', modes=["PQ"])
+    assert rows == [{"event": None}] * 3, rows
     rows, _ = run("where this[key] == 2\nselect id", modes=["LOG"])
     assert rows == [{"id": 2}], rows
     rows, _ = run('where "items" in this.keys()\nselect id', modes=["LOG"])
@@ -141,15 +136,15 @@ def main() -> None:
     rows, posts = run(scope="hybrid_dense", modes=["LOG", "LOG"])
     assert [row["id"] for row in rows] == list(range(1005)), rows
     assert posts[1]["payload"]["log"]["cursor"] == "match-999", posts
-    # A saturated projected PQ response must not silently truncate the read.
-    rows, _ = run("select id", scope="hybrid_dense", modes=["PQ", "LOG", "LOG"])
+    # A select in PQ lifts the default cap of 1,000 rows.
+    rows, _ = run("select id", scope="hybrid_dense", modes=["PQ"])
     assert rows == [{"id": i} for i in range(1005)], rows
-    # Optional nested projections must tolerate missing and null parents,
-    # including after a saturated PQ result falls back to paged LOG reads.
+    # Optional fields stay in Tenzir, which tolerates missing and null parents
+    # in paged LOG reads.
     rows, _ = run(
         "select id, event?.type?, dataSource?.name?",
         scope="hybrid_mixed",
-        modes=["PQ", "LOG", "LOG"],
+        modes=["LOG", "LOG"],
     )
     assert rows == [
         {
@@ -163,9 +158,9 @@ def main() -> None:
     rows, posts = run(tail, scope="hybrid_dense")
     assert [row["id"] for row in rows] == [1000, 1001, 1002], rows
     assert all(post["payload"]["queryType"] == "LOG" for post in posts), posts
-    assert len(posts) > 2, posts
+    assert len(posts) == 2, posts
     rows, _ = run(
-        tail + "\nselect id", scope="hybrid_dense", modes=["PQ", *["LOG"] * len(posts)]
+        tail + "\nselect id", scope="hybrid_dense", modes=["LOG"] * len(posts)
     )
     assert rows == [{"id": i} for i in (1000, 1001, 1002)], rows
 
@@ -188,12 +183,6 @@ def main() -> None:
         scope="hybrid_bad_values",
         modes=["LOG"],
         error="missing or invalid LOG match values",
-    )
-    assert not rows, rows
-    rows, _ = run(
-        scope="hybrid_partial_log",
-        modes=["LOG"],
-        error="SentinelOne returned an incomplete LOG result",
     )
     assert not rows, rows
     print("ok")

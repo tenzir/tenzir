@@ -1,5 +1,5 @@
-// `min` and `max` of values other than integers stay in Tenzir, which rejects
-// strings, where Splunk compares them.
+// Splunk computes `min` and `max` of mixed values with its own semantics:
+// numerically where values are numbers, and it ignores the others.
 from_splunk env("SPLUNK_MGMT_URL"),
   search=r#"| makeresults count=6 | streamstats count as i | eval g=if(i<=3, "a", "b"), n=case(i==1, "1", i==2, "2.5", i==3, "x", i==4, "10", i==5, " 7", i==6, "3")"#,
   earliest="1735689599",

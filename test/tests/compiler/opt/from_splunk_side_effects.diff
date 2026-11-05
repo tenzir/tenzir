@@ -1,0 +1,130 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "from_splunk",
+       store: {
+         op: {
+           path: [
+             `from_splunk` @ [1]:131..142 from 0
+           ],
+           ref: std::from_splunk/op
+         },
+         args: [
+           located "https://splunk.example.com" @ [1]:143..171 from 0
+         ],
+         named_args: [
+           {
+             index: 0,
+             value: located "index=main | outputlookup users.csv" @ [1]:182..219 from 0
+           },
+           {
+             index: 2,
+             value: located string "-15m" @ [1]:230..236 from 0
+           },
+           {
+             index: 3,
+             value: located string "-5m" @ [1]:245..250 from 0
+           },
+           {
+             index: 5,
+             value: expression record {
+               begin: [1]:262..263 from 0,
+               items: [
+                 field {
+                   name: `Authorization` @ [1]:263..276 from 0,
+                   expr: constant string "Splunk t" @ [1]:278..288 from 0
+                 }
+               ],
+               end: [1]:288..289 from 0
+             }
+           }
+         ]
+       },
+       filter: [
+         
+       ],
+-      order: "ordered"
+-    },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:290..295 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
+-          left: root_field {
+-            id: `user` @ [1]:296..300 from 0,
+-            has_question_mark: false
+-          },
+-          op: "eq",
+-          right: constant string "alice" @ [1]:304..311 from 0,
+-          location: [1]:296..311 from 0
++      order: "ordered",
++      plan: [
++        Filter {
++          predicate: binary_expr {
++            left: root_field {
++              id: `user` @ [1]:296..300 from 0,
++              has_question_mark: false
++            },
++            op: "eq",
++            right: constant string "alice" @ [1]:304..311 from 0,
++            location: [1]:296..311 from 0
++          }
+         }
+       ],
+-      named_args: [
+-        
+-      ]
++      declined: "a `head` stage could cut the side effects of the search short"
+     },
+     GenericIr {
+       desc: "head",
+       store: {
+         op: {
+           path: [
+             `head` @ [1]:312..316 from 0
+           ],
+           ref: std::head/op
+         },
+         args: [
+           located 3 @ [1]:317..318 from 0
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:318..318 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ],
+   definition_location: [1]:131..318 from 0
+ }

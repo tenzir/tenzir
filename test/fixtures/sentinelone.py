@@ -38,9 +38,14 @@ class SentinelOneOptions:
 class SentinelOneAssertions:
     expected_add_events: list[dict[str, object]] | None = None
     queries_cancelled: bool = False
+    # The launches of the test, in order. Each entry compares only the keys
+    # that it has: `type`, `query` (the PowerQuery or the LOG filter),
+    # `limit` and `cursor` of a LOG page, `start`, `end`, and `status`.
+    expected_requests: list[dict[str, object]] | None = None
 
 
-# Predefined result data blocks keyed by `pq.query` in the launch body.
+# Predefined result data blocks keyed by the explicit `pq.query` that names
+# them, possibly followed by stages.
 #
 # The final LRQ poll nests this tabular payload in `data`:
 #   { "columns": [{"name": "col"},...], "values": [[val,...],...]  }
@@ -277,112 +282,589 @@ def _aggregate_population(scope: str, payload: dict) -> dict:
     }
 
 
-# A LOG filter that selects the events without a field.
-_ABSENT_FILTER = re.compile(r"\| filter !\((?P<field>[\w.]+) = \*\)")
+# -- PowerQuery evaluation ---------------------------------------------------
+#
+# The mock evaluates the subset of PowerQuery that the operator generates, and
+# that tests send as explicit queries, over the events of a dataset. Like
+# SentinelOne, it reads a missing field as `null`, matches `!=` on events
+# without the field, sorts `null` first in ascending order, and caps a
+# PowerQuery without `limit` at 1,000 rows.
+
+_MAX_LIMIT = 1_600_000
+_DEFAULT_CAP = 1_000
 
 
-def _absent(population: dict, field: str) -> dict:
-    """The events of `population` that lack `field` or hold `null` there."""
-    names = [column["name"] for column in population["columns"]]
-    index = names.index(field) if field in names else None
-    return {
-        **population,
-        "values": [
-            row for row in population["values"] if index is None or row[index] is None
-        ],
-    }
+class QueryError(Exception):
+    """A query that SentinelOne rejects."""
 
 
-# The aggregate queries that the operator generates from TQL.
-_GROUP_QUERY = re.compile(
-    r"\| group (?P<aggregates>.+?)(?: by (?P<keys>.+?) \| limit (?P<limit>\d+))?"
+_TOKEN = re.compile(
+    r"""\s*(?:
+      (?P<string>"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')
+    | (?P<number>\d+(?:\.\d+)?)
+    | (?P<matcher>(?:starts_with|ends_with|contains):matchcase)
+    | (?P<name>[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)
+    | (?P<op>==|!=|<=|>=|<|>|=|\*|!|\(|\)|,|-)
+    )""",
+    re.VERBOSE,
 )
 
 
-def _aggregate(population: dict, query: str) -> dict | None:
-    """Model PowerQuery's `group` stage for the generated aggregate queries.
+def _tokenize(text: str) -> list[tuple[str, str]]:
+    tokens = []
+    i = 0
+    while i < len(text):
+        if text[i:].strip() == "":
+            break
+        match = _TOKEN.match(text, i)
+        if match is None or match.end() == i:
+            raise QueryError(f"Don't understand [{text[i:]}]")
+        kind = match.lastgroup
+        assert kind is not None
+        tokens.append((kind, match[kind]))
+        i = match.end()
+    return tokens
 
-    Like PowerQuery, it groups values by type and spelling, before the type
-    inference of Tenzir, and groups events without a flat key field as `null`.
-    """
-    match = _GROUP_QUERY.fullmatch(query)
-    if match is None:
-        return None
-    aggregates = [part.split(" = ") for part in match["aggregates"].split(", ")]
-    keys = (
-        [part.split(" = ") for part in match["keys"].split(", ")]
-        if match["keys"]
-        else []
-    )
-    if any(len(part) != 2 or part[1] != "count()" for part in aggregates):
-        return None
-    names = [column["name"] for column in population["columns"]]
-    groups: dict[tuple, list] = {}
-    for row in population["values"]:
-        event = dict(zip(names, row))
-        key = [event.get(field) for _, field in keys]
-        group = tuple((type(value).__name__, value) for value in key)
-        groups.setdefault(group, [*key, 0])[-1] += 1
-    values = [
-        [*group[:-1], *([group[-1]] * len(aggregates))] for group in groups.values()
-    ]
-    if not keys and not values:
-        values = [[0] * len(aggregates)]
+
+def _unquote(text: str) -> str:
+    body = text[1:-1]
+    return re.sub(r"\\(.)", r"\1", body)
+
+
+class _Parser:
+    def __init__(self, text: str) -> None:
+        self.tokens = _tokenize(text)
+        self.i = 0
+
+    def peek(self) -> tuple[str, str] | None:
+        return self.tokens[self.i] if self.i < len(self.tokens) else None
+
+    def take(self, value: str | None = None) -> tuple[str, str]:
+        token = self.peek()
+        if token is None or (value is not None and token[1] != value):
+            raise QueryError(f"Don't understand [expected {value}]")
+        self.i += 1
+        return token
+
+    def accept(self, value: str) -> bool:
+        token = self.peek()
+        if token is not None and token[1] == value:
+            self.i += 1
+            return True
+        return False
+
+    def done(self) -> bool:
+        return self.i == len(self.tokens)
+
+    # Expressions are tuples: ("field", name), ("literal", value),
+    # ("cmp", op, lhs, rhs), ("in", lhs, values), ("present", field),
+    # ("match", kind, lhs, needle), ("and"|"or", lhs, rhs), ("not", operand).
+    def expression(self) -> tuple:
+        lhs = self.conjunction()
+        while self.accept("or"):
+            lhs = ("or", lhs, self.conjunction())
+        return lhs
+
+    def conjunction(self) -> tuple:
+        lhs = self.unary()
+        while self.accept("and"):
+            lhs = ("and", lhs, self.unary())
+        return lhs
+
+    def unary(self) -> tuple:
+        if self.accept("!"):
+            return ("not", self.unary())
+        return self.comparison()
+
+    def comparison(self) -> tuple:
+        lhs = self.primary()
+        token = self.peek()
+        if token is None:
+            return lhs
+        if token[1] in {"==", "!=", "<", "<=", ">", ">="}:
+            self.take()
+            return ("cmp", token[1], lhs, self.primary())
+        if token[1] == "=":
+            self.take()
+            self.take("*")
+            if lhs[0] != "field":
+                raise QueryError("Don't understand [= *]")
+            return ("present", lhs[1])
+        if token[1] == "in":
+            self.take()
+            self.take("(")
+            values = [self.value()]
+            while self.accept(","):
+                values.append(self.value())
+            self.take(")")
+            return ("in", lhs, values)
+        if token[0] == "matcher":
+            self.take()
+            return ("match", token[1].split(":")[0], lhs, self.primary())
+        return lhs
+
+    def value(self) -> object:
+        node = self.primary()
+        if node[0] != "literal":
+            raise QueryError("Don't understand [list element]")
+        return node[1]
+
+    def primary(self) -> tuple:
+        token = self.take()
+        kind, text = token
+        if text == "(":
+            node = self.expression()
+            self.take(")")
+            return node
+        if text == "-":
+            number = self.take()
+            if number[0] != "number":
+                raise QueryError("Don't understand [-]")
+            return ("literal", -_number(number[1]))
+        if kind == "string":
+            return ("literal", _unquote(text))
+        if kind == "number":
+            return ("literal", _number(text))
+        if kind == "name":
+            if text == "true":
+                return ("literal", True)
+            if text == "false":
+                return ("literal", False)
+            if text == "null":
+                raise QueryError("Illegal value [null]")
+            return ("field", text)
+        raise QueryError(f"Don't understand [{text}]")
+
+
+def _number(text: str) -> int | float:
+    return float(text) if "." in text else int(text)
+
+
+def _is_number(value: object) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _value(node: tuple, row: dict) -> object:
+    if node[0] == "field":
+        return row.get(node[1])
+    if node[0] == "literal":
+        return node[1]
+    raise QueryError("Don't understand [predicate as value]")
+
+
+def _numeric(value: object) -> object:
+    """Read a numeric string as a number, as PowerQuery's scan phase does."""
+    if isinstance(value, str) and re.fullmatch(r"-?\d+(?:\.\d+)?", value):
+        return _number(value.removeprefix("-")) * (-1 if value[0] == "-" else 1)
+    return value
+
+
+def _equal(lhs: object, rhs: object, coerce: bool) -> bool:
+    if lhs is None or rhs is None:
+        return False
+    if coerce and (_is_number(lhs) or _is_number(rhs)):
+        lhs, rhs = _numeric(lhs), _numeric(rhs)
+    if _is_number(lhs) and _is_number(rhs):
+        return lhs == rhs
+    return type(lhs) is type(rhs) and lhs == rhs
+
+
+def _holds(node: tuple, row: dict, coerce: bool = False) -> bool:
+    """Whether `node` holds for `row`. Before `columns` or `group`, PowerQuery
+    compares numeric strings with numbers as numbers (`coerce`)."""
+    kind = node[0]
+    if kind == "and":
+        return _holds(node[1], row, coerce) and _holds(node[2], row, coerce)
+    if kind == "or":
+        return _holds(node[1], row, coerce) or _holds(node[2], row, coerce)
+    if kind == "not":
+        return not _holds(node[1], row, coerce)
+    if kind == "present":
+        return row.get(node[1]) is not None
+    if kind == "in":
+        value = _value(node[1], row)
+        return any(_equal(value, x, coerce) for x in node[2])
+    if kind == "match":
+        value = _value(node[2], row)
+        needle = _value(node[3], row)
+        if not isinstance(value, str) or not isinstance(needle, str):
+            return False
+        if node[1] == "starts_with":
+            return value.startswith(needle)
+        if node[1] == "ends_with":
+            return value.endswith(needle)
+        return needle in value
+    if kind == "cmp":
+        op = node[1]
+        lhs = _value(node[2], row)
+        rhs = _value(node[3], row)
+        if op == "==":
+            return _equal(lhs, rhs, coerce)
+        if op == "!=":
+            return not _equal(lhs, rhs, coerce)
+        comparable = (_is_number(lhs) and _is_number(rhs)) or (
+            isinstance(lhs, str) and isinstance(rhs, str)
+        )
+        if not comparable:
+            return False
+        return {
+            "<": lhs < rhs,
+            "<=": lhs <= rhs,
+            ">": lhs > rhs,
+            ">=": lhs >= rhs,
+        }[op]
+    # A bare field searches the full text of events, which the operator never
+    # spells.
+    raise QueryError("Don't understand [bare field]")
+
+
+def _parse_predicate(text: str) -> tuple:
+    parser = _Parser(text)
+    node = parser.expression()
+    if not parser.done():
+        raise QueryError(f"Don't understand [{text}]")
+    return node
+
+
+def _split_pipes(query: str) -> list[str]:
+    """Split a query at `|` outside of strings, and drop its comments."""
+    parts = []
+    current = ""
+    quote = None
+    i = 0
+    while i < len(query):
+        c = query[i]
+        if not quote and query.startswith("//", i):
+            end = query.find("\n", i)
+            i = len(query) if end == -1 else end
+            continue
+        if not quote and query.startswith("/*", i):
+            end = query.find("*/", i)
+            if end == -1:
+                raise QueryError("Unable to parse the entire query: comment")
+            i = end + 2
+            continue
+        if quote:
+            current += c
+            if c == "\\" and i + 1 < len(query):
+                current += query[i + 1]
+                i += 2
+                continue
+            if c == quote:
+                quote = None
+        elif c in "\"'":
+            quote = c
+            current += c
+        elif c == "|":
+            parts.append(current)
+            current = ""
+        else:
+            current += c
+        i += 1
+    if quote:
+        raise QueryError("Unable to parse the entire query: unterminated string")
+    parts.append(current)
+    return [part.strip() for part in parts]
+
+
+def _assignments(text: str) -> list[tuple[str, tuple | None]]:
+    """Parse `name = expr, name, ...`, where the expression may be a call."""
+    parser = _Parser(text)
+    result = []
+    while True:
+        name = parser.take()
+        if name[0] != "name":
+            raise QueryError(f"Don't understand [{text}]")
+        expr = None
+        if parser.accept("="):
+            token = parser.peek()
+            if token is not None and token[1] == "count":
+                parser.take()
+                parser.take("(")
+                arg = None
+                if not parser.accept(")"):
+                    arg = parser.take()
+                    if arg[0] != "name":
+                        raise QueryError(f"Don't understand [{text}]")
+                    parser.take(")")
+                expr = ("count", arg[1] if arg else None)
+            else:
+                expr = parser.primary()
+        result.append((name[1], expr))
+        if parser.done():
+            return result
+        parser.take(",")
+
+
+def _stage(rows: list[dict], columns: list[str], stage: str, coerce: bool) -> tuple:
+    """Apply one PowerQuery stage to `rows`, whose fields are `columns`."""
+    command, _, rest = stage.partition(" ")
+    rest = rest.strip()
+    if command == "filter":
+        node = _parse_predicate(rest)
+        return [row for row in rows if _holds(node, row, coerce)], columns
+    if command == "columns":
+        assignments = _assignments(rest)
+        result = []
+        for row in rows:
+            out = {}
+            for name, expr in assignments:
+                if expr is not None and expr[0] == "count":
+                    raise QueryError("Don't understand [count in columns]")
+                out[name] = row.get(name) if expr is None else _value(expr, row)
+            result.append(out)
+        return result, [name for name, _ in assignments]
+    if command == "group":
+        aggregates_text, _, keys_text = rest.partition(" by ")
+        aggregates = _assignments(aggregates_text)
+        keys = _assignments(keys_text) if keys_text else []
+        if any(expr is None or expr[0] != "count" for _, expr in aggregates):
+            raise QueryError(f"Don't understand [{aggregates_text}]")
+        groups: dict[tuple, dict] = {}
+        for row in rows:
+            key = [row.get(name) if e is None else _value(e, row) for name, e in keys]
+            # Group by type and value, as PowerQuery does.
+            group = tuple((type(v).__name__, v) for v in key)
+            state = groups.setdefault(
+                group,
+                {
+                    **{name: value for (name, _), value in zip(keys, key)},
+                    **{name: 0 for name, _ in aggregates},
+                },
+            )
+            for name, (_, arg) in aggregates:
+                if arg is None or row.get(arg) is not None:
+                    state[name] += 1
+        result = list(groups.values())
+        if not keys and not result:
+            result = [{name: 0 for name, _ in aggregates}]
+        return result, [name for name, _ in keys] + [name for name, _ in aggregates]
+    if command == "sort":
+        result = list(rows)
+        for key in reversed([part.strip() for part in rest.split(",")]):
+            descending = key.startswith("-")
+            name = key.removeprefix("-")
+
+            def order(row: dict, name: str = name) -> tuple:
+                value = row.get(name)
+                if value is None:
+                    return (0, 0, "")
+                if _is_number(value):
+                    return (1, value, "")
+                return (2, 0, str(value))
+
+            # Nulls sort first ascending and last descending.
+            result.sort(key=order, reverse=descending)
+        return result, columns
+    if command == "limit":
+        if not re.fullmatch(r"\d+", rest) or not 1 <= int(rest) <= _MAX_LIMIT:
+            raise QueryError(f"query syntax error: invalid limit [{rest}]")
+        return rows[: int(rest)], columns
+    raise QueryError(f"Don't understand [{command}]")
+
+
+def _rows(table: dict) -> tuple[list[dict], list[str]]:
+    names = [column["name"] for column in table["columns"]]
+    return [dict(zip(names, row)) for row in table["values"]], names
+
+
+def _table(rows: list[dict], columns: list[str]) -> dict:
     return {
-        "columns": [{"name": alias} for alias, _ in keys]
-        + [{"name": alias} for alias, _ in aggregates],
-        "values": values[: int(match["limit"])] if match["limit"] else values,
-    }
-
-
-# A trailing `columns` stage before an optional `limit`, as generated from TQL.
-_COLUMNS_STAGE = re.compile(r"(?:^| )\| columns ([^|]+?)(?= \| |$)")
-
-
-def _split_columns(query: str) -> tuple[str, list[str] | None]:
-    """Separate the projection of a generated query from its other stages."""
-    match = _COLUMNS_STAGE.search(query)
-    if match is None:
-        return query, None
-    rest = (query[: match.start()] + query[match.end() :]).strip()
-    if not rest:
-        # A projection alone reads the whole request window.
-        rest = "| filter (1 == 1)"
-    return rest, [name.strip() for name in match.group(1).split(",")]
-
-
-def _project(data: dict, columns: list[str] | None) -> dict:
-    """Model PowerQuery's table projection of a generated query.
-
-    Without a `columns` stage, SentinelOne returns only `timestamp` and
-    `message`. Requested fields that an event lacks are null. Every real event
-    has a `timestamp`; fixtures without one model it as absent instead.
-    """
-    names = [column["name"] for column in data["columns"]]
-    if columns is None:
-        columns = ["timestamp", "message"]
-    columns = [name for name in columns if name != "timestamp" or name in names]
-    indexes = [names.index(name) if name in names else None for name in columns]
-    return {
-        **data,
         "columns": [{"name": name} for name in columns],
-        "values": [
-            [None if i is None else row[i] for i in indexes] for row in data["values"]
-        ],
+        "values": [[row.get(name) for name in columns] for row in rows],
     }
 
 
-def _request_query(payload: dict) -> str:
-    if payload["queryType"] == "PQ":
-        return payload["pq"]["query"]
-    return "| filter " + (payload["log"]["filter"] or "(1 == 1)")
+def _hybrid_rows(scope: str) -> list[dict]:
+    count = 3 if scope in {"hybrid_discovery", "hybrid_partial"} else 1005
+    return [
+        {
+            "timestamp": 1704067200000000000,
+            "id": i,
+            "event.type": "DNS Resolved",
+            "event.dns.request": f"host-{i}",
+            "key": "id",
+            "flag": "true",
+            "addr": "192.0.2.1",
+            "items": [1, {"nested": "false"}],
+            "event.extra": "kept",
+        }
+        for i in range(count)
+    ]
 
 
-def _log_page(data: dict, payload: dict) -> dict:
-    names = [column["name"] for column in data["columns"]]
+def _population(scope: str, payload: dict) -> tuple[list[dict], list[str]]:
+    """The events of the account scope `scope` within the request window."""
+    if scope.startswith("aggregate"):
+        table = _aggregate_population(scope, payload)
+        rows, columns = _rows(table)
+        # A missing field is absent from the event.
+        rows = [{k: v for k, v in row.items() if v is not None} for row in rows]
+        return rows, columns
+    if scope == "pq_maximum":
+        return [{"x": 0}] * _MAX_LIMIT, ["x"]
+    if scope == "hybrid_numeric_floats":
+        rows, columns = _rows(_STATIC_RESPONSES["select_floats"])
+    elif scope.startswith("hybrid_numeric_") or scope == "hybrid_inline":
+        rows, columns = _rows(_STATIC_RESPONSES["select_basic"])
+    elif scope.startswith("hybrid_"):
+        rows = _hybrid_rows(scope)
+        columns = list(rows[0])
+    elif scope in {"pushdown_projection", "pushdown_semantics", "pushdown_booleans"}:
+        rows, columns = _rows(_STATIC_RESPONSES[scope])
+    elif scope == "pushdown_empty":
+        return [], []
+    else:
+        rows, columns = _rows(_STATIC_RESPONSES["select_basic"])
+    start = datetime.fromisoformat(payload["startTime"]).timestamp()
+    end = datetime.fromisoformat(payload["endTime"]).timestamp()
+    rows = [
+        row
+        for row in rows
+        if "timestamp" not in row or start <= row["timestamp"] / 1e9 < end
+    ]
+    return rows, columns
+
+
+def _capped_rows(base: str, payload: dict) -> list[dict]:
+    """1,005 events, five more than the default cap returns."""
+    start = datetime.fromisoformat(payload["startTime"]).timestamp()
+    end = datetime.fromisoformat(payload["endTime"]).timestamp()
+    reverse = base == "pushdown_capped_reverse"
+    rows = []
+    for i in range(1005):
+        seconds = 1704067200 + (1004 - i if reverse else i)
+        if start <= seconds < end:
+            rows.append({"timestamp": seconds * 1_000_000_000, "id": i})
+    return rows
+
+
+def _named_base(base: str, payload: dict) -> tuple[list[dict], list[str]] | None:
+    """The result of an explicit query that names a test dataset."""
+    if base == "select_scope":
+        rows = [
+            {
+                "tenant": payload.get("tenant"),
+                "accounts": ",".join(payload.get("accountIds", [])),
+            }
+        ]
+        return rows, ["tenant", "accounts"]
+    if base == "select_echo_times":
+        return [{"start": payload["startTime"], "end": payload["endTime"]}], [
+            "start",
+            "end",
+        ]
+    if base in {"pushdown_capped", "pushdown_capped_reverse"}:
+        return _capped_rows(base, payload), ["timestamp", "id"]
+    if base.startswith("pushdown_empty"):
+        return [], []
+    if base in _RETRY_QUERIES:
+        return _rows(_STATIC_RESPONSES["select_basic"])
+    data = _STATIC_RESPONSES.get(base)
+    if isinstance(data, dict):
+        return _rows(data)
+    return None
+
+
+# Explicit queries whose transport misbehaves before it returns the basic
+# result.
+_RETRY_QUERIES = {
+    "select_retry",
+    "select_launch_retry",
+    "select_launch_long_retry",
+    "select_launch_retry_signed_overflow",
+    "select_launch_retry_unsigned_max",
+    "select_launch_retry_beyond_unsigned",
+    "select_launch_retry_invalid",
+    "select_poll_retry_overflow",
+    "select_transport_retry",
+    "select_delete_retry",
+}
+
+
+def _check_query(payload: dict) -> None:
+    """Reject queries that SentinelOne would not parse, as at launch."""
+    if payload["queryType"] == "LOG":
+        if payload["log"]["filter"].strip():
+            _parse_predicate(payload["log"]["filter"])
+        return
+    parts = _split_pipes(payload["pq"]["query"])
+    for stage in parts[1:]:
+        command, _, rest = stage.partition(" ")
+        if command == "filter":
+            _parse_predicate(rest)
+        elif command in {"columns", "group"}:
+            for text in rest.split(" by "):
+                _assignments(text)
+        elif command == "limit":
+            if not re.fullmatch(r"\d+", rest.strip()) or not (
+                1 <= int(rest) <= _MAX_LIMIT
+            ):
+                raise QueryError(f"query syntax error: invalid limit [{rest}]")
+        elif command != "sort":
+            raise QueryError(f"Don't understand [{command}]")
+
+
+def _evaluate_pq(payload: dict, scope: str) -> dict | str:
+    """Evaluate a PowerQuery as SentinelOne would, or return a static body."""
+    query = payload["pq"]["query"]
+    parts = _split_pipes(query)
+    base, stages = parts[0], parts[1:]
+    explicit = bool(base)
+    if explicit and not stages and base in _STATIC_RESPONSES:
+        # Keep static fixtures byte-for-byte, also malformed ones.
+        data = _STATIC_RESPONSES[base]
+        if data is None:
+            raise QueryError(f"unknown query: {query!r}")
+        return data
+    named = _named_base(base, payload) if explicit else None
+    if named is not None:
+        rows, columns = named
+    else:
+        rows, columns = _population(scope, payload)
+        if explicit:
+            # A plain query filters the events of the scope.
+            node = _parse_predicate(base)
+            rows = [row for row in rows if _holds(node, row, True)]
+    shaped = False
+    limited = False
+    for stage in stages:
+        rows, columns = _stage(rows, columns, stage, not shaped)
+        command = stage.partition(" ")[0]
+        shaped = shaped or command in {"columns", "group"}
+        limited = limited or command == "limit"
+    if named is None and not shaped:
+        # Whole events show only `timestamp` and `message`.
+        columns = [
+            name
+            for name in ("timestamp", "message")
+            if name != "timestamp" or name in columns
+        ]
+    data = _table(rows, columns)
+    if not limited and len(data["values"]) > _DEFAULT_CAP:
+        data["values"] = data["values"][:_DEFAULT_CAP]
+        data["warnings"] = ["Result set limited to 1000 rows by default"]
+    return data
+
+
+def _evaluate_log(payload: dict, scope: str) -> list[dict]:
+    rows, _ = _population(scope, payload)
+    text = payload["log"]["filter"]
+    if text.strip():
+        node = _parse_predicate(text)
+        # LOG queries also see the metadata that `_log_page` adds.
+        rows = [
+            row
+            for row in rows
+            if _holds(node, {"severity": 3, "threadId": "worker", **row}, True)
+        ]
+    return rows
+
+
+def _log_page(rows: list[dict], payload: dict) -> dict:
     matches = []
-    for i, row in enumerate(data["values"]):
-        values = dict(zip(names, row))
+    for i, row in enumerate(rows):
+        values = dict(row)
         matches.append(
             {
                 "cursor": f"match-{i}",
@@ -401,6 +883,22 @@ def _log_page(data: dict, payload: dict) -> dict:
         # This estimate is deliberately wrong. It is not an exhaustion signal.
         "estimatedMatchCount": 1,
     }
+
+
+def _request_text(payload: dict) -> str:
+    if payload["queryType"] == "PQ":
+        return payload["pq"]["query"]
+    return payload["log"]["filter"]
+
+
+def _base(payload: dict) -> str:
+    """The first segment of a PowerQuery, which names explicit test queries."""
+    if payload["queryType"] != "PQ":
+        return ""
+    try:
+        return _split_pipes(payload["pq"]["query"])[0]
+    except QueryError:
+        return payload["pq"]["query"]
 
 
 def _validate_add_events_payload(payload: object) -> str | None:
@@ -492,23 +990,21 @@ def _make_handler(
                 capture(method="POST", payload=payload, status=400, error=error)
                 self._respond(400, {"error": error})
                 return
-            query = _request_query(payload)
-            launches[query] = launches.get(query, 0) + 1
-            if payload.get("accountIds") == [
-                "aggregate_bad_launch_retry"
-            ] and query.startswith("| group"):
+            text = _request_text(payload)
+            query = _base(payload)
+            grouped = "| group" in text
+            launches[text] = launches.get(text, 0) + 1
+            if payload.get("accountIds") == ["aggregate_bad_launch_retry"] and grouped:
                 capture(method="POST", payload=payload, status=429)
                 self._respond(
                     429, {"error": "rate limited"}, {"Retry-After": "invalid"}
                 )
                 return
-            if payload.get("accountIds") == ["aggregate_rejected"] and query.startswith(
-                "| group"
-            ):
+            if payload.get("accountIds") == ["aggregate_rejected"] and grouped:
                 capture(method="POST", payload=payload, status=500)
                 self._respond(500, {"error": "Don't understand [group]"})
                 return
-            if query.startswith("| filter ((launch_error) == (1))"):
+            if "launch_error" in text:
                 capture(method="POST", payload=payload, status=500)
                 self._respond(500, {"error": "Unable to parse the entire query"})
                 return
@@ -526,11 +1022,17 @@ def _make_handler(
                 "select_launch_retry_beyond_unsigned": str(2**64),
                 "select_launch_retry_invalid": "invalid",
             }.get(query)
-            if retry_after is not None and launches[query] == 1:
+            if retry_after is not None and launches[text] == 1:
                 capture(method="POST", payload=payload, status=429)
                 self._respond(
                     429, {"error": "rate limited"}, {"Retry-After": retry_after}
                 )
+                return
+            try:
+                _check_query(payload)
+            except QueryError as exc:
+                capture(method="POST", payload=payload, status=400, rejected=str(exc))
+                self._respond(400, {"message": str(exc)})
                 return
             qid = str(len(queries) + 1)
             tag = f"route-{qid}"
@@ -552,8 +1054,7 @@ def _make_handler(
                 self.connection.close()
                 return
             if query.startswith("select_launch_server_error") or (
-                payload.get("accountIds") == ["aggregate_launch_error"]
-                and query.startswith("| group")
+                payload.get("accountIds") == ["aggregate_launch_error"] and grouped
             ):
                 capture(method="POST", payload=payload, status=503, id=qid)
                 self._respond(503, {"error": "response failed after query creation"})
@@ -566,7 +1067,9 @@ def _make_handler(
                         "id": qid,
                         "stepsCompleted": 2,
                         "stepsTotal": 2,
-                        "data": _log_page(_STATIC_RESPONSES["select_basic"], payload),
+                        "data": _log_page(
+                            _evaluate_log(payload, "hybrid_inline"), payload
+                        ),
                     },
                     {"X-Dataset-Query-Forward-Tag": tag},
                 )
@@ -648,7 +1151,9 @@ def _make_handler(
                 self._respond(400, {"error": "invalid lastStepSeen or deleted query"})
                 return
             state["polls"] += 1
-            query = _request_query(state["payload"])
+            text = _request_text(state["payload"])
+            query = _base(state["payload"])
+            grouped = "| group" in text
             scope = state["payload"].get("accountIds", [""])[0]
             continuation = "cursor" in state["payload"].get("log", {})
             if continuation and scope in {"hybrid_retry", "hybrid_timeout"}:
@@ -675,14 +1180,14 @@ def _make_handler(
                 "aggregate_long_retry": "20",
                 "aggregate_bad_retry": "invalid",
             }.get(scope)
-            if retry_after is not None and query.startswith("| group"):
+            if retry_after is not None and grouped:
                 capture(method="GET", id=qid, status=429)
                 self._respond(
                     429, {"error": "rate limited"}, {"Retry-After": retry_after}
                 )
                 return
             # Every poll of this aggregate query fails, so retries cannot help.
-            if scope == "aggregate_poll_error" and query.startswith("| group"):
+            if scope == "aggregate_poll_error" and grouped:
                 capture(method="GET", id=qid, status=0)
                 self.close_connection = True
                 self.connection.shutdown(socket.SHUT_RDWR)
@@ -727,7 +1232,7 @@ def _make_handler(
                 capture(method="GET", id=qid, status=503)
                 self._respond(503, {"error": "temporarily unavailable"})
                 return
-            if query.startswith("| filter ((poll_error) == (1))"):
+            if "poll_error" in text:
                 capture(method="GET", id=qid, status=500)
                 self._respond(500, {"error": "undefined field 'poll_error'"})
                 return
@@ -744,12 +1249,12 @@ def _make_handler(
                 step, total = 1, 2
             # Wire-contract cases need no slow-query simulation. Keep lifecycle
             # coverage in the existing select_* scenarios.
-            if query.startswith("pushdown_") or query.startswith("| "):
+            if not query.startswith("select_"):
                 step = total = 2
             state["last_step"] = step
             capture(method="GET", id=qid, status=200, step=step)
             # Malformed polls of an aggregate query.
-            if query.startswith("| group") and scope in {
+            if grouped and scope in {
                 "aggregate_no_data",
                 "aggregate_bad_poll",
                 "aggregate_no_steps",
@@ -773,204 +1278,14 @@ def _make_handler(
                     },
                 )
                 return
-            # Generated queries project their response; explicit ones do not.
-            generated = query.startswith("| ")
-            query, projection = _split_columns(query) if generated else (query, None)
-            # The number of events that the initial filter matched. Only
-            # aggregate queries differ from the number of returned rows.
-            match_count = None
-            if query == "select_scope":
-                data = {
-                    "columns": [{"name": "tenant"}, {"name": "accounts"}],
-                    "values": [
-                        [
-                            state["payload"].get("tenant"),
-                            ",".join(state["payload"].get("accountIds", [])),
-                        ]
-                    ],
-                }
-            elif query == "select_echo_times":
-                data = {
-                    "columns": [{"name": "start"}, {"name": "end"}],
-                    "values": [
-                        [state["payload"]["startTime"], state["payload"]["endTime"]]
-                    ],
-                }
-            elif query in {
-                "select_retry",
-                "select_launch_retry",
-                "select_launch_long_retry",
-                "select_launch_retry_signed_overflow",
-                "select_launch_retry_unsigned_max",
-                "select_launch_retry_beyond_unsigned",
-                "select_launch_retry_invalid",
-                "select_poll_retry_overflow",
-                "select_transport_retry",
-                "select_delete_retry",
-            }:
-                data = _STATIC_RESPONSES["select_basic"]
-            elif query.startswith("pushdown_empty"):
-                # The caller asserts exact query text and bounds in the capture.
-                # This accepts arbitrary lexical probes, not arbitrary PQ syntax.
-                data = {"columns": [], "values": []}
-            elif query.startswith("pushdown_capped"):
-                # Model the server's order: window and query first, cap last.
-                # There are five more rows than the default cap can return.
-                match = re.fullmatch(
-                    r"pushdown_capped(?:_reverse)?(?: \| filter \(\(id\) >= \((\d+)\)\))?"
-                    r"(?: \| limit (\d+))?",
-                    query,
-                )
-                if match is None:
-                    self._respond(400, {"error": "unexpected capped query"})
-                    return
-                start = datetime.fromisoformat(
-                    state["payload"]["startTime"]
-                ).timestamp()
-                end = datetime.fromisoformat(state["payload"]["endTime"]).timestamp()
-                minimum = int(match[1]) if match[1] is not None else 0
-                limit = int(match[2]) if match[2] is not None else 1000
-                reverse = query.startswith("pushdown_capped_reverse")
-                values = []
-                for i in range(1005):
-                    seconds = 1704067200 + (1004 - i if reverse else i)
-                    if i >= minimum and start <= seconds < end:
-                        values.append([seconds * 1_000_000_000, i])
-                data = {
-                    "columns": [{"name": "timestamp"}, {"name": "id"}],
-                    "values": values[:limit],
-                }
-            elif query.startswith("| ") and scope.startswith("aggregate"):
-                population = _aggregate_population(scope, state["payload"])
-                if query.startswith("| group"):
-                    data = _aggregate(population, query)
-                    if data is None:
-                        self._respond(400, {"error": f"unexpected group: {query!r}"})
-                        return
-                    match_count = len(population["values"])
-                    generated = False
-                elif query == "| filter (1 == 1)":
-                    data = population
-                elif match := _ABSENT_FILTER.fullmatch(query):
-                    data = _absent(population, match["field"])
-                    # Model a population that changed between the queries.
-                    if scope == "aggregate_sparse_drift":
-                        data = {**data, "values": []}
+            try:
+                if state["payload"]["queryType"] == "LOG":
+                    data = {"rows": _evaluate_log(state["payload"], scope)}
                 else:
-                    self._respond(400, {"error": f"unexpected query: {query!r}"})
-                    return
-            elif query.startswith("| ") and scope.startswith("hybrid_numeric_"):
-                data = _STATIC_RESPONSES[
-                    "select_floats"
-                    if scope == "hybrid_numeric_floats"
-                    else "select_basic"
-                ]
-            elif query.startswith("| ") and scope.startswith("hybrid_"):
-                data = {
-                    "columns": [
-                        {"name": name}
-                        for name in (
-                            "timestamp",
-                            "id",
-                            "event.type",
-                            "event.dns.request",
-                            "key",
-                            "flag",
-                            "addr",
-                            "items",
-                            "event.extra",
-                        )
-                    ],
-                    "values": [
-                        [
-                            1704067200000000000,
-                            i,
-                            "DNS Resolved",
-                            f"host-{i}",
-                            "id",
-                            "true",
-                            "192.0.2.1",
-                            [1, {"nested": "false"}],
-                            "kept",
-                        ]
-                        for i in range(
-                            3
-                            if scope in {"hybrid_discovery", "hybrid_partial"}
-                            else 1005
-                        )
-                    ],
-                }
-                # Generated PQ inherits the native 1,000-row cap. LOG pages
-                # can continue beyond it, even though every timestamp ties.
-                if state["payload"]["queryType"] == "PQ":
-                    data["values"] = data["values"][:1000]
-            elif query.startswith("| ") and state["payload"].get("accountIds") == [
-                "pushdown_empty"
-            ]:
-                # Exact query spelling is asserted by the wire-contract tests.
-                data = {"columns": [], "values": []}
-            elif query.startswith("| ") and state["payload"].get("accountIds") == [
-                "pushdown_projection"
-            ]:
-                original = _STATIC_RESPONSES["pushdown_projection"]
-                values = original["values"]
-                if query == '| filter ((event.type) == ("DNS Resolved"))':
-                    values = [row for row in values if row[2] == "DNS Resolved"]
-                elif query == '| filter ((dataSource.name) == ("SentinelOne"))':
-                    values = [row for row in values if row[4] == "SentinelOne"]
-                elif query != "| filter (1 == 1)":
-                    self._respond(400, {"error": "unexpected projection prefilter"})
-                    return
-                data = {**original, "values": values}
-            elif query.startswith("| ") and state["payload"].get("accountIds") in (
-                ["pushdown_semantics"],
-                ["pushdown_booleans"],
-            ):
-                scope = state["payload"]["accountIds"][0]
-                original = _STATIC_RESPONSES[scope]
-                values = original["values"]
-                if scope == "pushdown_semantics":
-                    expected = "| filter ((n) == (42))"
-                    if query in (expected, expected + " and (missing = *)"):
-                        # Emulate loose coercion and a raw field omitted from
-                        # the returned columns. Both need local rechecking.
-                        values = [row for row in values if row[1] in (42, "42")]
-                    elif query not in {"| limit 1000", "| filter (1 == 1)"}:
-                        self._respond(400, {"error": "unexpected prefilter"})
-                        return
-                elif query == '| filter (((flag) == (true)) or ((flag) == ("true")))':
-                    values = values[:2]
-                elif query not in {"| limit 1000", "| filter (1 == 1)"}:
-                    self._respond(400, {"error": "unexpected boolean prefilter"})
-                    return
-                data = {**original, "values": values}
-            elif query in {
-                "| filter (1 == 1)",
-                "| filter ((event_id) == (42))",
-                "| filter ((event_id) > (40))",
-                '| filter ((message) starts_with:matchcase("login"))',
-                "| limit 1",
-            }:
-                original = _STATIC_RESPONSES["select_basic"]
-                start = datetime.fromisoformat(
-                    state["payload"]["startTime"]
-                ).timestamp()
-                end = datetime.fromisoformat(state["payload"]["endTime"]).timestamp()
-                values = [
-                    row for row in original["values"] if start <= row[0] / 1e9 < end
-                ]
-                if query in {
-                    "| filter ((event_id) == (42))",
-                    '| filter ((message) starts_with:matchcase("login"))',
-                }:
-                    values = [row for row in values if row[1] == 42]
-                if query == "| limit 1":
-                    values = values[:1]
-                data = {**original, "values": values}
-            else:
-                data = _STATIC_RESPONSES.get(query)
-            if data is None:
-                self._respond(400, {"error": f"unknown query: {query!r}"})
+                    data = _evaluate_pq(state["payload"], scope)
+            except QueryError as exc:
+                capture(method="GET", id=qid, status=400, rejected=str(exc))
+                self._respond(400, {"message": str(exc)})
                 return
             if isinstance(data, str):
                 # Keep malformed JSON fixtures byte-for-byte to retain their
@@ -978,7 +1293,7 @@ def _make_handler(
                 self._respond(200, data)
                 return
             if state["payload"]["queryType"] == "LOG":
-                data = _log_page(data, state["payload"])
+                data = _log_page(data["rows"], state["payload"])
                 if scope == "hybrid_mixed":
                     for match in data["matches"]:
                         values = match["values"]
@@ -1012,16 +1327,12 @@ def _make_handler(
                     200, {"stepsCompleted": step, "stepsTotal": total, "data": data}
                 )
                 return
-            if generated:
-                data = _project(data, projection)
             data = dict(data)
             data["columns"] = [
                 dict(column, cellType="UNKNOWN", decimalPlaces=0)
                 for column in data["columns"]
             ]
-            data["matchCount"] = (
-                len(data["values"]) if match_count is None else match_count
-            )
+            data["matchCount"] = len(data["values"])
             if scope in {"hybrid_partial", "aggregate_partial"}:
                 data["omittedEvents"] = 1.0
             self._respond(
@@ -1035,14 +1346,14 @@ def _make_handler(
             qid, state = active
             state["deletes"] += 1
             if (
-                _request_query(state["payload"]) == "select_delete_retry"
+                _base(state["payload"]) == "select_delete_retry"
                 and state["deletes"] == 1
             ):
                 capture(method="DELETE", id=qid, status=503)
                 self._respond(503, {"error": "temporarily unavailable"})
                 return
             state["deleted"] = True
-            code = 404 if _request_query(state["payload"]) == "select_expired" else 200
+            code = 404 if _base(state["payload"]) == "select_expired" else 200
             capture(method="DELETE", id=qid, status=code)
             self._respond(code, {})
 
@@ -1118,12 +1429,44 @@ def sentinelone() -> FixtureHandle:
         "S1_FIXTURE_LRQ_CAPTURE_FILE": lrq_capture_path,
     }
     env.update(tls_env)
+    # The number of captured requests that earlier tests of the suite made.
+    checked = [0]
+
+    def _request(call: dict[str, Any]) -> dict[str, object]:
+        payload = call["payload"]
+        result: dict[str, object] = {
+            "type": payload["queryType"],
+            "query": _request_text(payload),
+            "start": payload["startTime"],
+            "end": payload["endTime"],
+            "status": call["status"],
+        }
+        if payload["queryType"] == "LOG":
+            result["limit"] = payload["log"]["limit"]
+            result["cursor"] = payload["log"].get("cursor")
+        return result
 
     def _assert_test(
         *, assertions: SentinelOneAssertions | dict[str, Any], **_: object
     ) -> None:
         if isinstance(assertions, dict):
             assertions = SentinelOneAssertions(**assertions)
+        lines = Path(lrq_capture_path).read_text().splitlines()
+        recent = [json.loads(line) for line in lines[checked[0] :] if line]
+        checked[0] = len(lines)
+        if assertions.expected_requests is not None:
+            actual = [_request(call) for call in recent if call["method"] == "POST"]
+            projected = [
+                {key: request.get(key) for key in expected}
+                for request, expected in zip(actual, assertions.expected_requests)
+            ]
+            if len(actual) != len(assertions.expected_requests) or (
+                projected != assertions.expected_requests
+            ):
+                raise AssertionError(
+                    "expected SentinelOne requests "
+                    f"{assertions.expected_requests!r}, got {actual!r}"
+                )
         if assertions.queries_cancelled:
             calls = [
                 json.loads(line)

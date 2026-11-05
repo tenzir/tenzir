@@ -1,0 +1,13 @@
+// A sort with a limit becomes `sort` with the bound of the limit.
+from_splunk env("SPLUNK_MGMT_URL"),
+  index="main",
+  earliest="1735689599",
+  latest="1735689780",
+  headers={
+    Authorization: env("SPLUNK_AUTHORIZATION"),
+  },
+  tls={skip_peer_verification: true}
+where source == "tenzir-docs-auth"
+sort -_time
+head 2
+select _time, user

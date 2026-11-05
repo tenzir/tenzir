@@ -8,6 +8,7 @@
 
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/pushdown/splunk.hpp"
+#include "tenzir/pushdown/sql_source.hpp"
 #include "tenzir/session.hpp"
 #include "tenzir/test/registry.hpp"
 #include "tenzir/test/test.hpp"
@@ -20,8 +21,11 @@
 
 using namespace tenzir;
 using namespace tenzir::pushdown;
+using namespace std::literals;
 
 namespace {
+
+using Path = std::vector<std::string>;
 
 auto parse(std::string_view source) -> ast::expression {
   auto dh = collecting_diagnostic_handler{};
@@ -37,14 +41,6 @@ auto parse(std::string_view source) -> ast::expression {
   return std::move(*expr);
 }
 
-auto filters(std::vector<std::string_view> sources) -> ir::OptimizeFilter {
-  auto result = ir::OptimizeFilter{};
-  for (auto source : sources) {
-    result.push_back(parse(source));
-  }
-  return result;
-}
-
 auto paths(std::vector<std::string_view> sources) -> ir::OptimizeProjection {
   auto result = ir::OptimizeProjection{};
   for (auto source : sources) {
@@ -55,227 +51,413 @@ auto paths(std::vector<std::string_view> sources) -> ir::OptimizeProjection {
   return result;
 }
 
-auto plan(std::string_view search, std::vector<std::string_view> predicates,
-          Option<std::vector<std::string_view>> projection = None{},
-          Option<uint64_t> limit = None{}, bool inference = true) -> PipePlan {
+auto at(std::string_view source) -> tenzir::time {
+  auto expr = parse(source);
+  auto const* constant = try_as<ast::constant>(expr);
+  REQUIRE(constant);
+  return as<tenzir::time>(constant->value);
+}
+
+auto filter(std::string_view predicate) -> ir::QueryStage {
+  return {ir::QueryStage::Filter{parse(predicate)}};
+}
+
+auto select(std::vector<std::pair<Path, Path>> fields) -> ir::QueryStage {
+  auto result = ir::QueryStage::Select{};
+  for (auto& [output, input] : fields) {
+    result.fields.push_back({.output = output, .input = input});
+  }
+  return {std::move(result)};
+}
+
+auto drop(std::vector<Path> fields) -> ir::QueryStage {
+  return {ir::QueryStage::Drop{std::move(fields)}};
+}
+
+auto sort(std::vector<std::string_view> keys, Option<uint64_t> bound = None{})
+  -> ir::QueryStage {
+  auto result = ir::QueryStage::Sort{.keys = {}, .bound = bound};
+  for (auto key : keys) {
+    auto descending = key.starts_with('-');
+    if (descending) {
+      key.remove_prefix(1);
+    }
+    result.keys.push_back(
+      {.field = {std::string{key}}, .descending = descending});
+  }
+  return {std::move(result)};
+}
+
+auto limit(uint64_t count) -> ir::QueryStage {
+  return {ir::QueryStage::Limit{count}};
+}
+
+auto main_index() -> SplSource {
+  return {.search = None{}, .indexes = {"main"}};
+}
+
+auto user(std::string_view search) -> SplSource {
+  return {.search = std::string{search}, .indexes = {}};
+}
+
+/// The search that reads `source` and computes `stages`, or the empty string
+/// if Splunk does not spell them.
+auto spl(SplSource const& source, std::vector<ir::QueryStage> stages,
+         Option<std::vector<std::string_view>> projection = None{})
+  -> std::string {
   auto projected = Option<ir::OptimizeProjection>{};
   if (projection) {
     projected = paths(*projection);
   }
-  return plan_spl_search(search, filters(predicates), projected, limit,
-                         inference, test::builtin_registry());
-}
-
-/// The `search` stage for a single predicate, or the empty string if nothing
-/// was pushed.
-auto search(std::string_view predicate) -> std::string {
-  auto planned = plan("S", {predicate});
-  if (not planned.filtered) {
+  auto query = plan_spl_query(source, stages, projected);
+  if (not query) {
     return {};
   }
-  constexpr auto prefix = std::string_view{"S\n| search "};
-  constexpr auto suffix = std::string_view{"\n| fields *"};
-  REQUIRE(planned.query.starts_with(prefix));
-  REQUIRE(planned.query.ends_with(suffix));
-  return planned.query.substr(prefix.size(), planned.query.size()
-                                               - prefix.size() - suffix.size());
+  return query->search;
+}
+
+/// The terms that a filter adds to the search for the index `main`, and the
+/// stages after it, without the final `fields *`.
+auto index_filter(std::string_view predicate) -> std::string {
+  auto search = spl(main_index(), {filter(predicate)});
+  if (search.empty()) {
+    return {};
+  }
+  constexpr auto prefix = "search index=\"main\""sv;
+  constexpr auto suffix = "\n| fields *"sv;
+  REQUIRE(search.starts_with(prefix));
+  REQUIRE(search.ends_with(suffix));
+  return search.substr(prefix.size(),
+                       search.size() - prefix.size() - suffix.size());
+}
+
+/// The `where` expression of a filter after a user's search, or the empty
+/// string if Splunk does not spell it.
+auto where(std::string_view predicate) -> std::string {
+  auto search = spl(user("S"), {filter(predicate)});
+  if (search.empty()) {
+    return {};
+  }
+  constexpr auto prefix = "search S\n| where "sv;
+  constexpr auto suffix = "\n| fields *"sv;
+  REQUIRE(search.starts_with(prefix));
+  REQUIRE(search.ends_with(suffix));
+  return search.substr(prefix.size(),
+                       search.size() - prefix.size() - suffix.size());
 }
 
 } // namespace
 
-TEST("spl renders number comparisons") {
-  CHECK_EQUAL(search("n > 6"), "n>6");
-  CHECK_EQUAL(search("n >= -1.5"), "n>=-1.5");
-  CHECK_EQUAL(search("n < 0.25"), "n<0.25");
-  CHECK_EQUAL(search("n <= 7"), "n<=7");
-  CHECK_EQUAL(search("n == 7"), "n=7");
-  CHECK_EQUAL(search("6 < n"), "n>6");
-  // Exponents might read as text.
-  CHECK_EQUAL(search("n > 0.0000001"), "");
+TEST("spl spells leading filters of indexes as search terms") {
+  CHECK_EQUAL(index_filter("n > 6"), " n>6");
+  CHECK_EQUAL(index_filter("6 < n"), " n>6");
+  CHECK_EQUAL(index_filter("n >= -1.5"), " n>=-1.5");
+  CHECK_EQUAL(index_filter("n == 7"), " n=7");
+  CHECK_EQUAL(index_filter(R"(user == "alice")"), R"( user="alice")");
+  CHECK_EQUAL(index_filter(R"(user == "a\"b\\c")"), R"( user="a\"b\\c")");
+  CHECK_EQUAL(index_filter("flag == true"), " flag=true");
+  CHECK_EQUAL(index_filter("src == 192.0.2.10"), R"( src="192.0.2.10")");
+  CHECK_EQUAL(index_filter("src in 10.0.0.0/8"), R"( src="10.0.0.0/8")");
+  CHECK_EQUAL(index_filter(R"(user in ["alice", 5, true])"),
+              R"( user IN ("alice", 5, true))");
+  CHECK_EQUAL(index_filter("action != null"), " action=*");
+  CHECK_EQUAL(index_filter(R"(user.starts_with("al"))"), R"( user="al*")");
+  CHECK_EQUAL(index_filter(R"(user.ends_with("ce"))"), R"( user="*ce")");
+  CHECK_EQUAL(index_filter(R"("lic" in user)"), R"( user="*lic*")");
+  CHECK_EQUAL(index_filter(R"(this["weird field"] == "x")"),
+              R"( "weird field"="x")");
+  CHECK_EQUAL(index_filter(R"(n > 6 or user == "bob")"),
+              R"( (n>6 OR user="bob"))");
+  CHECK_EQUAL(index_filter("_time >= 2025-01-01T00:01:00.5Z"),
+              " _time>=1735689660.5");
+  // Each conjunct of a filter goes into the search or into a `where` stage
+  // as a whole.
+  CHECK_EQUAL(index_filter(R"(n > 6 and user != "bob" and x == 1)"),
+              " n>6 x=1\n| where ('user' != \"bob\")");
+  // A wildcard in a string would match more than the string, and search
+  // modifiers are no fields, so these stay in `where`.
+  CHECK_EQUAL(index_filter(R"(user == "a*")"), "\n| where ('user' == \"a*\")");
+  CHECK_EQUAL(index_filter(R"(earliest == "x")"),
+              "\n| where ('earliest' == \"x\")");
+  CHECK_EQUAL(index_filter(R"(user.starts_with("a*"))"),
+              "\n| where (substr('user', 1, len(\"a*\"))==\"a*\")");
 }
 
-TEST("spl renders string and boolean equality") {
-  CHECK_EQUAL(search(R"(user == "alice")"), R"(user="alice")");
-  CHECK_EQUAL(search(R"(user == "a\"b\\c")"), R"(user="a\"b\\c")");
-  CHECK_EQUAL(search(R"(user == "")"), R"(user="")");
-  CHECK_EQUAL(search("flag == true"), "flag=true");
-  CHECK_EQUAL(search("flag"), "flag=true");
-  // Wildcards in values only widen the match.
-  CHECK_EQUAL(search(R"(user == "a*")"), R"(user="a*")");
-  // Control characters stay local.
-  CHECK_EQUAL(search("user == \"a\\nb\""), "");
-  // Ordering on strings stays local.
-  CHECK_EQUAL(search(R"(user < "b")"), "");
-  // `!=` must keep missing fields, which `search` cannot prove.
-  // `!=` goes into a `where` stage; see the negation test.
+TEST("spl spells other filters as where stages") {
+  CHECK_EQUAL(where("n > 6"), "('n' > 6)");
+  CHECK_EQUAL(where("n != 6.5"), "('n' != 6.5)");
+  CHECK_EQUAL(where(R"(user == "a\"b")"), R"(('user' == "a\"b"))");
+  CHECK_EQUAL(where("flag == true"), R"(('flag' == "true"))");
+  CHECK_EQUAL(where("x == null"), "isnull('x')");
+  CHECK_EQUAL(where("x != null"), "isnotnull('x')");
+  CHECK_EQUAL(where("n in [1, 2]"), "in('n', 1, 2)");
+  CHECK_EQUAL(where(R"(not (user == "a") or n + 1 > 2)"),
+              R"(((NOT ('user' == "a")) OR (('n' + 1) > 2)))");
+  CHECK_EQUAL(where(R"(user.starts_with("al"))"),
+              R"((substr('user', 1, len("al"))=="al"))");
+  CHECK_EQUAL(where(R"(user.ends_with("ce"))"),
+              R"((substr('user', len('user')-len("ce")+1)=="ce"))");
+  CHECK_EQUAL(where(R"(user.match_regex("^a"))"), R"(match('user', "^a"))");
+  CHECK_EQUAL(where(R"(user.to_lower() == "a")"), R"((lower('user') == "a"))");
+  CHECK_EQUAL(where(R"(this["a b"] == 1)"), "('a b' == 1)");
+  CHECK_EQUAL(where("_time > 2025-01-01T00:01:00Z"), "('_time' > 1735689660)");
+  // A string or a field name that SPL cannot hold, nested paths, bare
+  // fields, which SPL does not read as predicates, and times of other fields,
+  // which hold text, have no spelling.
+  CHECK_EQUAL(where("user == \"a\\nb\""), "");
+  CHECK_EQUAL(where(R"(this["a|b"] == 1)"), "");
+  CHECK_EQUAL(where("obj.k == 1"), "");
+  CHECK_EQUAL(where("flag"), "");
+  CHECK_EQUAL(where("ts > 2025-01-01T00:01:00Z"), "");
+  CHECK_EQUAL(where("src in 10.0.0.0/8"), "");
+  // Filters after other stages use `where` also for indexes.
+  CHECK_EQUAL(spl(main_index(), {limit(5), filter("n > 6")}),
+              "search index=\"main\"\n| head 5\n| where ('n' > 6)\n| fields *");
 }
 
-TEST("spl quotes field names that are not identifiers") {
-  CHECK_EQUAL(search(R"(this["weird field"] == "x")"), R"("weird field"="x")");
-  CHECK_EQUAL(search(R"(this["obj.k"] == "x")"), R"("obj.k"="x")");
-  CHECK_EQUAL(search(R"(this["tags{}"] == "x")"), R"("tags{}"="x")");
-  CHECK_EQUAL(search(R"(this["ümlaut"] == "x")"), R"("ümlaut"="x")");
-  CHECK_EQUAL(search(R"(this["OR"] == "x")"), R"("OR"="x")");
-  CHECK_EQUAL(search(R"(_time_ms == 1)"), "_time_ms=1");
-  // Names that a quoted field name cannot hold stay local.
-  CHECK_EQUAL(search(R"(this["a*"] == "x")"), "");
-  CHECK_EQUAL(search(R"(this["a\"b"] == "x")"), "");
-  // Splunk field names are flat.
-  CHECK_EQUAL(search(R"(obj.k == "x")"), "");
+TEST("spl selects fields with fields and renames in the layout") {
+  auto query = plan_spl_query(
+    main_index(),
+    std::vector{
+      select({{{"u"}, {"user"}}, {{"n"}, {"n"}}, {{"x", "y"}, {"n"}}})},
+    None{});
+  REQUIRE(query);
+  CHECK_EQUAL(query->search, "search index=\"main\"\n| fields user, n");
+  REQUIRE(query->layout.fields);
+  auto const expected = LayoutFields{
+    {{"u"}, "user"},
+    {{"n"}, "n"},
+    {{"x", "y"}, "n"},
+  };
+  CHECK_EQUAL(*query->layout.fields, expected);
+  CHECK(not query->sentinel);
+  // Commands name other fields in double quotes. Every input refers to the
+  // fields before the stage.
+  CHECK_EQUAL(spl(main_index(),
+                  {select({{{"a"}, {"a b"}}, {{"b"}, {"tags{}"}}})}),
+              "search index=\"main\"\n| fields \"a b\", \"tags{}\"");
+  CHECK_EQUAL(spl(main_index(),
+                  {select({{{"b"}, {"a"}}, {{"a"}, {"b"}}}), filter("a > 1")}),
+              "search index=\"main\"\n| fields a, b\n| where ('b' > 1)");
+  // A field that neither a command nor an expression can name has no
+  // spelling.
+  CHECK_EQUAL(spl(main_index(), {select({{{"y"}, {"a*"}}})}), "");
+  // An empty selection could make Splunk drop the results.
+  CHECK_EQUAL(spl(main_index(), {select({})}), "");
+  // Fields that the selection removed are gone.
+  CHECK_EQUAL(spl(main_index(), {select({{{"a"}, {"a"}}}), filter("b > 1")}),
+              "");
 }
 
-TEST("spl renders membership") {
-  CHECK_EQUAL(search(R"(user in ["alice", "bob"])"),
-              R"(user IN ("alice", "bob"))");
-  CHECK_EQUAL(search("n in [5, 7]"), "n IN (5, 7)");
-  // Like `==` and `IN`, TQL's `in` compares each element by its own kind, so
-  // that `false` is not in `[0, 5]`, and `1` is not in `[true]`.
-  CHECK_EQUAL(search("n in [0, 5]"), "n IN (0, 5)");
-  CHECK_EQUAL(search("n in [5, 1.0]"), "n IN (5, 1)");
-  CHECK_EQUAL(search("flag in [true]"), "flag IN (true)");
-  CHECK_EQUAL(search("flag in [false, 0]"), "flag IN (false, 0)");
-  CHECK_EQUAL(search(R"(x in [1, "a", true])"), R"(x IN (1, "a", true))");
-  CHECK_EQUAL(search("flag == true"), "flag=true");
-  CHECK_EQUAL(search("n == 0"), "n=0");
+TEST("spl spells times before the epoch") {
+  CHECK_EQUAL(index_filter("_time == 1969-12-31T23:59:59.5Z"), " _time=-0.5");
+  CHECK_EQUAL(index_filter("_time == 1969-12-31T23:59:58Z"), " _time=-2");
 }
 
-TEST("spl renders string relations as wildcard patterns") {
-  CHECK_EQUAL(search(R"(user.starts_with("al"))"), R"(user="al*")");
-  CHECK_EQUAL(search(R"(user.ends_with("ce"))"), R"(user="*ce")");
-  CHECK_EQUAL(search(R"("lic" in user)"), R"(user="*lic*")");
-  CHECK_EQUAL(search(R"(user.starts_with("AL", ignore_case=true))"),
-              R"(user="AL*")");
+TEST("spl drops fields") {
+  CHECK_EQUAL(spl(main_index(), {drop({{"a"}, {"b c"}})}),
+              "search index=\"main\"\n| fields - a, \"b c\"\n| fields *");
+  CHECK_EQUAL(spl(main_index(), {drop({{"a"}}), filter("a > 1")}), "");
+  CHECK_EQUAL(spl(main_index(), {drop({{"a", "b"}})}), "");
+  // Splunk treats fields that start with `__` as internal, and `fields - __x`
+  // discards every result.
+  CHECK_EQUAL(spl(main_index(), {drop({{"__x"}})}), "");
+  CHECK_EQUAL(spl(main_index(), {select({{{"a"}, {"__x"}}})}), "");
+  // After a selection, a drop only changes the layout.
+  auto query = plan_spl_query(
+    main_index(),
+    std::vector{select({{{"a"}, {"a"}}, {{"b"}, {"b"}}}), drop({{"a"}})},
+    None{});
+  REQUIRE(query);
+  CHECK_EQUAL(query->search, "search index=\"main\"\n| fields a, b");
+  CHECK_EQUAL(*query->layout.fields, (LayoutFields{{{"b"}, "b"}}));
+  // A drop that leaves no field has no spelling.
+  CHECK_EQUAL(spl(main_index(), {select({{{"a"}, {"a"}}}), drop({{"a"}})}), "");
 }
 
-TEST("spl renders null checks") {
-  CHECK_EQUAL(search("action != null"), "action=*");
-  CHECK_EQUAL(search("action == null"), "");
+TEST("spl sorts with an explicit count") {
+  CHECK_EQUAL(spl(main_index(), {sort({"-n", "user"})}),
+              "search index=\"main\"\n| sort 0 -n, user\n| fields *");
+  CHECK_EQUAL(spl(main_index(), {sort({"-n"}, 3), limit(3)}),
+              "search index=\"main\"\n| sort 3 -n\n| head 3\n| fields *");
+  CHECK_EQUAL(spl(main_index(), {sort({"n"}, 0), limit(0)}), "");
+  CHECK_EQUAL(spl(main_index(), {sort({"a*"})}), "");
+  // `head 0` ends the search without running the stages after it.
+  CHECK_EQUAL(spl(main_index(), {limit(0)}), "");
 }
 
-TEST("spl renders _time comparisons in whole seconds") {
-  CHECK_EQUAL(search("_time >= 2025-01-01T00:01:00Z"), "_time>=1735689660");
-  CHECK_EQUAL(search("_time > 2025-01-01T00:01:00.5Z"), "_time>=1735689660");
-  CHECK_EQUAL(search("_time < 2025-01-01T00:01:00.5Z"), "_time<=1735689661");
-  CHECK_EQUAL(search("_time == 2025-01-01T00:01:00.5Z"),
-              "(_time>=1735689660 _time<=1735689661)");
-  // Other fields hold timestamps as text.
-  CHECK_EQUAL(search("ts >= 2025-01-01T00:01:00Z"), "");
+TEST("spl keeps the fields that downstream needs") {
+  CHECK_EQUAL(spl(main_index(), {}), "search index=\"main\"\n| fields *");
+  CHECK_EQUAL(spl(main_index(), {}, std::vector{"user"sv, "n"sv}),
+              "search index=\"main\"\n| fields user, n");
+  CHECK_EQUAL(spl(main_index(), {}, std::vector{R"(this["a b"])"sv}),
+              "search index=\"main\"\n| fields \"a b\"");
+  CHECK_EQUAL(spl(main_index(), {}, std::vector{R"(this["a*"])"sv}),
+              "search index=\"main\"\n| fields *");
+  CHECK_EQUAL(spl(main_index(), {}, std::vector<std::string_view>{}),
+              "search index=\"main\"\n| fields *");
+  // A selection keeps its own fields.
+  CHECK_EQUAL(spl(main_index(), {select({{{"a"}, {"a"}}})}, std::vector{"a"sv}),
+              "search index=\"main\"\n| fields a");
 }
 
-TEST("spl renders junctions") {
-  CHECK_EQUAL(search(R"(n > 6 or user == "bob")"), R"((n>6 OR user="bob"))");
-  // `and` drops operands that do not render.
+TEST("spl narrows the time window of indexes") {
+  auto window = [](SplSource const& source,
+                   std::vector<ir::QueryStage> stages) -> TimeWindow {
+    auto query = plan_spl_query(source, stages, None{});
+    REQUIRE(query);
+    return query->window;
+  };
+  auto const lower
+    = window(main_index(), {filter("_time >= 2025-01-01T00:01:00Z and n > 1"),
+                            filter("_time < 2025-01-01T00:02:00Z"),
+                            filter("_time > 2025-01-01T00:00:30Z")});
+  REQUIRE(lower.begin);
+  REQUIRE(lower.end);
+  CHECK(*lower.begin == at("2025-01-01T00:01:00Z"));
+  CHECK(*lower.end == at("2025-01-01T00:02:00Z"));
+  // A disjunction encloses its operands, if they all bound a side.
+  auto enclosed
+    = window(main_index(), {filter("(_time >= 2025-01-01T00:01:00Z and _time < "
+                                   "2025-01-01T00:02:00Z) or (_time >= "
+                                   "2025-01-01T00:03:00Z and _time < "
+                                   "2025-01-01T00:04:00Z)")});
+  REQUIRE(enclosed.begin);
+  REQUIRE(enclosed.end);
+  CHECK(*enclosed.begin == at("2025-01-01T00:01:00Z"));
+  CHECK(*enclosed.end == at("2025-01-01T00:04:00Z"));
+  // A disjunction with an unbounded operand tells nothing, and neither does a
+  // filter after a limit.
+  auto none
+    = window(main_index(), {filter("_time >= 2025-01-01T00:01:00Z or n > 1"),
+                            limit(5), filter("_time < 2025-01-01T00:02:00Z")});
+  CHECK(not none.begin);
+  CHECK(not none.end);
+  // A selection keeps the provenance of `_time`, but a field renamed to
+  // `_time` is another field.
+  auto kept = window(main_index(), {select({{{"_time"}, {"_time"}}}),
+                                    filter("_time >= 2025-01-01T00:01:00Z")});
+  CHECK(kept.begin);
+  CHECK_EQUAL(spl(main_index(), {select({{{"_time"}, {"x"}}}),
+                                 filter("_time >= 2025-01-01T00:01:00Z")}),
+              "");
+  // Only `_time` holds epoch seconds, so other fields do not compare with
+  // times.
+  CHECK_EQUAL(spl(main_index(), {select({{{"t"}, {"_time"}}}),
+                                 filter("t >= 2025-01-01T00:01:00Z")}),
+              "");
+  // A time literal compares only with Splunk's own `_time`, not with another
+  // field that a stage made `_time`, nor after a drop of `_time`.
+  CHECK_EQUAL(spl(main_index(), {select({{{"_time"}, {"event_time"}}}),
+                                 filter("_time >= 2025-01-01T00:01:00Z")}),
+              "");
+  CHECK_EQUAL(spl(user("index=main"),
+                  {select({{{"_time"}, {"event_time"}}}),
+                   filter("_time >= 2025-01-01T00:01:00Z")}),
+              "");
+  CHECK_EQUAL(spl(main_index(),
+                  {drop({{"_time"}}), filter("_time >= 2025-01-01T00:01:00Z")}),
+              "");
+  CHECK(not spl(main_index(), {select({{{"_time"}, {"_time"}}}),
+                               filter("_time >= 2025-01-01T00:01:00Z")})
+              .empty());
+  // Neither an identity selection nor a summary brings back the provenance
+  // that an earlier stage ended.
+  CHECK_EQUAL(spl(main_index(), {select({{{"_time"}, {"event_time"}}}),
+                                 select({{{"_time"}, {"_time"}}}),
+                                 filter("_time >= 2025-01-01T00:01:00Z")}),
+              "");
   CHECK_EQUAL(
-    search(R"((n > 6 or user == "bob") and (n > 1 and user.match_regex("x")))"),
-    R"((n>6 OR user="bob") n>1)");
-  // `or` needs every operand.
-  CHECK_EQUAL(search(R"(n > 6 or user.match_regex("^b"))"), "");
-  CHECK_EQUAL(search("not (n > 6)"), "");
+    spl(main_index(),
+        {select({{{"_time"}, {"event_time"}}}),
+         ir::QueryStage{ir::QueryStage::Aggregate{
+           .columns
+           = {{.output = {"_time"}, .function = "min", .input = Path{"_time"}}},
+           .schema_name = "tenzir.summarize"}},
+         filter("_time >= 2025-01-01T00:01:00Z")}),
+    "");
+  // A command after the first one of a user's search may redefine `_time`,
+  // also without naming it, while a plain search keeps Splunk's own, also
+  // with a subsearch.
+  for (auto search : {"index=main | rename event_time AS _time",
+                      "index=main | rename event* AS _*", "| makeresults",
+                      "index=main `macro`"}) {
+    CHECK_EQUAL(spl(user(search), {filter("_time >= 2025-01-01T00:01:00Z")}),
+                "");
+  }
+  for (auto search : {"index=main", "search index=main x=1",
+                      "index=main [search index=other | fields host]"}) {
+    CHECK(
+      not spl(user(search), {filter("_time >= 2025-01-01T00:01:00Z")}).empty());
+  }
+  // A list of times, also one that the optimizer folds into a constant, tests
+  // the membership of `_time` only.
+  auto folded = [](std::string_view field) {
+    auto list = tenzir::list{data{at("2025-01-01T00:00:00Z")}};
+    return ir::QueryStage{ir::QueryStage::Filter{ast::binary_expr{
+      parse(field), ast::binary_op::in,
+      ast::constant::make(located{data{std::move(list)}, location::unknown})}}};
+  };
+  CHECK_EQUAL(spl(main_index(), {folded("ts")}), "");
+  CHECK_EQUAL(where("ts in [2025-01-01T00:00:00Z]"), "");
+  CHECK(not spl(main_index(), {folded("_time")}).empty());
+  // A filter without a time literal still binds `_time` to its column.
+  CHECK(not spl(main_index(), {select({{{"_time"}, {"event_time"}}}),
+                               filter("_time != null")})
+              .empty());
+  // A user's search may assign `_time` itself.
+  auto search
+    = window(user("index=main"), {filter("_time >= 2025-01-01T00:01:00Z")});
+  CHECK(not search.begin);
 }
 
-TEST("spl appends projection and limit stages") {
-  CHECK_EQUAL(plan("S", {}).query, "S\n| fields *");
-  CHECK_EQUAL(plan("S", {"n > 6"}, std::vector<std::string_view>{"user"}).query,
-              "S\n| search n>6\n| fields user, n");
+TEST("spl appends stages only to searches that accept them") {
+  CHECK_EQUAL(spl(user("index=main"), {filter("n > 1"), limit(2)}),
+              "search index=main\n| where ('n' > 1)\n| head 2\n| fields *");
+  // A `head` could cut side effects short, and `fieldformat` changes what
+  // later stages see.
+  CHECK_EQUAL(spl(user("index=main | outputlookup x.csv"), {limit(2)}), "");
+  CHECK_EQUAL(spl(user("index=main | outputlookup x.csv"), {filter("n > 1")}),
+              "search index=main | outputlookup x.csv\n| where ('n' > 1)\n| "
+              "fields *");
+  CHECK_EQUAL(spl(user("index=main | fieldformat n=n*2"), {filter("n > 1")}),
+              "");
+  CHECK_EQUAL(spl(user("index=main | fieldformat n=n*2"), {}),
+              "search index=main | fieldformat n=n*2\n| fields *");
+  CHECK(spl_declines(user("index=main | fieldformat n=n*2")));
+  CHECK(spl_declines(user("index=main |")));
+  CHECK(not spl_declines(user("index=main")));
+  CHECK(not spl_declines(main_index()));
+  // A search that does not accept stages goes out as it is.
+  CHECK_EQUAL(spl(user("search index=main |"), {}), "search index=main |");
+  CHECK_EQUAL(spl(user("search index=main |"), {filter("n > 1")}), "");
+}
+
+TEST("spl sources take over the longest prefix that SPL spells") {
+  auto const absorb
+    = [](SplSource const& source, std::vector<ir::QueryStage> stages) {
+        return absorb_prefix(
+          ir::QueryChain{.stages = std::move(stages), .end = ""},
+          [&](std::span<ir::QueryStage const> prefix) {
+            return plan_spl_query(source, prefix, None{}).is_some();
+          },
+          {.target = "Splunk", .filters_only = false, .veto = {}});
+      };
+  auto all = absorb(main_index(), {filter("n > 1"), sort({"n"}), limit(3)});
+  CHECK_EQUAL(all.prefix, size_t{3});
+  auto partial = absorb(main_index(),
+                        {filter("n > 1"), filter("ts > 2025-01-01"), limit(3)});
+  CHECK_EQUAL(partial.prefix, size_t{1});
+  CHECK_EQUAL(partial.declined, "Splunk cannot spell the stage"s);
+}
+
+TEST("spl redacts searches for logs") {
   CHECK_EQUAL(
-    plan("S", {}, std::vector<std::string_view>{"this[\"weird field\"]"}).query,
-    "S\n| fields \"weird field\"");
-  CHECK_EQUAL(plan("S", {}, None{}, 10).query, "S\n| fields *\n| head 10");
-  // A remaining predicate runs after the limit, so the limit stays local.
-  CHECK_EQUAL(plan("S", {"n > 6"}, None{}, 10).query,
-              "S\n| search n>6\n| fields *");
-}
-
-TEST("spl keeps searches with side effects complete") {
-  for (auto search : {
-         "search index=main | outputlookup x.csv",
-         "search index=main | collect index=summary",
-         "search index=main | sendemail to=a@example.com",
-         "search index=main | `my_macro`",
-         "`my_macro`",
-       }) {
-    auto stages = spl_stages(search);
-    CHECK(stages.accepted);
-    CHECK(not stages.limitable);
-    CHECK_EQUAL(plan(search, {}, None{}, 10).query,
-                fmt::format("{}\n| fields *", search));
-  }
-}
-
-TEST("spl keeps predicates local after fieldformat") {
-  // Results show the formatted values, but `search` compares the original
-  // ones, so a prefilter could drop results that the predicate keeps. The
-  // projection and the limit still apply.
-  for (auto search : {
-         "search index=main | fieldformat n=n*2",
-         "search index=main | FIELDFORMAT n=n*2",
-         "search index=main | `my_macro`",
-       }) {
-    auto stages = spl_stages(search);
-    CHECK(stages.accepted);
-    CHECK(stages.formatted);
-    CHECK_EQUAL(
-      plan(search, {"n > 10"}, std::vector<std::string_view>{"n"}).query,
-      fmt::format("{}\n| fields n", search));
-    // Negations would compare the original values in a `where` stage, and
-    // address terms in the `search` stage.
-    CHECK_EQUAL(plan(search,
-                     {R"(user != "root")", "not (n in [1, 2])",
-                      "src == 10.0.0.1", "src in 10.0.0.0/8"},
-                     std::vector<std::string_view>{"user"})
-                  .query,
-                fmt::format("{}\n| fields user, n, src", search));
-  }
-  // The same predicates go into the search without `fieldformat`.
-  CHECK_EQUAL(
-    plan("search index=main", {R"(user != "root")", "src in 10.0.0.0/8"},
-         std::vector<std::string_view>{"user"})
-      .query,
-    "search index=main\n| search (src=\"10.0.0.0/8\" OR "
-    "src=\"::ffff:10.0.0.0/104\")\n| where (isnull(user) OR mvcount(user)>1 OR "
-    "if(user==\"root\", false(), true()))\n| fields user, src");
-  CHECK_EQUAL(
-    plan("search index=main | fieldformat n=n*2", {}, None{}, 10).query,
-    "search index=main | fieldformat n=n*2\n| fields *\n| head 10");
-  CHECK(not spl_stages("search index=main | eval n=n*2").formatted);
-}
-
-TEST("spl tells whether the results keep a field") {
-  for (auto search : {
-         "search index=main",
-         "| makeresults",
-         "search index=main | eval x=1 | fields + x | where x > 0",
-         // Splunk returns results whose fields `eval` set to `null()` as
-         // empty objects.
-         "| makeresults | eval _time=null()",
-         "search index=main | fields x | eval _raw=null(), _time=null()",
-         "| makeresults count=2 annotate=t splunk_server=local | fields x",
-         "| makeresults COUNT=2 splunk_server_group=* | fields x",
-         R"(| makeresults splunk_server="format=csv" | fields x)",
-         "| makeresults | eval format=1, data=2 | fields x",
-       }) {
-    CHECK(spl_stages(search).keeps_fields);
-  }
-  for (auto search : {
-         "| makeresults | fields - _time",
-         "| makeresults | FIELDS -_time",
-         // Results with only the fields that `data` lists, but no `_time`.
-         "| makeresults format=csv data=\"x\n1\" | fields y",
-         "| makeresults FORMAT=csv DATA=\"x\n1\"",
-         "| makeresults \"format\"=csv \"data\"=\"x\n1\"",
-         // Options that the lexer does not tell apart from these: Splunk
-         // ignores the first two, and `format=json` keeps `_time`.
-         "| makeresults count=1 format = csv data = \"x\n1\"",
-         "| makeresults 'format'=csv 'data'=\"x\n1\"",
-         "| makeresults format=json data=\"[{}]\"",
-         "search index=main | table x",
-         "search index=main | rename _raw as __raw",
-         "search index=main | chart count by x",
-         "| rest /services/server/info",
-         "search index=main | `my_macro`",
-       }) {
-    CHECK(not spl_stages(search).keeps_fields);
-  }
+    redact_query(R"(search user="a\"b" ```note "x"``` | where 'f'==1)",
+                 spl_lexicon),
+    R"(search user="***" ``` *** ``` | where '***'==1)");
+  CHECK_EQUAL(redact_query("search ```unterminated", spl_lexicon),
+              "search ``` *** ```");
 }
 
 TEST("spl lexes searches before appending stages") {
@@ -290,6 +472,7 @@ TEST("spl lexes searches before appending stages") {
     auto stages = spl_stages(search);
     CHECK(stages.accepted);
     CHECK(stages.limitable);
+    CHECK(not stages.formatted);
   }
   for (auto search : {
          "",
@@ -305,8 +488,37 @@ TEST("spl lexes searches before appending stages") {
          "search user=O'Brien",
        }) {
     CHECK(not spl_stages(search).accepted);
-    CHECK_EQUAL(plan(search, {"n > 6"}).query, search);
   }
+  // A plain search is a single `search` command without macros, which keeps
+  // Splunk's own fields, such as `_time`.
+  for (auto search : {"search index=main", R"(search user="a|b")",
+                      "search index=main [search index=other | fields user]",
+                      "search index=main ```a | comment```"}) {
+    CHECK(spl_stages(search).plain);
+  }
+  for (auto search : {"| makeresults count=2", "search index=main | eval x=1",
+                      "search index=main `macro`"}) {
+    CHECK(not spl_stages(search).plain);
+  }
+  for (auto search : {
+         "search index=main | outputlookup x.csv",
+         "search index=main | collect index=summary",
+         "search index=main | sendemail to=a@example.com",
+         "search index=main | `my_macro`",
+         "`my_macro`",
+       }) {
+    auto stages = spl_stages(search);
+    CHECK(stages.accepted);
+    CHECK(not stages.limitable);
+  }
+  for (auto search : {
+         "search index=main | fieldformat n=n*2",
+         "search index=main | FIELDFORMAT n=n*2",
+         "search index=main | `my_macro`",
+       }) {
+    CHECK(spl_stages(search).formatted);
+  }
+  CHECK(not spl_stages("search index=main | eval n=n*2").formatted);
 }
 
 TEST("spl prepends the search command where Splunk Web does") {
@@ -325,217 +537,12 @@ TEST("spl prepends the search command where Splunk Web does") {
 }
 
 TEST("spl generates searches for indexes") {
-  auto plan_indexes
-    = [](std::vector<std::string> indexes,
-         std::vector<std::string_view> predicates,
-         Option<std::vector<std::string_view>> projection = None{},
-         Option<uint64_t> limit = None{}) -> std::string {
-    auto projected = Option<ir::OptimizeProjection>{};
-    if (projection) {
-      projected = paths(*projection);
-    }
-    auto planned = plan_spl_indexes(indexes, filters(predicates), projected,
-                                    limit, true, test::builtin_registry());
-    REQUIRE(planned);
-    return planned->query;
-  };
-  CHECK_EQUAL(plan_indexes({"main"}, {}), "search index=\"main\"\n| fields *");
-  CHECK_EQUAL(plan_indexes({"main", "web_*"}, {}),
-              "search index IN (\"main\", \"web_*\")\n| fields *");
-  // Prefilters extend the base search.
-  CHECK_EQUAL(plan_indexes({"main"},
-                           {R"(sourcetype == "linux_secure")", "bytes > 1024"},
-                           std::vector<std::string_view>{"user"}),
-              "search index=\"main\" sourcetype=\"linux_secure\" bytes>1024\n"
-              "| fields user, sourcetype, bytes");
-  CHECK_EQUAL(plan_indexes({"main"}, {}, None{}, 5),
-              "search index=\"main\"\n| fields *\n| head 5");
+  auto const main = std::vector<std::string>{"main"};
+  CHECK_EQUAL(spl_index_search(main), "search index=\"main\"");
+  auto const two = std::vector<std::string>{"main", "web_*"};
+  CHECK_EQUAL(spl_index_search(two), R"(search index IN ("main", "web_*"))");
   auto empty = std::vector<std::string>{""};
   CHECK(not spl_index_search(empty));
   auto control = std::vector<std::string>{"a\nb"};
   CHECK(not spl_index_search(control));
-}
-
-TEST("spl keeps non-time comparisons of _time local") {
-  // Splunk holds `_time` as epoch seconds, not as the exported string.
-  CHECK_EQUAL(search(R"(_time == "2025-01-01")"), "");
-  CHECK_EQUAL(search(R"(_time.starts_with("2025-01-01"))"), "");
-  CHECK_EQUAL(search(R"(_time in ["2025-01-01"])"), "");
-  CHECK_EQUAL(search("_time > 5"), "");
-  CHECK_EQUAL(search("_time != null"), "_time=*");
-}
-
-TEST("spl keeps fields named like search modifiers local") {
-  // `earliest="x"` would set the time range of the search.
-  CHECK_EQUAL(search(R"(earliest == "not-a-time")"), "");
-  CHECK_EQUAL(search(R"(this["LATEST"] == "x")"), "");
-  CHECK_EQUAL(search("starttime > 5"), "");
-  CHECK_EQUAL(search("earliest != null"), "");
-  // Projections may still name them.
-  CHECK_EQUAL(plan("S", {}, std::vector<std::string_view>{"earliest"}).query,
-              "S\n| fields earliest");
-}
-
-TEST("spl keeps _time comparisons local after searches that mention _time") {
-  // The search may assign `_time` a formatted string.
-  auto planned = plan(R"(index=main | eval _time=strftime(_time, "%FT%T"))",
-                      {"_time >= 2025-01-01T00:01:00Z", "n > 6"});
-  CHECK_EQUAL(planned.query,
-              "index=main | eval _time=strftime(_time, \"%FT%T\")\n"
-              "| search n>6\n| fields *");
-  auto indexes = std::vector<std::string>{"main"};
-  auto generated
-    = plan_spl_indexes(indexes, filters({"_time >= 2025-01-01T00:01:00Z"}),
-                       None{}, None{}, true, test::builtin_registry());
-  REQUIRE(generated);
-  CHECK_EQUAL(generated->query,
-              "search index=\"main\" _time>=1735689660\n| fields *");
-}
-
-/// The appended stages for a single predicate, without `fields *`.
-auto stages(std::string_view predicate, bool inference = true) -> std::string {
-  auto planned = plan("S", {predicate}, None{}, None{}, inference);
-  constexpr auto suffix = std::string_view{"\n| fields *"};
-  REQUIRE(planned.query.starts_with("S"));
-  REQUIRE(planned.query.ends_with(suffix));
-  return planned.query.substr(1, planned.query.size() - 1 - suffix.size());
-}
-
-/// The `where` expression of a negation of `field` with `values`.
-auto negated_where(std::string_view field, std::vector<std::string_view> values)
-  -> std::string {
-  auto equalities = std::vector<std::string>{};
-  for (auto value : values) {
-    equalities.push_back(fmt::format("{}=={}", field, value));
-  }
-  return fmt::format("(isnull({0}) OR mvcount({0})>1 OR if({1}, false(), "
-                     "true()))",
-                     field, fmt::join(equalities, " OR "));
-}
-
-auto where(std::string_view expression) -> std::string {
-  return fmt::format("\n| where {}", expression);
-}
-
-TEST("spl renders negations that keep missing and multivalue fields") {
-  CHECK_EQUAL(stages(R"(user != "alice")"),
-              where(negated_where("user", {R"("alice")"})));
-  CHECK_EQUAL(stages(R"("alice" != user)"),
-              where(negated_where("user", {R"("alice")"})));
-  CHECK_EQUAL(stages(R"(not (user == "alice"))"),
-              where(negated_where("user", {R"("alice")"})));
-  CHECK_EQUAL(stages(R"(not (user in ["alice", "bob"]))"),
-              where(negated_where("user", {R"("alice")", R"("bob")"})));
-  CHECK_EQUAL(stages("n != 5"), where(negated_where("n", {"5"})));
-  CHECK_EQUAL(stages("not (n in [5, 7])"),
-              where(negated_where("n", {"5", "7"})));
-  CHECK_EQUAL(stages("flag != true"),
-              where(negated_where("flag", {R"("true")"})));
-  CHECK_EQUAL(stages(R"(this["tags{}"] != "x")"),
-              where(negated_where("'tags{}'", {R"("x")"})));
-  CHECK_EQUAL(stages(R"(this["OR"] != "x")"),
-              where(negated_where("'OR'", {R"("x")"})));
-  // `eval` compares exactly, so wildcards, empty strings, and whitespace work.
-  CHECK_EQUAL(stages(R"(x != "a*b")"), where(negated_where("x", {R"("a*b")"})));
-  CHECK_EQUAL(stages(R"(x != "")"), where(negated_where("x", {R"("")"})));
-  CHECK_EQUAL(stages(R"(x != " a")"), where(negated_where("x", {R"(" a")"})));
-  // Negations combine with `search` terms in separate stages.
-  CHECK_EQUAL(stages(R"(user != "alice" and n > 6)"),
-              "\n| search n>6" + where(negated_where("user", {R"("alice")"})));
-  CHECK_EQUAL(plan("S", {R"(user != "alice")", "n != 5"}).query,
-              "S"
-                + where(negated_where("user", {R"("alice")"}) + " AND "
-                        + negated_where("n", {"5"}))
-                + "\n| fields *");
-  // A disjunction cannot mix stages, and a conjunction drops expressions.
-  CHECK_EQUAL(stages(R"(user != "alice" or n > 6)"), "");
-  CHECK_EQUAL(stages(R"(user != "alice" or n != 5)"),
-              where("(" + negated_where("user", {R"("alice")"}) + " OR "
-                    + negated_where("n", {"5"}) + ")"));
-  CHECK_EQUAL(stages(R"((user != "alice" and n > 6) or n > 9)"),
-              "\n| search (n>6 OR n>9)");
-  // A string that inference turns into another type differs from the value
-  // that TQL sees, which negating the match would drop.
-  for (auto value : {"5", "-1.5", "true", "false", "192.0.2.1", "10.0.0.0/8",
-                     "5m", "2025-01-01T00:00:00Z", "now", "inf", "nan"}) {
-    CHECK_EQUAL(stages(fmt::format(R"(x != "{}")", value)), "");
-  }
-  // Escaping of quotes and backslashes in `eval` is not verified.
-  for (auto value : {R"(a\"b)", R"(a\\b)"}) {
-    CHECK_EQUAL(stages(fmt::format(R"(x != "{}")", value)), "");
-  }
-  // Other negations, `_time`, search modifiers, and nested paths stay local.
-  CHECK_EQUAL(stages("not (n > 6)"), "");
-  CHECK_EQUAL(stages(R"(not user.starts_with("a"))"), "");
-  CHECK_EQUAL(stages(R"(_time != "x")"), "");
-  CHECK_EQUAL(stages(R"(earliest != "x")"), "");
-  CHECK_EQUAL(stages("_time != 2025-01-01"), "");
-  CHECK_EQUAL(stages(R"(obj.k != "x")"), "");
-  CHECK_EQUAL(stages(R"(this["it's"] != "x")"), "");
-  // Names that `eval` cannot read stay local: `|` and brackets fail the
-  // search, and a backslash or `::` reads another field.
-  for (auto name : {"a|b", "a[b]", "a]b", R"(a\\b)", "tag::x", " a", "a "}) {
-    CHECK_EQUAL(stages(fmt::format(R"(this["{}"] != "x")", name)), "");
-  }
-  CHECK_EQUAL(stages(R"(this["a b"] != "x")"),
-              where(negated_where("'a b'", {R"("x")"})));
-  CHECK_EQUAL(stages(R"(this["a-b.c/d@e"] != "x")"),
-              where(negated_where("'a-b.c/d@e'", {R"("x")"})));
-  // Presence checks are unchanged.
-  CHECK_EQUAL(stages("action != null"), "\n| search action=*");
-  // The numeric boundary of exact doubles stays local, also in lists.
-  CHECK_EQUAL(stages("n != 9007199254740992"), "");
-  CHECK_EQUAL(stages("n != -9007199254740992"), "");
-  CHECK_EQUAL(stages("not (n in [1, 9007199254740992])"), "");
-  CHECK_EQUAL(stages("not (n in [-9007199254740992])"), "");
-  CHECK_EQUAL(stages("not (n in [uint(9007199254740992)])"), "");
-  // TQL compares each element of a list by its own kind, as the negation
-  // does.
-  CHECK_EQUAL(stages("not (x in [1, true])"),
-              where(negated_where("x", {"1", R"("true")"})));
-  CHECK_EQUAL(stages("not (n in [9007199254740991])"),
-              where(negated_where("n", {"9007199254740991"})));
-}
-
-TEST("spl negates only strings without type inference") {
-  // Without inference, `"5"` stays a string, which differs from `5`.
-  CHECK_EQUAL(stages("n != 5", false), "");
-  CHECK_EQUAL(stages("flag != true", false), "");
-  CHECK_EQUAL(stages(R"(x != "5")", false),
-              where(negated_where("x", {R"("5")"})));
-  // Positive comparisons are unaffected.
-  CHECK_EQUAL(stages("n > 6", false), "\n| search n>6");
-}
-
-TEST("spl appends negations after the base search of indexes") {
-  auto indexes = std::vector<std::string>{"main"};
-  auto planned
-    = plan_spl_indexes(indexes, filters({R"(user != "alice")", "n > 6"}),
-                       None{}, None{}, true, test::builtin_registry());
-  REQUIRE(planned);
-  CHECK_EQUAL(planned->query, "search index=\"main\" n>6"
-                                + where(negated_where("user", {R"("alice")"}))
-                                + "\n| fields *");
-}
-
-TEST("spl renders addresses and networks") {
-  // Single-host networks match every spelling of an address.
-  CHECK_EQUAL(search("src == 192.0.2.10"),
-              R"((src="192.0.2.10/32" OR src="::ffff:192.0.2.10/128"))");
-  CHECK_EQUAL(search("src.ip() == 192.0.2.10"),
-              R"((src="192.0.2.10/32" OR src="::ffff:192.0.2.10/128"))");
-  CHECK_EQUAL(search("src == 2001:db8::1"), R"(src="2001:db8::1/128")");
-  CHECK_EQUAL(search("src in 192.0.2.0/24"),
-              R"((src="192.0.2.0/24" OR src="::ffff:192.0.2.0/120"))");
-  CHECK_EQUAL(search("src in 2001:db8::/32"), R"(src="2001:db8::/32")");
-  CHECK_EQUAL(search("src in [192.0.2.10, 2001:db8::1]"),
-              R"((src="192.0.2.10/32" OR src="::ffff:192.0.2.10/128" OR )"
-              R"(src="2001:db8::1/128"))");
-  // Splunk matches IPv4 networks only against IPv4 addresses and IPv6 ones
-  // only against IPv6 addresses, so networks spanning both stay local.
-  CHECK_EQUAL(search("src in ::/0"), "");
-  CHECK_EQUAL(search("src in ::/64"), "");
-  // Ordering and negation of addresses stay local.
-  CHECK_EQUAL(search("src < 192.0.2.10"), "");
-  CHECK_EQUAL(search("src != 192.0.2.10"), "");
 }

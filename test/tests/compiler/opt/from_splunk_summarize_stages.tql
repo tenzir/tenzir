@@ -1,5 +1,5 @@
-// `from_splunk` shows that its summary is complete by the number of groups,
-// so the stages after it stay local.
+// `from_splunk` takes over the summary and the stages after it, which run in
+// Splunk with Splunk's semantics.
 from_splunk "https://splunk.example.com", search="index=main", earliest="-15m",
   latest="-5m", headers={Authorization: "Splunk t"}
 summarize user, events=count()

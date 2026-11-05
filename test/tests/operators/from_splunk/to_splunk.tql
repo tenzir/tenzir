@@ -15,7 +15,7 @@ fixtures:
 
 from_splunk env("HTTP_FIXTURE_URL"),
   search="fixture", earliest="-15m", latest="-5m",
-  headers={Authorization: "Splunk search-token"}, tls=false
+  headers={Authorization: "Splunk search-token"}, tls=false, pushdown=false
 where number == 43
 to_splunk env("HTTP_FIXTURE_URL"),
   hec_token="hec-token",

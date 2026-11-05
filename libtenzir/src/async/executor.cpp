@@ -663,6 +663,13 @@ private:
     return exec_ctx_.checkpoint_settings();
   }
 
+  auto contexts() -> Option<ContextHandles const&> override {
+    if (auto contexts = exec_ctx_.contexts()) {
+      return **contexts;
+    }
+    return None{};
+  }
+
   auto register_secret(nova::Secret const& value) -> void override {
     censor_.add(value.data);
   }

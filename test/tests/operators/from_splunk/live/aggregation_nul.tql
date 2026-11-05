@@ -1,6 +1,5 @@
-// `stats` cuts a group key off at a NUL character, which would merge `a\0b`
-// and `a\0c`. The operator then summarizes the results of the search in
-// Tenzir.
+// `stats` cuts a group key off at a NUL character, which merges `a\0b` and
+// `a\0c` with `a`.
 from_splunk env("SPLUNK_MGMT_URL"),
   search=r#"| makeresults count=3 | streamstats count as i | eval k=case(i==1, urldecode("a%00b"), i==2, urldecode("a%00c"), i==3, "a")"#,
   earliest="1735689599",

@@ -1,0 +1,8 @@
+error: SentinelOne rejected the query with the stages that the operator appended
+  --> tests/operators/from_sentinelone_data_lake/stages/10_query_rejected.tql:14:1
+   |
+14 | from_sentinelone_data_lake env("S1_FIXTURE_URL"),
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: {"error": "Unable to parse the entire query"}
+   = hint: set `pushdown=false` to run the stages after the operator in Tenzir

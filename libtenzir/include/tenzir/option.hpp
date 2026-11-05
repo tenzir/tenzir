@@ -18,6 +18,7 @@
 
 #include <compare>
 #include <concepts>
+#include <memory>
 #include <optional>
 #include <source_location>
 #include <type_traits>
@@ -93,7 +94,7 @@ template <class T>
 class OptionStorage<T&> {
 public:
   OptionStorage() noexcept = default;
-  explicit OptionStorage(T& ref) noexcept : ptr_{&ref} {
+  explicit OptionStorage(T& ref) noexcept : ptr_{std::addressof(ref)} {
   }
   auto is_some() const noexcept -> bool {
     return ptr_ != nullptr;

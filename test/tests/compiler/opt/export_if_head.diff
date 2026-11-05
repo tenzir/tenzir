@@ -25,6 +25,7 @@
        order: "ordered"
      },
      If {
+       source: [1]:7..27 from 0,
        condition: binary_expr {
          left: root_field {
            id: `x` @ [1]:10..11 from 0,

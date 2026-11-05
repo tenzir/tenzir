@@ -1,6 +1,5 @@
-// Results whose fields `eval` set to `null()` keep these fields: Splunk returns
-// them as empty objects, which `summarize` counts as `stats` does, so the
-// summary runs in Splunk. `aggregation_fieldless_eval_local` computes it in
+// Results whose fields `eval` set to `null()` keep these fields. Splunk counts
+// them in `stats`, and `aggregation_fieldless_eval_local` counts them in
 // Tenzir.
 from_splunk env("SPLUNK_MGMT_URL"),
   search=r#"| makeresults count=2 | eval x=1 | eval x=null(), _time=null()"#,

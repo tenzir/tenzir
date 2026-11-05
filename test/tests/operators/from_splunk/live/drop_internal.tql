@@ -1,0 +1,11 @@
+// Splunk treats fields that start with `__` as internal, and `fields - __foo`
+// would discard every result, so the drop stays in Tenzir.
+from_splunk env("SPLUNK_MGMT_URL"),
+  search="| makeresults | eval __foo=\"abc\" | stats count as c by __foo",
+  earliest="0",
+  latest="now",
+  headers={
+    Authorization: env("SPLUNK_AUTHORIZATION"),
+  },
+  tls={skip_peer_verification: true}
+drop __foo

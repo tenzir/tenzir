@@ -1,5 +1,4 @@
-// With `raw=true`, a key with a NUL character also keeps the summary in
-// Tenzir.
+// With `raw=true`, `stats` still cuts group keys off at a NUL character.
 from_splunk env("SPLUNK_MGMT_URL"),
   search=r#"| makeresults count=3 | streamstats count as i | eval k=case(i==1, urldecode("a%00b"), i==2, urldecode("a%00c"), i==3, "a")"#,
   earliest="1735689599",

@@ -1,0 +1,7 @@
+// A LOG page that SentinelOne reports as incomplete comes with a warning.
+from_sentinelone_data_lake env("S1_FIXTURE_URL"),
+  token=env("S1_FIXTURE_TOKEN"),
+  start=2024-01-01, end=2024-01-02,
+  account_ids=["hybrid_partial_log"]
+head 2
+summarize n=count()

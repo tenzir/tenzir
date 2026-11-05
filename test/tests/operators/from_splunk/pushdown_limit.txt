@@ -4,3 +4,9 @@
 {
   user: "Alice",
 }
+{
+  user: "bob",
+}
+{
+  user: "carol",
+}

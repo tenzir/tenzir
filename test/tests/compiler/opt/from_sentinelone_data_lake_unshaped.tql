@@ -1,0 +1,8 @@
+// Whole events reach SentinelOne's stages with only `timestamp` and
+// `message`, so a filter after a limit, a sort before a `select`, and a
+// `drop` stay in Tenzir, while the limit runs in SentinelOne.
+from_sentinelone_data_lake "https://example.sentinelone.net", token="t"
+head 10
+where event.type == "DNS Resolved"
+sort timestamp
+drop message

@@ -1,6 +1,6 @@
-// PowerQuery groups the event without `event.type` as `null`. The operator
-// reads that event, finds that TQL also reads its key as `null`, and accepts
-// the result of SentinelOne. It equals that of `15_sparse_local.tql`.
+// PowerQuery groups the event without `event.type` as `null`, as TQL does, but
+// sorts the `null` group first, unlike TQL. Otherwise, the result equals that
+// of `15_sparse_local.tql`.
 from_sentinelone_data_lake env("S1_FIXTURE_URL"),
   token=env("S1_FIXTURE_TOKEN"),
   start=2024-01-01, end=2024-01-02,

@@ -1,5 +1,5 @@
-// A predicate that stays local keeps all events, but makes the operator
-// aggregate locally, with the result of `01_pushed.tql`.
+// A predicate that stays in Tenzir keeps all events, and the summary after it
+// stays in Tenzir, too, with the result of `01_pushed.tql`.
 from_sentinelone_data_lake env("S1_FIXTURE_URL"),
   token=env("S1_FIXTURE_TOKEN"),
   start=2024-01-01, end=2024-01-02,

@@ -17,6 +17,7 @@
 #include <tenzir/controller/transport.hpp>
 #include <tenzir/detail/default_formatter.hpp>
 #include <tenzir/hash/hash.hpp>
+#include <tenzir/nova/type_system.hpp>
 #include <tenzir/option.hpp>
 #include <tenzir/result.hpp>
 #include <tenzir/time.hpp>
@@ -2083,6 +2084,41 @@ struct std::hash<tenzir::ChannelTapRequest> {
 
 namespace tenzir {
 
+/// A context on a deployment. `details` depends on the type, such as the number
+/// of entries in a lookup table; no key is guaranteed.
+class ContextStatus {
+public:
+  ContextStatus(std::string name, std::string type, nova::Record details)
+    : name{std::move(name)},
+      type{std::move(type)},
+      details{std::move(details)} {
+  }
+
+  std::string name;
+  std::string type;
+  nova::Record details;
+
+  friend auto operator==(ContextStatus const&, ContextStatus const&) -> bool
+    = default;
+
+  template <class HashAlgorithm>
+  friend auto hash_append(HashAlgorithm& h, ContextStatus const& value)
+    -> void {
+    hash_append(h, value.name, value.type, value.details);
+  }
+};
+
+} // namespace tenzir
+
+template <>
+struct std::hash<tenzir::ContextStatus> {
+  auto operator()(tenzir::ContextStatus const& value) const -> std::size_t {
+    return tenzir::hash(value);
+  }
+};
+
+namespace tenzir {
+
 /// The id the platform gave an ad-hoc pipeline when it started it
 /// Values must match
 /// `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`.
@@ -2580,6 +2616,14 @@ public:
 using StreamPipelineEventsFailure
   = variant<ExecutionUnavailable, ChannelTapRejected>;
 
+/// `GET /contexts`
+/// The contexts on the answering deployment instance, sorted by name. A standby
+/// instance has none.
+class InspectContexts {
+public:
+  InspectContexts() = default;
+};
+
 /// `POST /pipelines/:pipelineId/start`
 /// Starts another run of a persisted pipeline. Starting a pipeline that is
 /// already running is a no-op, so a retry is safe. The deployment compiles the
@@ -2691,6 +2735,8 @@ public:
   virtual auto handle(StreamPipelineEvents request)
     -> Task<Result<HttpBodyStream, StreamPipelineEventsFailure>>
     = 0;
+
+  virtual auto handle(InspectContexts) -> Task<std::vector<ContextStatus>> = 0;
 
   virtual auto handle(StartPipeline request)
     -> Task<Result<void, StartPipelineFailure>>
@@ -2832,6 +2878,8 @@ auto parse_execution_graph_snapshot(simdjson::dom::element value)
   -> Result<ExecutionGraphSnapshot, ParseError>;
 auto parse_channel_tap_request(simdjson::dom::element value)
   -> Result<ChannelTapRequest, ParseError>;
+auto parse_context_status(simdjson::dom::element value)
+  -> Result<ContextStatus, ParseError>;
 auto parse_adhoc_pipeline_id(simdjson::dom::element value)
   -> Result<AdhocPipelineId, ParseError>;
 auto parse_encoding(simdjson::dom::element value)
@@ -2906,6 +2954,7 @@ auto write_json(ApiExecutionOutcome const& value, std::string& out) -> void;
 auto write_json(SourceFile const& value, std::string& out) -> void;
 auto write_json(ExecutionGraphSnapshot const& value, std::string& out) -> void;
 auto write_json(ChannelTapRequest const& value, std::string& out) -> void;
+auto write_json(ContextStatus const& value, std::string& out) -> void;
 auto write_json(AdhocPipelineId const& value, std::string& out) -> void;
 auto write_json(Encoding const& value, std::string& out) -> void;
 auto write_json(AdhocPipelineDefinition const& value, std::string& out) -> void;

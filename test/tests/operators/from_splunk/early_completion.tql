@@ -8,5 +8,7 @@ from_splunk env("HTTP_FIXTURE_SPLUNK_STREAM_URL"),
   earliest="-15m",
   latest="-5m",
   headers={Authorization: "Splunk test-token"},
-  tls=false
+  tls=false,
+  // The `head` stays in Tenzir, which ends the search early.
+  pushdown=false
 head 1

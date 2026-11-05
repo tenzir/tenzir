@@ -1,18 +1,6 @@
-{
-  event: {
-    type: "DNS Resolved",
-  },
-  n: 3,
-}
-{
-  event: {
-    type: "IP Connect",
-  },
-  n: 2,
-}
-{
-  event: {
-    type: "Process Creation",
-  },
-  n: 1,
-}
+error: failed to make http request: proxygen::coro::HTTPError: Error receiving response headers, err=HTTP source aborted err=TRANSPORT_EOF
+ --> tests/operators/from_sentinelone_data_lake/summarize/19_poll_error.tql:6:1
+  |
+6 | from_sentinelone_data_lake env("S1_FIXTURE_URL"),
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |

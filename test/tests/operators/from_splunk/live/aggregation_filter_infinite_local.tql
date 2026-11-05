@@ -1,6 +1,6 @@
-// A limit before the filters keeps them and the summary of
-// `aggregation_filter_infinite` in Tenzir, which computes the same events from
-// the unfiltered results of the search.
+// With `pushdown=false`, Tenzir computes the stages of
+// `aggregation_filter_infinite` from the results of the search, with the
+// semantics of TQL.
 from_splunk env("SPLUNK_MGMT_URL"),
   search=r#"| makeresults count=12 | streamstats count as i | eval n=case(i==1, "1e999", i==2, "inf", i==3, "Infinity", i==4, "+8", i==5, "7.5", i==6, "1e3", i==7, "1234567890123456", i==8, "nan", i==9, "-inf", i==10, "5", i==11, "-1e999", i==12, "9007199254740993"), k=if(i%2==0, "even", "odd")"#,
   earliest="1735689599",
@@ -8,8 +8,8 @@ from_splunk env("SPLUNK_MGMT_URL"),
   headers={
     Authorization: env("SPLUNK_AUTHORIZATION"),
   },
-  tls={skip_peer_verification: true}
-head 1000000000
+  tls={skip_peer_verification: true},
+  pushdown=false
 where n > 6
 summarize k, events=count()
 sort k

@@ -25,6 +25,7 @@
        order: "ordered"
      },
      If {
+       source: [1]:139..166 from 0,
        condition: binary_expr {
          left: function_call {
            fn: {
@@ -118,6 +119,7 @@
 -      ]
      },
      If {
+       source: [1]:182..214 from 0,
        condition: binary_expr {
          left: unary_expr {
            op: "move",

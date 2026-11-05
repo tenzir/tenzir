@@ -1,6 +1,5 @@
-// A limit before the filters keeps them and the summary of `aggregation_filter`
-// in Tenzir, which computes the same events from the unfiltered results of the
-// search.
+// With `pushdown=false`, Tenzir computes the stages of `aggregation_filter`
+// from the results of the search, with the semantics of TQL.
 from_splunk env("SPLUNK_MGMT_URL"),
   index="main",
   earliest="1735689599",
@@ -8,8 +7,8 @@ from_splunk env("SPLUNK_MGMT_URL"),
   headers={
     Authorization: env("SPLUNK_AUTHORIZATION"),
   },
-  tls={skip_peer_verification: true}
-head 1000000000
+  tls={skip_peer_verification: true},
+  pushdown=false
 where source == "tenzir-docs-auth" and action != "logout"
 where outcome in ["success", "failure"] and user != null
 summarize user, events=count(), outcomes=count(outcome)

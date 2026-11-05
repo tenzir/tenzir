@@ -649,6 +649,10 @@ public:
     return "where_ir";
   }
 
+  auto main_location() const -> location override {
+    return args_.main_location();
+  }
+
   auto substitute(substitute_ctx ctx, bool instantiate)
     -> failure_or<void> override {
     return args_.substitute(ctx, instantiate);

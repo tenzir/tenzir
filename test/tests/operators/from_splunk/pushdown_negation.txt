@@ -1,4 +1,12 @@
 {
+  user: "alice",
+  n: 5,
+}
+{
+  user: "Alice",
+  n: 50,
+}
+{
   user: "bob",
   n: -1.5,
 }
