@@ -43,7 +43,7 @@ public:
     = default;
 
   template <class HashAlgorithm>
-  friend auto hash_append(HashAlgorithm& h, NoPrincipal const& value) -> void {
+  friend auto hash_append(HashAlgorithm& h, NoPrincipal const&) -> void {
     hash_append(h, std::string_view{"NoPrincipal"});
   }
 };

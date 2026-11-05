@@ -2099,7 +2099,7 @@ auto parse_adhoc_pipeline_definition(simdjson::dom::element value)
 
 // ── Encoding ────────────────────────────────────────────────────────────────
 
-auto write_json(NoPrincipal const& value, std::string& out) -> void {
+auto write_json(NoPrincipal const&, std::string& out) -> void {
   out += '{';
   out += "\"_tag\":\"NoPrincipal\"";
   out += '}';
