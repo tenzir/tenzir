@@ -1,0 +1,3 @@
+// The workspace lists `myteam`, which uses `acme`, another of its packages.
+from {x: 1}
+myteam::twice
