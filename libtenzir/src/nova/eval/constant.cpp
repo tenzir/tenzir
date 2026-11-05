@@ -62,6 +62,29 @@ auto to_nova_data(auto const& value, diagnostic_handler& dh, location source)
 
 } // namespace
 
+auto _::repeated_value(Array<Data> const& array) -> Option<Data> {
+  return match(array, []<class T>(T const& typed) -> Option<Data> {
+    if constexpr (std::same_as<T, UnionArray>) {
+      return None{};
+    } else {
+      return match(
+        typed.storage(), []<class S>(S const& physical) -> Option<Data> {
+          if constexpr (std::same_as<S, storage::NullStorage>) {
+            return Data{Null{}};
+          } else if constexpr (std::same_as<S, storage::BitMap>) {
+            return physical.as_constant().transform([](bool value) {
+              return Data{value};
+            });
+          } else if constexpr (requires { physical.value(); }) {
+            return Data{physical.value()};
+          } else {
+            return None{};
+          }
+        });
+    }
+  });
+}
+
 auto _::EvalRun::eval(const ast::constant& x, EvalFrame frame) -> Array<Data> {
   return repeat(to_nova_data(x.value, frame, x.get_location()), frame.length());
 }

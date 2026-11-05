@@ -67,7 +67,8 @@ auto is_operation(ast::expression const& expr) -> bool {
 }
 
 /// Returns whether `expr` is a constant, or a list or record literal that holds
-/// only such values. The evaluator folds such a literal into a constant.
+/// only such values. The evaluator repeats the value of such a literal for all
+/// rows instead of building it row by row.
 auto is_constant_literal(ast::expression const& expr) -> bool {
   return expr.match(
     [](ast::constant const&) {

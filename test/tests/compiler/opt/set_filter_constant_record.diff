@@ -1,0 +1,122 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "export",
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:73..79 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+-        
++        constant bool false @ [1]:112..123 from 0
+       ],
+       order: "ordered"
+     },
+     SetIr {
+       assignments: [
+         {
+           left: root_field {
+             id: `m` @ [1]:80..81 from 0,
+             has_question_mark: false
+           },
+           right: record {
+             begin: [1]:84..85 from 0,
+             items: [
+               field {
+                 name: `v` @ [1]:85..86 from 0,
+                 expr: constant int64 1 @ [1]:88..89 from 0
+               }
+             ],
+             end: [1]:89..90 from 0
+           },
+           location: [1]:80..90 from 0
+         }
+       ],
+       order: "ordered"
+     },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:91..96 from 0
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:123..123 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
+         ],
+-        ref: std::where/op
++        named_args: [
++          
++        ]
+       },
+-      args: [
+-        expression binary_expr {
+-          left: binary_expr {
+-            left: root_field {
+-              id: `m` @ [1]:97..98 from 0,
+-              has_question_mark: false
+-            },
+-            op: "eq",
+-            right: record {
+-              begin: [1]:102..103 from 0,
+-              items: [
+-                field {
+-                  name: `v` @ [1]:103..104 from 0,
+-                  expr: constant int64 2 @ [1]:106..107 from 0
+-                }
+-              ],
+-              end: [1]:107..108 from 0
+-            },
+-            location: [1]:97..108 from 0
+-          },
+-          op: "or_",
+-          right: binary_expr {
+-            left: root_field {
+-              id: `m` @ [1]:112..113 from 0,
+-              has_question_mark: false
+-            },
+-            op: "eq",
+-            right: record {
+-              begin: [1]:117..118 from 0,
+-              items: [
+-                field {
+-                  name: `v` @ [1]:118..119 from 0,
+-                  expr: constant int64 3 @ [1]:121..122 from 0
+-                }
+-              ],
+-              end: [1]:122..123 from 0
+-            },
+-            location: [1]:112..123 from 0
+-          },
+-          location: [1]:97..123 from 0
+-        }
++      filter: [
++        
+       ],
+-      named_args: [
+-        
+-      ]
++      order: "ordered"
+     }
+   ],
+   definition_location: [1]:73..123 from 0
+ }

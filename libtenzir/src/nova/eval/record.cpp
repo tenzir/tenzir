@@ -66,12 +66,24 @@ auto _::EvalRun::eval(const ast::record& x, EvalFrame frame) -> Array<Data> {
     contribute(Array<Record>::from_fields(fields));
     fields.clear();
   };
+  // Constant fields without spreads make a constant record, which
+  // `ir::is_plain` relies on.
+  auto constant = Option<Record>{Record{}};
   for (auto const& item : x.items) {
     if (auto const* field = try_as<ast::record::field>(item)) {
-      fields.emplace_back(field->name.name, MaskedArray<Array<Data>>{
-                                              frame.eval(field->expr), mask});
+      auto value = frame.eval(field->expr);
+      if (constant) {
+        if (auto field_value = _::repeated_value(value)) {
+          (*constant)[field->name.name] = std::move(*field_value);
+        } else {
+          constant = None{};
+        }
+      }
+      fields.emplace_back(field->name.name,
+                          MaskedArray<Array<Data>>{std::move(value), mask});
       continue;
     }
+    constant = None{};
     auto const& spread = as<ast::spread>(item);
     auto spread_value = eval_spread(frame, spread.expr);
     if (not spread_value) {
@@ -79,6 +91,9 @@ auto _::EvalRun::eval(const ast::record& x, EvalFrame frame) -> Array<Data> {
     }
     apply_fields();
     contribute(std::move(*spread_value));
+  }
+  if (constant) {
+    return repeat(std::move(*constant), frame.length());
   }
   apply_fields();
   if (not result) {

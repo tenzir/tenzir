@@ -1,0 +1,128 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "export",
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:122..128 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+-        
++        constant bool false @ [1]:167..179 from 0
+       ],
+       order: "ordered"
+     },
+     SetIr {
+       assignments: [
+         {
+           left: field_access {
+             left: root_field {
+               id: `o` @ [1]:129..130 from 0,
+               has_question_mark: false
+             },
+             has_question_mark: false,
+             name: `p` @ [1]:131..132 from 0,
+             location: [1]:129..132 from 0
+           },
+           right: list {
+             begin: [1]:135..136 from 0,
+             items: [
+               expression constant string "cloud" @ [1]:136..143 from 0
+             ],
+             end: [1]:143..144 from 0
+           },
+           location: [1]:129..144 from 0
+         }
+       ],
+       order: "ordered"
+     },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:145..150 from 0
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:179..179 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
+         ],
+-        ref: std::where/op
++        named_args: [
++          
++        ]
+       },
+-      args: [
+-        expression binary_expr {
+-          left: binary_expr {
+-            left: field_access {
+-              left: root_field {
+-                id: `o` @ [1]:151..152 from 0,
+-                has_question_mark: false
+-              },
+-              has_question_mark: false,
+-              name: `p` @ [1]:153..154 from 0,
+-              location: [1]:151..154 from 0
+-            },
+-            op: "eq",
+-            right: list {
+-              begin: [1]:158..159 from 0,
+-              items: [
+-                expression constant string "a" @ [1]:159..162 from 0
+-              ],
+-              end: [1]:162..163 from 0
+-            },
+-            location: [1]:151..163 from 0
+-          },
+-          op: "or_",
+-          right: binary_expr {
+-            left: field_access {
+-              left: root_field {
+-                id: `o` @ [1]:167..168 from 0,
+-                has_question_mark: false
+-              },
+-              has_question_mark: false,
+-              name: `p` @ [1]:169..170 from 0,
+-              location: [1]:167..170 from 0
+-            },
+-            op: "eq",
+-            right: list {
+-              begin: [1]:174..175 from 0,
+-              items: [
+-                expression constant string "b" @ [1]:175..178 from 0
+-              ],
+-              end: [1]:178..179 from 0
+-            },
+-            location: [1]:167..179 from 0
+-          },
+-          location: [1]:151..179 from 0
+-        }
++      filter: [
++        
+       ],
+-      named_args: [
+-        
+-      ]
++      order: "ordered"
+     }
+   ],
+   definition_location: [1]:122..179 from 0
+ }
