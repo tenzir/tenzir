@@ -33,9 +33,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
-import shutil
 import ssl
-import tempfile
 import time
 import urllib.error
 import urllib.parse
@@ -61,7 +59,7 @@ from ._utils import find_free_port
 
 logger = logging.getLogger(__name__)
 
-SPLUNK_IMAGE = "docker.io/splunk/splunk:latest"
+SPLUNK_IMAGE = "docker.io/splunk/splunk:10.4.3"
 SPLUNK_HEC_TOKEN = "abcd1234"
 SPLUNK_PASSWORD = "tenzir123"
 SPLUNK_USER = "admin"
@@ -129,7 +127,6 @@ def _start_splunk(
     web_port: int,
     hec_port: int,
     mgmt_port: int,
-    defaults_path: Path,
 ) -> ManagedContainer:
     container_name = f"tenzir-test-splunk-{uuid.uuid4().hex[:8]}"
     # No `--rm`: when Splunk dies during startup (e.g. the OOM killer), the
@@ -146,14 +143,14 @@ def _start_splunk(
         f"{hec_port}:8088",
         "-p",
         f"{mgmt_port}:8089",
-        "-v",
-        f"{defaults_path}:/tmp/defaults/default.yml:ro",
         "-e",
         "SPLUNK_GENERAL_TERMS=--accept-sgt-current-at-splunk-com",
         "-e",
         "SPLUNK_START_ARGS=--accept-license",
         "-e",
         f"SPLUNK_HEC_TOKEN={SPLUNK_HEC_TOKEN}",
+        "-e",
+        "SPLUNK_HEC_SSL=false",
         "-e",
         f"SPLUNK_PASSWORD={SPLUNK_PASSWORD}",
         SPLUNK_IMAGE,
@@ -451,29 +448,12 @@ def splunk() -> FixtureHandle:
     mgmt_port = find_free_port()
     web_port = find_free_port()
     container: ManagedContainer | None = None
-    temp_dir = Path(tempfile.mkdtemp(prefix="splunk-fixture-"))
-    defaults_path = temp_dir / "default.yml"
-    defaults_path.write_text(
-        "\n".join(
-            [
-                "splunk:",
-                "  hec:",
-                "    enable: true",
-                "    ssl: false",
-                "    port: 8088",
-                f"    token: {SPLUNK_HEC_TOKEN}",
-                "",
-            ]
-        ),
-        encoding="utf-8",
-    )
     try:
         container = _start_splunk(
             runtime,
             web_port=web_port,
             hec_port=hec_port,
             mgmt_port=mgmt_port,
-            defaults_path=defaults_path,
         )
         _wait_for_splunk(container, web_port, hec_port, mgmt_port)
         _verify_v2_export(mgmt_port)
@@ -493,7 +473,6 @@ def splunk() -> FixtureHandle:
     except Exception:
         if container is not None:
             _stop_splunk(container)
-        shutil.rmtree(temp_dir, ignore_errors=True)
         raise
     assert container is not None
 
@@ -511,10 +490,7 @@ def splunk() -> FixtureHandle:
         )
 
     def _teardown() -> None:
-        try:
-            _stop_splunk(container)
-        finally:
-            shutil.rmtree(temp_dir, ignore_errors=True)
+        _stop_splunk(container)
 
     return FixtureHandle(
         env={
