@@ -1,6 +1,8 @@
 ---
 title: Filters reach the source through constant literals again
 type: bugfix
+authors:
+  - jachris
 created: 2026-11-05T15:00:00Z
 ---
 
