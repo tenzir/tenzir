@@ -67,6 +67,10 @@ auto equivalent(const RowView<Data>& l, const RowView<Data>& r) -> bool {
   return equal_impl<true>(l, r);
 }
 
+auto operator==(Data const& lhs, Data const& rhs) -> bool {
+  return equal(RowView<Data>{lhs}, RowView<Data>{rhs});
+}
+
 namespace {
 
 enum class category : uint8_t {
@@ -167,6 +171,14 @@ auto hash(const RowView<Data>& row) noexcept -> std::size_t {
   return match(row, []<typename V>(RowView<V> const& view) -> std::size_t {
     return hash_view(view);
   });
+}
+
+auto hash_of(Data const& value) noexcept -> std::size_t {
+  return hash(RowView<Data>{value});
+}
+
+auto hash_of(Record const& value) noexcept -> std::size_t {
+  return hash(RowView<Data>{RowView<Record>{value}});
 }
 
 auto hash_rows(Array<Data> const& column, storage::BitMap const& rows,

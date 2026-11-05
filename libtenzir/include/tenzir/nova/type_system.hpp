@@ -58,6 +58,12 @@ using Blob = tenzir::blob;
 using BlobView = tenzir::blob_view;
 
 class Data;
+class Record;
+
+/// What `nova::hash` gives a view of `value`, for `hash_append` to fold in.
+auto hash_of(Data const& value) noexcept -> std::size_t;
+auto hash_of(Record const& value) noexcept -> std::size_t;
+
 class List : public std::vector<Data> {
 public:
   using vector::vector;
@@ -66,6 +72,11 @@ class Record : public detail::stable_map<std::string, Data> {
 public:
   using Base = detail::stable_map<std::string, Data>;
   using Base::Base;
+
+  template <class HashAlgorithm>
+  friend auto hash_append(HashAlgorithm& h, Record const& value) -> void {
+    hash_append(h, nova::hash_of(value));
+  }
 };
 template <class T>
 class RowView;
@@ -105,6 +116,15 @@ class Data : public data_type_list::apply<variant> {
 public:
   using Base = data_type_list::apply<variant>;
   using Base::Base;
+
+  /// Equal the way `nova::equal` says: numbers by value whatever their type,
+  /// and a NaN never equal to itself.
+  friend auto operator==(Data const& lhs, Data const& rhs) -> bool;
+
+  template <class HashAlgorithm>
+  friend auto hash_append(HashAlgorithm& h, Data const& value) -> void {
+    hash_append(h, nova::hash_of(value));
+  }
 };
 
 template <typename Type>

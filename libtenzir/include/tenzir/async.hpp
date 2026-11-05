@@ -69,6 +69,7 @@
 namespace tenzir {
 
 class base_ctx;
+struct ContextHandles;
 
 namespace ir {
 struct pipeline;
@@ -158,6 +159,11 @@ public:
   /// Registers a runtime value for diagnostic censorship, without persisting it.
   virtual auto register_secret(nova::Secret const& value) -> void {
     TENZIR_UNUSED(value);
+  }
+
+  /// The contexts the host provides for this pipeline, if any.
+  virtual auto contexts() -> Option<ContextHandles const&> {
+    return None{};
   }
 
   /// Spawn a subpipeline from an already-instantiated `Plan`.

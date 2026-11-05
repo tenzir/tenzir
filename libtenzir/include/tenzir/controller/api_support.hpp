@@ -14,6 +14,9 @@
 
 #include <tenzir/box.hpp>
 #include <tenzir/controller/transport.hpp>
+#include <tenzir/detail/assert.hpp>
+#include <tenzir/nova/type_system.hpp>
+#include <tenzir/nova_json_printer.hpp>
 #include <tenzir/option.hpp>
 #include <tenzir/result.hpp>
 #include <tenzir/time.hpp>
@@ -368,6 +371,78 @@ auto write_json(Option<T> const& value, std::string& out) -> void {
 inline auto write_time(time value, std::string& out) -> void {
   fmt::format_to(std::back_inserter(out), R"("{:%FT%T}Z")",
                  std::chrono::floor<std::chrono::microseconds>(value));
+}
+
+inline auto record_of(simdjson::dom::element value, std::string_view schema)
+  -> Result<nova::Record, ParseError>;
+
+/// `S.Json` on the wire, as the engine holds data. A number keeps the type
+/// JSON gives it no word for: whole numbers are integers, signed unless only
+/// unsigned fits, and the rest are floats. A duplicated key resolves to its
+/// last value, as in `field`. How deep the value nests is bounded by the
+/// parser, which refuses a document deeper than that before this sees it.
+inline auto data_of(simdjson::dom::element value, std::string_view schema)
+  -> Result<nova::Data, ParseError> {
+  switch (value.type()) {
+    case simdjson::dom::element_type::NULL_VALUE:
+      return nova::Data{nova::Null{}};
+    case simdjson::dom::element_type::BOOL:
+      return nova::Data{value.get_bool().value_unsafe()};
+    case simdjson::dom::element_type::INT64:
+      return nova::Data{value.get_int64().value_unsafe()};
+    case simdjson::dom::element_type::UINT64:
+      return nova::Data{value.get_uint64().value_unsafe()};
+    case simdjson::dom::element_type::DOUBLE:
+      return nova::Data{value.get_double().value_unsafe()};
+    case simdjson::dom::element_type::BIGINT:
+      return Err{ParseError{std::string{schema},
+                            "expected a number that fits into 64 bits"}};
+    case simdjson::dom::element_type::STRING:
+      return nova::Data{std::string{value.get_string().value_unsafe()}};
+    case simdjson::dom::element_type::ARRAY: {
+      auto result = nova::List{};
+      for (auto item : value.get_array().value_unsafe()) {
+        TRY(auto decoded, data_of(item, schema));
+        result.push_back(std::move(decoded));
+      }
+      return nova::Data{std::move(result)};
+    }
+    case simdjson::dom::element_type::OBJECT: {
+      TRY(auto result, record_of(value, schema));
+      return nova::Data{std::move(result)};
+    }
+  }
+  TENZIR_UNREACHABLE();
+}
+
+/// `S.JsonObject` on the wire: a JSON value that has to be an object.
+inline auto record_of(simdjson::dom::element value, std::string_view schema)
+  -> Result<nova::Record, ParseError> {
+  TRY(auto object, object_of(value, schema));
+  auto result = nova::Record{};
+  for (auto entry : object) {
+    TRY(auto decoded, data_of(entry.value, schema));
+    result[std::string{entry.key}] = std::move(decoded);
+  }
+  return result;
+}
+
+/// Data as JSON, the way the engine prints it elsewhere: a value JSON has no
+/// type for, such as an IP address or a duration, becomes a string, and a
+/// secret never shows its value.
+inline auto write_data(nova::RowView<nova::Data> value, std::string& out)
+  -> void {
+  auto printer = nova::json_printer{{
+    .style = no_style(),
+    .oneline = true,
+  }};
+  printer.print(value);
+  auto bytes = printer.bytes();
+  out.append(reinterpret_cast<char const*>(bytes.data()), bytes.size());
+}
+
+inline auto write_record(nova::Record const& value, std::string& out) -> void {
+  write_data(nova::RowView<nova::Record>{value}, out);
 }
 
 /// A refusal, as a frame.
