@@ -30,6 +30,7 @@
        order: "ordered"
      },
      If {
+       source: [1]:21..148 from 0,
        condition: binary_expr {
          left: root_field {
            id: `foo` @ [1]:24..27 from 0,

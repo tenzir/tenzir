@@ -25,6 +25,7 @@
        order: "ordered"
      },
      If {
+       source: [1]:7..120 from 0,
        condition: root_field {
          id: `c` @ [1]:10..11 from 0,
          has_question_mark: false
@@ -86,6 +87,7 @@
          ],
          operators: [
            If {
+             source: [1]:49..120 from 0,
              condition: root_field {
                id: `d` @ [1]:52..53 from 0,
                has_question_mark: false

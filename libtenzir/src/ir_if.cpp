@@ -35,12 +35,14 @@ namespace tenzir {
 namespace {
 
 struct IfArgs {
+  location source;
   ast::expression condition;
   ir::pipeline consequence;
   Option<ir::pipeline> alternative;
 
   friend auto inspect(auto& f, IfArgs& x) -> bool {
-    return f.object(x).fields(f.field("condition", x.condition),
+    return f.object(x).fields(f.field("source", x.source),
+                              f.field("condition", x.condition),
                               f.field("consequence", x.consequence),
                               f.field("alternative", x.alternative));
   }
@@ -221,6 +223,10 @@ public:
 
   auto name() const -> std::string override {
     return "If";
+  }
+
+  auto main_location() const -> location override {
+    return args_.source;
   }
 
   auto copy() const -> Box<ir::Operator> override {
@@ -499,6 +505,7 @@ auto make_if_ir(ast::if_stmt x, compile_ctx& ctx)
   TRY(x.condition.bind(ctx));
   TRY(auto then, std::move(x.then).compile(ctx));
   auto args = IfArgs{};
+  args.source = x.location;
   args.condition = std::move(x.condition);
   args.consequence = std::move(then);
   if (x.else_) {

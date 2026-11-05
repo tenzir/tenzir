@@ -52,6 +52,7 @@
        order: "ordered"
      },
      If {
+       source: [1]:7..96 from 0,
        condition: binary_expr {
          left: root_field {
            id: `x` @ [1]:10..11 from 0,
@@ -98,6 +99,7 @@
          ],
          operators: [
            If {
+             source: [1]:41..96 from 0,
              condition: binary_expr {
                left: root_field {
                  id: `y` @ [1]:44..45 from 0,

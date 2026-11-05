@@ -67,6 +67,7 @@
 +      ]
      },
      If {
+       source: [1]:7..53 from 0,
        condition: root_field {
          id: `route` @ [1]:10..15 from 0,
          has_question_mark: false

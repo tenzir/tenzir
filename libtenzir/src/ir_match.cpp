@@ -828,6 +828,10 @@ public:
     return "Match";
   }
 
+  auto main_location() const -> location override {
+    return args_.match_keyword;
+  }
+
   auto copy() const -> Box<ir::Operator> override {
     return MatchIr{args_};
   }

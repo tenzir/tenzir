@@ -25,6 +25,7 @@
        order: "ordered"
      },
      If {
+       source: [1]:204..286 from 0,
        condition: binary_expr {
          left: field_access {
            left: function_call {

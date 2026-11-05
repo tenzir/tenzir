@@ -25,6 +25,7 @@
 -      order: "ordered"
 -    },
 -    If {
+-      source: [1]:88..153 from 0,
 -      condition: binary_expr {
 -        left: constant string "" @ [1]:91..93 from 0,
 -        op: "neq",

@@ -25,6 +25,7 @@
        order: "ordered"
      },
      If {
+       source: [1]:7..41 from 0,
        condition: root_field {
          id: `c` @ [1]:10..11 from 0,
          has_question_mark: false
