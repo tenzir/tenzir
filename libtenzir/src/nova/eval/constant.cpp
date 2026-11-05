@@ -67,20 +67,20 @@ auto _::repeated_value(Array<Data> const& array) -> Option<Data> {
     if constexpr (std::same_as<T, UnionArray>) {
       return None{};
     } else {
-      return match(
-        typed.storage(), []<class S>(S const& physical) -> Option<Data> {
-          if constexpr (std::same_as<S, storage::NullStorage>) {
-            return Data{Null{}};
-          } else if constexpr (std::same_as<S, storage::BitMap>) {
-            return physical.as_constant().transform([](bool value) {
-              return Data{value};
-            });
-          } else if constexpr (requires { physical.value(); }) {
-            return Data{physical.value()};
-          } else {
-            return None{};
-          }
-        });
+      return match(typed.storage(),
+                   []<class S>(S const& physical) -> Option<Data> {
+                     if constexpr (std::same_as<S, storage::NullStorage>) {
+                       return Data{Null{}};
+                     } else if constexpr (std::same_as<S, storage::BitMap>) {
+                       return physical.as_constant().transform([](bool value) {
+                         return Data{value};
+                       });
+                     } else if constexpr (requires { physical.value(); }) {
+                       return Data{physical.value()};
+                     } else {
+                       return None{};
+                     }
+                   });
     }
   });
 }
