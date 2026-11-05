@@ -711,11 +711,19 @@ auto parse_deployment_path(simdjson::dom::element value)
   -> Result<DeploymentPath, ParseError> {
   TRY(auto object, api::object_of(value, "DeploymentPath"));
 
+  TRY(auto org_raw, api::field(object, "org", "DeploymentPath"));
+  TRY(auto org, api::string_of(org_raw, "DeploymentPath.org"));
+
+  TRY(auto workspace_raw, api::field(object, "workspace", "DeploymentPath"));
+  TRY(auto workspace,
+      api::string_of(workspace_raw, "DeploymentPath.workspace"));
+
   TRY(auto deployment_id_raw,
       api::field(object, "deploymentId", "DeploymentPath"));
   TRY(auto deployment_id, parse_deployment_id(deployment_id_raw));
 
-  return DeploymentPath{std::move(deployment_id)};
+  return DeploymentPath{std::move(org), std::move(workspace),
+                        std::move(deployment_id)};
 }
 
 auto TelemetryCount::make(std::int64_t value)
@@ -1336,6 +1344,14 @@ auto parse_attach_ingest_endpoint_path(simdjson::dom::element value)
   -> Result<AttachIngestEndpointPath, ParseError> {
   TRY(auto object, api::object_of(value, "AttachIngestEndpointPath"));
 
+  TRY(auto org_raw, api::field(object, "org", "AttachIngestEndpointPath"));
+  TRY(auto org, api::string_of(org_raw, "AttachIngestEndpointPath.org"));
+
+  TRY(auto workspace_raw,
+      api::field(object, "workspace", "AttachIngestEndpointPath"));
+  TRY(auto workspace,
+      api::string_of(workspace_raw, "AttachIngestEndpointPath.workspace"));
+
   TRY(auto deployment_id_raw,
       api::field(object, "deploymentId", "AttachIngestEndpointPath"));
   TRY(auto deployment_id, parse_deployment_id(deployment_id_raw));
@@ -1343,7 +1359,8 @@ auto parse_attach_ingest_endpoint_path(simdjson::dom::element value)
   TRY(auto name_raw, api::field(object, "name", "AttachIngestEndpointPath"));
   TRY(auto name, parse_ingest_endpoint_name(name_raw));
 
-  return AttachIngestEndpointPath{std::move(deployment_id), std::move(name)};
+  return AttachIngestEndpointPath{std::move(org), std::move(workspace),
+                                  std::move(deployment_id), std::move(name)};
 }
 
 auto IngestEndpointGroupName::make(std::string value)
@@ -1460,6 +1477,14 @@ auto parse_deployment_secret_path(simdjson::dom::element value)
   -> Result<DeploymentSecretPath, ParseError> {
   TRY(auto object, api::object_of(value, "DeploymentSecretPath"));
 
+  TRY(auto org_raw, api::field(object, "org", "DeploymentSecretPath"));
+  TRY(auto org, api::string_of(org_raw, "DeploymentSecretPath.org"));
+
+  TRY(auto workspace_raw,
+      api::field(object, "workspace", "DeploymentSecretPath"));
+  TRY(auto workspace,
+      api::string_of(workspace_raw, "DeploymentSecretPath.workspace"));
+
   TRY(auto deployment_id_raw,
       api::field(object, "deploymentId", "DeploymentSecretPath"));
   TRY(auto deployment_id, parse_deployment_id(deployment_id_raw));
@@ -1467,7 +1492,8 @@ auto parse_deployment_secret_path(simdjson::dom::element value)
   TRY(auto name_raw, api::field(object, "name", "DeploymentSecretPath"));
   TRY(auto name, parse_secret_name(name_raw));
 
-  return DeploymentSecretPath{std::move(deployment_id), std::move(name)};
+  return DeploymentSecretPath{std::move(org), std::move(workspace),
+                              std::move(deployment_id), std::move(name)};
 }
 
 auto parse_secret_resolution(simdjson::dom::element value)
@@ -2167,7 +2193,11 @@ auto write_json(Principal const& value, std::string& out) -> void {
 
 auto write_json(DeploymentPath const& value, std::string& out) -> void {
   out += '{';
-  out += "\"deploymentId\":";
+  out += "\"org\":";
+  api::write_string(value.org, out);
+  out += ",\"workspace\":";
+  api::write_string(value.workspace, out);
+  out += ",\"deploymentId\":";
   write_json(value.deployment_id, out);
   out += '}';
 }
@@ -2473,7 +2503,11 @@ auto write_json(IngestEndpointName const& value, std::string& out) -> void {
 auto write_json(AttachIngestEndpointPath const& value, std::string& out)
   -> void {
   out += '{';
-  out += "\"deploymentId\":";
+  out += "\"org\":";
+  api::write_string(value.org, out);
+  out += ",\"workspace\":";
+  api::write_string(value.workspace, out);
+  out += ",\"deploymentId\":";
   write_json(value.deployment_id, out);
   out += ",\"name\":";
   write_json(value.name, out);
@@ -2539,7 +2573,11 @@ auto write_json(SecretName const& value, std::string& out) -> void {
 
 auto write_json(DeploymentSecretPath const& value, std::string& out) -> void {
   out += '{';
-  out += "\"deploymentId\":";
+  out += "\"org\":";
+  api::write_string(value.org, out);
+  out += ",\"workspace\":";
+  api::write_string(value.workspace, out);
+  out += ",\"deploymentId\":";
   write_json(value.deployment_id, out);
   out += ",\"name\":";
   write_json(value.name, out);
@@ -2992,7 +3030,9 @@ auto call(Transport& transport, ReadAccount)
 auto call(Transport& transport, ReadDeployment request)
   -> Task<Result<DeploymentInfo, variant<ReadDeploymentError, CallError>>> {
   auto path
-    = fmt::format("/api/deployments/{}",
+    = fmt::format("/api/organizations/{}/workspaces/{}/deployments/{}",
+                  api::encode_segment(request.path.org),
+                  api::encode_segment(request.path.workspace),
                   api::encode_segment(request.path.deployment_id.to_string()));
   auto body = std::string{};
   CO_TRY(auto response, (co_await transport.request(HttpRequest{
@@ -3081,9 +3121,11 @@ auto call(Transport& transport, ReadDeployment request)
 
 auto call(Transport& transport, PushTelemetry request)
   -> Task<Result<void, variant<PushTelemetryError, CallError>>> {
-  auto path
-    = fmt::format("/api/deployments/{}/telemetry",
-                  api::encode_segment(request.path.deployment_id.to_string()));
+  auto path = fmt::format(
+    "/api/organizations/{}/workspaces/{}/deployments/{}/telemetry",
+    api::encode_segment(request.path.org),
+    api::encode_segment(request.path.workspace),
+    api::encode_segment(request.path.deployment_id.to_string()));
   auto body = std::string{};
   write_json(request.payload, body);
   CO_TRY(auto response, (co_await transport.request(
@@ -3191,7 +3233,10 @@ auto call(Transport& transport, AttachIngestEndpoint request)
   -> Task<Result<IngestEndpointAttachment,
                  variant<AttachIngestEndpointError, CallError>>> {
   auto path
-    = fmt::format("/api/deployments/{}/ingest-endpoints/{}/attach",
+    = fmt::format("/api/organizations/{}/workspaces/{}/deployments/{}/"
+                  "ingest-endpoints/{}/attach",
+                  api::encode_segment(request.path.org),
+                  api::encode_segment(request.path.workspace),
                   api::encode_segment(request.path.deployment_id.to_string()),
                   api::encode_segment(request.path.name.to_string()));
   if (request.query.group) {
@@ -3297,10 +3342,12 @@ auto call(Transport& transport, AttachIngestEndpoint request)
 
 auto call(Transport& transport, ResolveSecret request)
   -> Task<Result<ResolvedSecret, variant<ResolveSecretError, CallError>>> {
-  auto path
-    = fmt::format("/api/deployments/{}/secrets/{}/resolve",
-                  api::encode_segment(request.path.deployment_id.to_string()),
-                  api::encode_segment(request.path.name.to_string()));
+  auto path = fmt::format(
+    "/api/organizations/{}/workspaces/{}/deployments/{}/secrets/{}/resolve",
+    api::encode_segment(request.path.org),
+    api::encode_segment(request.path.workspace),
+    api::encode_segment(request.path.deployment_id.to_string()),
+    api::encode_segment(request.path.name.to_string()));
   auto body = std::string{};
   write_json(request.payload, body);
   CO_TRY(auto response, (co_await transport.request(

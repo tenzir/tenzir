@@ -191,12 +191,19 @@ public:
         = Box<Transport>::from_non_null(std::make_unique<BufferedHttpTransport>(
           std::move(discovered).unwrap(), std::move(*key)));
     }
+    auto identity = co_await connection.identity();
+    if (identity.is_err()) {
+      TENZIR_WARN("platform telemetry could not learn the deployment's "
+                  "workspace: {}",
+                  std::move(identity).unwrap_err());
+      co_return {};
+    }
     auto& sender = *transport;
-    auto response = co_await sender->request(HttpRequest{
-      "POST",
-      fmt::format("/deployments/{}/telemetry", connection.deployment_id),
-      pending.body,
-      {{"content-type", "application/json"}}});
+    auto response = co_await sender->request(
+      HttpRequest{"POST",
+                  fmt::format("{}/telemetry", identity.unwrap().route()),
+                  pending.body,
+                  {{"content-type", "application/json"}}});
     if (response.is_err()) {
       if (discover_transport) {
         transport.reset();

@@ -373,10 +373,15 @@ namespace tenzir {
 
 class DeploymentPath {
 public:
-  explicit DeploymentPath(DeploymentId deployment_id)
-    : deployment_id{std::move(deployment_id)} {
+  DeploymentPath(std::string org, std::string workspace,
+                 DeploymentId deployment_id)
+    : org{std::move(org)},
+      workspace{std::move(workspace)},
+      deployment_id{std::move(deployment_id)} {
   }
 
+  std::string org;
+  std::string workspace;
   DeploymentId deployment_id;
 
   friend auto operator==(DeploymentPath const&, DeploymentPath const&) -> bool
@@ -385,7 +390,7 @@ public:
   template <class HashAlgorithm>
   friend auto hash_append(HashAlgorithm& h, DeploymentPath const& value)
     -> void {
-    hash_append(h, value.deployment_id);
+    hash_append(h, value.org, value.workspace, value.deployment_id);
   }
 };
 
@@ -1261,10 +1266,16 @@ namespace tenzir {
 
 class AttachIngestEndpointPath {
 public:
-  AttachIngestEndpointPath(DeploymentId deployment_id, IngestEndpointName name)
-    : deployment_id{std::move(deployment_id)}, name{std::move(name)} {
+  AttachIngestEndpointPath(std::string org, std::string workspace,
+                           DeploymentId deployment_id, IngestEndpointName name)
+    : org{std::move(org)},
+      workspace{std::move(workspace)},
+      deployment_id{std::move(deployment_id)},
+      name{std::move(name)} {
   }
 
+  std::string org;
+  std::string workspace;
   DeploymentId deployment_id;
   IngestEndpointName name;
 
@@ -1276,7 +1287,7 @@ public:
   template <class HashAlgorithm>
   friend auto
   hash_append(HashAlgorithm& h, AttachIngestEndpointPath const& value) -> void {
-    hash_append(h, value.deployment_id, value.name);
+    hash_append(h, value.org, value.workspace, value.deployment_id, value.name);
   }
 };
 
@@ -1466,10 +1477,16 @@ namespace tenzir {
 
 class DeploymentSecretPath {
 public:
-  DeploymentSecretPath(DeploymentId deployment_id, SecretName name)
-    : deployment_id{std::move(deployment_id)}, name{std::move(name)} {
+  DeploymentSecretPath(std::string org, std::string workspace,
+                       DeploymentId deployment_id, SecretName name)
+    : org{std::move(org)},
+      workspace{std::move(workspace)},
+      deployment_id{std::move(deployment_id)},
+      name{std::move(name)} {
   }
 
+  std::string org;
+  std::string workspace;
   DeploymentId deployment_id;
   SecretName name;
 
@@ -1480,7 +1497,7 @@ public:
   template <class HashAlgorithm>
   friend auto hash_append(HashAlgorithm& h, DeploymentSecretPath const& value)
     -> void {
-    hash_append(h, value.deployment_id, value.name);
+    hash_append(h, value.org, value.workspace, value.deployment_id, value.name);
   }
 };
 
@@ -2356,7 +2373,7 @@ auto call(Transport& transport, ReadAccount)
 
 // ── Deployments (deployment → platform) ─────────────────────────────────────
 
-/// `GET /api/deployments/:deploymentId`
+/// `GET /api/organizations/:org/workspaces/:workspace/deployments/:deploymentId`
 /// Reads a single deployment by id
 class ReadDeployment {
 public:
@@ -2375,7 +2392,8 @@ auto call(Transport& transport, ReadDeployment request)
 
 // ── Telemetry (deployment → platform) ───────────────────────────────────────
 
-/// `POST /api/deployments/:deploymentId/telemetry`
+/// `POST
+/// /api/organizations/:org/workspaces/:workspace/deployments/:deploymentId/telemetry`
 /// Stores one batch of pipeline metrics, operator metrics, diagnostics and run
 /// transitions from the deployment that sends it, and passes it on to anyone
 /// watching live. An error may follow partial table writes. Retry the identical
@@ -2401,7 +2419,8 @@ auto call(Transport& transport, PushTelemetry request)
 
 // ── IngestEndpoints (deployment → platform) ─────────────────────────────────
 
-/// `POST /api/deployments/:deploymentId/ingest-endpoints/:name/attach`
+/// `POST
+/// /api/organizations/:org/workspaces/:workspace/deployments/:deploymentId/ingest-endpoints/:name/attach`
 /// Answers where the deployment that sends it reads the events of an ingest
 /// endpoint of its organization that it may read, with Kafka credentials of its
 /// own that may read only that topic in the endpoint's consumer groups.
@@ -2429,7 +2448,8 @@ auto call(Transport& transport, AttachIngestEndpoint request)
 
 // ── Secrets (deployment → platform) ─────────────────────────────────────────
 
-/// `POST /api/deployments/:deploymentId/secrets/:name/resolve`
+/// `POST
+/// /api/organizations/:org/workspaces/:workspace/deployments/:deploymentId/secrets/:name/resolve`
 /// Resolves a secret the deployment can read. The value comes back as base58
 /// ECIES to `transportKey`, a secp256k1 public key the deployment made for this
 /// request alone
@@ -2609,9 +2629,9 @@ public:
 /// do; one that ends in a sink or in bytes is refused. Answers as soon as the
 /// ad-hoc pipeline has started. The deployment then opens a request of its own
 /// to the platform, `POST
-/// /deployments/:deploymentId/adhoc-pipelines/:adhocPipelineId/events`, and
-/// streams the events in its body for as long as the ad-hoc pipeline lasts. A
-/// start of an ad-hoc pipeline that is already live is a no-op, so a retry is
+/// /organizations/:org/workspaces/:workspace/deployments/:deploymentId/adhoc-pipelines/:adhocPipelineId/events`,
+/// and streams the events in its body for as long as the ad-hoc pipeline lasts.
+/// A start of an ad-hoc pipeline that is already live is a no-op, so a retry is
 /// safe. Refused while the deployment is suspended.
 class StartAdhocPipeline {
 public:
