@@ -1,0 +1,23 @@
+---
+fixtures:
+  - microsoft_defender:
+      tls: true
+      client_cert: true
+timeout: 60
+---
+
+// The API requires the client certificate, and the fixture fails if the token
+// endpoint receives it.
+from_microsoft_defender env("DEFENDER_QUERY"),
+  azure_auth={
+    tenant_id: env("DEFENDER_TENANT"),
+    client_id: env("DEFENDER_CLIENT"),
+    client_secret: env("DEFENDER_SECRET"),
+    authority: env("DEFENDER_AUTHORITY"),
+  },
+  _base_url=env("DEFENDER_URL"),
+  tls={
+    cacert: env("DEFENDER_CACERT"),
+    certfile: env("DEFENDER_CERTFILE"),
+    keyfile: env("DEFENDER_KEYFILE"),
+  }

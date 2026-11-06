@@ -667,9 +667,14 @@ auto run_export_request(std::string url, std::string target, std::string body,
     co_return false;
   };
   auto pool = HttpPool::make(std::move(executor), url, std::move(config));
-  auto result
-    = co_await pool->stream_post(std::move(target), std::move(body),
-                                 std::move(headers), std::move(callbacks));
+  if (pool.is_err()) {
+    co_await queue->enqueue(RequestFailed{std::move(pool).unwrap_err()});
+    co_await queue->enqueue(StreamDone{});
+    co_return;
+  }
+  auto result = co_await std::move(pool).unwrap()->stream_post(
+    std::move(target), std::move(body), std::move(headers),
+    std::move(callbacks));
   if (stopped) {
     co_await queue->enqueue(StreamDone{});
     co_return;
@@ -1040,9 +1045,14 @@ auto run_export_request_events(
     co_return false;
   };
   auto pool = HttpPool::make(std::move(executor), url, std::move(config));
-  auto result
-    = co_await pool->stream_post(std::move(target), std::move(body),
-                                 std::move(headers), std::move(callbacks));
+  if (pool.is_err()) {
+    co_await queue->enqueue(RequestFailed{std::move(pool).unwrap_err()});
+    co_await queue->enqueue(StreamDone{});
+    co_return;
+  }
+  auto result = co_await std::move(pool).unwrap()->stream_post(
+    std::move(target), std::move(body), std::move(headers),
+    std::move(callbacks));
   if (stopped) {
     co_await queue->enqueue(StreamDone{});
     co_return;

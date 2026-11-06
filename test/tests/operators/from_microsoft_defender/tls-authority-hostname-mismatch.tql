@@ -1,0 +1,20 @@
+---
+fixtures:
+  - microsoft_defender:
+      tls: true
+      token_san: ["DNS:wrong.example"]
+timeout: 60
+error: true
+---
+
+// The certificate of the token endpoint is trusted but issued for another
+// host, so the source must not send the client secret.
+from_microsoft_defender env("DEFENDER_QUERY"),
+  azure_auth={
+    tenant_id: env("DEFENDER_TENANT"),
+    client_id: env("DEFENDER_CLIENT"),
+    client_secret: env("DEFENDER_SECRET"),
+    authority: env("DEFENDER_AUTHORITY"),
+  },
+  _base_url=env("DEFENDER_URL"),
+  tls={cacert: env("DEFENDER_CACERT")}

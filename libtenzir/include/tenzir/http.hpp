@@ -101,7 +101,15 @@ struct Response {
 };
 
 /// Ensures default CA certificate paths are configured for proxygen.
+///
+/// Like OpenSSL, this prefers the bundle that `SSL_CERT_FILE` names over the
+/// well-known system bundles.
 auto ensure_default_ca_paths() -> void;
+
+/// Returns whether two URL hosts name the same server. IP literals, also in
+/// brackets, compare as addresses. DNS names compare case-insensitively and
+/// with or without a trailing root dot.
+auto is_same_host(std::string_view lhs, std::string_view rhs) -> bool;
 
 /// Prepends `http://` or `https://` to a URL that has no explicit scheme.
 auto add_default_url_scheme(std::string& url, bool tls_enabled) -> void;
@@ -126,7 +134,7 @@ auto normalize_url_and_tls(Option<located<data>> const& tls, std::string& url,
 /// Builds an `HttpPoolConfig` from a URL and optional TLS configuration.
 ///
 /// This mutates `url` the same way as `normalize_url_and_tls` and attaches the
-/// resolved SSL context when TLS is enabled.
+/// resolved TLS settings, which also apply to pools for other hosts.
 auto make_http_pool_config(Option<located<data>> const& tls, std::string& url,
                            location url_loc, diagnostic_handler& dh,
                            std::chrono::milliseconds request_timeout,

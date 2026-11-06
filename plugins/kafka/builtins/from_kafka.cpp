@@ -753,19 +753,17 @@ public:
       while (base_path.ends_with('/')) {
         base_path.pop_back();
       }
-      auto pool = Option<Box<HttpPool>>{};
-      try {
-        pool.emplace(
-          HttpPool::make(ctx.io_executor(), url, std::move(*config)));
-      } catch (std::runtime_error const&) {
-        diagnostic::error("invalid `schema_registry` URL")
+      auto pool = HttpPool::make(ctx.io_executor(), url, std::move(*config));
+      if (pool.is_err()) {
+        diagnostic::error("unusable `schema_registry` URL: {}",
+                          std::move(pool).unwrap_err())
           .primary(args_.schema_registry->get_location())
           .emit(ctx);
         co_return;
       }
       auto cpu = co_await folly::coro::co_current_executor;
       registry.emplace(Box<AvroRegistry>{
-        std::in_place, std::move(*pool), std::move(base_path),
+        std::in_place, std::move(pool).unwrap(), std::move(base_path),
         std::move(headers), *plugin, folly::getKeepAliveToken(cpu)});
     }
     if (not co_await make_subscription_source(ctx, *auth, *offset)) {
@@ -2521,19 +2519,17 @@ public:
       while (base_path.ends_with('/')) {
         base_path.pop_back();
       }
-      auto pool = Option<Box<HttpPool>>{};
-      try {
-        pool.emplace(
-          HttpPool::make(ctx.io_executor(), url, std::move(*config)));
-      } catch (std::runtime_error const&) {
-        diagnostic::error("invalid `schema_registry` URL")
+      auto pool = HttpPool::make(ctx.io_executor(), url, std::move(*config));
+      if (pool.is_err()) {
+        diagnostic::error("unusable `schema_registry` URL: {}",
+                          std::move(pool).unwrap_err())
           .primary(args_.schema_registry->get_location())
           .emit(ctx);
         co_return;
       }
       auto cpu = co_await folly::coro::co_current_executor;
       registry.emplace(Box<AvroRegistry>{
-        std::in_place, std::move(*pool), std::move(base_path),
+        std::in_place, std::move(pool).unwrap(), std::move(base_path),
         std::move(headers), *plugin, folly::getKeepAliveToken(cpu)});
     }
     if (not co_await make_subscription_source(ctx, *auth, *offset)) {

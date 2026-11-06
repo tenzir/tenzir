@@ -215,3 +215,21 @@ TEST("decompress gzip trailer after output limit") {
   CHECK(finished.bytes.empty());
   CHECK(finished.finished);
 }
+
+TEST("same URL host") {
+  CHECK(http::is_same_host("api.example", "api.example"));
+  CHECK(http::is_same_host("API.Example", "api.example"));
+  CHECK(http::is_same_host("api.example.", "api.example"));
+  CHECK(http::is_same_host("API.example.", "api.example"));
+  CHECK(http::is_same_host("127.0.0.1", "127.0.0.1"));
+  CHECK(not http::is_same_host("api.example", "other.example"));
+  CHECK(not http::is_same_host("api.example", "api.example.org"));
+  CHECK(not http::is_same_host("api.example..", "api.example"));
+  CHECK(not http::is_same_host("127.0.0.1", "127.0.0.2"));
+  // IP literals compare as addresses.
+  CHECK(http::is_same_host("[2001:db8::1]", "[2001:0db8:0:0:0:0:0:1]"));
+  CHECK(http::is_same_host("[2001:DB8::1]", "2001:db8::1"));
+  CHECK(not http::is_same_host("[2001:db8::1]", "[2001:db8::2]"));
+  CHECK(not http::is_same_host("127.0.0.1", "localhost"));
+  CHECK(not http::is_same_host("[::1]", "localhost"));
+}

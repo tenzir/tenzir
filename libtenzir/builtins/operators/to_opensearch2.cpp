@@ -313,8 +313,7 @@ public:
     }
     auto loc = args_.operator_location;
     auto config = HttpPoolConfig{
-      .tls = *tls_needed,
-      .ssl_context = nullptr,
+      .tls = {},
       // Fan concurrent requests out over multiple connections instead of
       // serializing head-of-line on one HTTP/1.1 connection, so that
       // `parallel` delivers actual concurrency.
@@ -330,21 +329,22 @@ public:
       if (tls.is_error()) {
         co_return;
       }
-      auto ssl_context
-        = tls->make_folly_ssl_context(ctx, proxygen::URL{url_}.getHost(), true);
-      if (ssl_context.is_error()) {
+      auto client_tls = HttpClientTls::make(std::move(*tls),
+                                            proxygen::URL{url_}.getHost(), ctx);
+      if (client_tls.is_error()) {
         co_return;
       }
-      config.ssl_context = std::move(*ssl_context);
+      config.tls = std::move(*client_tls);
     }
-    try {
-      pool_ = HttpPool::make(ctx.io_executor(), url_, config);
-    } catch (std::exception const& e) {
-      diagnostic::error("failed to initialize HTTP client: {}", e.what())
+    auto pool = HttpPool::make(ctx.io_executor(), url_, config);
+    if (pool.is_err()) {
+      diagnostic::error("failed to initialize HTTP client: {}",
+                        std::move(pool).unwrap_err())
         .primary(args_.url)
         .emit(ctx);
       co_return;
     }
+    pool_ = std::move(pool).unwrap();
     if (args_.user or args_.passwd) {
       auto token = detail::base64::encode(fmt::format("{}:{}", user, password));
       http::set(headers_, "Authorization", fmt::format("Basic {}", token));

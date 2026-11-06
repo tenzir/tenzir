@@ -461,8 +461,12 @@ private:
         break;
       }
       auto error = std::move(attempt_result).unwrap_err();
-      auto error_message = scrub_errno(error.what().toStdString());
-      auto retry = get_retry_info(error);
+      auto tls_error
+        = describe_tls_verification_error(error, parsed_url_.getHost());
+      // Retrying cannot fix a certificate that fails verification.
+      auto retry = tls_error ? Option<retry_info>{} : get_retry_info(error);
+      auto error_message = tls_error ? std::move(*tls_error)
+                                     : scrub_errno(error.what().toStdString());
       // Once the receiver has been moved into the streaming source,
       // the body cannot be replayed and retries are impossible.
       if (not body_rx or not retry or attempt >= max_retries) {
@@ -577,8 +581,12 @@ private:
         break;
       }
       auto error = std::move(attempt_result).unwrap_err();
-      auto error_message = scrub_errno(error.what().toStdString());
-      auto retry = get_retry_info(error);
+      auto tls_error
+        = describe_tls_verification_error(error, parsed_url_.getHost());
+      // Retrying cannot fix a certificate that fails verification.
+      auto retry = tls_error ? Option<retry_info>{} : get_retry_info(error);
+      auto error_message = tls_error ? std::move(*tls_error)
+                                     : scrub_errno(error.what().toStdString());
       if (not retry or attempt >= max_retries) {
         diagnostic::error("HTTP request to `{}` failed: {}", url_,
                           error_message)
@@ -977,8 +985,12 @@ private:
         break;
       }
       auto error = std::move(attempt_result).unwrap_err();
-      auto error_message = scrub_errno(error.what().toStdString());
-      auto retry = get_retry_info(error);
+      auto tls_error
+        = describe_tls_verification_error(error, parsed_url_.getHost());
+      // Retrying cannot fix a certificate that fails verification.
+      auto retry = tls_error ? Option<retry_info>{} : get_retry_info(error);
+      auto error_message = tls_error ? std::move(*tls_error)
+                                     : scrub_errno(error.what().toStdString());
       // Once the receiver has been moved into the streaming source,
       // the body cannot be replayed and retries are impossible.
       if (not body_rx or not retry or attempt >= max_retries) {
@@ -1093,8 +1105,12 @@ private:
         break;
       }
       auto error = std::move(attempt_result).unwrap_err();
-      auto error_message = scrub_errno(error.what().toStdString());
-      auto retry = get_retry_info(error);
+      auto tls_error
+        = describe_tls_verification_error(error, parsed_url_.getHost());
+      // Retrying cannot fix a certificate that fails verification.
+      auto retry = tls_error ? Option<retry_info>{} : get_retry_info(error);
+      auto error_message = tls_error ? std::move(*tls_error)
+                                     : scrub_errno(error.what().toStdString());
       if (not retry or attempt >= max_retries) {
         diagnostic::error("HTTP request to `{}` failed: {}", url_,
                           error_message)

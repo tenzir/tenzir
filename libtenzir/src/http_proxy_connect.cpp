@@ -13,6 +13,7 @@
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/base64.hpp"
 #include "tenzir/http.hpp"
+#include "tenzir/http_pool.hpp"
 #include "tenzir/ip.hpp"
 #include "tenzir/proxy_settings.hpp"
 #include "tenzir/ref.hpp"
@@ -119,9 +120,24 @@ auto open_http_proxy_session(
     co_yield folly::coro::co_error(std::runtime_error{
       fmt::format("invalid TLS server name `{}`", proxy->host)});
   }
-  auto& proxy_session = *co_await proxygen::coro::HTTPCoroConnector::connect(
-    &evb, std::move(proxy_addr), connect_timeout, std::move(proxy_conn_params),
-    proxygen::coro::HTTPCoroConnector::defaultSessionParams());
+  if (proxy_conn_params.sslContext) {
+    record_peer_verification(*proxy_conn_params.sslContext, TlsPeer::proxy);
+  }
+  auto connected = co_await folly::coro::co_awaitTry(
+    proxygen::coro::HTTPCoroConnector::connect(
+      &evb, std::move(proxy_addr), connect_timeout,
+      std::move(proxy_conn_params),
+      proxygen::coro::HTTPCoroConnector::defaultSessionParams()));
+  if (connected.hasException()) {
+    // Name the proxy certificate that failed verification instead of
+    // reporting a generic connection failure that callers would retry.
+    if (auto error = describe_tls_verification_error(
+          connected.exception(), host, std::string_view{proxy->host})) {
+      co_yield folly::coro::co_error(TlsVerificationError{std::move(*error)});
+    }
+    co_yield folly::coro::co_error(std::move(connected.exception()));
+  }
+  auto& proxy_session = **connected;
   if (not target_is_secure) {
     co_return HttpProxySession{
       .session = proxy_session,

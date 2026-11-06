@@ -353,13 +353,20 @@ auto AzureTokenProvider::refresh(OpCtx& ctx, HttpPoolConfig const& config)
     {"Content-Type", "application/x-www-form-urlencoded"},
     {"Content-Length", fmt::to_string(body.size())},
   };
+  // The token endpoint shares the trust settings of the API server, but not
+  // its client certificate. The pool verifies the certificate of the token
+  // endpoint's own host.
   auto token_config = config;
-  token_config.tls = url.starts_with("https://");
-  if (not token_config.tls) {
-    token_config.ssl_context.reset();
-  }
+  token_config.tls = config.tls.without_client_identity();
   auto pool = HttpPool::make(ctx.io_executor(), url, std::move(token_config));
-  auto result = co_await pool->post(body, std::move(headers));
+  if (pool.is_err()) {
+    co_return Err{diagnostic::error("failed to fetch Azure access token: {}",
+                                    std::move(pool).unwrap_err())
+                    .primary(loc_)
+                    .done()};
+  }
+  auto result
+    = co_await std::move(pool).unwrap()->post(body, std::move(headers));
   if (result.is_err()) {
     co_return Err{diagnostic::error("failed to fetch Azure access token: {}",
                                     std::move(result).unwrap_err())

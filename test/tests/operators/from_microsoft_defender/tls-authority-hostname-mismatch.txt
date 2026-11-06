@@ -1,0 +1,6 @@
+error: failed to fetch Azure access token: TLS certificate verification failed for `localhost`: hostname mismatch
+  --> tests/operators/from_microsoft_defender/tls-authority-hostname-mismatch.tql:13:14
+   |
+13 |   azure_auth={
+   |              ^
+   |

@@ -4,14 +4,20 @@ from __future__ import annotations
 
 import copy
 import json
+import shutil
+import socket
+import ssl
+import tempfile
 import threading
 from dataclasses import dataclass
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from typing import Iterator
 
 from tenzir_test import current_assertions, current_options, fixture
 
+from ._utils import generate_self_signed_cert
 from .microsoft_graph import (
     _ACCESS_TOKEN,
     _CLIENT_ID,
@@ -347,6 +353,15 @@ class Options:
     # Instead of `results`, the number of rows of a single `Int64` column
     # `Value`, counting from 0.
     synthesize: int | None = None
+    # Serve HTTPS, with the API at `127.0.0.1` and the token endpoint at
+    # `localhost`. Each certificate is valid only for its own server, so a
+    # client must verify each server against its own host name.
+    tls: bool = False
+    # Require a client certificate at the API. The token endpoint asks for an
+    # optional one and fails the test if it receives it.
+    client_cert: bool = False
+    # Replaces the names in the certificate of the token endpoint.
+    token_san: list[str] | None = None
 
 
 @dataclass(frozen=True)
@@ -744,15 +759,96 @@ class _FailedRefreshTokenHandler(_RefreshingTokenHandler):
     fail_refresh = True
 
 
+class _ClientCertCheckingTokenHandler(_TokenHandler):
+    def do_POST(self) -> None:  # noqa: N802
+        assert isinstance(self.server, _TokenServer)
+        assert isinstance(self.connection, ssl.SSLSocket)
+        if self.connection.getpeercert():
+            self.server.client_certs += 1
+        super().do_POST()
+
+
+class _DualStackTokenServer(_TokenServer):
+    """Accepts IPv4 and IPv6, wherever `localhost` resolves to."""
+
+    address_family = socket.AF_INET6
+
+    def server_bind(self) -> None:
+        self.socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
+        super().server_bind()
+
+
+def _make_token_server(
+    handler: type[BaseHTTPRequestHandler], tls: bool
+) -> _TokenServer:
+    if tls:
+        try:
+            return _DualStackTokenServer(("::", 0), handler)
+        except OSError:
+            # Without IPv6, `localhost` resolves to IPv4 only.
+            pass
+    return _TokenServer((_HOST, 0), handler)
+
+
+def _serve_tls(
+    server: ThreadingHTTPServer,
+    cert: Path,
+    key: Path,
+    client_ca: Path | None,
+    verify_mode: ssl.VerifyMode,
+) -> None:
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.load_cert_chain(certfile=cert, keyfile=key)
+    if client_ca is not None:
+        context.load_verify_locations(cafile=client_ca)
+        context.verify_mode = verify_mode
+    server.socket = context.wrap_socket(server.socket, server_side=True)
+
+
 def _run(
     bad_auth: bool = False,
     token_handler: type[_TokenHandler] = _TokenHandler,
     options: Options | None = None,
     assertions: Assertions | None = None,
 ) -> Iterator[dict[str, str]]:
-    token = _TokenServer((_HOST, 0), _BadTokenHandler if bad_auth else token_handler)
+    options = options or Options()
+    if options.client_cert:
+        token_handler = _ClientCertCheckingTokenHandler
+    token = _make_token_server(
+        _BadTokenHandler if bad_auth else token_handler, options.tls
+    )
+    token.client_certs = 0
     graph = _Server((_HOST, 0), _Handler)
-    graph.options = options or Options()
+    graph.options = options
+    scheme = "https" if options.tls else "http"
+    token_host = "localhost" if options.tls else _HOST
+    tls_env: dict[str, str] = {}
+    temp_dir: Path | None = None
+    if options.tls:
+        temp_dir = Path(tempfile.mkdtemp(prefix="microsoft-defender-tls-"))
+        (temp_dir / "graph").mkdir()
+        (temp_dir / "token").mkdir()
+        (temp_dir / "client").mkdir()
+        graph_cert, graph_key, _, _ = generate_self_signed_cert(
+            temp_dir / "graph", common_name=_HOST, san_entries=[f"IP:{_HOST}"]
+        )
+        token_cert, token_key, _, _ = generate_self_signed_cert(
+            temp_dir / "token",
+            common_name="localhost",
+            san_entries=options.token_san or ["DNS:localhost"],
+        )
+        cacert = temp_dir / "ca.pem"
+        cacert.write_bytes(graph_cert.read_bytes() + token_cert.read_bytes())
+        tls_env["DEFENDER_CACERT"] = str(cacert)
+        client_ca = None
+        if options.client_cert:
+            client_cert, client_key, client_ca, _ = generate_self_signed_cert(
+                temp_dir / "client", common_name="tenzir", san_entries=["DNS:tenzir"]
+            )
+            tls_env["DEFENDER_CERTFILE"] = str(client_cert)
+            tls_env["DEFENDER_KEYFILE"] = str(client_key)
+        _serve_tls(graph, graph_cert, graph_key, client_ca, ssl.CERT_REQUIRED)
+        _serve_tls(token, token_cert, token_key, client_ca, ssl.CERT_OPTIONAL)
     graph.rows = options.rows if options else None
     graph.project = options.project if options else None
     threads = [
@@ -763,8 +859,9 @@ def _run(
     try:
         yield {
             **_plugin_env(),
-            "DEFENDER_URL": f"http://{_HOST}:{graph.server_port}",
-            "DEFENDER_AUTHORITY": f"http://{_HOST}:{token.server_port}",
+            **tls_env,
+            "DEFENDER_URL": f"{scheme}://{_HOST}:{graph.server_port}",
+            "DEFENDER_AUTHORITY": f"{scheme}://{token_host}:{token.server_port}",
             "DEFENDER_TENANT": _TENANT_ID,
             "DEFENDER_CLIENT": _CLIENT_ID,
             "DEFENDER_SECRET": _CLIENT_SECRET,
@@ -785,7 +882,12 @@ def _run(
         }.get(graph.query, 1)
         if graph.query in {"refresh", "refresh-failed"}:
             assert token.token_requests == 2, token.token_requests
-        assert graph.calls == (0 if bad_auth else expected_calls), (
+        assert token.client_certs == 0, "token endpoint received client certificate"
+        # A token endpoint without a valid certificate receives no request.
+        rejected = options.token_san is not None
+        if rejected:
+            assert token.token_requests == 0, token.token_requests
+        assert graph.calls == (0 if bad_auth or rejected else expected_calls), (
             graph.query,
             graph.calls,
         )
@@ -796,6 +898,8 @@ def _run(
             thread.join(timeout=2)
         token.server_close()
         graph.server_close()
+        if temp_dir is not None:
+            shutil.rmtree(temp_dir, ignore_errors=True)
 
 
 @fixture(name="microsoft_defender", options=Options, assertions=Assertions)

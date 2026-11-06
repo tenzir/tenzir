@@ -86,10 +86,20 @@ auto make_async_sqs_queue(const Args& args, OpCtx& ctx)
     = resolved_creds
         ? Option<tenzir::resolved_aws_credentials>{std::move(*resolved_creds)}
         : None{};
-  auto queue
-    = std::make_shared<AsyncSqsQueue>(std::move(queue_name), poll_time,
-                                      std::move(region), std::move(creds_opt),
-                                      ctx.io_executor());
+  auto queue = std::shared_ptr<AsyncSqsQueue>{};
+  try {
+    queue
+      = std::make_shared<AsyncSqsQueue>(std::move(queue_name), poll_time,
+                                        std::move(region), std::move(creds_opt),
+                                        ctx.io_executor());
+  } catch (diagnostic const&) {
+    throw;
+  } catch (std::exception const& e) {
+    // The signed HTTP client throws when it cannot set up its connection.
+    diagnostic::error("failed to initialize SQS client: {}", e.what())
+      .primary(args.queue.source)
+      .throw_();
+  }
   co_await queue->init();
   co_return queue;
 }

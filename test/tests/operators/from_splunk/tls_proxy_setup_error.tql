@@ -1,0 +1,20 @@
+---
+fixtures:
+  - http_connect_proxy:
+      default_port: true
+      proxy_tls: true
+      proxy_auth: false
+      invalid_ca_bundle: true
+error: true
+timeout: 60
+---
+
+// The CA bundle for the HTTPS proxy contains no certificates, so the client
+// cannot set up TLS for it and must report that instead of crashing.
+from_splunk env("HTTP_PROXY_FIXTURE_URL"),
+  search="fixture",
+  earliest="-15m",
+  latest="-5m",
+  headers={Authorization: "Splunk test-token"},
+  tls={cacert: env("HTTP_PROXY_FIXTURE_CAFILE")},
+  max_retry_count=0

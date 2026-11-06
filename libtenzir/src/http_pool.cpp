@@ -8,6 +8,7 @@
 
 #include <tenzir/async/result.hpp>
 #include <tenzir/detail/assert.hpp>
+#include <tenzir/diagnostics.hpp>
 #include <tenzir/http.hpp>
 #include <tenzir/http_pool.hpp>
 #include <tenzir/http_proxy_connect.hpp>
@@ -15,11 +16,14 @@
 #include <tenzir/proxy_settings.hpp>
 #include <tenzir/ref.hpp>
 #include <tenzir/tls_options.hpp>
+#include <tenzir/try.hpp>
 
 #include <fmt/format.h>
 #include <folly/coro/Coroutine.h>
 #include <folly/coro/Sleep.h>
 #include <folly/io/async/AsyncSocketException.h>
+#include <folly/io/async/SSLContext.h>
+#include <folly/io/async/ssl/SSLErrors.h>
 #include <proxygen/lib/http/HTTPMessage.h>
 #include <proxygen/lib/http/HTTPMethod.h>
 #include <proxygen/lib/http/coro/HTTPFixedSource.h>
@@ -28,8 +32,10 @@
 #include <proxygen/lib/utils/URL.h>
 
 #include <algorithm>
+#include <charconv>
 #include <chrono>
 #include <stdexcept>
+#include <system_error>
 
 namespace tenzir::http {
 auto to_http_response(proxygen::coro::HTTPClient::Response& resp) -> Response;
@@ -84,9 +90,11 @@ auto make_request_source(proxygen::URL const& host_url, std::string path,
   return source;
 }
 
-template <class F>
-auto retry_request(HttpPoolConfig const& config, F&& f)
-  -> Task<Result<http::Response, std::string>> {
+/// Retries `f` per `config`. `describe_tls_error` names a certificate that
+/// failed verification for a failed attempt, which then is not retried.
+template <class F, class D>
+auto retry_request(HttpPoolConfig const& config, D const& describe_tls_error,
+                   F&& f) -> Task<Result<http::Response, std::string>> {
   auto attempt = uint32_t{0};
   while (true) {
     auto retry_after = Option<std::chrono::seconds>{};
@@ -124,6 +132,10 @@ auto retry_request(HttpPoolConfig const& config, F&& f)
     } else {
       // transport error
       auto attempt_err = attempt_res.unwrap_err();
+      // Retrying cannot fix a certificate that fails verification.
+      if (auto error = describe_tls_error(attempt_err)) {
+        co_return Err{std::move(*error)};
+      }
       auto is_retryable = false;
       attempt_err.with_exception([&](folly::AsyncSocketException const&) {
         is_retryable = true;
@@ -189,34 +201,146 @@ auto make_shared_session_pool(auto&&... args)
 
 } // namespace
 
+namespace {
+
+/// Extracts the OpenSSL error code from a message that `ERR_error_string`
+/// formatted, as in `error:4080003E:...`.
+auto parse_openssl_error(std::string_view message) -> unsigned long {
+  constexpr auto prefix = std::string_view{"error:"};
+  auto const begin = message.find(prefix);
+  if (begin == std::string_view::npos) {
+    return 0;
+  }
+  auto const digits = message.substr(begin + prefix.size(), 8);
+  auto code = 0ul;
+  auto const [end, ec]
+    = std::from_chars(digits.data(), digits.data() + digits.size(), code, 16);
+  if (ec != std::errc{} or end != digits.data() + digits.size()) {
+    return 0;
+  }
+  return code;
+}
+
+/// Finds the verification failure that a failed handshake reported.
+auto find_verification_failure(folly::exception_wrapper const& error)
+  -> Option<PeerVerificationFailure> {
+  auto result = Option<PeerVerificationFailure>{};
+  // Proxygen rethrows failed connections as plain `AsyncSocketException`s,
+  // which keep the OpenSSL error only in their message.
+  error.with_exception([&](folly::AsyncSocketException const& socket_error) {
+    if (socket_error.getType() == folly::AsyncSocketException::SSL_ERROR) {
+      result
+        = peer_verification_failure(parse_openssl_error(socket_error.what()));
+    }
+  });
+  error.with_exception([&](folly::SSLException const& ssl_error) {
+    result = peer_verification_failure(ssl_error.getInternalSSLError());
+  });
+  error.with_exception(
+    [&](proxygen::coro::HTTPCoroSessionPool::Exception const& pool_error) {
+      result = find_verification_failure(pool_error.connectException);
+    });
+  return result;
+}
+
+} // namespace
+
+auto describe_tls_verification_error(folly::exception_wrapper const& error,
+                                     std::string_view host,
+                                     Option<std::string_view> proxy_host)
+  -> Option<std::string> {
+  if (auto const* described = error.get_exception<TlsVerificationError>()) {
+    return std::string{described->what()};
+  }
+  auto failure = find_verification_failure(error);
+  if (not failure) {
+    return None{};
+  }
+  if (failure->peer == TlsPeer::server) {
+    return fmt::format("TLS certificate verification failed for `{}`: {}", host,
+                       failure->reason);
+  }
+  if (proxy_host) {
+    return fmt::format("TLS certificate verification failed for proxy `{}`: {}",
+                       *proxy_host, failure->reason);
+  }
+  return fmt::format("TLS certificate verification failed for the proxy: {}",
+                     failure->reason);
+}
+
+HttpClientTls::HttpClientTls(TlsConfig config)
+  : config_{std::make_shared<TlsConfig const>(std::move(config))} {
+}
+
+auto HttpClientTls::make(TlsConfig config, std::string_view host,
+                         diagnostic_handler& dh) -> failure_or<HttpClientTls> {
+  auto result = HttpClientTls{std::move(config)};
+  TRY(result.prepared_, result.config_->make_folly_ssl_context(dh, host, true));
+  result.prepared_host_ = std::string{host};
+  return result;
+}
+
+auto HttpClientTls::without_client_identity() const -> HttpClientTls {
+  if (not config_ or (not config_->certfile and not config_->keyfile)) {
+    return *this;
+  }
+  return HttpClientTls{config_->without_client_identity()};
+}
+
+auto HttpClientTls::context_for(std::string_view host) const
+  -> Result<std::shared_ptr<folly::SSLContext>, std::string> {
+  if (not config_) {
+    return std::shared_ptr<folly::SSLContext>{};
+  }
+  if (prepared_ and host == prepared_host_) {
+    return prepared_;
+  }
+  // A context verifies the certificate of exactly one host, so other hosts
+  // need their own.
+  auto dh = collecting_diagnostic_handler{};
+  auto result = config_->make_folly_ssl_context(dh, host, true);
+  if (result.is_error()) {
+    auto diags = std::move(dh).collect();
+    if (diags.empty()) {
+      return Err{fmt::format("failed to set up TLS for `{}`", host)};
+    }
+    return Err{std::move(diags.front().message)};
+  }
+  return std::move(*result);
+}
+
 struct HttpPool::Impl {
   folly::Executor::KeepAlive<folly::IOExecutor> executor;
   folly::EventBase* evb = nullptr;
   proxygen::URL url;
   HttpPoolConfig config;
+  /// TLS context that verifies the certificate of `url`'s host, or `nullptr`
+  /// for plaintext connections.
+  std::shared_ptr<folly::SSLContext const> ssl_context;
+  /// The host of the HTTPS proxy that the session pool connects through.
+  Option<std::string> proxy_host = None{};
   SessionPoolPtr pool;
   HttpRequestTargetForm target_form = HttpRequestTargetForm::origin;
   Option<proxy_url> proxy = None{};
   bool use_authenticated_proxy = false;
 };
 
+/// Names the certificate that failed verification in a failed attempt.
+auto describe_tls_error(auto const& impl, folly::exception_wrapper const& error)
+  -> Option<std::string> {
+  return describe_tls_verification_error(
+    error, impl.url.getHost(), impl.proxy_host.map([](std::string const& host) {
+      return std::string_view{host};
+    }));
+}
+
 auto make_conn_params(auto const& impl)
   -> proxygen::coro::HTTPCoroConnector::ConnectionParams {
-  // Do not load Proxygen's default CA bundle when a context is already set.
-  auto secure = impl.config.tls and not impl.config.ssl_context
-                  ? proxygen::coro::HTTPClient::SecureTransportImpl::TLS
-                  : proxygen::coro::HTTPClient::SecureTransportImpl::NONE;
-  auto conn_params
-    = proxygen::coro::HTTPClient::getConnParams(secure, impl.url.getHost());
-  if (conn_params.sslContext
-      and not set_expected_peer_name(*conn_params.sslContext,
-                                     impl.url.getHost())) {
-    throw std::runtime_error{
-      fmt::format("invalid TLS server name `{}`", impl.url.getHost())};
-  }
-  if (impl.config.ssl_context) {
+  auto conn_params = proxygen::coro::HTTPClient::getConnParams(
+    proxygen::coro::HTTPClient::SecureTransportImpl::NONE, impl.url.getHost());
+  if (impl.ssl_context) {
     conn_params.serverName = impl.url.getHost();
-    conn_params.sslContext = impl.config.ssl_context;
+    conn_params.sslContext = impl.ssl_context;
   }
   return conn_params;
 }
@@ -284,7 +408,7 @@ auto get_session_with_reservation(auto const& impl) -> Task<HttpPoolRequest> {
     auto request = co_await make_http_proxy_request(
       *impl->evb, impl->url.getHost(), impl->url.getPort(),
       std::move(conn_params), std::move(sess_params),
-      impl->config.connection_timeout, impl->config.tls);
+      impl->config.connection_timeout, impl->url.isSecure());
     co_return HttpPoolRequest{std::move(request)};
   }
   auto pooled = co_await impl->pool->getSessionWithReservation();
@@ -293,85 +417,142 @@ auto get_session_with_reservation(auto const& impl) -> Task<HttpPoolRequest> {
                             impl->target_form, impl->proxy};
 }
 
-HttpPool::HttpPool(folly::Executor::KeepAlive<folly::IOExecutor> executor,
-                   std::string url, HttpPoolConfig config)
-  : impl_{std::make_shared<Impl>()} {
-  impl_->executor = std::move(executor);
-  impl_->evb = impl_->executor->getEventBase();
-  impl_->url = proxygen::URL{url};
-  impl_->config = std::move(config);
-  if (not impl_->url.isValid() or not impl_->url.hasHost()) {
-    throw std::runtime_error(fmt::format("invalid url: {}", url));
-  }
-  if (impl_->config.tls) {
+namespace {
+
+/// Creates Proxygen's default TLS context for `host`, which trusts the CA
+/// bundles of `http::ensure_default_ca_paths`.
+auto make_default_ssl_context(std::string const& host, TlsPeer peer)
+  -> Result<std::shared_ptr<folly::SSLContext const>, std::string> {
+  auto const server = peer == TlsPeer::proxy ? fmt::format("proxy `{}`", host)
+                                             : fmt::format("`{}`", host);
+  try {
     http::ensure_default_ca_paths();
+    // Proxygen loads the CA bundles here and throws if it cannot.
+    auto ssl_context
+      = proxygen::coro::HTTPClient::getConnParams(
+          proxygen::coro::HTTPClient::SecureTransportImpl::TLS, host)
+          .sslContext;
+    if (not set_expected_peer_name(*ssl_context, host)) {
+      return Err{fmt::format("failed to set up TLS for {}: invalid server name",
+                             server)};
+    }
+    record_peer_verification(*ssl_context, peer);
+    return ssl_context;
+  } catch (std::exception const& error) {
+    return Err{
+      fmt::format("failed to set up TLS for {}: {}", server, error.what())};
   }
-  auto conn_params = make_conn_params(*impl_);
+}
+
+/// Creates the session pools of `impl` for its URL, directly or through
+/// `proxy`.
+auto make_session_pools(auto& impl, Option<proxy_url> proxy)
+  -> Result<void, std::string> {
+  auto const host = impl.url.getHost();
+  auto const tls = impl.url.isSecure();
+  auto conn_params = make_conn_params(impl);
   auto pool_params = proxygen::coro::HTTPCoroSessionPool::PoolParams{};
-  pool_params.connectTimeout = impl_->config.connection_timeout;
-  auto session_params = make_session_params(impl_->config);
+  pool_params.connectTimeout = impl.config.connection_timeout;
+  auto session_params = make_session_params(impl.config);
   // When a proxy is configured and the target is not on the bypass list,
   // cleartext HTTP pools sessions to the proxy and sends absolute-form
   // requests. HTTPS targets reuse Proxygen's proxyPool support for CONNECT
   // tunnels, except authenticated CONNECT uses the one-shot helper below.
-  auto proxy = proxy_for_target(impl_->config.tls ? "https" : "http",
-                                impl_->url.getHost());
-  if (proxy) {
-    impl_->target_form = impl_->config.tls ? HttpRequestTargetForm::origin
-                                           : HttpRequestTargetForm::absolute;
-    if (not impl_->config.tls) {
-      impl_->proxy = *proxy;
+  if (not proxy) {
+    impl.pool
+      = make_session_pool(impl.evb, host, impl.url.getPort(), pool_params,
+                          conn_params, session_params, true);
+    return {};
+  }
+  impl.target_form
+    = tls ? HttpRequestTargetForm::origin : HttpRequestTargetForm::absolute;
+  if (not tls) {
+    impl.proxy = *proxy;
+  }
+  if (tls and proxy->username) {
+    impl.use_authenticated_proxy = true;
+    return {};
+  }
+  // TLS-wrap the connection to the proxy itself when the proxy URL uses
+  // `https://`. The CONNECT tunnel then carries the target's own TLS (when
+  // `conn_params` requests it).
+  auto proxy_conn_params = proxygen::coro::HTTPClient::getConnParams(
+    proxygen::coro::HTTPClient::SecureTransportImpl::NONE, proxy->host);
+  if (proxy->scheme == "https") {
+    TRY(proxy_conn_params.sslContext,
+        make_default_ssl_context(proxy->host, TlsPeer::proxy));
+    proxy_conn_params.serverName = proxy->host;
+    impl.proxy_host = proxy->host;
+  }
+  if (impl.target_form == HttpRequestTargetForm::absolute) {
+    impl.pool = make_session_pool(
+      impl.evb, proxy->host, proxy->port, pool_params, proxy_conn_params,
+      proxygen::coro::HTTPCoroConnector::defaultSessionParams(),
+      /*allowNameLookup=*/true);
+    return {};
+  }
+  auto proxy_pool = make_shared_session_pool(
+    impl.evb, proxy->host, proxy->port, pool_params, proxy_conn_params,
+    proxygen::coro::HTTPCoroConnector::defaultSessionParams(),
+    /*allowNameLookup=*/true);
+  impl.pool = make_session_pool(impl.evb, host, impl.url.getPort(),
+                                std::move(proxy_pool), pool_params, conn_params,
+                                session_params,
+                                /*observer=*/nullptr);
+  return {};
+}
+
+/// Sets up a pool for `url`.
+auto initialize(auto& impl, std::string const& url)
+  -> Result<void, std::string> {
+  impl.url = proxygen::URL{url};
+  if (not impl.url.isValid() or not impl.url.hasHost()) {
+    // The URL may contain credentials, so it stays out of the message.
+    return Err{std::string{"invalid HTTP URL: expected a URL with a host"}};
+  }
+  auto const host = impl.url.getHost();
+  auto const tls = impl.url.isSecure();
+  if (tls) {
+    auto ssl_context = impl.config.tls.context_for(host);
+    if (ssl_context.is_err()) {
+      return Err{fmt::format("failed to set up TLS for `{}`: {}", host,
+                             std::move(ssl_context).unwrap_err())};
     }
-    if (impl_->config.tls and proxy->username) {
-      impl_->use_authenticated_proxy = true;
-      return;
+    impl.ssl_context = std::move(ssl_context).unwrap();
+    if (not impl.ssl_context) {
+      TRY(impl.ssl_context, make_default_ssl_context(host, TlsPeer::server));
     }
-    // TLS-wrap the connection to the proxy itself when the proxy
-    // URL uses `https://`. The CONNECT tunnel then carries the
-    // target's own TLS (when `conn_params` requests it).
-    auto proxy_secure
-      = proxy->scheme == "https"
-          ? proxygen::coro::HTTPClient::SecureTransportImpl::TLS
-          : proxygen::coro::HTTPClient::SecureTransportImpl::NONE;
-    if (proxy_secure == proxygen::coro::HTTPClient::SecureTransportImpl::TLS) {
-      http::ensure_default_ca_paths();
-    }
-    auto proxy_conn_params
-      = proxygen::coro::HTTPClient::getConnParams(proxy_secure, proxy->host);
-    if (proxy_conn_params.sslContext
-        and not set_expected_peer_name(*proxy_conn_params.sslContext,
-                                       proxy->host)) {
-      throw std::runtime_error{
-        fmt::format("invalid TLS server name `{}`", proxy->host)};
-    }
-    if (impl_->target_form == HttpRequestTargetForm::absolute) {
-      impl_->pool = make_session_pool(
-        impl_->evb, proxy->host, proxy->port, pool_params, proxy_conn_params,
-        proxygen::coro::HTTPCoroConnector::defaultSessionParams(),
-        /*allowNameLookup=*/true);
-    } else {
-      auto proxy_pool = make_shared_session_pool(
-        impl_->evb, proxy->host, proxy->port, pool_params, proxy_conn_params,
-        proxygen::coro::HTTPCoroConnector::defaultSessionParams(),
-        /*allowNameLookup=*/true);
-      impl_->pool
-        = make_session_pool(impl_->evb, impl_->url.getHost(),
-                            impl_->url.getPort(), std::move(proxy_pool),
-                            pool_params, conn_params, session_params,
-                            /*observer=*/nullptr);
-    }
-  } else {
-    impl_->pool = make_session_pool(impl_->evb, impl_->url.getHost(),
-                                    impl_->url.getPort(), pool_params,
-                                    conn_params, session_params, true);
+  }
+  auto proxy = proxy_for_target(tls ? "https" : "http", host);
+  // Proxygen resolves the host of the server or proxy while creating the
+  // session pool and throws when it cannot.
+  auto const resolved_host = proxy ? proxy->host : host;
+  try {
+    return make_session_pools(impl, std::move(proxy));
+  } catch (std::system_error const&) {
+    // The resolver's message differs between platforms.
+    return Err{fmt::format("failed to resolve `{}`", resolved_host)};
+  } catch (std::exception const& error) {
+    return Err{fmt::format("failed to set up a connection to `{}`: {}",
+                           resolved_host, error.what())};
   }
 }
 
+} // namespace
+
+HttpPool::HttpPool(std::shared_ptr<Impl> impl) : impl_{std::move(impl)} {
+}
+
 auto HttpPool::make(folly::Executor::KeepAlive<folly::IOExecutor> executor,
-                    std::string url, HttpPoolConfig config) -> Box<HttpPool> {
-  return Box<HttpPool>::from_non_null(std::unique_ptr<HttpPool>{
-    new HttpPool{std::move(executor), std::move(url), std::move(config)},
-  });
+                    std::string url, HttpPoolConfig config)
+  -> Result<Box<HttpPool>, std::string> {
+  auto impl = std::make_shared<Impl>();
+  impl->executor = std::move(executor);
+  impl->evb = impl->executor->getEventBase();
+  impl->config = std::move(config);
+  TRY(initialize(*impl, url));
+  return Box<HttpPool>::from_non_null(
+    std::unique_ptr<HttpPool>{new HttpPool{std::move(impl)}});
 }
 
 HttpPool::~HttpPool() = default;
@@ -424,7 +605,11 @@ auto HttpPool::request(proxygen::HTTPMethod method, Option<std::string> path,
        std::string path, std::string body, HttpHeaderFactory make_headers)
       -> Task<Result<http::Response, std::string>> {
       co_return co_await retry_request(
-        impl->config, [&]() -> Task<proxygen::coro::HTTPClient::Response> {
+        impl->config,
+        [&](folly::exception_wrapper const& error) {
+          return describe_tls_error(*impl, error);
+        },
+        [&]() -> Task<proxygen::coro::HTTPClient::Response> {
           auto headers = co_await make_headers();
           if (headers.is_err()) {
             throw std::runtime_error{std::move(headers).unwrap_err()};
@@ -602,6 +787,10 @@ auto HttpPool::stream_request(proxygen::HTTPMethod method, std::string path,
           // We cancelled the read before the body to retry a retryable status.
         } else {
           auto attempt_err = result.unwrap_err();
+          // Retrying cannot fix a certificate that fails verification.
+          if (auto error = describe_tls_error(*impl, attempt_err)) {
+            co_return Err{std::move(*error)};
+          }
           auto is_retryable = false;
           attempt_err.with_exception([&](folly::AsyncSocketException const&) {
             is_retryable = true;
@@ -687,11 +876,13 @@ auto http_request(folly::EventBase* evb, proxygen::HTTPMethod method,
                         : proxygen::coro::HTTPClient::SecureTransportImpl::NONE;
         auto conn_params = proxygen::coro::HTTPClient::getConnParams(
           secure, url_parsed.getHost());
-        if (conn_params.sslContext
-            and not set_expected_peer_name(*conn_params.sslContext,
-                                           url_parsed.getHost())) {
-          throw std::runtime_error{
-            fmt::format("invalid TLS server name `{}`", url_parsed.getHost())};
+        if (conn_params.sslContext) {
+          if (not set_expected_peer_name(*conn_params.sslContext,
+                                         url_parsed.getHost())) {
+            throw std::runtime_error{fmt::format("invalid TLS server name `{}`",
+                                                 url_parsed.getHost())};
+          }
+          record_peer_verification(*conn_params.sslContext);
         }
         auto sess_params
           = proxygen::coro::HTTPClient::getSessionParams(timeout);
@@ -714,6 +905,10 @@ auto http_request(folly::EventBase* evb, proxygen::HTTPMethod method,
         co_return http::to_http_response(resp);
       }());
       if (result.is_err()) {
+        if (auto error = describe_tls_verification_error(
+              result.unwrap_err(), proxygen::URL{url}.getHost())) {
+          co_return Err{std::move(*error)};
+        }
         co_return Err{std::move(result).unwrap_err().what().toStdString()};
       }
       co_return std::move(result).unwrap();

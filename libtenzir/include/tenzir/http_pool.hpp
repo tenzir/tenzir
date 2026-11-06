@@ -14,6 +14,7 @@
 #include <tenzir/option.hpp>
 #include <tenzir/result.hpp>
 
+#include <folly/ExceptionWrapper.h>
 #include <folly/Executor.h>
 
 #include <chrono>
@@ -21,6 +22,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -37,6 +39,62 @@ enum class HTTPMethod;
 
 namespace tenzir {
 
+/// TLS settings for the servers that HTTP clients connect to.
+///
+/// The settings do not depend on a particular server. Every `HttpPool` derives
+/// a TLS context that verifies the certificate of its own host, so one
+/// `HttpPoolConfig` can serve pools for different hosts.
+class HttpClientTls {
+public:
+  /// Uses the system trust store and default verification.
+  HttpClientTls() = default;
+
+  /// Uses resolved TLS settings.
+  explicit HttpClientTls(TlsConfig config);
+
+  /// Uses resolved TLS settings and prepares a context for `host`.
+  ///
+  /// Preparing the context reports configuration errors, such as an unreadable
+  /// `cacert`, with their source locations. Pools for `host` reuse it.
+  static auto make(TlsConfig config, std::string_view host,
+                   diagnostic_handler& dh) -> failure_or<HttpClientTls>;
+
+  /// Returns these settings without the client certificate and key.
+  ///
+  /// Use this for servers that should not receive the client identity, such
+  /// as an OAuth token endpoint next to the configured API server.
+  auto without_client_identity() const -> HttpClientTls;
+
+  /// Returns a TLS context that verifies the certificate of `host`, or
+  /// `nullptr` for the system defaults.
+  auto context_for(std::string_view host) const
+    -> Result<std::shared_ptr<folly::SSLContext>, std::string>;
+
+private:
+  std::shared_ptr<TlsConfig const> config_;
+  std::string prepared_host_;
+  std::shared_ptr<folly::SSLContext> prepared_;
+};
+
+/// A server certificate failed verification. The message names the server and
+/// the reason, like the result of `describe_tls_verification_error`.
+class TlsVerificationError : public std::runtime_error {
+public:
+  using std::runtime_error::runtime_error;
+};
+
+/// Describes why a server certificate failed verification, if `error` is a
+/// handshake that failed this way, possibly wrapped in a failed connection
+/// attempt of a session pool.
+///
+/// The failure must come from a connection whose context has
+/// `record_peer_verification`. `host` names the destination and `proxy_host`
+/// the HTTPS proxy, if any. A `TlsVerificationError` describes itself.
+auto describe_tls_verification_error(folly::exception_wrapper const& error,
+                                     std::string_view host,
+                                     Option<std::string_view> proxy_host
+                                     = None{}) -> Option<std::string>;
+
 /// Regenerates headers before each buffered or streaming request attempt.
 /// Invoked serially on the pool's IO executor, including after retry sleeps.
 /// Producers that need no asynchronous work can simply co_return their result.
@@ -47,12 +105,11 @@ using HttpHeaderFactory
 ///
 /// The pool owns the retry policy and TLS client context. Callers usually build
 /// this through `http::make_http_pool_config` so URL normalization and TLS
-/// diagnostics stay consistent across operators.
+/// diagnostics stay consistent across operators. The URL scheme of a pool
+/// decides whether it uses TLS.
 struct HttpPoolConfig {
-  /// Whether the pool connects via HTTPS.
-  bool tls = true;
-  /// TLS client context used when `tls` is true.
-  std::shared_ptr<folly::SSLContext> ssl_context;
+  /// TLS settings for pools with an `https` URL.
+  HttpClientTls tls;
   /// Time allowed for one complete HTTP request attempt.
   std::chrono::milliseconds request_timeout = std::chrono::seconds{90};
   /// Time allowed for establishing a connection.
@@ -100,9 +157,14 @@ struct HttpStreamCallbacks {
 class HttpPool {
 public:
   /// Creates a pool bound to the given IO executor and its current event base.
-  static auto make(folly::Executor::KeepAlive<folly::IOExecutor> executor,
-                   std::string url, HttpPoolConfig config = {})
-    -> Box<HttpPool>;
+  ///
+  /// Fails for URLs without a host, when the TLS setup for the server or its
+  /// HTTPS proxy fails, such as for a missing CA bundle, and when the host of
+  /// the server or proxy does not resolve. The error never contains the URL,
+  /// which may hold credentials.
+  [[nodiscard]] static auto
+  make(folly::Executor::KeepAlive<folly::IOExecutor> executor, std::string url,
+       HttpPoolConfig config = {}) -> Result<Box<HttpPool>, std::string>;
 
   ~HttpPool();
   HttpPool(HttpPool const&) = delete;
@@ -198,10 +260,10 @@ public:
     -> Task<Result<http::Response, std::string>>;
 
 private:
-  explicit HttpPool(folly::Executor::KeepAlive<folly::IOExecutor> executor,
-                    std::string url, HttpPoolConfig config);
-
   struct Impl;
+
+  explicit HttpPool(std::shared_ptr<Impl> impl);
+
   std::shared_ptr<Impl> impl_;
 };
 

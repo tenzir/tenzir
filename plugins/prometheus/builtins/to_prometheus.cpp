@@ -803,14 +803,16 @@ public:
       done_ = true;
       co_return;
     }
-    try {
-      pool_ = HttpPool::make(ctx.io_executor(), url_, std::move(*config));
-    } catch (std::exception const& e) {
-      diagnostic::error("failed to initialize HTTP client: {}", e.what())
+    auto pool = HttpPool::make(ctx.io_executor(), url_, std::move(*config));
+    if (pool.is_err()) {
+      diagnostic::error("failed to initialize HTTP client: {}",
+                        std::move(pool).unwrap_err())
         .primary(args_.url)
         .emit(ctx);
       done_ = true;
+      co_return;
     }
+    pool_ = std::move(pool).unwrap();
   }
 
   auto process(Input input, OpCtx& ctx) -> Task<void> override {

@@ -1,0 +1,15 @@
+---
+fixtures:
+  - http_connect_proxy:
+      default_port: true
+      proxy_tls: true
+error: true
+timeout: 60
+---
+
+// The HTTPS proxy itself presents a certificate that the client does not
+// trust, so the request fails before it reaches the destination.
+from_http env("HTTP_PROXY_FIXTURE_URL"), max_retry_count=0,
+  tls={cacert: env("HTTP_PROXY_FIXTURE_CAFILE")} {
+  read_json
+}

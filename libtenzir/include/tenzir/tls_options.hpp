@@ -39,6 +39,39 @@ auto parse_caf_tls_version(std::string_view version)
 auto set_expected_peer_name(folly::SSLContext const& ctx, std::string_view host)
   -> bool;
 
+/// The role of the server that a TLS client connects to.
+enum class TlsPeer {
+  /// The destination of a request.
+  server,
+  /// An HTTPS proxy on the way to the destination.
+  proxy,
+};
+
+/// A server certificate that failed verification in a TLS handshake.
+struct PeerVerificationFailure {
+  TlsPeer peer = TlsPeer::server;
+  /// Why the certificate failed, such as `hostname mismatch`.
+  std::string reason;
+};
+
+/// Makes TLS handshakes of connections created from `ctx` report why the
+/// certificate of `peer` failed verification, for
+/// `peer_verification_failure`.
+///
+/// A failed handshake then puts a dedicated OpenSSL error first in the
+/// thread's error queue, where the failed handshake's own exception picks it
+/// up, so concurrent connections never see each other's results. Verification
+/// itself is unchanged. Contexts from `TlsConfig::make_folly_ssl_context`
+/// already do this in client mode.
+auto record_peer_verification(folly::SSLContext const& ctx,
+                              TlsPeer peer = TlsPeer::server) -> void;
+
+/// Decodes the OpenSSL error that a failed handshake of a connection from a
+/// context with `record_peer_verification` reported, such as the internal
+/// error code of a `folly::SSLException`. Returns `None` for other errors.
+auto peer_verification_failure(unsigned long openssl_error)
+  -> Option<PeerVerificationFailure>;
+
 auto add_tls_client_diagnostic_hints(diagnostic_builder diag, bool tls_enabled,
                                      std::string_view service_name = {},
                                      Option<uint64_t> plaintext_port = None{},
@@ -101,6 +134,10 @@ struct TlsConfig {
   make_folly_ssl_context(diagnostic_handler& dh, std::string_view peer_name,
                          bool tls_required = false) const
     -> failure_or<std::shared_ptr<folly::SSLContext>>;
+
+  /// Returns these settings without the client certificate, key, and key
+  /// password, for servers that must not receive the client identity.
+  auto without_client_identity() const -> TlsConfig;
 
   /// Escape hatch for utility code that does not have access to an
   /// `actor_system_config` and just needs a `TlsConfig` with default settings

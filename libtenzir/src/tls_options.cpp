@@ -16,13 +16,16 @@
 #include <caf/net/ssl/context.hpp>
 #include <curl/curl.h>
 #include <folly/io/async/SSLContext.h>
+#include <openssl/err.h>
 #include <openssl/ssl.h>
 #include <openssl/x509v3.h>
 
 #include <algorithm>
 #include <array>
+#include <cstdint>
 #include <filesystem>
 #include <memory>
+#include <vector>
 
 namespace tenzir {
 
@@ -126,6 +129,89 @@ auto set_expected_peer_name(folly::SSLContext const& ctx, std::string_view host)
   X509_VERIFY_PARAM_set_hostflags(param, X509_CHECK_FLAG_NO_PARTIAL_WILDCARDS);
   return not name.empty()
          and X509_VERIFY_PARAM_set1_host(param, name.data(), name.size()) == 1;
+}
+
+namespace {
+
+/// Marks reasons in the dedicated OpenSSL error library that concern a proxy.
+/// X509 verification results are far smaller.
+constexpr auto proxy_reason_flag = 0x10000;
+
+/// Returns the OpenSSL error library for failed certificate verifications.
+///
+/// Its error strings make `ERR_error_string` readable for these errors, also
+/// in code that does not decode them with `peer_verification_failure`.
+auto verification_error_library() -> int {
+  static auto const library = [] {
+    auto const library = ERR_get_next_error_library();
+    // OpenSSL keeps pointers to these entries, so they must live forever.
+    static auto strings = [&] {
+      auto result = std::vector<ERR_STRING_DATA>{};
+      // OpenSSL stops at the first entry without a code, so the entry for the
+      // library itself needs its full code.
+      result.push_back({ERR_PACK(library, 0, 0), "certificate verification"});
+      // X509 verification results stay well below 256.
+      for (auto code = 1; code < 256; ++code) {
+        auto const* reason = X509_verify_cert_error_string(code);
+        result.push_back({ERR_PACK(0, 0, code), reason});
+        result.push_back({ERR_PACK(0, 0, code | proxy_reason_flag), reason});
+      }
+      result.push_back({0, nullptr});
+      return result;
+    }();
+    ERR_load_strings(library, strings.data());
+    return library;
+  }();
+  return library;
+}
+
+auto verify_and_record(X509_STORE_CTX* store, void* arg) -> int {
+  // This is what OpenSSL does without a callback, so verification itself,
+  // including the expected peer name and the `SSL`-level verify callback,
+  // stays unchanged.
+  auto const verified = X509_verify_cert(store);
+  if (verified == 1) {
+    return verified;
+  }
+  auto const error = X509_STORE_CTX_get_error(store);
+  auto const* ssl = static_cast<SSL const*>(
+    X509_STORE_CTX_get_ex_data(store, SSL_get_ex_data_X509_STORE_CTX_idx()));
+  // A connection that skips verification ignores the failure, and the error
+  // would linger in the thread's error queue.
+  if (error == X509_V_OK or not ssl
+      or (SSL_get_verify_mode(ssl) & SSL_VERIFY_PEER) == 0) {
+    return verified;
+  }
+  // OpenSSL adds its generic `certificate verify failed` after this error, and
+  // folly and Proxygen put the first error of the queue into the exception of
+  // the failed handshake.
+  auto const proxy = reinterpret_cast<std::uintptr_t>(arg) != 0;
+  ERR_raise(verification_error_library(),
+            error | (proxy ? proxy_reason_flag : 0));
+  return verified;
+}
+
+} // namespace
+
+auto record_peer_verification(folly::SSLContext const& ctx, TlsPeer peer)
+  -> void {
+  auto* const arg = reinterpret_cast<void*>(
+    static_cast<std::uintptr_t>(peer == TlsPeer::proxy ? 1 : 0));
+  SSL_CTX_set_cert_verify_callback(ctx.getSSLCtx(), verify_and_record, arg);
+}
+
+auto peer_verification_failure(unsigned long openssl_error)
+  -> Option<PeerVerificationFailure> {
+  if (openssl_error == 0
+      or ERR_GET_LIB(openssl_error) != verification_error_library()) {
+    return None{};
+  }
+  auto const reason = ERR_GET_REASON(openssl_error);
+  return PeerVerificationFailure{
+    .peer
+    = (reason & proxy_reason_flag) != 0 ? TlsPeer::proxy : TlsPeer::server,
+    .reason = X509_verify_cert_error_string(reason & ~proxy_reason_flag),
+  };
 }
 
 auto add_tls_client_diagnostic_hints(diagnostic_builder diag, bool tls_enabled,
@@ -803,11 +889,14 @@ auto TlsConfig::make_folly_ssl_context(diagnostic_handler& dh,
   } else {
     ctx->setVerificationOption(folly::SSLContext::SSLVerifyPeerEnum::VERIFY);
   }
-  if (not is_server and not skip_verify
-      and not set_expected_peer_name(*ctx, peer_name)) {
-    diagnostic::error("failed to set the expected server name `{}`", peer_name)
-      .emit(dh);
-    return failure::promise();
+  if (not is_server and not skip_verify) {
+    if (not set_expected_peer_name(*ctx, peer_name)) {
+      diagnostic::error("failed to set the expected server name `{}`",
+                        peer_name)
+        .emit(dh);
+      return failure::promise();
+    }
+    record_peer_verification(*ctx);
   }
   return ctx;
 }
@@ -885,6 +974,14 @@ auto tls_options::resolve(std::string_view url, location url_loc,
   out.uses_curl_http = uses_curl_http_;
   out.tls_arg_source = tls_ ? tls_->source : location::unknown;
   return out;
+}
+
+auto TlsConfig::without_client_identity() const -> TlsConfig {
+  auto result = *this;
+  result.certfile = None{};
+  result.keyfile = None{};
+  result.password = None{};
+  return result;
 }
 
 auto TlsConfig::defaults() -> TlsConfig {

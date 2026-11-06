@@ -1,1 +1,6 @@
-certificate verify failed
+error: HTTP request to `https://tenzir-http-proxy-target.test/` failed: TLS certificate verification failed for `tenzir-http-proxy-target.test`: hostname mismatch
+  --> tests/operators/to_http/tls_hostname_mismatch.tql:12:1
+   |
+12 | to_http env("HTTP_PROXY_FIXTURE_URL"), max_retry_count=0,
+   | ^^^^^^^
+   |

@@ -1,0 +1,6 @@
+error: HTTP request to `https://tenzir-http-proxy-target.test/services/search/v2/jobs/export` failed: TLS certificate verification failed for proxy `127.0.0.1`: self-signed certificate
+  --> tests/operators/from_splunk/tls_proxy_untrusted.tql:13:13
+   |
+13 | from_splunk env("HTTP_PROXY_FIXTURE_URL"),
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |

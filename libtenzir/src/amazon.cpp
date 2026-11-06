@@ -220,13 +220,18 @@ SignedHttpClient::SignedHttpClient(SignedHttpClientConfig config)
       Aws::String{region_.c_str(), region_.size()});
   }
   auto pool_config = HttpPoolConfig{};
-  pool_config.tls = endpoint_.starts_with("https://");
   pool_config.request_timeout = config.request_timeout;
   pool_config.max_retry_count = config.max_retry_count;
   pool_config.retry_delay = config.retry_delay;
   pool_config.max_concurrent_streams_per_connection = 1;
-  pool_ = HttpPool::make(std::move(config.io_executor), endpoint_,
-                         std::move(pool_config));
+  auto pool = HttpPool::make(std::move(config.io_executor), endpoint_,
+                             std::move(pool_config));
+  if (pool.is_err()) {
+    // Callers report exceptions from this constructor as initialization
+    // failures of their client.
+    throw std::runtime_error{std::move(pool).unwrap_err()};
+  }
+  pool_ = std::move(pool).unwrap();
 }
 
 auto aws_response(Result<http::Response, std::string> response,

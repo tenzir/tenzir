@@ -8,11 +8,15 @@
 
 #include "tenzir/http.hpp"
 
+#include "tenzir/concept/parseable/tenzir/ip.hpp"
+#include "tenzir/concept/parseable/to.hpp"
 #include "tenzir/curl.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/detail/env.hpp"
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/string.hpp"
 #include "tenzir/http_pool.hpp"
+#include "tenzir/ip.hpp"
 #include "tenzir/nova/materialize.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/view3.hpp"
@@ -285,6 +289,30 @@ auto emit_odata_envelope_error(location paginate_loc, diagnostic_handler& dh)
 
 } // namespace
 
+auto is_same_host(std::string_view lhs, std::string_view rhs) -> bool {
+  // IP literals have many spellings, such as `2001:db8::1` and
+  // `2001:0db8:0:0:0:0:0:1`, so compare the addresses.
+  auto parse_ip = [](std::string_view host) {
+    if (host.size() >= 2 and host.front() == '[' and host.back() == ']') {
+      host.remove_prefix(1);
+      host.remove_suffix(1);
+    }
+    return to<ip>(std::string{host});
+  };
+  auto const lhs_ip = parse_ip(lhs);
+  auto const rhs_ip = parse_ip(rhs);
+  if (lhs_ip or rhs_ip) {
+    return lhs_ip and rhs_ip and *lhs_ip == *rhs_ip;
+  }
+  auto strip_root = [](std::string_view host) {
+    if (host.size() > 1 and host.ends_with('.')) {
+      host.remove_suffix(1);
+    }
+    return host;
+  };
+  return detail::ascii_icase_equal(strip_root(lhs), strip_root(rhs));
+}
+
 auto add_default_url_scheme(std::string& url, bool tls_enabled) -> void {
   if (not url.starts_with("http://") and not url.starts_with("https://")) {
     url.insert(0, tls_enabled ? "https://" : "http://");
@@ -322,17 +350,14 @@ auto make_http_pool_config(Option<located<data>> const& tls, std::string& url,
   TRY(tls_opts.validate(url, url_loc, dh));
   TRY(auto resolved, tls_opts.resolve(cfg, dh));
   add_default_url_scheme(url, resolved.tls.inner);
-  auto tls_enabled = url.starts_with("https://");
   auto config = HttpPoolConfig{
-    .tls = tls_enabled,
-    .ssl_context = nullptr,
+    .tls = HttpClientTls{resolved},
     .request_timeout = request_timeout,
     .on_retry = {},
   };
-  if (tls_enabled) {
-    TRY(auto ssl_context, resolved.make_folly_ssl_context(
-                            dh, proxygen::URL{url}.getHost(), true));
-    config.ssl_context = std::move(ssl_context);
+  if (url.starts_with("https://")) {
+    TRY(config.tls, HttpClientTls::make(std::move(resolved),
+                                        proxygen::URL{url}.getHost(), dh));
   }
   return config;
 }
@@ -896,13 +921,20 @@ auto ensure_default_ca_paths() -> void {
   static std::once_flag flag;
   std::call_once(flag, [] {
     auto ca_paths = std::vector<std::string>{};
-    for (auto const* path : {
-           "/etc/ssl/certs/ca-certificates.crt",
-           "/etc/pki/tls/cert.pem",
-           "/etc/ssl/cert.pem",
-         }) {
-      if (std::filesystem::exists(path)) {
-        ca_paths.emplace_back(path);
+    // Contexts with OpenSSL's default verify paths honor `SSL_CERT_FILE`, so
+    // Proxygen's default contexts should trust the same bundle.
+    if (auto file = detail::getenv("SSL_CERT_FILE");
+        file and std::filesystem::exists(*file)) {
+      ca_paths.push_back(std::move(*file));
+    } else {
+      for (auto const* path : {
+             "/etc/ssl/certs/ca-certificates.crt",
+             "/etc/pki/tls/cert.pem",
+             "/etc/ssl/cert.pem",
+           }) {
+        if (std::filesystem::exists(path)) {
+          ca_paths.emplace_back(path);
+        }
       }
     }
     if (not ca_paths.empty()) {

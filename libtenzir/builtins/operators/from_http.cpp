@@ -843,6 +843,8 @@ auto fetch(folly::EventBase* evb, proxygen::URL url, RequestConfig request,
                             request = std::move(request),
                             config = std::move(config), buffer_retryable_body,
                             mq = std::move(mq)]() mutable -> Task<void> {
+      // Why the server certificate failed verification, if it did.
+      auto tls_error = Option<std::string>{};
       auto result = co_await folly::coro::co_awaitTry([&]() -> Task<void> {
         auto const& host = url.getHost();
         auto const is_secure = url.isSecure();
@@ -947,6 +949,11 @@ auto fetch(folly::EventBase* evb, proxygen::URL url, RequestConfig request,
             if (emitted_messages) {
               co_yield folly::coro::co_error(std::move(ew));
             }
+            // Retrying cannot fix a certificate that fails verification.
+            tls_error = describe_tls_verification_error(ew, host);
+            if (tls_error) {
+              co_yield folly::coro::co_error(std::move(ew));
+            }
             auto retryable = false;
             if (ew.is_compatible_with<folly::AsyncSocketException>()) {
               retryable = true;
@@ -985,6 +992,8 @@ auto fetch(folly::EventBase* evb, proxygen::URL url, RequestConfig request,
             co_await mq->enqueue(
               ResponseBody{chunk::copy(res->body.data(), res->body.size())});
           }
+        } else if (tls_error) {
+          co_await mq->enqueue(FetchError{std::move(*tls_error)});
         } else {
           co_await mq->enqueue(
             FetchError{describe_fetch_error(result.exception())});
@@ -1024,6 +1033,7 @@ public:
       co_return;
     }
     pagination_.current_url = resolved_url;
+    origin_host_ = proxygen::URL{resolved_url}.getHost();
     // prepare fetch config
     fetch_config_ = make_fetch_config(args_);
     // ensure system CA paths are registered
@@ -1260,6 +1270,11 @@ private:
         lifecycle_ = Lifecycle::done;
         co_return;
       }
+      // Only the server of the configured URL receives the client
+      // certificate, not the servers that pagination leads to.
+      if (not http::is_same_host(parsed_url.getHost(), origin_host_)) {
+        *tls = tls->without_client_identity();
+      }
       auto result
         = tls->make_folly_ssl_context(ctx, parsed_url.getHost(), true);
       if (result.is_success()) {
@@ -1362,6 +1377,8 @@ private:
   // --- args ---
   FromHttpArgs args_;
   FetchConfig fetch_config_;
+  // The host of the configured URL.
+  std::string origin_host_;
   std::vector<http::Header> resolved_headers_;
   // --- state ---
   Lifecycle lifecycle_{};
@@ -1412,6 +1429,7 @@ public:
       co_return;
     }
     pagination_.current_url = resolved_url;
+    origin_host_ = proxygen::URL{resolved_url}.getHost();
     // prepare fetch config
     fetch_config_ = make_fetch_config(args_);
     // ensure system CA paths are registered
@@ -1660,6 +1678,11 @@ private:
         lifecycle_ = Lifecycle::done;
         co_return;
       }
+      // Only the server of the configured URL receives the client
+      // certificate, not the servers that pagination leads to.
+      if (not http::is_same_host(parsed_url.getHost(), origin_host_)) {
+        *tls = tls->without_client_identity();
+      }
       auto result
         = tls->make_folly_ssl_context(ctx, parsed_url.getHost(), true);
       if (result.is_success()) {
@@ -1771,6 +1794,8 @@ private:
   // --- args ---
   FromHttpArgs args_;
   FetchConfig fetch_config_;
+  // The host of the configured URL.
+  std::string origin_host_;
   std::vector<http::Header> resolved_headers_;
   // --- state ---
   Lifecycle lifecycle_{};

@@ -1,0 +1,6 @@
+error: HTTP request to `https://tenzir-http-proxy-target.test/services/search/v2/jobs/export` failed: failed to set up TLS for proxy `127.0.0.1`: SSL_CTX_load_verify_locations: no certificate or crl found
+  --> tests/operators/from_splunk/tls_proxy_setup_error.tql:14:13
+   |
+14 | from_splunk env("HTTP_PROXY_FIXTURE_URL"),
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |

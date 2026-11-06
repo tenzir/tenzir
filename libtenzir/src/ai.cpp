@@ -48,16 +48,19 @@ auto make_path(std::span<std::string_view const> names, bool optional)
   return std::move(*result);
 }
 
-/// Creates the HTTP pool. The pool throws for URLs that it cannot handle, and
-/// its message contains the URL, so the endpoint stays out of the diagnostic.
+/// Creates the HTTP pool, whose errors never contain the endpoint URL.
 auto make_pool(OpCtx& ctx, std::string url, HttpPoolConfig config,
                location source) -> failure_or<Box<HttpPool>> {
-  try {
-    return HttpPool::make(ctx.io_executor(), std::move(url), std::move(config));
-  } catch (std::exception const&) {
-    diagnostic::error("`endpoint` is not a valid URL").primary(source).emit(ctx);
+  auto pool
+    = HttpPool::make(ctx.io_executor(), std::move(url), std::move(config));
+  if (pool.is_err()) {
+    diagnostic::error("`endpoint` is not usable: {}",
+                      std::move(pool).unwrap_err())
+      .primary(source)
+      .emit(ctx);
     return failure::promise();
   }
+  return std::move(pool).unwrap();
 }
 
 } // namespace
