@@ -8,9 +8,10 @@ assertions:
     azure_log_analytics:
       queries: 1
       tokens: 1
-      appended: "\n| project ['Value'] = column_ifexists('Value', dynamic(null))"
+      appended: ""
 ---
 
+// With `pushdown=false`, the summary runs in Tenzir over every decoded row.
 from_azure_log_analytics env("AZLOG_QUERY"),
   workspace_id=env("AZLOG_WORKSPACE"),
   azure_auth={
@@ -20,5 +21,6 @@ from_azure_log_analytics env("AZLOG_QUERY"),
     authority: env("AZLOG_AUTHORITY"),
   },
   _base_url=env("AZLOG_URL"),
-  tls=false
+  tls=false,
+  pushdown=false
 summarize Count=count(), Min=min(Value), Max=max(Value)

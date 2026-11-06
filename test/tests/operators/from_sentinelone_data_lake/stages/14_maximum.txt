@@ -4,7 +4,7 @@ warning: the result may be incomplete
 12 | from_sentinelone_data_lake env("S1_FIXTURE_URL"),
    | ~~~~~~~~~~~~~~~~~~~~~~~~~~
    |
-   = note: SentinelOne returns at most 1600000 rows
+   = note: SentinelOne returns at most 1,600,000 rows
    = hint: narrow the time window or the query
 {
   n: 1600000,

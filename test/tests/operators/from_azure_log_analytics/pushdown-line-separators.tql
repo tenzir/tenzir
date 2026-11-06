@@ -1,7 +1,7 @@
 ---
 fixtures:
   - azure_log_analytics:
-      case: pushdown
+      case: "pushdown"
       rows: []
 timeout: 60
 assertions:
@@ -11,7 +11,7 @@ assertions:
       tokens: 1
       appended: |-
 
-        | where (gettype(column_ifexists('Name', dynamic(null))) !in ("string") or tostring(column_ifexists('Name', dynamic(null))) == "a\u2028b\u2029c\u0085d" or tostring(column_ifexists('Name', dynamic(null))) matches regex @'^[ \t\r\n]*"')
+        | where (['Name'] == "a\u2028b\u2029c\u0085d")
 ---
 
 // U+2028, U+2029, and U+0085 are escaped, so that the literal stays on one

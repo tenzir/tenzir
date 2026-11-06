@@ -1,8 +1,8 @@
 ---
 fixtures:
   - azure_log_analytics:
-      case: pushdown
-      rows: [0, 3, 4]
+      case: "pushdown"
+      rows: [0]
 timeout: 60
 assertions:
   fixtures:
@@ -11,10 +11,12 @@ assertions:
       tokens: 1
       appended: |-
 
-        | where (gettype(column_ifexists('Port', dynamic(null))) !in ("int", "long", "real", "double") or todouble(column_ifexists('Port', dynamic(null))) >= 443.0)
+        | where (['Port'] >= 443)
+        | take 1
 ---
 
-// The filter also runs locally, so pushing the limit could lose matches.
+// The filter and the limit after it run in Log Analytics. The service
+// returns row 0.
 from_azure_log_analytics env("AZLOG_QUERY"),
   workspace_id=env("AZLOG_WORKSPACE"),
   azure_auth={

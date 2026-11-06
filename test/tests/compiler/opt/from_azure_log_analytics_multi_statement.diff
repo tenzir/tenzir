@@ -1,0 +1,101 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "from_azure_log_analytics",
+       store: {
+         op: {
+           path: [
+             `from_azure_log_analytics` @ [1]:119..143 from 0
+           ],
+           ref: std::from_azure_log_analytics/op
+         },
+         args: [
+           located "print x = 1; print x = 2" @ [1]:144..170 from 0
+         ],
+         named_args: [
+           {
+             index: 0,
+             value: expression constant string "01234567-89ab-cdef-0123-456789abcdef" @ [1]:187..225 from 0
+           },
+           {
+             index: 1,
+             value: expression record {
+               begin: [1]:240..241 from 0,
+               items: [
+                 field {
+                   name: `tenant_id` @ [1]:241..250 from 0,
+                   expr: constant string "t" @ [1]:252..255 from 0
+                 },
+                 field {
+                   name: `client_id` @ [1]:257..266 from 0,
+                   expr: constant string "c" @ [1]:268..271 from 0
+                 },
+                 field {
+                   name: `client_secret` @ [1]:273..286 from 0,
+                   expr: constant string "s" @ [1]:288..291 from 0
+                 }
+               ],
+               end: [1]:291..292 from 0
+             }
+           }
+         ]
+       },
+       filter: [
+         
+       ],
+-      order: "ordered"
++      order: "ordered",
++      declined: "the query does not accept stages after it"
+     },
+     where_ir {
+       op: {
+         path: [
+-          `where` @ [1]:293..298 from 0
++          
+         ],
+-        ref: std::where/op
++        ref: unresolved
+       },
+       args: [
+-        expression binary_expr {
++        Incomplete binary_expr {
+           left: root_field {
+             id: `x` @ [1]:299..300 from 0,
+             has_question_mark: false
+           },
+           op: "eq",
+           right: constant int64 2 @ [1]:304..305 from 0,
+           location: [1]:299..305 from 0
+         }
+       ],
+       named_args: [
+         
+       ]
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:305..305 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ],
+   definition_location: [1]:119..305 from 0
+ }

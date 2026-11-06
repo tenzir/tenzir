@@ -1,0 +1,28 @@
+---
+fixtures:
+  - microsoft_defender:
+      rows: [0]
+timeout: 60
+assertions:
+  fixtures:
+    microsoft_defender:
+      appended: |-
+
+        | where (['DeviceName'] endswith_cs "a")
+        | where (['DeviceName'] matches regex "^host")
+        | take 1
+---
+
+// String functions and regular expressions run in advanced hunting,
+// case-sensitively. The service returns row 0.
+from_microsoft_defender "pushdown",
+  azure_auth={
+    tenant_id: env("DEFENDER_TENANT"),
+    client_id: env("DEFENDER_CLIENT"),
+    client_secret: env("DEFENDER_SECRET"),
+    authority: env("DEFENDER_AUTHORITY"),
+  },
+  _base_url=env("DEFENDER_URL"),
+  tls=false
+where DeviceName.ends_with("a") and DeviceName.match_regex("^host")
+head 1

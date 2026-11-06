@@ -337,26 +337,6 @@ TEST("repeated reader optimization refines an existing projection") {
   }
 }
 
-TEST("local hints count the limit across slices") {
-  auto filter = ir::OptimizeFilter{};
-  filter.push_back(expression_from("id >= 4"));
-  auto hints = pushdown::LocalHints<table_slice>{uint64_t{3}};
-  hints.set_filters(std::move(filter));
-  auto dh = collecting_diagnostic_handler{};
-  auto ctx = base_ctx{dh, test::builtin_registry()};
-  CHECK_EQUAL(hints.apply(slice_from(0), ctx).rows(), 0u);
-  CHECK_EQUAL(hints.remaining(), Option<uint64_t>{3});
-  CHECK(not hints.exhausted());
-  CHECK_EQUAL(hints.apply(slice_from(3), ctx).rows(), 2u);
-  CHECK_EQUAL(hints.apply(slice_from(6), ctx).rows(), 1u);
-  CHECK(hints.exhausted());
-  // Without a limit, nothing is ever exhausted.
-  auto unlimited = pushdown::LocalHints<table_slice>{};
-  CHECK_EQUAL(unlimited.apply(slice_from(6), ctx).rows(), 3u);
-  CHECK(not unlimited.remaining());
-  CHECK(not unlimited.exhausted());
-}
-
 namespace {
 
 auto required(std::string_view source) -> std::vector<std::string> {

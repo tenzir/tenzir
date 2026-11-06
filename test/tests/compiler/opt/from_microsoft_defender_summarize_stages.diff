@@ -1,0 +1,243 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "from_microsoft_defender",
+       store: {
+         op: {
+           path: [
+             `from_microsoft_defender` @ [1]:145..168 from 0
+           ],
+           ref: std::from_microsoft_defender/op
+         },
+         args: [
+           located "DeviceNetworkEvents" @ [1]:169..190 from 0
+         ],
+         named_args: [
+           {
+             index: 0,
+             value: expression record {
+               begin: [1]:205..206 from 0,
+               items: [
+                 field {
+                   name: `tenant_id` @ [1]:206..215 from 0,
+                   expr: constant string "t" @ [1]:217..220 from 0
+                 },
+                 field {
+                   name: `client_id` @ [1]:222..231 from 0,
+                   expr: constant string "c" @ [1]:233..236 from 0
+                 },
+                 field {
+                   name: `client_secret` @ [1]:238..251 from 0,
+                   expr: constant string "s" @ [1]:253..256 from 0
+                 }
+               ],
+               end: [1]:256..257 from 0
+             }
+           }
+         ]
+       },
+       filter: [
+         
+       ],
+-      order: "ordered"
+-    },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:258..263 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
+-          left: root_field {
++      order: "ordered",
++      projection: [
++        {
++          expr: root_field {
++            id: `DeviceName` @ [1]:292..302 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `DeviceName` @ [1]:292..302 from 0,
++              has_question_mark: false
++            }
++          ]
++        },
++        {
++          expr: root_field {
+             id: `RemotePort` @ [1]:264..274 from 0,
+             has_question_mark: false
+           },
+-          op: "eq",
+-          right: constant int64 443 @ [1]:278..281 from 0,
+-          location: [1]:264..281 from 0
++          has_this: false,
++          path: [
++            {
++              id: `RemotePort` @ [1]:264..274 from 0,
++              has_question_mark: false
++            }
++          ]
+         }
+       ],
+-      named_args: [
+-        
+-      ]
+-    },
+-    summarize {
+-      self: [1]:282..291 from 0,
+-      cfg: {
+-        aggregates: [
+-          {
+-            dest: {
+-              expr: root_field {
+-                id: `events` @ [1]:304..310 from 0,
+-                has_question_mark: false
+-              },
+-              has_this: false,
+-              path: [
+-                {
+-                  id: `events` @ [1]:304..310 from 0,
+-                  has_question_mark: false
+-                }
++      plan: [
++        Filter {
++          predicate: binary_expr {
++            left: root_field {
++              id: `RemotePort` @ [1]:264..274 from 0,
++              has_question_mark: false
++            },
++            op: "eq",
++            right: constant int64 443 @ [1]:278..281 from 0,
++            location: [1]:264..281 from 0
++          }
++        },
++        Aggregate {
++          columns: [
++            {
++              output: [
++                "DeviceName"
++              ],
++              input: [
++                "DeviceName"
+               ]
+             },
+-            call: {
+-              fn: {
+-                path: [
+-                  `count` @ [1]:311..316 from 0
+-                ],
+-                ref: std::count/fn
+-              },
+-              args: [
+-                
++            {
++              output: [
++                "events"
+               ],
+-              method: false,
+-              location: [1]:311..318 from 0
++              function: "count"
+             }
+-          }
+-        ],
+-        groups: [
+-          {
+-            expr: {
+-              expr: root_field {
+-                id: `DeviceName` @ [1]:292..302 from 0,
+-                has_question_mark: false
+-              },
+-              has_this: false,
+-              path: [
+-                {
+-                  id: `DeviceName` @ [1]:292..302 from 0,
+-                  has_question_mark: false
+-                }
+-              ]
++          ],
++          schema_name: "tenzir.summarize"
++        },
++        Sort {
++          keys: [
++            {
++              field: [
++                "events"
++              ],
++              descending: true
+             }
+-          }
+-        ],
+-        indices: [
+-          -1,
+-          0
+-        ],
+-        emission: "final",
+-        mode: "reset",
+-        output: "summary",
+-        emit_every: 1
+-      }
+-    },
+-    sort {
+-      args: {
+-        op: {
+-          path: [
+-            `sort` @ [1]:319..323 from 0
+           ],
+-          ref: std::sort/op
++          bound: 3
+         },
+-        args: [
+-          expression unary_expr {
+-            op: "neg",
+-            expr: root_field {
+-              id: `events` @ [1]:325..331 from 0,
+-              has_question_mark: false
+-            },
+-            location: [1]:324..331 from 0
+-          }
+-        ],
+-        named_args: [
+-          
+-        ]
+-      }
++        Limit {
++          count: 3
++        }
++      ],
++      declined: "`to_stdout` is no stage"
+     },
+     GenericIr {
+-      desc: "head",
++      desc: "to_stdout",
+       store: {
+         op: {
+           path: [
+-            `head` @ [1]:332..336 from 0
++            `to_stdout` @ [1]:338..338 from 0
+           ],
+-          ref: std::head/op
++          ref: std::to_stdout/op
+         },
+         args: [
+-          located 3 @ [1]:337..338 from 0
++          
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
+     }
+   ],
+   definition_location: [1]:145..338 from 0
+ }

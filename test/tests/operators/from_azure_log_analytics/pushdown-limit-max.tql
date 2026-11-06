@@ -1,7 +1,7 @@
 ---
 fixtures:
   - azure_log_analytics:
-      case: pushdown
+      case: "pushdown"
 timeout: 60
 assertions:
   fixtures:

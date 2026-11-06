@@ -1,24 +1,15 @@
 ---
-fixtures:
-  - microsoft_defender:
-      case: timestamps
-      bounded: true
-      query: "  Events\n| project Id, EventTime = TimeGenerated, DeviceName, RemotePort, RemoteUrl, TextTime, Dyn  "
-      rows: [2,3,4,5,6,9]
-      project: ["Id","EventTime"]
+fixtures: [microsoft_defender]
 timeout: 60
 assertions:
   fixtures:
     microsoft_defender:
-      appended: |-
-
-        | take 100000
-        | where (gettype(column_ifexists('EventTime', dynamic(null))) != "datetime" or todatetime(column_ifexists('EventTime', dynamic(null))) < datetime(1900-01-01) or todatetime(column_ifexists('EventTime', dynamic(null))) >= datetime(2262-01-01) or todatetime(column_ifexists('EventTime', dynamic(null))) >= datetime(2026-10-19T10:03:00.123455Z))
-        | project ['Id'] = column_ifexists('Id', dynamic(null)), ['EventTime'] = column_ifexists('EventTime', dynamic(null))
+      appended: ""
 ---
 
-// The exact filter runs after the conservative prefilter and before head.
-from_microsoft_defender env("DEFENDER_QUERY"),
+// KQL holds times in ticks of 100 nanoseconds, so a time in between has no
+// spelling and the filter runs in Tenzir.
+from_microsoft_defender "pushdown",
   azure_auth={
     tenant_id: env("DEFENDER_TENANT"),
     client_id: env("DEFENDER_CLIENT"),
@@ -26,8 +17,5 @@ from_microsoft_defender env("DEFENDER_QUERY"),
     authority: env("DEFENDER_AUTHORITY"),
   },
   _base_url=env("DEFENDER_URL"),
-  tls=false,
-  start=2026-01-01,
-  end=2026-01-02
-where EventTime > 2026-10-19T10:03:00.123456750Z
-select Id
+  tls=false
+where Timestamp > 2026-01-02T00:00:00.000000001Z

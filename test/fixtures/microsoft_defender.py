@@ -12,8 +12,6 @@ from typing import Iterator
 
 from tenzir_test import current_assertions, current_options, fixture
 
-from . import kql_observables
-
 from .microsoft_graph import (
     _ACCESS_TOKEN,
     _CLIENT_ID,
@@ -341,6 +339,14 @@ class Options:
     # The columns that the service returns, in order, emulating an appended
     # `project`. A name without a column yields a dynamic `null`.
     project: list[str] | None = None
+    # The response of the `custom` case: its schema and its logical rows, with
+    # `None` for `null`, such as the generated columns of an appended
+    # `summarize`.
+    schema: list[dict[str, str]] | None = None
+    results: list[dict[str, object]] | None = None
+    # Instead of `results`, the number of rows of a single `Int64` column
+    # `Value`, counting from 0.
+    synthesize: int | None = None
 
 
 @dataclass(frozen=True)
@@ -459,46 +465,20 @@ class _Handler(BaseHTTPRequestHandler):
         envelope: dict[str, object] = {"schema": schema, "results": rows}
         if query == _QUERY:
             pass
-        elif query in {
-            "pushdown",
-            "pushdown-bounded",
-            "observables",
-            "observable-adversarial",
-            "timestamps",
-        }:
+        elif query in {"pushdown", "pushdown-bounded", "device-network-events"}:
             source_schema = _PUSHDOWN_SCHEMA
-            source_rows = _PUSHDOWN_ROWS
-            if query in {"observables", "observable-adversarial", "timestamps"}:
-                adversarial = query == "observable-adversarial"
-                definitions = (
-                    kql_observables.ADVERSARIAL_COLUMNS
-                    if adversarial
-                    else kql_observables.TIME_COLUMNS
-                    if query == "timestamps"
-                    else kql_observables.COLUMNS
-                )
-                types = {
-                    "long": "Int64",
-                    "string": "String",
-                    "datetime": "DateTime",
-                    "dynamic": "Object",
-                }
-                source_schema = [
-                    {"name": name, "type": types[kind]} for name, kind in definitions
-                ]
-                source_rows = (
-                    kql_observables.ADVERSARIAL_ROWS
-                    if adversarial
-                    else kql_observables.TIME_ROWS
-                    if query == "timestamps"
-                    else kql_observables.ROWS
-                )
+            source_rows: list[dict[str, object]] = [
+                dict(zip((column["name"] for column in _PUSHDOWN_SCHEMA), row))
+                for row in _PUSHDOWN_ROWS
+            ]
+            if query == "device-network-events":
+                source_schema = _DEVICE_NETWORK_EVENTS_SCHEMA
+                source_rows = _DEVICE_NETWORK_EVENTS_ROWS
             selected = server.rows
             if selected is None:
                 selected = list(range(len(source_rows)))
             schema = copy.deepcopy(source_schema)
-            names = [column["name"] for column in schema]
-            rows = [dict(zip(names, copy.deepcopy(source_rows[i]))) for i in selected]
+            rows = [copy.deepcopy(source_rows[i]) for i in selected]
             if server.project is not None:
                 types = {column["name"]: column["type"] for column in schema}
                 schema = [
@@ -509,6 +489,19 @@ class _Handler(BaseHTTPRequestHandler):
                     {name: row.get(name) for name in server.project} for row in rows
                 ]
             envelope = {"schema": schema, "results": rows}
+        elif query == "custom":
+            options = server.options
+            if options.synthesize is not None:
+                envelope = {
+                    "schema": [{"name": "Value", "type": "Int64"}],
+                    "results": [{"Value": i} for i in range(options.synthesize)],
+                }
+            else:
+                assert options.schema is not None and options.results is not None
+                envelope = {
+                    "schema": copy.deepcopy(options.schema),
+                    "results": copy.deepcopy(options.results),
+                }
         elif query in {"bounded", "retry", "retry-503", "retry-504", "refresh"}:
             pass
         elif query == "empty":
@@ -675,11 +668,6 @@ class _Handler(BaseHTTPRequestHandler):
             }
         elif query == "undeclared-annotation":
             rows[0]["Other@odata.type"] = "#Int64"
-        elif query == "device-network-events":
-            envelope = {
-                "schema": copy.deepcopy(_DEVICE_NETWORK_EVENTS_SCHEMA),
-                "results": copy.deepcopy(_DEVICE_NETWORK_EVENTS_ROWS),
-            }
         elif query in {"annotation-shaped", "annotation-shaped-none"}:
             # Keys that only look like annotations are payload. Graph itself
             # drops or rejects such keys, but the connector keeps them.

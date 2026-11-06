@@ -1,0 +1,9 @@
+// `from_azure_log_analytics` takes over the stages up to the first one that
+// KQL does not spell: strings have no order in KQL.
+from_azure_log_analytics "let a = 1;\nSecurityEvent",
+  workspace_id="01234567-89ab-cdef-0123-456789abcdef",
+  azure_auth={tenant_id: "t", client_id: "c", client_secret: "s"}
+where Account == "alice"
+select Account, Computer
+where Computer < "m"
+head 3

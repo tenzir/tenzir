@@ -1,7 +1,7 @@
 ---
 fixtures:
   - azure_log_analytics:
-      case: pushdown
+      case: "pushdown"
       bounded: true
       rows: [0, 3, 4]
 timeout: 60
@@ -12,10 +12,10 @@ assertions:
       tokens: 1
       appended: |-
 
-        | where (gettype(column_ifexists('Port', dynamic(null))) !in ("int", "long", "real", "double") or todouble(column_ifexists('Port', dynamic(null))) >= 443.0)
+        | where (['Port'] >= 443)
 ---
 
-// The window stays as given.
+// The request window stays as given.
 from_azure_log_analytics env("AZLOG_QUERY"),
   workspace_id=env("AZLOG_WORKSPACE"),
   azure_auth={

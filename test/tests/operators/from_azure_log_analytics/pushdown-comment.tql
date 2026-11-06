@@ -1,7 +1,7 @@
 ---
 fixtures:
   - azure_log_analytics:
-      case: pushdown
+      case: "pushdown"
       rows: [0, 3, 4]
 timeout: 60
 assertions:
@@ -9,7 +9,7 @@ assertions:
     azure_log_analytics:
       queries: 1
       tokens: 1
-      appended: " // ends in a comment\n| where (gettype(column_ifexists('Port', dynamic(null))) !in (\"int\", \"long\", \"real\", \"double\") or todouble(column_ifexists('Port', dynamic(null))) >= 443.0)"
+      appended: " // ends in a comment\n| where (['Port'] >= 443)"
 ---
 
 // Stages start on a new line, after a trailing comment.

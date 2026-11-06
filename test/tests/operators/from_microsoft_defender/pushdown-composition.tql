@@ -2,20 +2,20 @@
 fixtures:
   - microsoft_defender:
       rows: [0]
-      project: ["Id", "DeviceName", "RemotePort"]
+      project: ["DeviceName", "Id"]
 timeout: 60
 assertions:
   fixtures:
     microsoft_defender:
       appended: |-
 
-        | take 100000
-        | where (gettype(column_ifexists('DeviceName', dynamic(null))) !in ("string") or tostring(column_ifexists('DeviceName', dynamic(null))) == "host-a" or tostring(column_ifexists('DeviceName', dynamic(null))) matches regex @'^[ \t\r\n]*"') and (gettype(column_ifexists('RemotePort', dynamic(null))) !in ("int", "long", "real", "double") or todouble(column_ifexists('RemotePort', dynamic(null))) >= 443.0)
-        | project ['Id'] = column_ifexists('Id', dynamic(null)), ['DeviceName'] = column_ifexists('DeviceName', dynamic(null)), ['RemotePort'] = column_ifexists('RemotePort', dynamic(null))
+        | where (['DeviceName'] == "host-a")
+        | where (['RemotePort'] >= 443)
+        | project ['DeviceName'], ['Id']
 ---
 
-// Prefilters and the projection follow the user's query. The service
-// returns row 0.
+// The filter and the selection run in advanced hunting, after the user's
+// query. The service returns row 0 with the selected columns.
 from_microsoft_defender "pushdown",
   azure_auth={
     tenant_id: env("DEFENDER_TENANT"),

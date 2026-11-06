@@ -1,7 +1,7 @@
 ---
 fixtures:
   - azure_log_analytics:
-      case: pushdown
+      case: "pushdown"
       rows: [4]
 timeout: 60
 assertions:
@@ -11,11 +11,10 @@ assertions:
       tokens: 1
       appended: |-
 
-        | where (gettype(column_ifexists('Name', dynamic(null))) !in ("string") or tostring(column_ifexists('Name', dynamic(null))) endswith_cs "ße" or tostring(column_ifexists('Name', dynamic(null))) matches regex @'^[ \t\r\n]*"')
+        | where (['Name'] endswith_cs "ße")
 ---
 
-// `endswith_cs` matches ordinally, so non-ASCII needles are pushed. The
-// service returns row 4.
+// `endswith_cs` matches ordinally. The service returns row 4.
 from_azure_log_analytics env("AZLOG_QUERY"),
   workspace_id=env("AZLOG_WORKSPACE"),
   azure_auth={

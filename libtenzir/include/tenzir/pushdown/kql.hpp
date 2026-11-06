@@ -10,121 +10,77 @@
 
 #include "tenzir/ir.hpp"
 #include "tenzir/option.hpp"
-#include "tenzir/pushdown/pipe.hpp"
-#include "tenzir/pushdown/renderer.hpp"
+#include "tenzir/pushdown/layout.hpp"
 
-#include <cstdint>
+#include <span>
 #include <string>
 #include <string_view>
 
-/// Pushdown into the Kusto Query Language (KQL), shared by the sources that
+/// The queries in the Kusto Query Language (KQL) that the sources send that
 /// run a user's KQL query, such as Microsoft Defender advanced hunting and
-/// Azure Log Analytics.
+/// Azure Log Analytics, with the stages that they take over.
 ///
-/// These sources know neither the columns nor the types of a query's output
-/// before they run it, so every column is a `DynamicType`, and translation
-/// yields prefilters only. The sources therefore evaluate every predicate
-/// locally, and the KQL that this module renders only needs to keep a superset
-/// of the rows that a predicate keeps. Each rule below states why it does.
+/// A source appends the stages that it takes over to the user's query, each
+/// on a new line, where they run with KQL's semantics:
 ///
-/// The decoded values that TQL sees and the values that KQL compares differ in
-/// three ways that all rules account for:
-/// - A column that the query does not return is missing in TQL, where KQL
-///   fails the whole query on an unknown name. Columns are therefore read with
-///   `column_ifexists(name, dynamic(null))`, which yields `null` instead.
-/// - Several KQL types decode to the same TQL type: `guid` and `decimal`
-///   decode to strings, and a `dynamic` string that holds JSON decodes to the
-///   JSON value, so that the dynamic string `"42"` may decode to the number
-///   `42`. A rule compares a value in KQL only when KQL reports the type that
-///   the literal requires, through `gettype()`, and keeps every other row.
-/// - KQL is statically typed and rejects a comparison of mismatched types for
-///   the whole query, while TQL yields `null` per row. Every comparison
-///   converts its operand with a conversion function that accepts any type,
-///   such as `tostring()` or `todouble()`, so that the query always compiles.
+/// - A filter becomes `where`. Strings compare case-sensitively, a string is
+///   never `null` but may be empty, IP addresses and subnets are strings that
+///   compare as text, and a comparison of mismatched types either fails the
+///   query or holds for no row.
+/// - A select becomes `project`, and a drop `project-away`, which fails the
+///   query for a column that it does not return.
+/// - A summary becomes `summarize`, which keeps a group for `null` keys.
+/// - A sort becomes `sort` with an explicit direction, which orders `null`
+///   first ascending and last descending, and a limit `take`.
 ///
-/// The rendered predicates are supersets, never exact translations, so they
-/// must not be negated. `KqlRenderer` vetoes `Not`.
+/// The plan decides from the syntax of the stages alone. A type that KQL
+/// rejects, such as a sum of strings or a group key of type `dynamic`, fails
+/// the query with the service's error.
 namespace tenzir::pushdown {
 
-/// Spells IR prefilters in KQL.
-///
-/// Renders only expressions over `DynamicType` columns, as translated by
-/// `translate_prefilter`, and guarantees that the rendered predicate is `true`
-/// for every row where the IR predicate holds on the decoded values. Rows may
-/// pass that the IR predicate drops.
-///
-/// Supported shapes, each a superset for the reason given in the source:
-/// - `==`, `<`, `<=`, `>`, `>=` between a column and a number,
-/// - `==` between a column and a string or a boolean,
-/// - `==`, `<`, `<=`, `>`, `>=` between a column and a timestamp, with
-///   outward-rounded microsecond bounds that cover decoder precision loss,
-/// - `in` of a column in a list of string, boolean, or number literals of a
-///   single kind,
-/// - `starts_with`, `ends_with`, and substring membership, case-sensitively,
-/// - ASCII-needle case-insensitive affixes, recursive `search`/`contains`, and
-///   equality/membership after `to_lower` or `to_upper`, keeping non-ASCII
-///   subjects and values whose decoded representation might match,
-/// - IP equality and subnet membership, with optional `ip()` conversion,
-///   keeping spellings that KQL cannot parse,
-/// - `!= null` of a column,
-/// - `and` and `or` of these, where `and` drops conjuncts that do not render.
-///
-/// Everything else is vetoed and stays local, notably negation, nested field
-/// paths, membership in lists that mix kinds, ordering on strings, regular
-/// expressions, non-ASCII case-insensitive needles, IP ordering, native IPv6
-/// subnets overlapping ::/80, timestamp list membership, arithmetic, and
-/// `== null`.
-///
-class KqlRenderer final : public PrefilterRenderer {
-protected:
-  auto render_atom(Expr const& expr) const -> Option<std::string> override;
-
-  auto render_junction(Junction junction,
-                       std::span<std::string const> operands) const
-    -> Option<std::string> override;
-};
-
 /// Returns whether a stage appended to `query` on a new line applies to the
-/// rows that `query` returns, without changing whether the query compiles.
+/// only table that `query` returns, without changing whether the query
+/// compiles.
 ///
 /// The check lexes `query` without parsing it. It rejects a query that it
-/// cannot lex, such as one with an unterminated string, a management command,
-/// a query that ends in `;` or `|`, a query that uses `render`, `fork`, or
-/// `facet`, which must end a query or return several tables, and a query with
-/// a `set` statement, which may change how the service limits a result.
+/// cannot lex, such as one with an unterminated string or unbalanced brackets,
+/// a management command, a query that ends in `;` or `|`, and a query that
+/// uses `render`, `fork`, or `facet`, which must end a query or return several
+/// tables, or a `set` statement, which may change how the service limits a
+/// result. Of the statements of `query`, separated by `;`, only the last may
+/// be tabular: every other one must be a `let`, `declare`, or `alias`
+/// statement, since each tabular statement returns a table of its own.
 auto kql_accepts_trailing_stages(std::string_view query) -> bool;
 
-/// The query that a KQL source sends.
-using KqlPlan = PipePlan;
+/// The largest number of bytes that a KQL source appends to a user's query.
+/// Both services limit the size of a query; stages beyond this budget stay in
+/// the pipeline.
+inline constexpr auto max_kql_appendix = size_t{16'384};
 
-/// Appends optimizer hints to a user's KQL `query` as trailing stages, in the
-/// order `where`, `project`, and `take`, so that they apply to the rows that
-/// `query` returns. See `plan_trailing_stages`.
+/// The query that a KQL source sends, and how its result becomes events.
+struct KqlQuery {
+  /// The query to send: the user's query, followed by `generated`.
+  std::string query;
+  /// The text that the source appends to the user's query.
+  std::string generated;
+  /// How the result rows become events.
+  Layout layout;
+};
+
+/// Spells the query that runs the user's `query` and computes `stages` after
+/// it, or returns `None` if KQL does not spell some stage, if the stages
+/// exceed `max_kql_appendix`, or if `query` does not accept stages after it.
 ///
-/// The `where` stage holds the prefilters of `filter` that render. The source
-/// must still evaluate all of `filter` locally.
-///
-/// `result_cap` is the number of rows of `query` after which the service
-/// silently truncates the result. If set, a `take result_cap` stage precedes
-/// the `where` stage, so that the filter never reveals rows beyond that cap.
-/// Pass `None` for a service that fails a truncated result instead: capping
-/// before the filter would then turn that failure into a silently partial
-/// result, while the uncapped filter either yields the complete filtered
-/// result or still fails. The `project` stage and the `take` stage of a limit
-/// need no cap: they keep the rows that `query` returns, or a prefix.
-///
-/// The `project` stage keeps the columns that `projection` and `filter`
-/// reference, and the `take` stage is appended only for an empty `filter`,
-/// since every predicate stays local and would otherwise run after the limit,
-/// and only for a limit between 1 and 2^63 - 1. The source must enforce `limit`
-/// locally in any case. The planner never changes the request window: without
-/// parsing the query, no predicate on its output provably refers to the time
-/// that the window selects.
-///
-/// Returns `query` unchanged if `kql_accepts_trailing_stages` rejects it.
-auto plan_kql_query(std::string_view query, ir::OptimizeFilter const& filter,
-                    Option<ir::OptimizeProjection> const& projection,
-                    Option<uint64_t> limit, Option<uint64_t> result_cap,
-                    registry const& reg) -> KqlPlan;
+/// Without a stage that enumerates its output, the query ends with a
+/// `project` that keeps the top-level fields of `projection`, except those that
+/// a drop removed, as long as it fits into `max_kql_appendix` with the stages.
+/// A projected field that the query does not return becomes
+/// `null`, while a returned column keeps its type. Without a projection, or
+/// with one that refers to a whole event, the query keeps every column. A query
+/// that does not accept stages goes out unchanged, if there are none.
+auto plan_kql_query(std::string_view query,
+                    std::span<ir::QueryStage const> stages,
+                    Option<ir::OptimizeProjection> const& projection)
+  -> Option<KqlQuery>;
 
 } // namespace tenzir::pushdown

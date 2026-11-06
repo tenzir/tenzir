@@ -1,7 +1,7 @@
 ---
 fixtures:
   - azure_log_analytics:
-      case: pushdown
+      case: "pushdown"
       rows: [0, 1]
 timeout: 60
 assertions:
@@ -14,7 +14,7 @@ assertions:
         | take 2
 ---
 
-// Without a filter, the limit is pushed. The service returns rows 0 and 1.
+// The limit runs in Log Analytics. The service returns rows 0 and 1.
 from_azure_log_analytics env("AZLOG_QUERY"),
   workspace_id=env("AZLOG_WORKSPACE"),
   azure_auth={

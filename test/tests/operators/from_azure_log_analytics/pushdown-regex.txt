@@ -1,0 +1,20 @@
+{
+  Id: 0,
+  Name: "alice",
+  Addr: "10.0.0.1",
+  Port: 443,
+  Flag: true,
+  Ident: "01234567-89ab-cdef-0123-456789abcdef",
+  Amount: "443",
+  Dyn: 443,
+}
+{
+  Id: 5,
+  Name: "alice ",
+  Addr: "10.0.0.0/8",
+  Port: 0,
+  Flag: false,
+  Ident: null,
+  Amount: "3",
+  Dyn: true,
+}

@@ -1,18 +1,19 @@
 ---
 fixtures:
   - azure_log_analytics:
-      case: multi-statement
+      case: "multi-statement"
 timeout: 60
 assertions:
   fixtures:
     azure_log_analytics:
       queries: 1
       tokens: 1
-      appended: ";\nprint b = \"x\"\n| take 3"
+      appended: ";\nprint b = \"x\""
 ---
 
-// The appended `take` limits only the last statement, while the local limit
-// counts the rows of all tables in order.
+// The operator appends no stages to a query with several tabular
+// statements, so the limit runs in Tenzir and counts the rows of all tables
+// in order.
 from_azure_log_analytics env("AZLOG_QUERY") + ";\nprint b = \"x\"",
   workspace_id=env("AZLOG_WORKSPACE"),
   azure_auth={

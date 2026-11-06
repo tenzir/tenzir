@@ -1,0 +1,6 @@
+{
+  name: "host-a",
+  port: {
+    remote: 443,
+  },
+}

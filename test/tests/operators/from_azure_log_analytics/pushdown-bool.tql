@@ -1,7 +1,7 @@
 ---
 fixtures:
   - azure_log_analytics:
-      case: pushdown
+      case: "pushdown"
       rows: [0, 3]
 timeout: 60
 assertions:
@@ -11,10 +11,10 @@ assertions:
       tokens: 1
       appended: |-
 
-        | where (gettype(column_ifexists('Flag', dynamic(null))) !in ("bool") or tobool(column_ifexists('Flag', dynamic(null))) == true)
+        | where ['Flag']
 ---
 
-// The service returns rows 0 and 3.
+// A bare `bool` field is a predicate. The service returns rows 0 and 3.
 from_azure_log_analytics env("AZLOG_QUERY"),
   workspace_id=env("AZLOG_WORKSPACE"),
   azure_auth={

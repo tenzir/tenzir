@@ -1,0 +1,29 @@
+---
+fixtures:
+  - microsoft_defender:
+      rows: [0]
+      project: ["DeviceName", "RemotePort"]
+timeout: 60
+assertions:
+  fixtures:
+    microsoft_defender:
+      appended: |-
+
+        | where (['RemotePort'] > 100)
+        | project ['DeviceName'], ['RemotePort']
+---
+
+// A selection projects the input columns, and the layout renames and nests
+// them. The optimizer moves the filter before the selection. The service
+// returns row 0.
+from_microsoft_defender "pushdown",
+  azure_auth={
+    tenant_id: env("DEFENDER_TENANT"),
+    client_id: env("DEFENDER_CLIENT"),
+    client_secret: env("DEFENDER_SECRET"),
+    authority: env("DEFENDER_AUTHORITY"),
+  },
+  _base_url=env("DEFENDER_URL"),
+  tls=false
+select name=DeviceName, port.remote=RemotePort
+where port.remote > 100

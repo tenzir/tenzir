@@ -1,0 +1,227 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "from_azure_log_analytics",
+       store: {
+         op: {
+           path: [
+             `from_azure_log_analytics` @ [1]:130..154 from 0
+           ],
+           ref: std::from_azure_log_analytics/op
+         },
+         args: [
+           located "let a = 1;\nSecurityEvent" @ [1]:155..182 from 0
+         ],
+         named_args: [
+           {
+             index: 0,
+             value: expression constant string "01234567-89ab-cdef-0123-456789abcdef" @ [1]:199..237 from 0
+           },
+           {
+             index: 1,
+             value: expression record {
+               begin: [1]:252..253 from 0,
+               items: [
+                 field {
+                   name: `tenant_id` @ [1]:253..262 from 0,
+                   expr: constant string "t" @ [1]:264..267 from 0
+                 },
+                 field {
+                   name: `client_id` @ [1]:269..278 from 0,
+                   expr: constant string "c" @ [1]:280..283 from 0
+                 },
+                 field {
+                   name: `client_secret` @ [1]:285..298 from 0,
+                   expr: constant string "s" @ [1]:300..303 from 0
+                 }
+               ],
+               end: [1]:303..304 from 0
+             }
+           }
+         ]
+       },
+       filter: [
+         
+       ],
+-      order: "ordered"
++      order: "ordered",
++      projection: [
++        {
++          expr: root_field {
++            id: `Computer` @ [1]:346..354 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `Computer` @ [1]:346..354 from 0,
++              has_question_mark: false
++            }
++          ]
++        },
++        {
++          expr: root_field {
++            id: `Account` @ [1]:337..344 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `Account` @ [1]:337..344 from 0,
++              has_question_mark: false
++            }
++          ]
++        }
++      ],
++      plan: [
++        Filter {
++          predicate: binary_expr {
++            left: root_field {
++              id: `Account` @ [1]:311..318 from 0,
++              has_question_mark: false
++            },
++            op: "eq",
++            right: constant string "alice" @ [1]:322..329 from 0,
++            location: [1]:311..329 from 0
++          }
++        }
++      ],
++      declined: "Log Analytics cannot spell the stage"
+     },
+     where_ir {
+       op: {
+         path: [
+-          `where` @ [1]:305..310 from 0
++          
+         ],
+-        ref: std::where/op
++        ref: unresolved
+       },
+       args: [
+-        expression binary_expr {
++        Incomplete binary_expr {
+           left: root_field {
+-            id: `Account` @ [1]:311..318 from 0,
++            id: `Computer` @ [1]:346..354 from 0,
+             has_question_mark: false
+           },
+-          op: "eq",
+-          right: constant string "alice" @ [1]:322..329 from 0,
+-          location: [1]:311..329 from 0
++          op: "lt",
++          right: constant string "m" @ [1]:372..375 from 0,
++          location: [1]:361..375 from 0
+         }
+       ],
+       named_args: [
+         
+       ]
+     },
+     SetIr {
+       assignments: [
+         {
+           left: this_ [0]:0..0 from 0,
+           right: record {
+             begin: [0]:0..0 from 0,
+             items: [
+               
+             ],
+             end: [0]:0..0 from 0
+           },
+           location: [0]:0..0 from 0
+         },
+         {
+           left: root_field {
+             id: `Account` @ [1]:337..344 from 0,
+             has_question_mark: false
+           },
+           right: root_field {
+             id: `Account` @ [1]:337..344 from 0,
+             has_question_mark: false
+           },
+           location: [1]:337..344 from 0
+         },
+         {
+           left: root_field {
+             id: `Computer` @ [1]:346..354 from 0,
+             has_question_mark: false
+           },
+           right: root_field {
+             id: `Computer` @ [1]:346..354 from 0,
+             has_question_mark: false
+           },
+           location: [1]:346..354 from 0
+         }
+       ],
+       order: "ordered"
+     },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:355..360 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
+-          left: root_field {
+-            id: `Computer` @ [1]:361..369 from 0,
+-            has_question_mark: false
+-          },
+-          op: "lt",
+-          right: constant string "m" @ [1]:372..375 from 0,
+-          location: [1]:361..375 from 0
+-        }
+-      ],
+-      named_args: [
+-        
+-      ]
+-    },
+     GenericIr {
+       desc: "head",
+       store: {
+         op: {
+           path: [
+             `head` @ [1]:376..380 from 0
+           ],
+           ref: std::head/op
+         },
+         args: [
+           located 3 @ [1]:381..382 from 0
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:382..382 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ],
+   definition_location: [1]:130..382 from 0
+ }

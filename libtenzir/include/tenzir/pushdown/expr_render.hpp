@@ -32,10 +32,13 @@
 /// in a stage after a renaming one.
 namespace tenzir::pushdown {
 
+class ExpressionRenderer;
+
 /// The spelling of expressions in the language of a target.
 ///
 /// A binary expression becomes `(<left> <op> <right>)`, with the operator from
-/// `binary_operator`. The other forms are up to the hooks below.
+/// `binary_operator`, unless `render_binary` spells it. The other forms are up
+/// to the hooks below.
 class ExpressionDialect {
 public:
   virtual ~ExpressionDialect() = default;
@@ -75,6 +78,16 @@ public:
   virtual auto render_subnet(subnet value) const -> Option<std::string>;
 
   // -- Operators --------------------------------------------------------------
+
+  /// Spells the binary expression `x` where its spelling depends on its
+  /// operands, such as an operator that the target spells differently for a
+  /// literal operand. Returns `None` to veto `x`, or an empty spelling to
+  /// leave `x` to the default spelling. `renderer` spells the operands. The
+  /// spelling of an arithmetic operator is a value, that of any other
+  /// operator a predicate. Defaults to the default spelling.
+  virtual auto render_binary(ast::binary_expr const& x,
+                             ExpressionRenderer const& renderer) const
+    -> Option<Option<std::string>>;
 
   /// Spells the operator of a binary expression, such as `=` for `==`, or
   /// returns `None` if the target cannot compute it, as for arithmetic that a

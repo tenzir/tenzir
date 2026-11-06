@@ -1,0 +1,8 @@
+warning: the result may be incomplete
+  --> tests/operators/from_microsoft_defender/pushdown-cap-filter.tql:15:1
+   |
+15 | from_microsoft_defender "custom",
+   | ~~~~~~~~~~~~~~~~~~~~~~~
+   |
+   = note: Microsoft Defender returns at most 1,000 rows of a query without reporting a truncation
+   = hint: narrow the query or its time range

@@ -1,9 +1,9 @@
 ---
 fixtures:
   - azure_log_analytics:
-      case: pushdown
+      case: "pushdown"
       rows: [0, 3, 4]
-      project: ["Name", "Port"]
+      project: ["Name"]
 timeout: 60
 assertions:
   fixtures:
@@ -12,11 +12,12 @@ assertions:
       tokens: 1
       appended: |-
 
-        | where (gettype(column_ifexists('Port', dynamic(null))) !in ("int", "long", "real", "double") or todouble(column_ifexists('Port', dynamic(null))) >= 443.0)
-        | project ['Name'] = column_ifexists('Name', dynamic(null)), ['Port'] = column_ifexists('Port', dynamic(null))
+        | where (['Port'] >= 443)
+        | project ['Name']
 ---
 
-// The projection retains `Port`, which the local filter reads.
+// The filter and the selection run in Log Analytics. The service returns
+// rows 0, 3, and 4 with the selected column.
 from_azure_log_analytics env("AZLOG_QUERY"),
   workspace_id=env("AZLOG_WORKSPACE"),
   azure_auth={

@@ -1,7 +1,7 @@
 ---
 fixtures:
   - azure_log_analytics:
-      case: pushdown
+      case: "pushdown"
       rows: [0, 3, 4]
 timeout: 60
 assertions:
@@ -11,11 +11,10 @@ assertions:
       tokens: 1
       appended: |-
 
-        | where (gettype(column_ifexists('Port', dynamic(null))) !in ("int", "long", "real", "double") or todouble(column_ifexists('Port', dynamic(null))) >= 443.0)
+        | where (['Port'] >= 443)
 ---
 
-// A `null` port compares as `null` in KQL and TQL. The service returns
-// rows 0, 3, and 4.
+// The service returns rows 0, 3, and 4.
 from_azure_log_analytics env("AZLOG_QUERY"),
   workspace_id=env("AZLOG_WORKSPACE"),
   azure_auth={

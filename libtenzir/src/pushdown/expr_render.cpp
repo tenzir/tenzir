@@ -47,6 +47,13 @@ auto ExpressionDialect::render_subnet(subnet value) const
   return None{};
 }
 
+auto ExpressionDialect::render_binary(ast::binary_expr const& x,
+                                      ExpressionRenderer const& renderer) const
+  -> Option<Option<std::string>> {
+  TENZIR_UNUSED(x, renderer);
+  return Option<std::string>{None{}};
+}
+
 auto ExpressionDialect::render_call(std::string_view name,
                                     std::span<std::string const> args) const
   -> Option<std::string> {
@@ -199,6 +206,12 @@ auto is_null(ast::expression const& expr) -> bool {
 auto ExpressionRenderer::binary(ast::binary_expr const& x) const
   -> Option<Fragment> {
   using enum ast::binary_op;
+  TRY(auto custom, dialect_->render_binary(x, *this));
+  if (custom) {
+    auto const arithmetic
+      = x.op == add or x.op == sub or x.op == mul or x.op == div;
+    return Fragment{std::move(*custom), not arithmetic};
+  }
   auto const spell = [&](bool predicate, bool logical) -> Option<Fragment> {
     TRY(auto op, dialect_->binary_operator(x.op));
     auto operand = [&](ast::expression const& e) {

@@ -1,0 +1,27 @@
+---
+fixtures:
+  - microsoft_defender:
+      synthesize: 1000
+timeout: 60
+assertions:
+  fixtures:
+    microsoft_defender:
+      appended: |-
+
+        | take 1000
+---
+
+// A final limit of the cap's size explains a result of that size, which
+// does not warn.
+from_microsoft_defender "custom",
+  azure_auth={
+    tenant_id: env("DEFENDER_TENANT"),
+    client_id: env("DEFENDER_CLIENT"),
+    client_secret: env("DEFENDER_SECRET"),
+    authority: env("DEFENDER_AUTHORITY"),
+  },
+  _base_url=env("DEFENDER_URL"),
+  _max_result_rows=1000,
+  tls=false
+head 1000
+discard

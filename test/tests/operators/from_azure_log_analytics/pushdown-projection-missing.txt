@@ -10,15 +10,3 @@
   Name: "ALICE",
   Missing: null,
 }
-{
-  Name: "",
-  Missing: null,
-}
-{
-  Name: "straße",
-  Missing: null,
-}
-{
-  Name: "alice ",
-  Missing: null,
-}

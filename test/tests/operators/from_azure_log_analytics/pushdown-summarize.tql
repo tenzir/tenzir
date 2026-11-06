@@ -1,0 +1,37 @@
+---
+fixtures:
+  - azure_log_analytics:
+      case: "custom"
+      columns: [{"name": "Flag", "type": "bool"}, {"name": "__tenzir_column_0", "type": "long"}, {"name": "__tenzir_column_1", "type": "string"}]
+      results: [[true, 2, "alice"], [null, 1, "straße"]]
+timeout: 60
+assertions:
+  fixtures:
+    azure_log_analytics:
+      queries: 1
+      tokens: 1
+      appended: |-
+
+        | where (['Port'] >= 443)
+        | summarize ['__tenzir_column_0'] = count(), ['__tenzir_column_1'] = min(['Name']) by ['Flag']
+        | sort by ['__tenzir_column_0'] desc
+        | take 2
+---
+
+// The summary and the stages around it run in Log Analytics, which names
+// the aggregates after generated columns and keeps a group for `null`. The
+// layout restores the field names.
+from_azure_log_analytics env("AZLOG_QUERY"),
+  workspace_id=env("AZLOG_WORKSPACE"),
+  azure_auth={
+    tenant_id: "fixture-tenant",
+    client_id: "fixture-client",
+    client_secret: "fixture-secret",
+    authority: env("AZLOG_AUTHORITY"),
+  },
+  _base_url=env("AZLOG_URL"),
+  tls=false
+where Port >= 443
+summarize Flag, events=count(), lowest=min(Name)
+sort -events
+head 2

@@ -1,12 +1,22 @@
 {
-  Id: 5,
+  Timestamp: 2026-01-02T12:00:00Z,
+  Id: 3,
+  DeviceName: "",
+  RemoteIP: "fe80::1",
+  RemotePort: 8443,
+  Allowed: true,
+  ReportId: null,
+  Extra: null,
 }
 {
-  Id: 6,
-}
-{
-  Id: 7,
-}
-{
-  Id: 10,
+  Timestamp: 2026-01-03T00:00:00Z,
+  Id: 4,
+  DeviceName: "host-ä",
+  RemoteIP: "",
+  RemotePort: 443,
+  Allowed: null,
+  ReportId: "00000000-0000-0000-0000-000000000000",
+  Extra: {
+    port: 443,
+  },
 }

@@ -1,0 +1,24 @@
+---
+fixtures: [microsoft_defender]
+timeout: 60
+error: true
+assertions:
+  fixtures:
+    microsoft_defender:
+      appended: |-
+
+        | where (['DeviceName'] == "x")
+---
+
+// A query that the service rejects fails the pipeline, without running the
+// stages elsewhere.
+from_microsoft_defender "bad-query",
+  azure_auth={
+    tenant_id: env("DEFENDER_TENANT"),
+    client_id: env("DEFENDER_CLIENT"),
+    client_secret: env("DEFENDER_SECRET"),
+    authority: env("DEFENDER_AUTHORITY"),
+  },
+  _base_url=env("DEFENDER_URL"),
+  tls=false
+where DeviceName == "x"

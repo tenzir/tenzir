@@ -1,7 +1,7 @@
 ---
 fixtures:
   - azure_log_analytics:
-      case: partial
+      case: "partial"
 timeout: 60
 error: true
 assertions:
@@ -11,10 +11,10 @@ assertions:
       tokens: 1
       appended: |-
 
-        | where (gettype(column_ifexists('Port', dynamic(null))) !in ("int", "long", "real", "double") or todouble(column_ifexists('Port', dynamic(null))) >= 443.0)
+        | where (['Port'] >= 443)
 ---
 
-// A partial failure of the filtered query still fails the pipeline.
+// A partial failure of a query with stages still fails the pipeline.
 from_azure_log_analytics env("AZLOG_QUERY"),
   workspace_id=env("AZLOG_WORKSPACE"),
   azure_auth={

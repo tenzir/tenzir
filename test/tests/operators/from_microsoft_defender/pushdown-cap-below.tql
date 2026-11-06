@@ -1,0 +1,23 @@
+---
+fixtures:
+  - microsoft_defender:
+      synthesize: 999
+timeout: 60
+assertions:
+  fixtures:
+    microsoft_defender:
+      appended: ""
+---
+
+// A result below the cap does not warn.
+from_microsoft_defender "custom",
+  azure_auth={
+    tenant_id: env("DEFENDER_TENANT"),
+    client_id: env("DEFENDER_CLIENT"),
+    client_secret: env("DEFENDER_SECRET"),
+    authority: env("DEFENDER_AUTHORITY"),
+  },
+  _base_url=env("DEFENDER_URL"),
+  _max_result_rows=1000,
+  tls=false
+discard

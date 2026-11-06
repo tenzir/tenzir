@@ -1,0 +1,122 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "from_microsoft_defender",
+       store: {
+         op: {
+           path: [
+             `from_microsoft_defender` @ [1]:53..76 from 0
+           ],
+           ref: std::from_microsoft_defender/op
+         },
+         args: [
+           located "DeviceNetworkEvents" @ [1]:77..98 from 0
+         ],
+         named_args: [
+           {
+             index: 0,
+             value: expression record {
+               begin: [1]:113..114 from 0,
+               items: [
+                 field {
+                   name: `tenant_id` @ [1]:114..123 from 0,
+                   expr: constant string "t" @ [1]:125..128 from 0
+                 },
+                 field {
+                   name: `client_id` @ [1]:130..139 from 0,
+                   expr: constant string "c" @ [1]:141..144 from 0
+                 },
+                 field {
+                   name: `client_secret` @ [1]:146..159 from 0,
+                   expr: constant string "s" @ [1]:161..164 from 0
+                 }
+               ],
+               end: [1]:164..165 from 0
+             }
+           },
+           {
+             index: 6,
+             value: located false @ [1]:178..183 from 0
+           }
+         ]
+       },
+       filter: [
+         
+       ],
+-      order: "ordered"
++      order: "ordered",
++      declined: "`pushdown=false`"
+     },
+     where_ir {
+       op: {
+         path: [
+-          `where` @ [1]:184..189 from 0
++          
+         ],
+-        ref: std::where/op
++        ref: unresolved
+       },
+       args: [
+-        expression binary_expr {
++        Incomplete binary_expr {
+           left: root_field {
+             id: `RemotePort` @ [1]:190..200 from 0,
+             has_question_mark: false
+           },
+           op: "eq",
+           right: constant int64 443 @ [1]:204..207 from 0,
+           location: [1]:190..207 from 0
+         }
+       ],
+       named_args: [
+         
+       ]
+     },
+     GenericIr {
+       desc: "head",
+       store: {
+         op: {
+           path: [
+             `head` @ [1]:208..212 from 0
+           ],
+           ref: std::head/op
+         },
+         args: [
+           located 3 @ [1]:213..214 from 0
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:214..214 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ],
+   definition_location: [1]:53..214 from 0
+ }

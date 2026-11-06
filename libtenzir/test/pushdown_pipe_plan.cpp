@@ -13,6 +13,7 @@
 #include "tenzir/test/test.hpp"
 #include "tenzir/tql2/parser.hpp"
 #include "tenzir/tql2/resolve.hpp"
+#include "tenzir/try.hpp"
 
 #include <fmt/format.h>
 #include <fmt/ranges.h>
@@ -85,6 +86,28 @@ public:
 
   auto render_null() const -> Option<std::string> override {
     return "null";
+  }
+
+  /// Spells `"s" in x` as a substring test, and vetoes an ordering with a
+  /// string literal.
+  auto render_binary(ast::binary_expr const& x,
+                     ExpressionRenderer const& renderer) const
+    -> Option<Option<std::string>> override {
+    auto const is_string = [](ast::expression const& expr) {
+      auto const* constant = try_as<ast::constant>(expr);
+      return constant and is<std::string>(constant->value);
+    };
+    if (x.op == ast::binary_op::lt
+        and (is_string(x.left) or is_string(x.right))) {
+      return None{};
+    }
+    if (x.op == ast::binary_op::in and is_string(x.left)) {
+      TRY(auto needle, renderer.value(x.left));
+      TRY(auto haystack, renderer.value(x.right));
+      return Option<std::string>{
+        fmt::format("contains({}, {})", haystack, needle)};
+    }
+    return Option<std::string>{None{}};
   }
 
   auto render_bool(bool value) const -> std::string override {
@@ -285,6 +308,18 @@ auto window(std::vector<ir::QueryStage> stages, PipeOptions options = timed())
 }
 
 } // namespace
+
+TEST("pipe plans let the dialect spell binary expressions by operands") {
+  CHECK_EQUAL(stages({filter(R"("a" in x)")}, PipeOptions{}),
+              R"( | where contains(x, "a"))");
+  CHECK_EQUAL(stages({filter(R"(not ("a" in x))")}, PipeOptions{}),
+              R"( | where !contains(x, "a"))");
+  CHECK_EQUAL(stages({filter(R"(x < "b")")}, PipeOptions{}), "");
+  CHECK_EQUAL(stages({filter(R"(x > 1 and x < "b")")}, PipeOptions{}), "");
+  // Everything else keeps the default spelling.
+  CHECK_EQUAL(stages({filter(R"(x in ["a", "b"] and x < 2)")}, PipeOptions{}),
+              R"( | where (x in ("a", "b") and (x < 2)))");
+}
 
 TEST("pipe plans bind nested fields through the dialect") {
   // By default, a nested field binds to no column.

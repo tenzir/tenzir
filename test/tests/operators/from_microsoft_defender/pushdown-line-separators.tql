@@ -8,8 +8,7 @@ assertions:
     microsoft_defender:
       appended: |-
 
-        | take 100000
-        | where (gettype(column_ifexists('DeviceName', dynamic(null))) !in ("string") or tostring(column_ifexists('DeviceName', dynamic(null))) == "a\u2028b\u2029c\u0085d" or tostring(column_ifexists('DeviceName', dynamic(null))) matches regex @'^[ \t\r\n]*"')
+        | where (['DeviceName'] == "a\u2028b\u2029c\u0085d")
 ---
 
 // U+2028, U+2029, and U+0085 are escaped, so that the literal stays on one

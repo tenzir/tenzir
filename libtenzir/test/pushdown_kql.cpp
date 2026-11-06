@@ -7,8 +7,9 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/ip.hpp"
 #include "tenzir/pushdown/kql.hpp"
-#include "tenzir/pushdown/translate.hpp"
+#include "tenzir/pushdown/sql_source.hpp"
 #include "tenzir/session.hpp"
 #include "tenzir/test/registry.hpp"
 #include "tenzir/test/test.hpp"
@@ -24,8 +25,11 @@
 
 using namespace tenzir;
 using namespace tenzir::pushdown;
+using namespace std::literals;
 
 namespace {
+
+using Path = std::vector<std::string>;
 
 auto parse(std::string_view source) -> ast::expression {
   auto dh = collecting_diagnostic_handler{};
@@ -41,14 +45,6 @@ auto parse(std::string_view source) -> ast::expression {
   return std::move(*expr);
 }
 
-auto filters(std::vector<std::string_view> sources) -> ir::OptimizeFilter {
-  auto result = ir::OptimizeFilter{};
-  for (auto source : sources) {
-    result.push_back(parse(source));
-  }
-  return result;
-}
-
 auto paths(std::vector<std::string_view> sources) -> ir::OptimizeProjection {
   auto result = ir::OptimizeProjection{};
   for (auto source : sources) {
@@ -59,453 +55,371 @@ auto paths(std::vector<std::string_view> sources) -> ir::OptimizeProjection {
   return result;
 }
 
-/// The number of rows after which the service truncates a result.
-constexpr auto cap = uint64_t{1000};
+auto filter(std::string_view predicate) -> ir::QueryStage {
+  return {ir::QueryStage::Filter{parse(predicate)}};
+}
 
-/// The appended text for a single predicate, or the empty string if nothing
-/// was pushed.
+/// A filter with a constant that the optimizer folded, such as a list.
+auto folded(std::string_view field, ast::binary_op op, data value)
+  -> ir::QueryStage {
+  return {ir::QueryStage::Filter{ast::binary_expr{
+    parse(field), op,
+    ast::constant::make(located{std::move(value), location::unknown})}}};
+}
+
+auto select(std::vector<std::pair<Path, Path>> fields) -> ir::QueryStage {
+  auto result = ir::QueryStage::Select{};
+  for (auto& [output, input] : fields) {
+    result.fields.push_back({.output = output, .input = input});
+  }
+  return {std::move(result)};
+}
+
+auto drop(std::vector<Path> fields) -> ir::QueryStage {
+  return {ir::QueryStage::Drop{std::move(fields)}};
+}
+
+auto key(Path input, Option<Path> output = None{}) -> ir::AggregateColumn {
+  auto out = output ? std::move(*output) : input;
+  return {.output = std::move(out), .function = None{}, .input = input};
+}
+
+auto call(Path output, std::string function, Option<Path> input = None{})
+  -> ir::AggregateColumn {
+  return {
+    .output = std::move(output),
+    .function = std::move(function),
+    .input = std::move(input),
+  };
+}
+
+auto aggregate(std::vector<ir::AggregateColumn> columns) -> ir::QueryStage {
+  return {ir::QueryStage::Aggregate{.columns = std::move(columns),
+                                    .schema_name = "tenzir.summarize"}};
+}
+
+auto sort(std::vector<std::string_view> keys, Option<uint64_t> bound = None{})
+  -> ir::QueryStage {
+  auto result = ir::QueryStage::Sort{.keys = {}, .bound = bound};
+  for (auto key : keys) {
+    auto descending = key.starts_with('-');
+    if (descending) {
+      key.remove_prefix(1);
+    }
+    result.keys.push_back(
+      {.field = {std::string{key}}, .descending = descending});
+  }
+  return {std::move(result)};
+}
+
+auto limit(uint64_t count) -> ir::QueryStage {
+  return {ir::QueryStage::Limit{count}};
+}
+
+/// The text that a source appends to the query `T` for `stages`, or `"-"` if
+/// KQL does not spell them.
+auto kql(std::vector<ir::QueryStage> stages,
+         Option<std::vector<std::string_view>> projection = None{})
+  -> std::string {
+  auto projected = Option<ir::OptimizeProjection>{};
+  if (projection) {
+    projected = paths(*projection);
+  }
+  auto query = plan_kql_query("T", stages, projected);
+  if (not query) {
+    return "-";
+  }
+  CHECK_EQUAL(query->query, "T" + query->generated);
+  return query->generated;
+}
+
+/// The predicate of the `where` stage of a filter, or the empty string if KQL
+/// does not spell it.
 auto where(std::string_view predicate) -> std::string {
-  auto plan = plan_kql_query("T", filters({predicate}), None{}, None{}, cap,
-                             test::builtin_registry());
-  if (not plan.filtered) {
+  auto text = kql({filter(predicate)});
+  if (text == "-") {
     return {};
   }
-  constexpr auto prefix = std::string_view{"T\n| take 1000\n| where "};
-  REQUIRE(plan.query.starts_with(prefix));
-  return plan.query.substr(prefix.size());
-}
-
-constexpr auto x = std::string_view{"column_ifexists('x', dynamic(null))"};
-
-auto string_guard(std::string_view condition) -> std::string {
-  return fmt::format("(gettype({0}) !in (\"string\") or {1} or tostring({0}) "
-                     "matches regex @'^[ \\t\\r\\n]*\"')",
-                     x, condition);
-}
-
-auto number_guard(std::string_view condition) -> std::string {
-  return fmt::format("(gettype({}) !in (\"int\", \"long\", \"real\", "
-                     "\"double\") or {})",
-                     x, condition);
+  constexpr auto prefix = "\n| where "sv;
+  REQUIRE(text.starts_with(prefix));
+  return text.substr(prefix.size());
 }
 
 } // namespace
 
-TEST("kql renders string equality only where kql sees a string") {
-  CHECK_EQUAL(where(R"(x == "a\"b\\c")"),
-              string_guard(fmt::format(R"(tostring({}) == "a\"b\\c")", x)));
-  CHECK_EQUAL(where(R"("Straße" == x)"),
-              string_guard(fmt::format(R"(tostring({}) == "Straße")", x)));
-  CHECK_EQUAL(where(R"(x == "")"),
-              string_guard(fmt::format(R"(tostring({}) == "")", x)));
-  // Control characters use KQL's escapes.
-  CHECK_EQUAL(where("x == \"a\\nb\""),
-              string_guard(fmt::format(R"(tostring({}) == "a\nb")", x)));
-  CHECK_EQUAL(
-    where("x == \"\\t\\r\\u{1}\\u{7f}\""),
-    string_guard(fmt::format(R"(tostring({}) == "\t\r\u0001\u007f")", x)));
-  // Unicode line separators are escaped, so that the literal stays on one
-  // line and the planned query still lexes.
+TEST("kql spells literals") {
+  CHECK_EQUAL(where(R"(x == "a\"b\\c")"), R"((['x'] == "a\"b\\c"))");
+  CHECK_EQUAL(where(R"(x == "Straße")"), R"((['x'] == "Straße"))");
+  // Control characters use KQL's escapes, and Unicode line separators are
+  // escaped, so that the literal stays on one line.
+  CHECK_EQUAL(where("x == \"a\\nb\\t\\r\\u{1}\\u{7f}\""),
+              R"((['x'] == "a\nb\t\r\u0001\u007f"))");
   CHECK_EQUAL(where("x == \"a\\u{2028}b\\u{2029}c\\u{85}d\""),
-              string_guard(
-                fmt::format(R"(tostring({}) == "a\u2028b\u2029c\u0085d")", x)));
-  auto separated
-    = plan_kql_query("T", filters({"x == \"a\\u{2028}b\\u{2029}c\\u{85}d\""}),
-                     None{}, None{}, cap, test::builtin_registry());
-  CHECK(separated.filtered);
-  CHECK(kql_accepts_trailing_stages(separated.query));
-  // Strings have no ordering operators in KQL.
-  CHECK_EQUAL(where(R"(x < "b")"), "");
-  // `!=` must also keep `null`, which a dynamic column cannot prove.
-  CHECK_EQUAL(where(R"(x != "a")"), "");
-}
-
-TEST("kql renders number comparisons in real") {
-  CHECK_EQUAL(where("x == 42"),
-              number_guard(fmt::format("todouble({}) == 42.0", x)));
-  CHECK_EQUAL(where("x > -1.5"),
-              number_guard(fmt::format("todouble({}) > -1.5", x)));
-  CHECK_EQUAL(where("3 <= x"),
-              number_guard(fmt::format("todouble({}) >= 3.0", x)));
-  // The boundary of exact doubles relaxes strict comparisons.
-  CHECK_EQUAL(
-    where("x > 9007199254740992"),
-    number_guard(fmt::format("todouble({}) >= 9007199254740992.0", x)));
-  CHECK_EQUAL(
-    where("x < -9007199254740992"),
-    number_guard(fmt::format("todouble({}) <= -9007199254740992.0", x)));
-  CHECK_EQUAL(
-    where("x == 9007199254740992"),
-    number_guard(fmt::format("todouble({}) == 9007199254740992.0", x)));
-  CHECK_EQUAL(
-    where("x <= 9007199254740991"),
-    number_guard(fmt::format("todouble({}) <= 9007199254740991.0", x)));
-  // Literals beyond 2^53 do not convert to `real` exactly.
-  CHECK_EQUAL(where("x > 9007199254740993"), "");
-  CHECK_EQUAL(where("x < -9007199254740993"), "");
-  CHECK_EQUAL(where("x == 9223372036854775807"), "");
+              R"((['x'] == "a\u2028b\u2029c\u0085d"))");
+  CHECK_EQUAL(where("x == 42"), "(['x'] == 42)");
+  CHECK_EQUAL(where("x == 9223372036854775807"),
+              "(['x'] == 9223372036854775807)");
   CHECK_EQUAL(where("x == 18446744073709551615"), "");
-  CHECK_EQUAL(where("x > 9007199254740994.0"), "");
-  CHECK_EQUAL(where("x in [1, 9007199254740993]"), "");
-  // Exponents use the shortest spelling.
-  CHECK_EQUAL(where("x > 0.0000001"),
-              number_guard(fmt::format("todouble({}) > 1e-7", x)));
-  CHECK_EQUAL(where("x < -0.00000015"),
-              number_guard(fmt::format("todouble({}) < -1.5e-7", x)));
-  CHECK_EQUAL(where("x > 1e300"), "");
-}
-
-TEST("kql widens timestamp comparisons around decoded instants") {
-  auto guard = [](std::string_view condition) {
-    return fmt::format("(gettype({0}) != \"datetime\" or todatetime({0}) < "
-                       "datetime(1900-01-01) or todatetime({0}) >= "
-                       "datetime(2262-01-01) or {1})",
-                       x, condition);
-  };
-  auto lower
-    = fmt::format("todatetime({}) >= datetime(2026-10-19T10:03:00.123455Z)", x);
-  auto upper
-    = fmt::format("todatetime({}) <= datetime(2026-10-19T10:03:00.123458Z)", x);
+  CHECK_EQUAL(where("x == 1.5"), "(['x'] == 1.5)");
+  // A `double` keeps a `real` spelling.
+  CHECK_EQUAL(where("x == 2.0"), "(['x'] == 2.0)");
+  CHECK_EQUAL(where("x / 2.0 == 1"), "((['x'] / 2.0) == 1)");
+  CHECK_EQUAL(where("x / 2 == 1"), "((['x'] / 2) == 1)");
+  CHECK_EQUAL(where("x > 1e300"), "(['x'] > 1e+300)");
+  CHECK_EQUAL(where("x > 0.00000015"), "(['x'] > 1.5e-07)");
+  CHECK_EQUAL(where("x == true"), "(['x'] == true)");
   CHECK_EQUAL(where("x == 2026-10-19T10:03:00.1234567Z"),
-              guard(fmt::format("({} and {})", lower, upper)));
-  for (auto op : {">", ">="}) {
-    CHECK_EQUAL(where(fmt::format("x {} 2026-10-19T10:03:00.1234567Z", op)),
-                guard(lower));
-  }
-  for (auto op : {"<", "<="}) {
-    CHECK_EQUAL(where(fmt::format("x {} 2026-10-19T10:03:00.1234567Z", op)),
-                guard(upper));
-  }
-  CHECK_EQUAL(where("2026-10-19T10:03:00.1234567Z < x"), guard(lower));
-  CHECK_EQUAL(where("x >= 2026-10-19T10:03:00Z"),
-              guard(fmt::format("todatetime({}) >= "
-                                "datetime(2026-10-19T10:02:59.999999Z)",
-                                x)));
-  // Floor, rather than truncation toward zero, is required before the epoch.
+              "(['x'] == datetime(2026-10-19T10:03:00.1234567Z))");
   CHECK_EQUAL(where("x < 1969-12-31T23:59:59.9999999Z"),
-              guard(fmt::format("todatetime({}) <= "
-                                "datetime(1970-01-01T00:00:00.000001Z)",
-                                x)));
-  // Nanosecond boundaries, whether tick-aligned or not, widen outwards.
-  CHECK_EQUAL(where("x > 2026-10-19T10:03:00.123456789Z"), guard(lower));
-  for (auto expression : {
-         "x != 2026-10-19",
-         "not (x == 2026-10-19)",
-         "x in [2026-10-19, 2026-10-20]",
-         "x.y >= 2026-10-19",
-         "x + 1s >= 2026-10-19",
-       }) {
-    CHECK_EQUAL(where(expression), "");
-  }
-  // Rounding in microseconds must not overflow the nanosecond time range.
-  auto renderer = KqlRenderer{};
-  for (auto instant : {time::min(), time::max()}) {
-    CHECK(renderer.render_prefilter(Binary{
-      .op = BinaryOp::eq,
-      .left = Box<Expr>{Expr{Column{{"x"}}}},
-      .right = Box<Expr>{Expr{Literal{instant}}},
-    }));
-  }
-}
-
-TEST("kql timestamps filter query outputs without moving across user stages") {
-  auto query = std::string_view{
-    "T | take 7 | summarize EventTime=max(Timestamp) by DeviceName"};
-  auto plan = plan_kql_query(query, filters({"EventTime >= 2026-10-19"}),
-                             paths({"DeviceName"}), uint64_t{2}, cap,
-                             test::builtin_registry());
-  CHECK(
-    plan.query.starts_with(fmt::format("{}\n| take 1000\n| where ", query)));
-  CHECK(plan.filtered);
-  CHECK(plan.projected);
-  CHECK(not plan.limited);
-  CHECK(plan.query.ends_with("| project ['DeviceName'] = "
-                             "column_ifexists('DeviceName', dynamic(null)), "
-                             "['EventTime'] = column_ifexists('EventTime', "
-                             "dynamic(null))"));
-}
-
-TEST("kql renders booleans only where kql sees a boolean") {
-  auto expected
-    = fmt::format("(gettype({0}) !in (\"bool\") or tobool({0}) == true)", x);
-  CHECK_EQUAL(where("x == true"), expected);
-  CHECK_EQUAL(where("x"), expected);
-  CHECK_EQUAL(where("x == false"),
-              fmt::format("(gettype({0}) !in (\"bool\") or tobool({0}) == "
-                          "false)",
-                          x));
-}
-
-TEST("kql renders membership by kind") {
-  CHECK_EQUAL(where(R"(x in ["a", "b"])"),
-              string_guard(fmt::format(R"(tostring({}) in ("a", "b"))", x)));
-  CHECK_EQUAL(where("x in [1, 2]"),
-              number_guard(fmt::format("todouble({0}) == 1.0 or todouble({0}) "
-                                       "== 2.0",
-                                       x)));
-  CHECK_EQUAL(where("x in [true]"),
-              fmt::format("(gettype({0}) !in (\"bool\") or tobool({0}) == "
-                          "true)",
-                          x));
-  // A dynamic string `443` decodes to the number 443, so no type guard of a
-  // list that mixes kinds can restrict the rows of another kind: such lists
-  // stay local, in every element order.
-  CHECK_EQUAL(where(R"(x in ["a", 443])"), "");
-  CHECK_EQUAL(where(R"(x in [443, "a"])"), "");
-  CHECK_EQUAL(where(R"(x in ["a", true])"), "");
-  CHECK_EQUAL(where(R"(x in [true, "a"])"), "");
-  CHECK_EQUAL(where("x in [1, true]"), "");
-  CHECK_EQUAL(where(R"(x in ["a", 1, true])"), "");
-  // A list with `null` stays local.
-  CHECK_EQUAL(where("x in [1, null]"), "");
-}
-
-TEST("kql renders case-sensitive string matching") {
+              "(['x'] < datetime(1969-12-31T23:59:59.9999999Z))");
+  CHECK_EQUAL(where("x > 2026-10-19"),
+              "(['x'] > datetime(2026-10-19T00:00:00.0000000Z))");
+  // The earliest times spell, too, although the start of their day is out of
+  // range in nanoseconds.
   CHECK_EQUAL(
-    where(R"(x.starts_with("ab"))"),
-    string_guard(fmt::format(R"(tostring({}) startswith_cs "ab")", x)));
-  CHECK_EQUAL(where(R"(x.ends_with("ab"))"),
-              string_guard(fmt::format(R"(tostring({}) endswith_cs "ab")", x)));
-  CHECK_EQUAL(where(R"("ab" in x)"),
-              string_guard(fmt::format(R"(tostring({}) contains_cs "ab")", x)));
-  // Matching is ordinal, so empty and non-ASCII needles are pushed, too.
-  CHECK_EQUAL(where(R"(x.starts_with(""))"),
-              string_guard(fmt::format(R"(tostring({}) startswith_cs "")", x)));
-  CHECK_EQUAL(where(R"(x.ends_with("ße"))"),
-              string_guard(fmt::format(R"(tostring({}) endswith_cs "ße")", x)));
+    kql({folded("x", ast::binary_op::gt,
+                data{tenzir::time{duration{-9'223'369'200'000'000'000}}})}),
+    "\n| where (['x'] > datetime(1677-09-21T01:00:00.0000000Z))");
   CHECK_EQUAL(
-    where(R"("e\u{301}" in x)"),
-    string_guard(fmt::format("tostring({}) contains_cs \"e\u0301\"", x)));
-  // Non-ASCII needles remain local when case is ignored.
-  CHECK_EQUAL(where(R"(x.starts_with("ä", ignore_case=true))"), "");
+    kql({folded("x", ast::binary_op::gt,
+                data{tenzir::time{duration{9'223'372'036'854'775'800}}})}),
+    "\n| where (['x'] > datetime(2262-04-11T23:47:16.8547758Z))");
+  // KQL holds times and durations in ticks of 100 nanoseconds.
+  CHECK_EQUAL(where("x > 2026-10-19T10:03:00.123456789Z"), "");
+  CHECK_EQUAL(where("x > 1h"), "(['x'] > timespan(36000000000tick))");
+  CHECK_EQUAL(where("x > 100ns"), "(['x'] > timespan(1tick))");
+  CHECK_EQUAL(where("x > 1ns"), "");
+  CHECK_EQUAL(where("x - 2026-01-01 > 1d"),
+              "((['x'] - datetime(2026-01-01T00:00:00.0000000Z)) > "
+              "timespan(864000000000tick))");
+  // The smallest `long` has no literal of its own.
+  CHECK_EQUAL(kql({folded("x", ast::binary_op::gt,
+                          data{std::numeric_limits<int64_t>::min()})}),
+              "\n| where (['x'] > long(-9223372036854775808))");
+  // KQL has no `null` literal that compares with every type.
+  CHECK_EQUAL(where("x > null"), "");
 }
 
-TEST("kql guards ASCII case-insensitive string prefilters") {
-  auto guarded = [](std::string_view op, std::string_view needle,
-                    bool recursive = false) {
-    auto condition
-      = fmt::format("tostring({0}) {1} \"{2}\" or tostring({0}) matches regex "
-                    "@'[^\\x00-\\x7F]'",
-                    x, op, needle);
-    if (recursive) {
-      condition += fmt::format(
-        " or tostring({}) matches regex @'^[ \\t\\r\\n]*[\\[{{]'", x);
-    }
-    return string_guard(condition);
-  };
-  CHECK_EQUAL(where(R"(x.starts_with("ab", ignore_case=true))"),
-              guarded("startswith", "ab"));
-  CHECK_EQUAL(where(R"(x.ends_with("AB", ignore_case=true))"),
-              guarded("endswith", "AB"));
-  CHECK_EQUAL(where(R"(x.to_lower() == "alice")"), guarded("=~", "alice"));
-  CHECK_EQUAL(where(R"("ALICE" == x.to_upper())"), guarded("=~", "ALICE"));
-  CHECK_EQUAL(where(R"(x.to_lower() in ["alice", "bob"])"),
-              fmt::format("({} or {})", guarded("=~", "alice"),
-                          guarded("=~", "bob")));
-  CHECK_EQUAL(where(R"(search(x, "powershell", ignore_case=true))"),
-              guarded("contains", "powershell", true));
-  CHECK_EQUAL(where(R"(x.contains("-enc", ignore_case=true))"),
-              guarded("contains", "-enc", true));
-  CHECK_EQUAL(where(R"(x.search("ALICE", exact=true, ignore_case=true))"),
-              guarded("=~", "ALICE", true));
-  CHECK_EQUAL(where(R"(x.search("", ignore_case=true))"),
-              guarded("contains", "", true));
-  CHECK_EQUAL(where(R"(x.search("ß", ignore_case=true))"), "");
-  CHECK_EQUAL(where(R"(x.to_upper() in ["A", "Ä"])"), "");
-  CHECK_EQUAL(where(R"(x.search("a", ignore_case=true) or x.match_regex("b"))"),
-              "");
-  CHECK_EQUAL(where(R"(search(this, "a", ignore_case=true))"), "");
-}
-
-TEST("kql compares parsed IPs and subnet bounds in the mapped address space") {
-  auto guard = fmt::format("isempty(parse_ipv6(tostring({})))", x);
-  auto eq = [&](std::string_view address) {
-    return fmt::format("({} or ipv6_compare(tostring({}), \"{}\") == 0)", guard,
-                       x, address);
-  };
-  CHECK_EQUAL(where("x.ip() == 10.0.0.1"), eq("10.0.0.1"));
-  CHECK_EQUAL(where("x == 10.0.0.1"), eq("10.0.0.1"));
-  CHECK_EQUAL(where("::ffff:10.0.0.1 == x.ip()"), eq("10.0.0.1"));
-  CHECK_EQUAL(where("x.ip() == 2001:db8::1"), eq("2001:db8::1"));
-  auto subnet = [&](std::string_view lo, std::string_view hi) {
-    return fmt::format("({0} or (ipv6_compare(tostring({1}), \"{2}\") >= 0 "
-                       "and ipv6_compare(tostring({1}), \"{3}\") <= 0))",
-                       guard, x, lo, hi);
-  };
-  CHECK_EQUAL(where("x.ip() in 10.20.7.8/16"),
-              subnet("10.20.0.0", "10.20.255.255"));
-  CHECK_EQUAL(where("x in 0.0.0.0/0"), subnet("0.0.0.0", "255.255.255.255"));
-  CHECK_EQUAL(where("x.ip() in 10.0.0.1/32"), subnet("10.0.0.1", "10.0.0.1"));
-  // KQL aliases compatible and mapped IPv4 addresses. Moving a subnet bound
-  // between those regions can exclude otherwise matching native addresses.
-  for (auto network :
-       {"::/0", "::/80", "::/96", "::fffe:0:0/95", "::a00:1/128"}) {
-    CHECK_EQUAL(where(fmt::format("x.ip() in {}", network)), "");
-    CHECK_EQUAL(where(fmt::format("x.ip() in {} or x == 1", network)), "");
-  }
-  CHECK_EQUAL(where("x.ip() in 2001:db8::1/128"),
-              subnet("2001:db8::1", "2001:db8::1"));
-  CHECK_EQUAL(where("x.ip() in 2001:db8::/32"),
-              subnet("2001:db8::", "2001:db8:ffff:ffff:ffff:ffff:ffff:ffff"));
-  CHECK_EQUAL(where("x.ip() == 10.0.0.1 or x.match_regex(\"a\")"), "");
-}
-
-TEST("kql renders null checks for strictly decoded types only") {
-  CHECK_EQUAL(where("x != null"),
-              fmt::format("(isnotnull({0}) or gettype({0}) !in (\"int\", "
-                          "\"long\", \"real\", \"bool\", \"datetime\", "
-                          "\"timespan\", \"decimal\"))",
-                          x));
-  CHECK_EQUAL(where("x == null"), "");
-}
-
-TEST("kql vetoes predicates without a proven superset") {
-  CHECK_EQUAL(where("not (x == 1)"), "");
+TEST("kql spells expressions") {
+  CHECK_EQUAL(where("x != 1"), "(['x'] != 1)");
+  CHECK_EQUAL(where("x == null"), "isnull(['x'])");
+  CHECK_EQUAL(where("null != x"), "isnotnull(['x'])");
+  CHECK_EQUAL(where("x in [1, 2]"), "(['x'] in (1, 2))");
+  CHECK_EQUAL(where("x not in [1, 2]"), "not((['x'] in (1, 2)))");
+  CHECK_EQUAL(where("x in []"), "");
+  CHECK_EQUAL(where("x > 1 and (y < 2 or not z)"),
+              "((['x'] > 1) and ((['y'] < 2) or not(['z'])))");
+  CHECK_EQUAL(where("flag"), "['flag']");
+  CHECK_EQUAL(where("-x + 1 * y - 2 > 0"),
+              "((((-['x']) + (1 * ['y'])) - 2) > 0)");
+  CHECK_EQUAL(where(R"(x.starts_with("a"))"), R"((['x'] startswith_cs "a"))");
+  CHECK_EQUAL(where(R"(x.ends_with("a"))"), R"((['x'] endswith_cs "a"))");
+  CHECK_EQUAL(where(R"("a" in x)"), R"((['x'] contains_cs "a"))");
+  CHECK_EQUAL(where(R"(x.match_regex("^a"))"), R"((['x'] matches regex "^a"))");
+  CHECK_EQUAL(where(R"(x.to_lower() == "a")"), R"((tolower(['x']) == "a"))");
+  CHECK_EQUAL(where(R"(x.to_upper() == "A")"), R"((toupper(['x']) == "A"))");
+  CHECK_EQUAL(where("x.length_chars() > 1"), "(strlen(['x']) > 1)");
+  CHECK_EQUAL(where("x.abs() > 1"), "(abs(['x']) > 1)");
+  CHECK_EQUAL(where(R"(x.trim() == "a")"), R"((trim(@"\s+", ['x']) == "a"))");
+  // KQL rejects an ordering of strings.
+  CHECK_EQUAL(where(R"(x < "b")"), "");
+  CHECK_EQUAL(where(R"("b" >= x)"), "");
+  // Names spell with escapes. A `*` in a name is a wildcard in a command, and
+  // nested fields bind to no column.
+  CHECK_EQUAL(where(R"(this["it's \\ a.b"] == 1)"),
+              R"((['it\'s \\ a.b'] == 1))");
+  CHECK_EQUAL(where(R"(this["a*"] == 1)"), "");
   CHECK_EQUAL(where("x.y == 1"), "");
-  CHECK_EQUAL(where(R"(x.match_regex("a"))"), "");
-  CHECK_EQUAL(where("x.ip() != 1.2.3.4"), "");
-  CHECK_EQUAL(where("x.ip() > 1.2.3.4"), "");
-  CHECK_EQUAL(where("x != 2026-01-01"), "");
-  CHECK_EQUAL(where("x + 1 > 2"), "");
-  CHECK_EQUAL(where("x == y"), "");
-  CHECK_EQUAL(where(R"(x.to_lower() == "ä")"), "");
-  CHECK_EQUAL(where(R"(x.to_lower() != "a")"), "");
-  CHECK_EQUAL(where("int(x, base=16) == 16"), "");
+  // Optional fields, named arguments, and other functions have no spelling.
+  CHECK_EQUAL(where("x? == 1"), "");
+  CHECK_EQUAL(where(R"(x.starts_with("a", ignore_case=true))"), "");
+  CHECK_EQUAL(where("x.length_bytes() > 1"), "");
 }
 
-TEST("kql composes junctions") {
-  CHECK_EQUAL(where("x == 1 or x == 2"),
-              fmt::format("({} or {})",
-                          number_guard(fmt::format("todouble({}) == 1.0", x)),
-                          number_guard(fmt::format("todouble({}) == 2.0", x))));
-  // A disjunction needs both sides.
-  CHECK_EQUAL(where("x == 1 or x.match_regex(\"a\")"), "");
-  // A conjunction inside a disjunction drops its local-only part.
-  CHECK_EQUAL(where("(x == 1 and x.match_regex(\"a\")) or x == 2"),
-              fmt::format("({} or {})",
-                          number_guard(fmt::format("todouble({}) == 1.0", x)),
-                          number_guard(fmt::format("todouble({}) == 2.0", x))));
+TEST("kql spells IP addresses and subnets as strings") {
+  CHECK_EQUAL(where("x == 10.0.0.1"), R"((['x'] == "10.0.0.1"))");
+  CHECK_EQUAL(where("::1 != x"), R"(("::1" != ['x']))");
+  CHECK_EQUAL(where("x in [10.0.0.1, 10.0.0.2]"),
+              R"((['x'] in ("10.0.0.1", "10.0.0.2")))");
+  CHECK_EQUAL(kql({folded("x", ast::binary_op::in,
+                          data{list{data{ip::v4(uint32_t{1})}}})}),
+              "\n| where (['x'] in (\"0.0.0.1\"))");
+  CHECK_EQUAL(where("x in 10.0.0.0/8"),
+              R"(ipv4_is_in_range(['x'], "10.0.0.0/8"))");
+  CHECK_EQUAL(where("x in 0.0.0.0/0"),
+              R"(ipv4_is_in_range(['x'], "0.0.0.0/0"))");
+  CHECK_EQUAL(where("x in fe80::/10"),
+              R"(ipv6_is_in_range(['x'], "fe80::/10"))");
+  // KQL may read IPv4 addresses as mapped IPv6 addresses.
+  CHECK_EQUAL(where("x in ::/0"), "");
+  CHECK_EQUAL(where("x in ::ffff:0:0/95"), "");
+  // Addresses neither order nor compute.
+  CHECK_EQUAL(where("x < 10.0.0.1"), "");
+  CHECK_EQUAL(where("x == 10.0.0.0/8"), "");
 }
 
-TEST("kql plans append stages in order") {
-  auto filter = filters({R"(x == 1 and y.match_regex("a"))", R"(z == "b")"});
-  auto plan
-    = plan_kql_query("T | take 5 // comment", filter, paths({"x", "w.v", "x"}),
-                     uint64_t{3}, cap, test::builtin_registry());
-  CHECK(plan.filtered);
-  CHECK(plan.projected);
-  // Every predicate stays local, so the limit is not pushed.
-  CHECK(not plan.limited);
-  auto z = std::string_view{"column_ifexists('z', dynamic(null))"};
-  auto expected
-    = fmt::format("T | take 5 // comment\n"
-                  "| take 1000\n"
-                  "| where {0} and (gettype({1}) !in (\"string\") or "
-                  "tostring({1}) == \"b\" or "
-                  "tostring({1}) matches regex @'^[ \\t\\r\\n]*\"')\n"
-                  "| project ['x'] = column_ifexists('x', dynamic(null)), "
-                  "['w'] = column_ifexists('w', dynamic(null)), "
-                  "['y'] = column_ifexists('y', dynamic(null)), "
-                  "['z'] = column_ifexists('z', dynamic(null))",
-                  number_guard(fmt::format("todouble({}) == 1.0", x)), z);
-  CHECK_EQUAL(plan.query, expected);
+TEST("kql spells selections with project and renames in the layout") {
+  auto stages = std::vector{
+    select({{{"u"}, {"user"}}, {{"n"}, {"n"}}, {{"x", "y"}, {"n"}}})};
+  auto query = plan_kql_query("T", stages, None{});
+  REQUIRE(query);
+  CHECK_EQUAL(query->generated, "\n| project ['user'], ['n']");
+  REQUIRE(query->layout.fields);
+  auto const expected = LayoutFields{
+    {{"u"}, "user"},
+    {{"n"}, "n"},
+    {{"x", "y"}, "n"},
+  };
+  CHECK_EQUAL(*query->layout.fields, expected);
+  // A swap renames in the layout, and stages after it read the columns
+  // that hold the fields.
+  CHECK_EQUAL(kql({select({{{"b"}, {"a"}}, {{"a"}, {"b"}}}), filter("a > 1")}),
+              "\n| project ['a'], ['b']\n| where (['b'] > 1)");
+  // Fields that the selection removed are gone, and nested inputs bind to no
+  // column.
+  CHECK_EQUAL(kql({select({{{"a"}, {"a"}}}), filter("b > 1")}), "-");
+  CHECK_EQUAL(kql({select({{{"a"}, {"x", "y"}}})}), "-");
+  CHECK_EQUAL(kql({select({{{"a"}, {"a*"}}})}), "-");
+  CHECK_EQUAL(kql({select({})}), "-");
 }
 
-TEST("kql plans cap the query before filtering") {
-  // Without the cap, the filter would reveal rows beyond the service's result
-  // cap, which a sorted query would never return.
-  auto filter = filters({"x == 1"});
-  auto plan = plan_kql_query("T | sort by y", filter, None{}, uint64_t{5},
-                             uint64_t{100'000}, test::builtin_registry());
-  CHECK_EQUAL(plan.query,
-              fmt::format("T | sort by y\n| take 100000\n| where {}",
-                          number_guard(fmt::format("todouble({}) == 1.0", x))));
-  CHECK(plan.filtered);
-  CHECK(not plan.limited);
-  // A service that fails a truncated result needs no cap: the uncapped filter
-  // yields the complete filtered result or fails, too.
-  plan = plan_kql_query("T | sort by y", filter, None{}, None{}, None{},
-                        test::builtin_registry());
-  CHECK_EQUAL(plan.query,
-              fmt::format("T | sort by y\n| where {}",
-                          number_guard(fmt::format("todouble({}) == 1.0", x))));
-  CHECK(plan.filtered);
-  // A projection or a limit keeps the rows of the query, or a prefix.
-  plan = plan_kql_query("T | sort by y", {}, paths({"a"}), uint64_t{5},
-                        uint64_t{100'000}, test::builtin_registry());
-  CHECK_EQUAL(plan.query, "T | sort by y\n| project ['a'] = "
-                          "column_ifexists('a', dynamic(null))\n| take 5");
-  // A filter without prefilters needs no cap either.
-  plan = plan_kql_query("T", filters({R"(x.match_regex("a"))"}), paths({"x"}),
-                        None{}, uint64_t{100'000}, test::builtin_registry());
-  CHECK_EQUAL(plan.query,
-              "T\n| project ['x'] = column_ifexists('x', dynamic(null))");
-  // A `set` statement may change how the service limits a result, so the
-  // query stays unchanged.
-  for (auto query : {"set notruncation;\nT", "set truncationmaxrecords=10; T",
-                     "set query_take_max_records = 1000; T"}) {
-    CHECK(not kql_accepts_trailing_stages(query));
-    CHECK_EQUAL(plan_kql_query(query, filter, None{}, None{}, cap,
-                               test::builtin_registry())
-                  .query,
-                query);
+TEST("kql drops columns with project-away") {
+  CHECK_EQUAL(kql({drop({{"a"}, {"b c"}})}), "\n| project-away ['a'], ['b c']");
+  CHECK_EQUAL(kql({drop({{"a"}}), filter("a > 1")}), "-");
+  CHECK_EQUAL(kql({drop({{"a", "b"}})}), "-");
+  // `project-away` reads a `*` as a wildcard: `Na*` would drop `Name`.
+  CHECK_EQUAL(kql({drop({{"Na*"}})}), "-");
+  // After a selection, a drop only changes the layout.
+  auto query = plan_kql_query(
+    "T", std::vector{select({{{"a"}, {"a"}}, {{"b"}, {"b"}}}), drop({{"a"}})},
+    None{});
+  REQUIRE(query);
+  CHECK_EQUAL(query->generated, "\n| project ['a'], ['b']");
+  CHECK_EQUAL(*query->layout.fields, (LayoutFields{{{"b"}, "b"}}));
+}
+
+TEST("kql spells summaries with summarize") {
+  auto stages = std::vector{aggregate({
+    key({"k"}),
+    call({"n"}, "count"),
+    call({"c"}, "count", Path{"x"}),
+    call({"lo"}, "min", Path{"x"}),
+    call({"hi"}, "max", Path{"x"}),
+    call({"s"}, "sum", Path{"x"}),
+    call({"again"}, "count"),
+    key({"j"}, Path{"out", "j"}),
+  })};
+  auto query = plan_kql_query("T", stages, None{});
+  REQUIRE(query);
+  CHECK_EQUAL(query->generated,
+              "\n| summarize ['__tenzir_column_0'] = count(), "
+              "['__tenzir_column_1'] = countif(isnotempty(['x'])), "
+              "['__tenzir_column_2'] = min(['x']), ['__tenzir_column_3'] = "
+              "max(['x']), ['__tenzir_column_4'] = sum(['x']) by ['k'], ['j']");
+  auto const expected = LayoutFields{
+    {{"k"}, "k"},
+    {{"n"}, "__tenzir_column_0"},
+    {{"c"}, "__tenzir_column_1"},
+    {{"lo"}, "__tenzir_column_2"},
+    {{"hi"}, "__tenzir_column_3"},
+    {{"s"}, "__tenzir_column_4"},
+    {{"again"}, "__tenzir_column_0"},
+    {{"out", "j"}, "j"},
+  };
+  REQUIRE(query->layout.fields);
+  CHECK_EQUAL(*query->layout.fields, expected);
+  CHECK_EQUAL(query->layout.schema_name,
+              Option<std::string>{"tenzir.summarize"});
+  // Group keys alone still need a function, which the layout leaves out.
+  CHECK_EQUAL(kql({aggregate({key({"k"})})}),
+              "\n| summarize ['__tenzir_count_0'] = count() by ['k']");
+  // Stages after a summary read its columns.
+  CHECK_EQUAL(kql({filter("x > 1"),
+                   aggregate({key({"k"}), call({"n"}, "count")}),
+                   filter("n > 2"), sort({"-n", "k"}, 3), limit(3)}),
+              "\n| where (['x'] > 1)\n| summarize ['__tenzir_column_0'] = "
+              "count() by ['k']\n| where (['__tenzir_column_0'] > 2)\n| sort "
+              "by ['__tenzir_column_0'] desc, ['k'] asc\n| take 3");
+  // Generated names avoid the names that the stages reference.
+  CHECK_EQUAL(kql({aggregate({key({"__tenzir_column_0"}), call({"n"}, "coun"
+                                                                      "t")})}),
+              "\n| summarize ['__tenzir_column_1'] = count() by "
+              "['__tenzir_column_0']");
+  // `avg` yields `NaN` for no values, and other functions have no spelling.
+  CHECK_EQUAL(kql({aggregate({call({"m"}, "mean", Path{"x"})})}), "-");
+  CHECK_EQUAL(kql({aggregate({call({"m"}, "count_distinct", Path{"x"})})}),
+              "-");
+  CHECK_EQUAL(kql({aggregate({call({"m"}, "min")})}), "-");
+  CHECK_EQUAL(kql({aggregate({key({"x", "y"})})}), "-");
+  CHECK_EQUAL(kql({aggregate({key({"a*"}), call({"n"}, "count")})}), "-");
+}
+
+TEST("kql sorts with explicit directions and limits with take") {
+  CHECK_EQUAL(kql({sort({"-n", "user"})}),
+              "\n| sort by ['n'] desc, ['user'] asc");
+  CHECK_EQUAL(kql({sort({"n"}, 5), limit(5)}),
+              "\n| sort by ['n'] asc\n| take 5");
+  CHECK_EQUAL(kql({sort({"a*"})}), "-");
+  CHECK_EQUAL(kql({limit(0)}), "\n| take 0");
+  CHECK_EQUAL(kql({limit(9223372036854775807)}),
+              "\n| take 9223372036854775807");
+  CHECK_EQUAL(kql({limit(9223372036854775808u)}), "-");
+  CHECK_EQUAL(kql({limit(5), filter("x > 1")}),
+              "\n| take 5\n| where (['x'] > 1)");
+}
+
+TEST("kql keeps the fields that downstream needs") {
+  CHECK_EQUAL(kql({}, std::vector{"a"sv, "b.c"sv, "a"sv}),
+              "\n| project ['a'] = column_ifexists('a', dynamic(null)), ['b'] "
+              "= column_ifexists('b', dynamic(null))");
+  CHECK_EQUAL(kql({}, std::vector{R"(this["it's"])"sv}),
+              "\n| project ['it\\'s'] = column_ifexists('it\\'s', "
+              "dynamic(null))");
+  CHECK_EQUAL(kql({filter("x > 1")}, std::vector{"a"sv}),
+              "\n| where (['x'] > 1)\n| project ['a'] = column_ifexists('a', "
+              "dynamic(null))");
+  // A projection of whole events, of nothing, or with a name that has no
+  // spelling keeps every column.
+  CHECK_EQUAL(kql({}, std::vector{"this"sv}), "");
+  CHECK_EQUAL(kql({}, std::vector<std::string_view>{}), "");
+  CHECK_EQUAL(kql({}, std::vector{"a"sv, R"(this["b*"])"sv}), "");
+  // A drop leaves its fields out, and a selection or a summary keeps its own
+  // fields.
+  CHECK_EQUAL(kql({drop({{"a"}})}, std::vector{"a"sv, "b"sv}),
+              "\n| project-away ['a']\n| project ['b'] = column_ifexists('b', "
+              "dynamic(null))");
+  CHECK_EQUAL(kql({select({{{"a"}, {"a"}}})}, std::vector{"a"sv}),
+              "\n| project ['a']");
+}
+
+TEST("kql appends at most a bounded number of bytes") {
+  // A filter whose spelling exceeds the budget stays in the pipeline.
+  auto values = std::vector<std::string>{};
+  for (auto i = 0; i < 2'000; ++i) {
+    values.push_back(fmt::format("\"value-{:05}\"", i));
   }
-}
-
-TEST("kql plans push limits without filters") {
-  auto plan = plan_kql_query("  T\n| project a  ", {}, None{}, uint64_t{7}, cap,
-                             test::builtin_registry());
-  CHECK_EQUAL(plan.query, "  T\n| project a  \n| take 7");
-  CHECK(plan.limited);
-  CHECK(not plan.filtered);
-  CHECK(not plan.projected);
-  // KQL spells counts as `long`, so only limits up to 2^63 - 1 are pushed.
-  for (auto [limit, take] :
-       {std::pair{uint64_t{2147483648}, "2147483648"},
-        std::pair{uint64_t{9223372036854775807}, "9223372036854775807"}}) {
-    plan
-      = plan_kql_query("T", {}, None{}, limit, cap, test::builtin_registry());
-    CHECK_EQUAL(plan.query, fmt::format("T\n| take {}", take));
-    CHECK(plan.limited);
+  auto const large = fmt::format("x in [{}]", fmt::join(values, ", "));
+  CHECK_EQUAL(kql({filter(large)}), "-");
+  CHECK(not plan_kql_query("T", std::vector{filter(large)}, None{}));
+  // One that fits still goes out.
+  auto const small
+    = fmt::format("x in [{}]", fmt::join(std::span{values}.first(10), ", "));
+  CHECK(kql({filter(small)}) != "-");
+  // A projection that would exceed the budget stays out of the query, while
+  // the stages before it still go out.
+  auto fields = std::vector<std::string>{};
+  for (auto i = 0; i < 1'000; ++i) {
+    fields.push_back(fmt::format("field_{:04}", i));
   }
-  for (auto limit : {uint64_t{0}, uint64_t{9223372036854775808u},
-                     std::numeric_limits<uint64_t>::max()}) {
-    plan
-      = plan_kql_query("T", {}, None{}, limit, cap, test::builtin_registry());
-    CHECK_EQUAL(plan.query, "T");
-    CHECK(not plan.limited);
-  }
-  // A filter that renders nothing still runs locally after the limit.
-  plan = plan_kql_query("T", filters({R"(x.match_regex("a"))"}), None{},
-                        uint64_t{7}, cap, test::builtin_registry());
-  CHECK_EQUAL(plan.query, "T");
-  CHECK(not plan.limited);
+  auto names = std::vector<std::string_view>{fields.begin(), fields.end()};
+  CHECK_EQUAL(kql({}, names), "");
+  CHECK_EQUAL(kql({filter("x > 1")}, names), "\n| where (['x'] > 1)");
+  auto const fitting
+    = std::vector<std::string_view>{names.begin(), names.begin() + 3};
+  CHECK(kql({}, fitting).starts_with("\n| project"));
 }
 
-TEST("kql plans keep projection dependencies") {
-  // A filter whose references cannot be enumerated disables projection.
-  auto plan = plan_kql_query("T", filters({"this == {}"}), paths({"a"}), None{},
-                             cap, test::builtin_registry());
-  CHECK_EQUAL(plan.query, "T");
-  plan = plan_kql_query("T", {}, paths({"this"}), None{}, cap,
-                        test::builtin_registry());
-  CHECK_EQUAL(plan.query, "T");
-  plan = plan_kql_query("T", {}, ir::OptimizeProjection{}, None{}, cap,
-                        test::builtin_registry());
-  CHECK_EQUAL(plan.query, "T");
-  plan = plan_kql_query("T", {}, paths({"this[\"a\\u{2028}b\"]"}), None{}, cap,
-                        test::builtin_registry());
-  CHECK_EQUAL(plan.query, "T\n| project ['a\\u2028b'] = "
-                          "column_ifexists('a\\u2028b', dynamic(null))");
-  CHECK(kql_accepts_trailing_stages(plan.query));
-  plan = plan_kql_query("T", {}, paths({"this[\"it's\"]"}), None{}, cap,
-                        test::builtin_registry());
-  CHECK_EQUAL(plan.query, "T\n| project ['it\\'s'] = column_ifexists('it\\'s', "
-                          "dynamic(null))");
-}
-
-TEST("kql plans leave unfit queries unchanged") {
-  auto filter = filters({"x == 1"});
+TEST("kql appends stages only to queries that accept them") {
   for (auto query : {
          "T | render timechart",
          "T | fork (take 1) (take 2)",
@@ -529,12 +443,33 @@ TEST("kql plans leave unfit queries unchanged") {
          "b'",
          "T | where x == @\"a\xE2\x80\xA9"
          "b\"",
+         "set notruncation;\nT",
+         // Every tabular statement returns a table, and appended stages
+         // apply to the last one only.
+         "print x=1; print x=2",
+         "T;\nU",
+         "let a = 1;; T",
+         ";T",
+         // A table may be named like a declaration keyword, which then
+         // returns a table of its own.
+         "let alias = datatable(x: long)[1]; alias; print x=2",
+         "let let = datatable(x: long)[1]; let; print x=2",
+         "let declare = datatable(x: long)[1]; declare; print x=2",
+         "let as = T; let as x; U",
+         "declare | take 1; T",
+         "alias | take 1; T",
+         "let == 1; T",
+         "let ['a'] = 1; T",
+         // Brackets must balance.
+         "T | where (x == 1",
+         "T | where x == 1)",
        }) {
     CHECK(not kql_accepts_trailing_stages(query));
-    CHECK_EQUAL(plan_kql_query(query, filter, None{}, None{}, cap,
-                               test::builtin_registry())
-                  .query,
-                query);
+    auto unchanged = plan_kql_query(query, {}, paths({"a"}));
+    REQUIRE(unchanged);
+    CHECK_EQUAL(unchanged->query, query);
+    CHECK_EQUAL(unchanged->generated, "");
+    CHECK(not plan_kql_query(query, std::vector{filter("x == 1")}, None{}));
   }
   for (auto query : {
          "T | where x == 'render'",
@@ -547,21 +482,44 @@ TEST("kql plans leave unfit queries unchanged") {
          "let a = 1; T | extend renderer = a",
          "T | where x == ```render\n;```",
          "T | where x == \"a\\\"; render\"",
+         "let a = 1;\nlet f = (x: long) { T | where y > x; };\nf(a)",
+         "declare query_parameters(p: long = 1);\nT | where x == p",
+         "alias database db = cluster('c').database('d');\nT",
+         "let t = materialize(T);\nunion (t | take 1), (t | take 2)",
+         "T | where x == ';'",
+         "T // ;\n| take 1",
        }) {
     CHECK(kql_accepts_trailing_stages(query));
   }
+  // A stage starts on a new line, which ends a trailing comment.
+  auto query = plan_kql_query("T // note", std::vector{limit(1)}, None{});
+  REQUIRE(query);
+  CHECK_EQUAL(query->query, "T // note\n| take 1");
+  CHECK(kql_accepts_trailing_stages(query->query));
+  // A planned query accepts further stages, also with escaped separators.
+  query = plan_kql_query(
+    "T", std::vector{filter("x == \"a\\u{2028}b\\u{2029}c\\u{85}d\"")}, None{});
+  REQUIRE(query);
+  CHECK(kql_accepts_trailing_stages(query->query));
 }
 
-TEST("kql renders prefilters only, which keep their conjuncts local") {
-  // With a typed column, the predicate has an exact translation. KQL may only
-  // spell it as a superset, so the predicate must stay local.
-  auto columns = ColumnModel{};
-  columns.add({"x"}, {StringType{}, true});
-  auto split = split_filter(filters({"x == \"a\""}), columns, KqlRenderer{},
-                            test::builtin_registry());
-  CHECK_EQUAL(split.remaining.size(), size_t{1});
-  auto exact = translate_predicate(parse("x == \"a\""), columns,
-                                   test::builtin_registry());
-  REQUIRE(exact);
-  CHECK(not KqlRenderer{}.render(*exact));
+TEST("kql sources take over the longest prefix that KQL spells") {
+  auto const absorb
+    = [](std::string_view query, std::vector<ir::QueryStage> stages) {
+        return absorb_prefix(
+          ir::QueryChain{.stages = std::move(stages), .end = ""},
+          [&](std::span<ir::QueryStage const> prefix) {
+            return plan_kql_query(query, prefix, None{}).is_some();
+          },
+          {.target = "Defender", .filters_only = false, .veto = {}});
+      };
+  auto all = absorb("T", {filter("x > 1"),
+                          aggregate({key({"k"}), call({"n"}, "count")}),
+                          sort({"-n"}), limit(3)});
+  CHECK_EQUAL(all.prefix, size_t{4});
+  auto partial = absorb("T", {filter("x > 1"), filter(R"(x < "b")"), limit(3)});
+  CHECK_EQUAL(partial.prefix, size_t{1});
+  CHECK_EQUAL(partial.declined, "Defender cannot spell the stage"s);
+  auto none = absorb("print x=1; print x=2", {filter("x > 1")});
+  CHECK_EQUAL(none.prefix, size_t{0});
 }

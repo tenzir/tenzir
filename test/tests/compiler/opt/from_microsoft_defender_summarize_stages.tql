@@ -1,0 +1,8 @@
+// `from_microsoft_defender` takes over the filter, the summary, and the stages
+// after it, which run in advanced hunting with KQL's semantics.
+from_microsoft_defender "DeviceNetworkEvents",
+  azure_auth={tenant_id: "t", client_id: "c", client_secret: "s"}
+where RemotePort == 443
+summarize DeviceName, events=count()
+sort -events
+head 3

@@ -11,7 +11,7 @@ assertions:
         | take 1
 ---
 
-// Without a filter, the limit is pushed. The service returns row 0.
+// The limit runs in advanced hunting. The service returns row 0.
 from_microsoft_defender "pushdown",
   azure_auth={
     tenant_id: env("DEFENDER_TENANT"),

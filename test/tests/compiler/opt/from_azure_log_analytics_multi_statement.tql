@@ -1,0 +1,6 @@
+// Stages after a query with several tabular statements would apply to the
+// last table only, so they stay in Tenzir.
+from_azure_log_analytics "print x = 1; print x = 2",
+  workspace_id="01234567-89ab-cdef-0123-456789abcdef",
+  azure_auth={tenant_id: "t", client_id: "c", client_secret: "s"}
+where x == 2

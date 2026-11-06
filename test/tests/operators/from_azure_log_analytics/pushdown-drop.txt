@@ -1,0 +1,7 @@
+{
+  Id: 0,
+  Name: "alice",
+  Addr: "10.0.0.1",
+  Port: 443,
+  Flag: true,
+}

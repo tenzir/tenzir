@@ -1,18 +1,21 @@
 ---
-fixtures: [microsoft_defender]
+fixtures:
+  - microsoft_defender:
+      rows: [0]
+      project: ["DeviceName", "RemoteIP", "ReportId"]
 timeout: 60
 assertions:
   fixtures:
     microsoft_defender:
       appended: |-
 
-        | take 100000
-        | where (gettype(column_ifexists('RemotePort', dynamic(null))) !in ("int", "long", "real", "double") or todouble(column_ifexists('RemotePort', dynamic(null))) == 443.0) and (gettype(column_ifexists('ActionType', dynamic(null))) !in ("string") or tostring(column_ifexists('ActionType', dynamic(null))) == "ConnectionSuccess" or tostring(column_ifexists('ActionType', dynamic(null))) matches regex @'^[ \t\r\n]*"')
-        | project ['ReportId'] = column_ifexists('ReportId', dynamic(null)), ['RemoteIP'] = column_ifexists('RemoteIP', dynamic(null)), ['DeviceName'] = column_ifexists('DeviceName', dynamic(null)), ['RemotePort'] = column_ifexists('RemotePort', dynamic(null)), ['ActionType'] = column_ifexists('ActionType', dynamic(null))
+        | where (['RemotePort'] == 443)
+        | where (['ActionType'] == "ConnectionSuccess")
+        | project ['DeviceName'], ['RemoteIP'], ['ReportId']
 ---
 
-// Pushdown over a realistic response: the fixture returns every row, and
-// the local filter decides.
+// The stages run in advanced hunting over a realistic response. The service
+// returns row 0 with the selected columns.
 from_microsoft_defender "device-network-events",
   azure_auth={
     tenant_id: env("DEFENDER_TENANT"),

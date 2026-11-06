@@ -1,7 +1,7 @@
 ---
 fixtures:
   - azure_log_analytics:
-      case: pushdown
+      case: "pushdown"
 timeout: 60
 assertions:
   fixtures:
@@ -11,7 +11,8 @@ assertions:
       appended: ""
 ---
 
-// Negated IP and case-mapping predicates, and regular expressions, stay local.
+// A filter that KQL does not spell runs in Tenzir, together with every
+// stage after it.
 from_azure_log_analytics env("AZLOG_QUERY"),
   workspace_id=env("AZLOG_WORKSPACE"),
   azure_auth={

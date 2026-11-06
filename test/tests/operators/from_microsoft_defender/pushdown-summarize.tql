@@ -1,0 +1,33 @@
+---
+fixtures:
+  - microsoft_defender:
+      schema: [{"name": "Allowed", "type": "SByte"}, {"name": "__tenzir_column_0", "type": "Int64"}]
+      results: [{"Allowed": true, "__tenzir_column_0": 2}, {"Allowed": null, "__tenzir_column_0": 1}]
+timeout: 60
+assertions:
+  fixtures:
+    microsoft_defender:
+      appended: |-
+
+        | where isnotnull(['RemotePort'])
+        | summarize ['__tenzir_column_0'] = count() by ['Allowed']
+        | sort by ['__tenzir_column_0'] desc
+        | take 2
+---
+
+// The summary and the stages around it run in advanced hunting, which names
+// the count after a generated column and keeps a group for `null`. The
+// layout restores the field names.
+from_microsoft_defender "custom",
+  azure_auth={
+    tenant_id: env("DEFENDER_TENANT"),
+    client_id: env("DEFENDER_CLIENT"),
+    client_secret: env("DEFENDER_SECRET"),
+    authority: env("DEFENDER_AUTHORITY"),
+  },
+  _base_url=env("DEFENDER_URL"),
+  tls=false
+where RemotePort != null
+summarize Allowed, events=count()
+sort -events
+head 2

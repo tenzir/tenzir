@@ -1,17 +1,18 @@
 ---
-fixtures: [microsoft_defender]
+fixtures:
+  - microsoft_defender:
+      rows: [1, 2, 3, 4]
 timeout: 60
 assertions:
   fixtures:
     microsoft_defender:
       appended: |-
 
-        | take 100000
-        | where (gettype(column_ifexists('Timestamp', dynamic(null))) != "datetime" or todatetime(column_ifexists('Timestamp', dynamic(null))) < datetime(1900-01-01) or todatetime(column_ifexists('Timestamp', dynamic(null))) >= datetime(2262-01-01) or todatetime(column_ifexists('Timestamp', dynamic(null))) >= datetime(2026-01-01T11:59:59.999999Z))
+        | where (['Timestamp'] >= datetime(2026-01-01T12:00:00.0000000Z))
 ---
 
-// A time predicate on the output does not narrow the window: the query
-// may have aggregated, renamed, or computed `Timestamp`.
+// A filter on the time of the query's output runs in advanced hunting, and
+// the request window stays as given. The service returns rows 1 to 4.
 from_microsoft_defender "pushdown-bounded",
   azure_auth={
     tenant_id: env("DEFENDER_TENANT"),

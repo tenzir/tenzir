@@ -1,7 +1,7 @@
 ---
 fixtures:
   - azure_log_analytics:
-      case: pushdown
+      case: "pushdown"
       rows: [0, 2]
 timeout: 60
 assertions:
@@ -11,7 +11,7 @@ assertions:
       tokens: 1
       appended: |-
 
-        | where (gettype(column_ifexists('Name', dynamic(null))) !in ("string") or tostring(column_ifexists('Name', dynamic(null))) in ("alice", "ALICE") or tostring(column_ifexists('Name', dynamic(null))) matches regex @'^[ \t\r\n]*"')
+        | where (['Name'] in ("alice", "ALICE"))
 ---
 
 // KQL's `in` is case-sensitive. The service returns rows 0 and 2.

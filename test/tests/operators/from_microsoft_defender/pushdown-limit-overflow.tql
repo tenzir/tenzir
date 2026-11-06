@@ -7,7 +7,7 @@ assertions:
       appended: ""
 ---
 
-// Limits beyond what a KQL `long` can spell stay local.
+// Limits beyond what a KQL `long` can spell run in Tenzir.
 from_microsoft_defender "pushdown",
   azure_auth={
     tenant_id: env("DEFENDER_TENANT"),

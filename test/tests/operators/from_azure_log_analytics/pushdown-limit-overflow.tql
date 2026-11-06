@@ -1,7 +1,7 @@
 ---
 fixtures:
   - azure_log_analytics:
-      case: pushdown
+      case: "pushdown"
 timeout: 60
 assertions:
   fixtures:
@@ -11,7 +11,7 @@ assertions:
       appended: ""
 ---
 
-// Limits beyond what a KQL `long` can spell stay local.
+// Limits beyond what a KQL `long` can spell run in Tenzir.
 from_azure_log_analytics env("AZLOG_QUERY"),
   workspace_id=env("AZLOG_WORKSPACE"),
   azure_auth={
