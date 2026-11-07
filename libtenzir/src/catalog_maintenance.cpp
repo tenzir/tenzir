@@ -24,6 +24,7 @@
 #include "tenzir/partition_transformer.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/plugin/storage_policy.hpp"
+#include "tenzir/time_zone.hpp"
 #include "tenzir/version.hpp"
 
 #include <caf/actor_registry.hpp>
@@ -57,21 +58,13 @@ auto rebuild_byte_budget(Option<uint64_t> configured, size_t parallelism)
 }
 
 /// The time zone for rebuild windows when the configuration names none: the
-/// system time zone, or UTC. Returns `nullptr`, which stands for UTC, on
-/// systems without a time zone database, such as minimal containers without
-/// `tzdata`: UTC needs no database, and without one no zone resolves.
-auto default_rebuild_zone() -> arrow_vendored::date::time_zone const* {
-  try {
-    return arrow_vendored::date::current_zone();
-  } catch (std::runtime_error const&) {
-    // Minimal containers may have no /etc/localtime. UTC is the system
-    // default there.
+/// system time zone, or UTC. Minimal containers may have neither
+/// `/etc/localtime` nor a time zone database, and UTC needs neither.
+auto default_rebuild_zone() -> TimeZone const* {
+  if (auto zone = TimeZone::current()) {
+    return &*zone;
   }
-  try {
-    return arrow_vendored::date::locate_zone("UTC");
-  } catch (std::runtime_error const&) {
-    return nullptr;
-  }
+  return &TimeZone::utc();
 }
 
 } // namespace
@@ -90,38 +83,33 @@ auto catalog_state::next_rebuild_hour(time now) const -> time {
     return time{std::chrono::floor<std::chrono::hours>(now)
                 + std::chrono::hours{1}};
   }
-  auto const info = rebuild_zone->get_info(now);
   auto const local = rebuild_zone->to_local(now);
   auto const boundary
     = std::chrono::floor<std::chrono::hours>(local) + std::chrono::hours{1};
-  auto const candidate = time{boundary.time_since_epoch() - info.offset};
+  auto const candidate
+    = time{boundary.time_since_epoch() - rebuild_zone->offset(now)};
   // The offset transition itself closes the current window, including a
   // repeated hour. Never resolve an ambiguous local label back to system time.
-  if (info.end <= std::chrono::floor<std::chrono::seconds>(candidate)) {
-    return time{info.end.time_since_epoch()};
+  auto const transition = rebuild_zone->next_transition(now);
+  if (transition and *transition <= candidate) {
+    return *transition;
   }
   return candidate;
 }
 
 auto catalog_state::initialize_maintenance(time now) -> caf::error {
-  try {
+  if (maintenance.rebuild_timezone.empty()) {
+    rebuild_zone = default_rebuild_zone();
+  } else if (auto zone = TimeZone::locate(maintenance.rebuild_timezone)) {
+    rebuild_zone = &*zone;
+  } else {
     // An explicit time zone must resolve, even when the system lacks the
     // database to resolve it with.
-    if (maintenance.rebuild_timezone.empty()) {
-      rebuild_zone = default_rebuild_zone();
-    } else {
-      rebuild_zone
-        = arrow_vendored::date::locate_zone(maintenance.rebuild_timezone);
-    }
-  } catch (std::exception const& error) {
     return caf::make_error(
       ec::invalid_configuration,
-      fmt::format("failed to resolve {} time zone: {}",
-                  maintenance.rebuild_timezone.empty()
-                    ? std::string{"system"}
-                    : fmt::format("tenzir.rebuild-timezone '{}'",
-                                  maintenance.rebuild_timezone),
-                  error.what()));
+      fmt::format("failed to resolve tenzir.rebuild-timezone '{}': {} not "
+                  "found in timezone database",
+                  maintenance.rebuild_timezone, maintenance.rebuild_timezone));
   }
   next_collection = next_rebuild_hour(now);
   next_policy_check = now;

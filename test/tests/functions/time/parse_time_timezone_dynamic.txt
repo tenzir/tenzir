@@ -1,0 +1,54 @@
+warning: `parse_time` got unknown time zone `Mars/Olympus_Mons`
+  --> tests/functions/time/parse_time_timezone_dynamic.tql:11:77
+   |
+11 | t = s.parse_time("%b %e %H:%M:%S", reference=2025-12-01T00:00:00Z, timezone=tz)
+   |                                                                             ~~
+   |
+   = hint: use an IANA time zone name, such as `Europe/Berlin` or `UTC`
+
+warning: `parse_time` expected `timezone` to be `string`, but got `int`
+  --> tests/functions/time/parse_time_timezone_dynamic.tql:11:77
+   |
+11 | t = s.parse_time("%b %e %H:%M:%S", reference=2025-12-01T00:00:00Z, timezone=tz)
+   |                                                                             ~~
+   |
+{
+  s: "Nov  6 09:13:01",
+  tz: "Europe/Zurich",
+  t: 2025-11-06T08:13:01Z,
+}
+{
+  s: "Jul  4 09:13:01",
+  tz: "Europe/Zurich",
+  t: 2025-07-04T07:13:01Z,
+}
+{
+  s: "Nov  6 09:13:01",
+  tz: "America/Los_Angeles",
+  t: 2025-11-06T17:13:01Z,
+}
+{
+  s: "Nov  6 09:13:01",
+  tz: "UTC",
+  t: 2025-11-06T09:13:01Z,
+}
+{
+  s: "Nov  6 09:13:01",
+  tz: null,
+  t: 2025-11-06T09:13:01Z,
+}
+{
+  s: "Nov  6 09:13:01",
+  tz: "Mars/Olympus_Mons",
+  t: null,
+}
+{
+  s: "Nov  6 09:13:01",
+  tz: 42,
+  t: null,
+}
+{
+  s: null,
+  tz: "Europe/Zurich",
+  t: null,
+}

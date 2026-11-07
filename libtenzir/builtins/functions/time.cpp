@@ -20,6 +20,7 @@
 #include <tenzir/concept/parseable/tenzir/time.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/series_builder.hpp>
+#include <tenzir/time_zone.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/compute/api.h>
@@ -27,6 +28,8 @@
 #include <cerrno>
 #include <chrono>
 #include <ctime>
+#include <map>
+#include <string>
 #include <string_view>
 
 namespace tenzir::plugins::time_ {
@@ -47,6 +50,10 @@ struct date_fields {
   bool iso_week_number = false;
   bool weekday = false;
   bool complete_calendar_date = false;
+  /// Whether the format pins the instant itself through a UTC offset or
+  /// seconds since the epoch. `%Z` does not count: `strptime` consumes a zone
+  /// name without resolving it, and abbreviations are ambiguous.
+  bool absolute = false;
 };
 
 auto mark_date_field(date_fields& fields, char specifier) {
@@ -87,11 +94,19 @@ auto mark_date_field(date_fields& fields, char specifier) {
     case 'c':
     case 'D':
     case 'F':
-    case 's':
     case 'x':
       fields.year = true;
       fields.month = true;
       fields.day = true;
+      break;
+    case 's':
+      fields.year = true;
+      fields.month = true;
+      fields.day = true;
+      fields.absolute = true;
+      break;
+    case 'z':
+      fields.absolute = true;
       break;
     case 'j':
       fields.ordinal_day = true;
@@ -175,7 +190,32 @@ auto apply_ordinal_day(std::tm& tm) -> bool {
   return true;
 }
 
-auto resolve_missing_year(std::tm& tm, time reference, long offset) -> bool {
+/// Maps a broken-down time that `timegm` read as UTC to the actual UTC instant.
+/// Without a zone, the wall-clock time is UTC shifted by the fixed `offset`
+/// that `%z` parsed. With a zone, `TimeZone::to_utc` resolves it, including
+/// wall-clock times that a daylight saving transition repeats or skips.
+class WallClock {
+public:
+  WallClock(long offset, TimeZone const* zone) : offset_{offset}, zone_{zone} {
+  }
+
+  auto to_utc(std::time_t local) const -> std::time_t {
+    if (not zone_) {
+      return local - offset_;
+    }
+    auto const utc = zone_->to_utc(local_time{std::chrono::seconds{local}});
+    return std::chrono::duration_cast<std::chrono::seconds>(
+             utc.time_since_epoch())
+      .count();
+  }
+
+private:
+  long offset_;
+  TimeZone const* zone_;
+};
+
+auto resolve_missing_year(std::tm& tm, time reference, WallClock clock)
+  -> bool {
   const auto reference_tm = as_tm(reference);
   if (not reference_tm) {
     return false;
@@ -203,7 +243,8 @@ auto resolve_missing_year(std::tm& tm, time reference, long offset) -> bool {
       if (not fields_match(original, normalized)) {
         continue;
       }
-      const auto candidate_time = time::clock::from_time_t(parsed - offset);
+      const auto candidate_time
+        = time::clock::from_time_t(clock.to_utc(parsed));
       const auto delta = candidate_time > reference
                            ? candidate_time - reference
                            : reference - candidate_time;
@@ -225,7 +266,7 @@ auto resolve_missing_year(std::tm& tm, time reference, long offset) -> bool {
 }
 
 auto resolve_missing_date(std::tm& tm, const std::tm& reference_tm,
-                          time reference, long offset) -> bool {
+                          time reference, WallClock clock) -> bool {
   auto best = Option<std::tm>{};
   auto best_delta = Option<duration>{};
   // Try the reference date and its neighbors so that times of day shortly
@@ -242,7 +283,7 @@ auto resolve_missing_date(std::tm& tm, const std::tm& reference_tm,
     if (parsed == -1 and errno != 0) {
       continue;
     }
-    const auto candidate_time = time::clock::from_time_t(parsed - offset);
+    const auto candidate_time = time::clock::from_time_t(clock.to_utc(parsed));
     const auto delta = candidate_time > reference ? candidate_time - reference
                                                   : reference - candidate_time;
     if (not best_delta or delta < *best_delta) {
@@ -1001,16 +1042,63 @@ struct ParseTimeIssues {
   bool missing_reference = false;
   bool unsupported_reference = false;
   bool deprecated_missing_reference = false;
+  bool timezone_ignored = false;
+  /// The type of the first `timezone` that is not a `string`.
+  Option<std::string> timezone_type_error;
+  /// The first `timezone` that names no known time zone.
+  Option<std::string> unknown_timezone;
+};
+
+/// Looks up the `timezone` of `parse_time`, remembering earlier lookups so that
+/// a batch with few distinct zones resolves each of them only once.
+class ParseTimeZones {
+public:
+  /// Returns the zone named `name`, or a null pointer if there is none.
+  auto locate(std::string_view name) -> TimeZone const* {
+    auto it = cache_.find(name);
+    if (it == cache_.end()) {
+      auto const zone = TimeZone::locate(name);
+      it = cache_.emplace(std::string{name}, zone ? &*zone : nullptr).first;
+    }
+    return it->second;
+  }
+
+  /// Resolves the `timezone` of one row, recording problems in `issues`.
+  /// Returns `None` if the row must become null, and a null pointer if the
+  /// wall-clock time is UTC.
+  auto resolve(Option<std::string_view> name, bool absolute,
+               ParseTimeIssues& issues) -> Option<TimeZone const*> {
+    using Zone = TimeZone const*;
+    if (not name) {
+      return Zone{nullptr};
+    }
+    if (absolute) {
+      issues.timezone_ignored = true;
+      return Zone{nullptr};
+    }
+    auto const* zone = locate(*name);
+    if (not zone) {
+      if (not issues.unknown_timezone) {
+        issues.unknown_timezone = std::string{*name};
+      }
+      return None{};
+    }
+    return zone;
+  }
+
+private:
+  std::map<std::string, TimeZone const*, std::less<>> cache_;
 };
 
 /// Parses one input string of `parse_time`, filling the date fields that
-/// `format` lacks from `reference`. Returns `None` for a row that becomes null
-/// and records why in `issues`. `buffer` is scratch space for the
-/// NUL-terminated copy that `strptime` needs.
+/// `format` lacks from `reference`. The parsed wall-clock time is in `zone`, or
+/// in UTC if `zone` is null; an explicit offset in the input takes precedence.
+/// Returns `None` for a row that becomes null and records why in `issues`.
+/// `buffer` is scratch space for the NUL-terminated copy that `strptime` needs.
 auto parse_time_row(std::string_view input, std::string const& format,
                     date_fields const& fields, ParseTimeReference reference,
-                    std::string& buffer, ParseTimeIssues& issues)
-  -> Option<time> {
+                    TimeZone const* zone, std::string& buffer,
+                    ParseTimeIssues& issues) -> Option<time> {
   using Kind = ParseTimeReference::Kind;
   auto const has_reference = reference.kind != Kind::absent;
   if (has_reference and fields.iso_week_number
@@ -1032,7 +1120,7 @@ auto parse_time_row(std::string_view input, std::string const& format,
     issues.error = true;
     return None{};
   }
-  auto const offset = tm.tm_gmtoff;
+  auto const clock = WallClock{tm.tm_gmtoff, fields.absolute ? nullptr : zone};
   auto const needs_year = not fields.year;
   auto const needs_month = not fields.month;
   auto const needs_day = not fields.day;
@@ -1060,8 +1148,8 @@ auto parse_time_row(std::string_view input, std::string const& format,
         // all, or only the year is missing.
         auto const resolved
           = needs_month
-              ? resolve_missing_date(tm, *reference_tm, reference.value, offset)
-              : resolve_missing_year(tm, reference.value, offset);
+              ? resolve_missing_date(tm, *reference_tm, reference.value, clock)
+              : resolve_missing_year(tm, reference.value, clock);
         if (not resolved) {
           issues.error = true;
           return None{};
@@ -1100,7 +1188,7 @@ auto parse_time_row(std::string_view input, std::string const& format,
     issues.error = true;
     return None{};
   }
-  parsed -= offset;
+  parsed = clock.to_utc(parsed);
   return time_point_cast<std::chrono::nanoseconds>(
     time::clock::from_time_t(parsed));
 }
@@ -1110,7 +1198,30 @@ auto parse_time_row(std::string_view input, std::string const& format,
 auto emit_parse_time_issues(ParseTimeIssues const& issues, location input,
                             location format, location reference,
                             std::string_view reference_type,
-                            diagnostic_handler& dh) -> void {
+                            location timezone_location, diagnostic_handler& dh)
+  -> void {
+  if (issues.timezone_type_error) {
+    diagnostic::warning("`parse_time` expected `timezone` to be `string`, but "
+                        "got `{}`",
+                        *issues.timezone_type_error)
+      .primary(timezone_location)
+      .emit(dh);
+  }
+  if (issues.unknown_timezone) {
+    diagnostic::warning("`parse_time` got unknown time zone `{}`",
+                        *issues.unknown_timezone)
+      .primary(timezone_location)
+      .hint("use an IANA time zone name, such as `Europe/Berlin` or `UTC`")
+      .emit(dh);
+  }
+  if (issues.timezone_ignored) {
+    diagnostic::warning("`parse_time` ignores `timezone` because the format "
+                        "includes a time zone")
+      .primary(timezone_location)
+      .secondary(format)
+      .note("`%z` and `%s` take precedence over `timezone`")
+      .emit(dh);
+  }
   if (issues.error) {
     diagnostic::warning("failed to parse timestamp")
       .primary(input)
@@ -1157,6 +1268,7 @@ struct ParseTimeArgs {
   nova::ValueArgument x;
   located<std::string> format;
   Option<nova::ValueArgument> reference;
+  Option<nova::ValueArgument> timezone;
   date_fields fields;
   location call;
 };
@@ -1167,66 +1279,135 @@ public:
     -> nova::Array<nova::Data> {
     using namespace nova;
     using Kind = ParseTimeReference::Kind;
+    using Zone = TimeZone const*;
     auto issues = ParseTimeIssues{};
     auto buffer = std::string{};
     auto reference_type = std::string_view{};
     auto input_tag = Option<std::size_t>{};
-    auto parse = [&](std::string_view input,
-                     ParseTimeReference reference) -> Option<Time> {
-      return parse_time_row(input, args.format.inner, args.fields, reference,
-                            buffer, issues);
-    };
-    auto result = [&] {
-      if (not args.reference) {
-        return apply_kernel<1>(
-          frame, "parse_time", {args.x}, args.call,
-          detail::overload{
-            [](diagnostic_handler&, Null) -> Option<Time> {
-              return None{};
-            },
-            [&](diagnostic_handler&, std::string_view input) -> Option<Time> {
-              return parse(input, {});
-            },
-          });
-      }
-      return apply_kernel<2>(
-        frame, "parse_time", {args.x, *args.reference}, args.call,
-        detail::overload{
-          []<class R>(diagnostic_handler&, Null, R) -> Option<Time> {
+    // Resolve the time zones first, so that the parsing kernel only sees
+    // indices into `zones`: a null index means UTC, and a negative one turns
+    // the row null. Rows with a null or non-string input never parse, so they
+    // skip the lookup and its diagnostics, as in the legacy evaluator.
+    auto lookup = ParseTimeZones{};
+    auto zones = std::vector<Zone>{};
+    auto zone_indices = frame.null();
+    if (args.timezone) {
+      auto indices = std::map<Zone, Int>{};
+      zone_indices = apply_kernel<2>(
+        frame, "parse_time", {args.x, *args.timezone}, args.call,
+        [&]<class S, class Z>(diagnostic_handler&, S, Z zone) -> Option<Int> {
+          if constexpr (not std::same_as<S, std::string_view>
+                        or std::same_as<Z, Null>) {
             return None{};
-          },
-          // Rejecting the input here rather than through `apply_kernel` keeps
-          // the reference type out of the diagnostic.
-          [&]<class S, class R>(diagnostic_handler&, S, R) -> Option<Time>
-            requires(not std::same_as<S, std::string_view>
-                     and not std::same_as<S, Null>)
-          {
-            input_tag = KernelViewList::unique_index_of<S>;
-            return None{};
-          },
-          [&]<class R>(diagnostic_handler&, std::string_view input,
-                       R reference) -> Option<Time> {
-            if constexpr (std::same_as<R, Time>) {
-              return parse(input, {Kind::value, reference});
-            } else if constexpr (std::same_as<R, Null>) {
-              return parse(input, {Kind::null});
-            } else {
-              reference_type
-                = Type<data_type_list::at<KernelViewList::unique_index_of<R>>>::
-                  static_name;
-              return parse(input, {Kind::mistyped});
+          } else if constexpr (std::same_as<Z, std::string_view>) {
+            auto resolved = lookup.resolve(zone, args.fields.absolute, issues);
+            if (not resolved) {
+              return Int{-1};
             }
-          },
-          });
-    }();
+            if (not *resolved) {
+              return None{};
+            }
+            auto [it, inserted]
+              = indices.try_emplace(*resolved, static_cast<Int>(zones.size()));
+            if (inserted) {
+              zones.push_back(*resolved);
+            }
+            return it->second;
+          } else {
+            if (args.fields.absolute) {
+              issues.timezone_ignored = true;
+              return None{};
+            }
+            if (not issues.timezone_type_error) {
+              issues.timezone_type_error = std::string{
+                Type<data_type_list::at<KernelViewList::unique_index_of<Z>>>::
+                  static_name};
+            }
+            return Int{-1};
+          }
+        });
+    }
+    auto zone_at = [&](Option<Int> index) -> Option<Zone> {
+      if (not index) {
+        return Zone{nullptr};
+      }
+      if (*index < 0) {
+        return None{};
+      }
+      return zones[static_cast<std::size_t>(*index)];
+    };
+    auto parse = [&](std::string_view input, ParseTimeReference reference,
+                     Option<Int> zone_index) -> Option<Time> {
+      auto zone = zone_at(zone_index);
+      if (not zone) {
+        return None{};
+      }
+      return parse_time_row(input, args.format.inner, args.fields, reference,
+                            *zone, buffer, issues);
+    };
+    auto to_index = []<class Z>(Z zone) -> Option<Int> {
+      if constexpr (std::same_as<Z, Int>) {
+        return zone;
+      } else {
+        return None{};
+      }
+    };
+    // Without a `reference`, a null placeholder takes its place in the kernel.
+    auto reference = args.reference
+                       ? *args.reference
+                       : ValueArgument{frame.null(), location::unknown};
+    auto result = apply_kernel<3>(
+      frame, "parse_time",
+      {args.x, reference, ValueArgument{zone_indices, location::unknown}},
+      args.call,
+      detail::overload{
+        []<class R, class Z>(diagnostic_handler&, Null, R, Z) -> Option<Time>
+          requires(std::same_as<Z, Int> or std::same_as<Z, Null>)
+                  {
+                    return None{};
+                  },
+                  // Rejecting the input here rather than through
+                  // `apply_kernel` keeps the types of the other arguments out
+                  // of the diagnostic.
+                  [&]<class S, class R, class Z>(diagnostic_handler&, S, R,
+                                                 Z) -> Option<Time>
+                    requires(not std::same_as<S, std::string_view>
+                             and not std::same_as<S, Null>
+                             and (std::same_as<Z, Int> or std::same_as<Z, Null>))
+                            {
+                              input_tag = KernelViewList::unique_index_of<S>;
+                              return None{};
+                            },
+                            [&]<class R, class Z>(
+                              diagnostic_handler&, std::string_view input,
+                              R reference, Z zone) -> Option<Time>
+                              requires(std::same_as<Z, Int>
+                                       or std::same_as<Z, Null>)
+        {
+          if (not args.reference) {
+            return parse(input, {}, to_index(zone));
+          }
+          if constexpr (std::same_as<R, Time>) {
+            return parse(input, {Kind::value, reference}, to_index(zone));
+          } else if constexpr (std::same_as<R, Null>) {
+            return parse(input, {Kind::null}, to_index(zone));
+          } else {
+            reference_type
+              = Type<data_type_list::at<KernelViewList::unique_index_of<R>>>::
+                static_name;
+            return parse(input, {Kind::mistyped}, to_index(zone));
+          }
+        },
+        });
     if (input_tag) {
       warn_rejected_kernel_types(frame, "parse_time", args.call,
                                  std::array{*input_tag});
     }
-    emit_parse_time_issues(issues, args.x.source, args.format.source,
-                           args.reference ? args.reference->source
-                                          : location::unknown,
-                           reference_type, frame);
+    emit_parse_time_issues(
+      issues, args.x.source, args.format.source,
+      args.reference ? args.reference->source : location::unknown,
+      reference_type, args.timezone ? args.timezone->source : location::unknown,
+      frame);
     return result;
   }
 };
@@ -1246,6 +1427,7 @@ public:
     d.positional("input", &ParseTimeArgs::x, "string");
     d.positional("format", &ParseTimeArgs::format);
     d.named_optional("reference", &ParseTimeArgs::reference, "time");
+    d.named_optional("timezone", &ParseTimeArgs::timezone, "string");
     d.call_location(&ParseTimeArgs::call);
     d.validate(
       [](ParseTimeArgs& args, diagnostic_handler&) -> failure_or<void> {
@@ -1260,23 +1442,35 @@ public:
     auto subject_expr = ast::expression{};
     auto format = located<std::string>{};
     auto reference = Option<ast::expression>{};
+    auto timezone_expr = Option<ast::expression>{};
     TRY(argument_parser2::function(name())
           .positional("input", subject_expr, "string")
           .positional("format", format)
           .named("reference", reference, "time")
+          .named("timezone", timezone_expr, "string")
           .parse(inv, ctx));
     return function_use::make(
       [subject_expr = std::move(subject_expr), format = std::move(format),
-       reference = std::move(reference)](evaluator eval, session ctx) {
+       reference = std::move(reference),
+       timezone_expr = std::move(timezone_expr)](evaluator eval, session ctx) {
         using Kind = ParseTimeReference::Kind;
         const auto result_type = time_type{};
         const auto parsed_date_fields = parse_date_fields(format.inner);
-        auto null_reference = series::null(null_type{}, eval.length());
-        auto references = reference ? eval(*reference)
-                                    : multi_series{std::move(null_reference)};
+        auto references
+          = reference ? eval(*reference)
+                      : multi_series{series::null(null_type{}, eval.length())};
+        auto timezones
+          = timezone_expr
+              ? eval(*timezone_expr)
+              : multi_series{series::null(null_type{}, eval.length())};
+        auto zones = ParseTimeZones{};
+        auto arguments = std::array{eval(subject_expr), std::move(references),
+                                    std::move(timezones)};
         return map_series(
-          eval(subject_expr), std::move(references),
-          [&](series subject, series reference_series) {
+          arguments, [&](std::span<series> slices) -> multi_series {
+            auto const& subject = slices[0];
+            auto const& reference_series = slices[1];
+            auto const& timezone_series = slices[2];
             return match(
               *subject.array,
               [&](const arrow::StringArray& array) {
@@ -1285,6 +1479,7 @@ public:
                 check(b->Reserve(array.length()));
                 auto buffer = std::string{};
                 const auto reference_array = reference_series.as<time_type>();
+                const auto timezone_array = timezone_series.as<string_type>();
                 for (auto i = int64_t{0}; i < array.length(); ++i) {
                   if (array.IsNull(i)) {
                     b->UnsafeAppendNull();
@@ -1306,9 +1501,32 @@ public:
                   } else {
                     row_reference.kind = Kind::mistyped;
                   }
-                  auto parsed = parse_time_row(array.GetView(i), format.inner,
-                                               parsed_date_fields,
-                                               row_reference, buffer, issues);
+                  auto row_zone = Option<TimeZone const*>{
+                    static_cast<TimeZone const*>(nullptr)};
+                  if (timezone_array) {
+                    auto name = Option<std::string_view>{};
+                    if (timezone_array->array->IsValid(i)) {
+                      name = timezone_array->array->GetView(i);
+                    }
+                    row_zone = zones.resolve(name, parsed_date_fields.absolute,
+                                             issues);
+                  } else if (not is<null_type>(timezone_series.type)) {
+                    if (parsed_date_fields.absolute) {
+                      issues.timezone_ignored = true;
+                    } else {
+                      if (not issues.timezone_type_error) {
+                        issues.timezone_type_error
+                          = fmt::to_string(timezone_series.type.kind());
+                      }
+                      row_zone = None{};
+                    }
+                  }
+                  auto parsed
+                    = row_zone
+                        ? parse_time_row(array.GetView(i), format.inner,
+                                         parsed_date_fields, row_reference,
+                                         *row_zone, buffer, issues)
+                        : Option<time>{};
                   if (parsed) {
                     b->UnsafeAppend(parsed->time_since_epoch().count());
                   } else {
@@ -1318,7 +1536,10 @@ public:
                 emit_parse_time_issues(
                   issues, subject_expr.get_location(), format.source,
                   reference ? reference->get_location() : location::unknown,
-                  fmt::to_string(reference_series.type.kind()), ctx);
+                  fmt::to_string(reference_series.type.kind()),
+                  timezone_expr ? timezone_expr->get_location()
+                                : location::unknown,
+                  ctx);
                 return series{time_type{}, finish(*b)};
               },
               [&](const arrow::NullArray& array) {

@@ -1,0 +1,15 @@
+{
+  s: null,
+  tz: "Mars/Olympus_Mons",
+  t: null,
+}
+{
+  s: null,
+  tz: 42,
+  t: null,
+}
+{
+  s: "Nov  6 09:13:01",
+  tz: "Europe/Zurich",
+  t: 2025-11-06T08:13:01Z,
+}

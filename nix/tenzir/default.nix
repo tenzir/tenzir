@@ -16,6 +16,7 @@ let
       lz4,
       zstd,
       expat,
+      tzdata,
       # Defaults to null because it is omitted for the developer edition build.
       tenzir-plugins-source ? null,
       # The sibling `deployment/` project. When set, the build includes the
@@ -213,6 +214,9 @@ let
             "-DTENZIR_GRPC_CPP_PLUGIN=${lib.getBin pkgsBuildHost.grpc}/bin/grpc_cpp_plugin"
             "-DTENZIR_ENABLE_DEPLOYMENT=${lib.boolToString (deployment-source != null)}"
             "-DTENZIR_ENABLE_DEPLOYMENT_TESTS=${lib.boolToString deploymentTests}"
+            # Resolves time zones in the build sandbox and in images without a
+            # system time zone database.
+            "-DTENZIR_ZONEINFO_DIR=${tzdata}/share/zoneinfo"
           ]
           ++ lib.optionals (isStatic && stdenv.hostPlatform.isx86_64) [
             "-DCMAKE_COMPILE_WARNING_AS_ERROR=ON"

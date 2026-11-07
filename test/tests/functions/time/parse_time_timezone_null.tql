@@ -1,0 +1,4 @@
+// A null `timezone` behaves as if the argument were absent.
+from {s: "2025-07-04 12:00:00"}
+with_null = s.parse_time("%Y-%m-%d %H:%M:%S", timezone=null)
+without = s.parse_time("%Y-%m-%d %H:%M:%S")

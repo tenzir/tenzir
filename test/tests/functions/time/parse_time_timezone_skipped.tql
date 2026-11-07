@@ -1,0 +1,6 @@
+// Rows whose input does not parse skip the time zone lookup, so an unknown or
+// non-string time zone next to a null input produces no time zone warning.
+from {s: null, tz: "Mars/Olympus_Mons"},
+  {s: null, tz: 42},
+  {s: "Nov  6 09:13:01", tz: "Europe/Zurich"}
+t = s.parse_time("%b %e %H:%M:%S", reference=2025-12-01T00:00:00Z, timezone=tz)

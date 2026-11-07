@@ -1,0 +1,11 @@
+// `timezone` is evaluated per event. A null time zone keeps the default of
+// UTC, while unknown and non-string time zones turn the result null.
+from {s: "Nov  6 09:13:01", tz: "Europe/Zurich"},
+  {s: "Jul  4 09:13:01", tz: "Europe/Zurich"},
+  {s: "Nov  6 09:13:01", tz: "America/Los_Angeles"},
+  {s: "Nov  6 09:13:01", tz: "UTC"},
+  {s: "Nov  6 09:13:01", tz: null},
+  {s: "Nov  6 09:13:01", tz: "Mars/Olympus_Mons"},
+  {s: "Nov  6 09:13:01", tz: 42},
+  {s: null, tz: "Europe/Zurich"}
+t = s.parse_time("%b %e %H:%M:%S", reference=2025-12-01T00:00:00Z, timezone=tz)

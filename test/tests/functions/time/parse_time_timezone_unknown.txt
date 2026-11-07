@@ -1,0 +1,20 @@
+warning: `parse_time` got unknown time zone `Europe/Atlantis`
+ --> tests/functions/time/parse_time_timezone_unknown.tql:4:48
+  |
+4 | t = s.parse_time("%Y-%m-%d %H:%M:%S", timezone="Europe/Atlantis")
+  |                                                ~~~~~~~~~~~~~~~~~
+  |
+  = hint: use an IANA time zone name, such as `Europe/Berlin` or `UTC`
+
+warning: `parse_time` got unknown time zone `localtime`
+ --> tests/functions/time/parse_time_timezone_unknown.tql:5:52
+  |
+5 | local = s.parse_time("%Y-%m-%d %H:%M:%S", timezone="localtime")
+  |                                                    ~~~~~~~~~~~
+  |
+  = hint: use an IANA time zone name, such as `Europe/Berlin` or `UTC`
+{
+  s: "2025-07-04 12:00:00",
+  t: null,
+  local: null,
+}

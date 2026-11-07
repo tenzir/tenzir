@@ -1,0 +1,5 @@
+// Unknown names yield null. The host-dependent `localtime` counts as unknown,
+// so results don't depend on where the pipeline runs.
+from {s: "2025-07-04 12:00:00"}
+t = s.parse_time("%Y-%m-%d %H:%M:%S", timezone="Europe/Atlantis")
+local = s.parse_time("%Y-%m-%d %H:%M:%S", timezone="localtime")

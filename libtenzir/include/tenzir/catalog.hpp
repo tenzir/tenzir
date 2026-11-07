@@ -25,9 +25,9 @@
 #include "tenzir/plugin_fwd.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/taxonomies.hpp"
+#include "tenzir/time_zone.hpp"
 #include "tenzir/uuid.hpp"
 
-#include <arrow/vendored/datetime.h>
 #include <caf/mail_cache.hpp>
 #include <caf/response_type.hpp>
 #include <caf/settings.hpp>
@@ -934,7 +934,7 @@ public:
   time eviction_retry_at = {};
   /// The time zone of rebuild windows. `nullptr` stands for UTC, which is what
   /// systems without a time zone database get.
-  arrow_vendored::date::time_zone const* rebuild_zone = nullptr;
+  TimeZone const* rebuild_zone = nullptr;
 
   /// Monotonic catalog admissions, independent of imported timestamps.
   uint64_t admission_sequence = 0;

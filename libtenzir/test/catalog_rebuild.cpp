@@ -13,6 +13,7 @@
 #include "tenzir/qualified_record_field.hpp"
 #include "tenzir/synopsis_factory.hpp"
 #include "tenzir/test/test.hpp"
+#include "tenzir/time_zone.hpp"
 #include "tenzir/uuid.hpp"
 #include "tenzir/version.hpp"
 
@@ -35,7 +36,7 @@ struct fixture {
     factory<synopsis>::initialize();
     state.partition_capacity = capacity;
     state.desired_batch_size = capacity;
-    state.rebuild_zone = arrow_vendored::date::locate_zone("UTC");
+    state.rebuild_zone = &*TimeZone::locate("UTC");
   }
 
   /// Adds a partition and returns its id. Each call advances the clock, so
@@ -656,7 +657,7 @@ TEST("late arrivals cannot enter a manual run by carrying old timestamps") {
 TEST("timezone controls day buckets and preserves both autumn hours") {
   using namespace std::chrono;
   auto f = fixture{};
-  f.state.rebuild_zone = arrow_vendored::date::locate_zone("Europe/Berlin");
+  f.state.rebuild_zone = &*TimeZone::locate("Europe/Berlin");
   auto midnight_utc = tenzir::time{sys_days{2026y / October / 25}};
   CHECK_EQUAL(f.state.rebuild_day(midnight_utc - hours{1}),
               floor<days>(midnight_utc.time_since_epoch()).count());
@@ -669,7 +670,7 @@ TEST("timezone controls day buckets and preserves both autumn hours") {
 TEST("hourly collection skips the nonexistent spring hour") {
   using namespace std::chrono;
   auto f = fixture{};
-  f.state.rebuild_zone = arrow_vendored::date::locate_zone("Europe/Berlin");
+  f.state.rebuild_zone = &*TimeZone::locate("Europe/Berlin");
   auto midnight_utc = tenzir::time{sys_days{2026y / March / 29}};
   CHECK_EQUAL(f.state.next_rebuild_hour(midnight_utc + minutes{30}),
               midnight_utc + hours{1});
@@ -691,13 +692,12 @@ TEST("rebuild defaults to the system timezone and accepts an explicit "
   // Initialization prepares the clock and admissions, but component startup
   // must explicitly enable maintenance after publishing package operators.
   CHECK(not local.maintenance_ready);
-  CHECK_EQUAL(local.rebuild_zone->name(),
-              arrow_vendored::date::current_zone()->name());
+  CHECK_EQUAL(local.rebuild_zone->name(), TimeZone::current()->name());
   auto explicit_zone = catalog_state{};
   explicit_zone.maintenance.rebuild_timezone = "UTC";
   CHECK(not explicit_zone.initialize_maintenance(tenzir::time{}).valid());
   CHECK_EQUAL(explicit_zone.rebuild_zone->name(),
-              arrow_vendored::date::locate_zone("UTC")->name());
+              TimeZone::locate("UTC")->name());
 }
 
 TEST("rebuild windows without a time zone database are in UTC") {
@@ -707,7 +707,7 @@ TEST("rebuild windows without a time zone database are in UTC") {
   auto without_database = catalog_state{};
   REQUIRE(without_database.rebuild_zone == nullptr);
   auto utc = catalog_state{};
-  utc.rebuild_zone = arrow_vendored::date::locate_zone("UTC");
+  utc.rebuild_zone = &*TimeZone::locate("UTC");
   auto const midnight = tenzir::time{sys_days{2026y / March / 29}};
   auto const times = std::vector<tenzir::time>{
     tenzir::time{},

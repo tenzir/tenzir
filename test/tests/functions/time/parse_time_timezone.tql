@@ -1,0 +1,42 @@
+// `timezone` interprets the parsed wall-clock time in an IANA time zone and
+// observes daylight saving time.
+from {
+  summer: "2025-07-04 12:00:00",
+  winter: "2025-01-15 12:00:00",
+  gap: "2025-03-30 02:30:00",
+  overlap: "2025-10-26 02:30:00",
+  syslog_summer: "Jul  4 12:00:00",
+  syslog_winter: "Jan 15 12:00:00",
+  syslog_new_year: "Dec 31 23:30:00",
+}
+summer_zurich = summer.parse_time("%Y-%m-%d %H:%M:%S", timezone="Europe/Zurich")
+winter_zurich = winter.parse_time("%Y-%m-%d %H:%M:%S", timezone="Europe/Zurich")
+summer_utc = summer.parse_time("%Y-%m-%d %H:%M:%S", timezone="UTC")
+summer_new_york = summer.parse_time("%Y-%m-%d %H:%M:%S",
+                                    timezone="America/New_York")
+// Wall-clock times that a forward transition skips shift forward by the
+// length of the gap.
+gap_zurich = gap.parse_time("%Y-%m-%d %H:%M:%S", timezone="Europe/Zurich")
+// Wall-clock times that a backward transition repeats resolve to the earlier
+// instant.
+overlap_zurich = overlap.parse_time("%Y-%m-%d %H:%M:%S",
+                                   timezone="Europe/Zurich")
+// The reference supplies the missing year, picked so that the result in the
+// given zone lies closest to the reference.
+syslog_summer_zurich = syslog_summer.parse_time("%b %e %H:%M:%S",
+                                                reference=2025-06-01T00:00:00Z,
+                                                timezone="Europe/Zurich")
+syslog_winter_zurich = syslog_winter.parse_time("%b %e %H:%M:%S",
+                                                reference=2025-06-01T00:00:00Z,
+                                                timezone="Europe/Zurich")
+// Local New Year's Eve in Zurich is already the next year in UTC, so a
+// reference shortly after New Year's Eve still picks the previous year.
+syslog_new_year_zurich = syslog_new_year.parse_time(
+  "%b %e %H:%M:%S",
+  reference=2026-01-01T00:00:00Z,
+  timezone="Europe/Zurich",
+)
+// A time of day without a date takes the date closest to the reference.
+time_of_day_tokyo = "08:00:00".parse_time("%H:%M:%S",
+                                          reference=2025-07-04T00:00:00Z,
+                                          timezone="Asia/Tokyo")

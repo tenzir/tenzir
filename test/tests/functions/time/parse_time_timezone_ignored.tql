@@ -1,0 +1,3 @@
+// An explicit UTC offset in the input takes precedence over `timezone`.
+from {s: "2025-07-04 12:00:00 +0400"}
+t = s.parse_time("%Y-%m-%d %H:%M:%S %z", timezone="Europe/Zurich")

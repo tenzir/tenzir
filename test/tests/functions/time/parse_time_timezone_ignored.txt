@@ -1,0 +1,14 @@
+warning: `parse_time` ignores `timezone` because the format includes a time zone
+ --> tests/functions/time/parse_time_timezone_ignored.tql:3:51
+  |
+3 | t = s.parse_time("%Y-%m-%d %H:%M:%S %z", timezone="Europe/Zurich")
+  |                                                   ~~~~~~~~~~~~~~~
+  ⋮
+3 | t = s.parse_time("%Y-%m-%d %H:%M:%S %z", timezone="Europe/Zurich")
+  |                  ----------------------
+  |
+  = note: `%z` and `%s` take precedence over `timezone`
+{
+  s: "2025-07-04 12:00:00 +0400",
+  t: 2025-07-04T08:00:00Z,
+}

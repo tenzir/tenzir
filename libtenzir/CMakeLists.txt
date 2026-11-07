@@ -701,6 +701,26 @@ target_link_libraries(libtenzir PUBLIC re2::re2)
 string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(re2 REQUIRED)")
 dependency_summary("re2" re2::re2 "Dependencies")
 
+# Link against Abseil's time zone support, which `TimeZone` wraps. Abseil is
+# already a dependency of re2.
+find_package(absl CONFIG REQUIRED)
+target_link_libraries(libtenzir PRIVATE absl::time)
+# A time zone database to prefer over the system one where it exists, such as
+# the tzdata of a Nix build. It also serves Nix sandboxes and container images
+# without a system database.
+set(TENZIR_ZONEINFO_DIR
+    ""
+    CACHE PATH "Preferred time zone database directory")
+if (TENZIR_ZONEINFO_DIR)
+  set_property(
+    SOURCE src/time_zone.cpp
+    APPEND
+    PROPERTY COMPILE_DEFINITIONS
+             "TENZIR_ZONEINFO_DIR=\"${TENZIR_ZONEINFO_DIR}\"")
+endif ()
+string(APPEND TENZIR_FIND_DEPENDENCY_LIST
+       "\nfind_package(absl CONFIG REQUIRED)")
+
 # Link against ICU for Unicode case folding. The `data` component carries
 # ICU's data symbols (`icudt*_dat`) that `libicuuc.a` references, which the
 # static link requires.
