@@ -1,7 +1,7 @@
 warning: `octet_counting` is deprecated
-  --> tests/operators/accept_tcp/syslog_deprecated_false.tql:14:30
+  --> tests/operators/accept_tcp/syslog_deprecated_false.tql:13:30
    |
-14 |   read_syslog octet_counting=false
+13 |   read_syslog octet_counting=false
    |                              ~~~~~
    |
    = hint: omit `octet_counting` to detect syslog framing automatically

@@ -2,7 +2,6 @@
 fixtures:
   - tcp:
       mode: client
-      concurrent: true
       payloads:
         - "50 <165>1 2026-11-09T12:00:00Z host app 123 - - first"
         - "51 <165>1 2026-11-09T12:00:00Z host app 123 - - second"
