@@ -1,0 +1,4 @@
+// A user and a password authenticate as an ACL user.
+from_redis "queue", url=env("REDIS_URL"),
+  auth={user: "analyzer", password: "s3cret"}, count=1
+select item=string(message)

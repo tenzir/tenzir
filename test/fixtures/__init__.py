@@ -48,6 +48,7 @@ from . import prometheus  # noqa: F401
 from . import prometheus_remote_write_mock  # noqa: F401
 from . import quack  # noqa: F401
 from . import read_pushdown  # noqa: F401
+from . import redis  # noqa: F401
 from . import relp  # noqa: F401
 from . import rsyslog_relp  # noqa: F401
 from . import http_request  # noqa: F401
@@ -105,6 +106,7 @@ __all__ = [
     "prometheus",
     "prometheus_remote_write_mock",
     "read_pushdown",
+    "redis",
     "relp",
     "rsyslog_relp",
     "s3",

@@ -1,0 +1,5 @@
+---
+error: true
+---
+
+from_redis "queue", url="http://localhost:6379"

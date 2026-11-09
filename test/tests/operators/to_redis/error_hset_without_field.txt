@@ -1,0 +1,6 @@
+error: `command="hset"` requires `field`
+ --> tests/operators/to_redis/error_hset_without_field.tql:6:25
+  |
+6 | to_redis "key", command="hset"
+  |                         ^^^^^^
+  |

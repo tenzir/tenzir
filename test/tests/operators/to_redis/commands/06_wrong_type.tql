@@ -1,0 +1,4 @@
+// Redis rejects a set operation on a list, which is a warning. The rejected
+// write must not set an expiry on the list.
+from {x: 1}
+to_redis "jobs", command="sadd", ttl=1h, url=env("REDIS_URL")

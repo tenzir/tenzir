@@ -1,0 +1,3 @@
+suite: to-redis-roundtrip
+fixtures:
+  - redis

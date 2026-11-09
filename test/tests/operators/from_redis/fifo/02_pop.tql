@@ -1,0 +1,5 @@
+// The default pops from the right end, so the queue yields the items in FIFO
+// order. `count` takes exactly three items and leaves the fourth.
+from_redis "analyzer:8:3a7e4b8c", url=env("REDIS_URL"), count=3,
+  metadata_field=redis
+select item=string(message), key=redis.key

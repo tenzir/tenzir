@@ -1,0 +1,4 @@
+suite: from-redis-tls
+fixtures:
+  - redis:
+      tls: true

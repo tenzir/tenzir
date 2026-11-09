@@ -1,0 +1,12 @@
+{
+  item: "x",
+  key: "first",
+}
+{
+  item: "y",
+  key: "second",
+}
+{
+  item: "z",
+  key: "second",
+}

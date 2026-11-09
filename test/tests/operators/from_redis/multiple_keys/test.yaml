@@ -1,0 +1,3 @@
+suite: from-redis-multiple-keys
+fixtures:
+  - redis

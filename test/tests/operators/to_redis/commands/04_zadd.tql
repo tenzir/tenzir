@@ -1,0 +1,5 @@
+from {domain: "example.org", score: 0.5},
+  {domain: "example.com", score: 2},
+  {domain: "invalid", score: "high"}
+to_redis "scores", command="zadd", score=score, message=domain,
+  url=env("REDIS_URL")

@@ -1,0 +1,25 @@
+jobs:
+a
+b
+-1
+status:
+up
+down
+has ttl
+seen:
+10.0.0.1
+10.0.0.2
+scores:
+example.org
+0.5
+example.com
+2
+empty key:
+10.0.0.3
+has ttl
+user:alice:
+name
+Alice
+role
+admin
+has ttl

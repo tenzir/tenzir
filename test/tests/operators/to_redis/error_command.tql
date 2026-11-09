@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from {}
+to_redis "key", command="xadd"

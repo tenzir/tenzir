@@ -1,0 +1,14 @@
+{
+  file: "big-endian-single-packet.cap.gz",
+  packets: 1,
+  vlans: [],
+}
+{
+  file: "concatenated-vlan-files.cap.gz",
+  packets: 11,
+  vlans: [
+    1,
+    32,
+    104,
+  ],
+}

@@ -1,0 +1,4 @@
+// The URL can carry the credentials, too.
+from_redis "queue", url="redis://analyzer:s3cret@" + env("REDIS_ENDPOINT"),
+  count=1
+select item=string(message)

@@ -1,0 +1,7 @@
+error: unknown key `username` in `auth` record
+ --> tests/operators/from_redis/error_auth_key.tql:5:26
+  |
+5 | from_redis "queue", auth={username: "x", password: "y"}
+  |                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = hint: valid keys are: user, password

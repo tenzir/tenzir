@@ -1,0 +1,2 @@
+from {queue: "jobs", job: "a"}, {queue: "jobs", job: "b"}
+to_redis queue, command="rpush", message=job, url=env("REDIS_URL")

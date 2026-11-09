@@ -1,0 +1,7 @@
+warning: Redis rejected 1 command(s)
+ --> tests/operators/to_redis/commands/06_wrong_type.tql:4:1
+  |
+4 | to_redis "jobs", command="sadd", ttl=1h, url=env("REDIS_URL")
+  | ~~~~~~~~
+  |
+  = note: first error: WRONGTYPE Operation against a key holding the wrong kind of value

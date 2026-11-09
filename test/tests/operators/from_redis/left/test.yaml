@@ -1,0 +1,3 @@
+suite: from-redis-left
+fixtures:
+  - redis

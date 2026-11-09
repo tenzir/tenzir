@@ -1,0 +1,10 @@
+{
+  message: "first",
+  channel: "alerts.high",
+  pattern: "alerts.*",
+}
+{
+  message: "second",
+  channel: "alerts.low",
+  pattern: "alerts.*",
+}

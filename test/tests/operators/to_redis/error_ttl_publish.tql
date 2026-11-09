@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from {}
+to_redis "channel", command="publish", ttl=1h

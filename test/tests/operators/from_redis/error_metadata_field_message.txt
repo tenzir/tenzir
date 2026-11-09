@@ -1,0 +1,6 @@
+error: `metadata_field` must not overlap with `message`
+ --> tests/operators/from_redis/error_metadata_field_message.tql:5:36
+  |
+5 | from_redis "queue", metadata_field=message.redis
+  |                                    ^^^^^^^^^^^^^
+  |

@@ -1,0 +1,4 @@
+// Popping from the left end makes a queue in FIFO order for producers that
+// push to the right end.
+from_redis "queue", command="lpop", url=env("REDIS_URL"), count=3
+select item=string(message)

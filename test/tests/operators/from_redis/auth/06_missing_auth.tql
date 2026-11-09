@@ -1,0 +1,5 @@
+---
+error: true
+---
+
+from_redis "queue", url=env("REDIS_URL"), count=1

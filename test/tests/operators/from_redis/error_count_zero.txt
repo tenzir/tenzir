@@ -1,0 +1,6 @@
+error: `count` must be greater than zero
+ --> tests/operators/from_redis/error_count_zero.tql:5:27
+  |
+5 | from_redis "queue", count=0
+  |                           ^
+  |

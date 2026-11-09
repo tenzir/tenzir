@@ -1,0 +1,4 @@
+// The `rediss` scheme enables TLS, and the CA certificate verifies the server.
+from_redis "queue", url=env("REDIS_URL"), tls={cacert: env("REDIS_CA")},
+  count=1
+select item=string(message)

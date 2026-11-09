@@ -1,0 +1,5 @@
+// A blocking pop serves the first non-empty list, and the metadata tells the
+// lists apart.
+from_redis ["first", "second", "third"], url=env("REDIS_URL"), count=3,
+  metadata_field=meta.redis
+select item=string(message), key=meta.redis.key

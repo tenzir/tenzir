@@ -1,0 +1,6 @@
+{
+  severity: "high",
+}
+{
+  severity: "low",
+}

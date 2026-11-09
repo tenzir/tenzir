@@ -1,0 +1,2 @@
+from {ip: "10.0.0.1"}, {ip: "10.0.0.2"}, {ip: "10.0.0.1"}
+to_redis "seen", command="sadd", message=ip, url=env("REDIS_URL")

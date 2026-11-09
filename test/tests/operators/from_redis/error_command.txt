@@ -1,0 +1,7 @@
+error: unsupported command `xread`
+ --> tests/operators/from_redis/error_command.tql:5:29
+  |
+5 | from_redis "queue", command="xread"
+  |                             ^^^^^^^
+  |
+  = hint: use `rpop`, `lpop`, `subscribe`, or `psubscribe`

@@ -1,0 +1,5 @@
+separate expiries: 0
+scripted writes: 2
+a
+b
+has ttl

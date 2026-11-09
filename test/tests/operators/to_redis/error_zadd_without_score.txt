@@ -1,0 +1,6 @@
+error: `command="zadd"` requires `score`
+ --> tests/operators/to_redis/error_zadd_without_score.tql:6:25
+  |
+6 | to_redis "key", command="zadd"
+  |                         ^^^^^^
+  |

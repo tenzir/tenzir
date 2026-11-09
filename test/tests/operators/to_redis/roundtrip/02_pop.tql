@@ -1,0 +1,3 @@
+// The defaults of both operators preserve the order of events.
+from_redis "queue", url=env("REDIS_URL"), count=3
+this = string(message).parse_json()

@@ -1,0 +1,6 @@
+suite: from-redis-auth
+fixtures:
+  - redis:
+      password: hunter2
+      acl_user: analyzer
+      acl_password: s3cret

@@ -1,0 +1,3 @@
+// D4 keeps its analyzer queues in database 2.
+from_redis "queue", url=env("REDIS_URL"), db=2, count=1
+select item=string(message)

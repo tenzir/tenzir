@@ -1,0 +1,7 @@
+error: Redis rejected the connection
+ --> tests/operators/from_redis/auth/06_missing_auth.tql:5:25
+  |
+5 | from_redis "queue", url=env("REDIS_URL"), count=1
+  |                         ^^^^^^^^^^^^^^^^
+  |
+  = note: reason: PING failed: NOAUTH Authentication required.

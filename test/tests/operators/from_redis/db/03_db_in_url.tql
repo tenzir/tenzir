@@ -1,0 +1,3 @@
+// The path of the URL selects the database as well.
+from_redis "queue", url=env("REDIS_URL") + "/3", count=1
+select item=string(message)

@@ -1,0 +1,12 @@
+{
+  message: "first",
+  channel: "alerts",
+}
+{
+  message: "second",
+  channel: "notices",
+}
+{
+  message: "third",
+  channel: "alerts",
+}

@@ -1,0 +1,7 @@
+error: unsupported command `xadd`
+ --> tests/operators/to_redis/error_command.tql:6:25
+  |
+6 | to_redis "key", command="xadd"
+  |                         ^^^^^^
+  |
+  = hint: use `lpush`, `rpush`, `publish`, `set`, `sadd`, `zadd`, or `hset`

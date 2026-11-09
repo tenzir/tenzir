@@ -83,6 +83,9 @@ rec {
     # The `accept_wef` tests run a KDC and use GSSAPI as a client.
     krb5
     krb5.dev
+    # The `redis` fixture runs `redis-server` and `redis-cli`. They only need to
+    # run on the build machine, so a static build need not build them.
+    pkgsBuildBuild.redis
     tenzir-test
   ];
 }

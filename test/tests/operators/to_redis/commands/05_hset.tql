@@ -1,0 +1,4 @@
+from {user: "alice", field: "name", value: "Alice"},
+  {user: "alice", field: "role", value: "admin"}
+to_redis "user:" + user, command="hset", field=field, message=value, ttl=1d,
+  url=env("REDIS_URL"), db=1

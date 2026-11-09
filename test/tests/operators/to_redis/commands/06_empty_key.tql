@@ -1,0 +1,3 @@
+// Redis accepts the empty string as a key, and the write sets its expiry.
+from {ip: "10.0.0.3"}
+to_redis "", command="sadd", message=ip, ttl=1h, url=env("REDIS_URL")

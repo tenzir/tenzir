@@ -1,0 +1,3 @@
+suite: from-redis-db
+fixtures:
+  - redis

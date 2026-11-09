@@ -1,0 +1,3 @@
+// The default pushes NDJSON to the left end, like a D4 server.
+from {id: 1}, {id: 2}, {id: 3}
+to_redis "queue", url=env("REDIS_URL")

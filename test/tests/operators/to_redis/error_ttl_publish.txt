@@ -1,0 +1,6 @@
+error: `ttl` does not apply to `command="publish"`
+ --> tests/operators/to_redis/error_ttl_publish.tql:6:44
+  |
+6 | to_redis "channel", command="publish", ttl=1h
+  |                                            ^^
+  |
