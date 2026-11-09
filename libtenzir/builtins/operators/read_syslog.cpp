@@ -23,7 +23,6 @@
 #include <folly/coro/BoundedQueue.h>
 
 #include <algorithm>
-#include <cctype>
 #include <chrono>
 #include <concepts>
 #include <limits>
@@ -76,58 +75,51 @@ auto detect_octet_counting(std::string_view& bytes, std::string& probe)
     probe.push_back(byte);
     auto space = probe.find(' ');
     if (space == std::string::npos) {
-      // A timestamp such as "18:47:02:" or "3/1" is not a length prefix.
-      if (byte < '0' or byte > '9') {
+      if (probe.front() == '0' or byte < '0' or byte > '9'
+          or probe.size() > max_prefix_bytes) {
         return false;
-      }
-      if (probe.size() > max_prefix_bytes) {
-        return true;
       }
       continue;
     }
     if (space == 0) {
       return false;
     }
-    auto first = probe.cbegin();
-    auto length = uint32_t{};
-    if (not syslog::octet_length_parser(first, probe.cend(), length)
-        or length > syslog::max_syslog_message_size) {
-      // Preserve the counted reader's diagnostics for invalid lengths.
-      return true;
-    }
-    if (first == probe.cend()) {
+    // Require a complete PRI after the count so digit-leading legacy
+    // timestamps remain newline-framed. The probe is bounded to 16 bytes:
+    // ten count digits, one space, and at most five bytes for the PRI.
+    auto pri = std::string_view{probe}.substr(space + 1);
+    if (pri.empty()) {
       continue;
     }
-    if (*first == ' ' or *first == '\t') {
+    if (pri.front() != '<') {
       return false;
     }
-    // Cisco's year-first header can look like a count followed by a legacy
-    // message. Prefer the existing newline interpretation of "2026 Apr ".
-    if (length >= 1900 and length <= 2100
-        and std::isalpha(static_cast<unsigned char>(*first))) {
-      auto month = std::string_view{first, probe.cend()};
-      if (month.size() <= 3) {
-        if (std::ranges::all_of(month, [](unsigned char c) {
-              return std::isalpha(c);
-            })) {
-          continue;
-        }
-        return true;
-      }
-      return month.back() != ' ' and month.back() != '\t';
+    pri.remove_prefix(1);
+    if (pri.empty()) {
+      continue;
     }
-    // Prefer Cisco's legacy "days hours:" uptime header when a valid hour
-    // is followed by a colon. This needs at most three lookahead bytes.
-    auto cisco = probe.cbegin();
-    auto uptime = syslog::cisco_uptime_long_datetime{};
-    if (syslog::cisco_uptime_long_datetime_parser{}.parse(cisco, probe.cend(),
-                                                          uptime)) {
-      if (cisco == probe.cend()) {
-        continue;
-      }
-      return *cisco != ':';
+    auto complete = pri.back() == '>';
+    if (complete) {
+      pri.remove_suffix(1);
     }
-    return true;
+    if (pri.empty() or pri.size() > 3
+        or (pri.size() > 1 and pri.front() == '0')) {
+      return false;
+    }
+    auto value = uint16_t{0};
+    for (auto digit : pri) {
+      if (digit < '0' or digit > '9') {
+        return false;
+      }
+      value = value * 10 + digit - '0';
+    }
+    if (value > 191) {
+      return false;
+    }
+    if (complete) {
+      // The counted reader validates the declared length after selection.
+      return true;
+    }
   }
   return None{};
 }
@@ -202,9 +194,8 @@ public:
     -> Task<FinalizeBehavior> override {
     TENZIR_ASSERT(dh_);
     if (not framing_probe_.empty()) {
-      // Diagnose an unfinished probe using the counted reader's existing
-      // handling of incomplete prefixes and messages.
-      octet_counting_ = true;
+      // An incomplete signature at EOF is newline input.
+      octet_counting_ = false;
       auto probe = std::exchange(framing_probe_, {});
       co_await process_bytes(probe, push);
     }
@@ -609,7 +600,8 @@ public:
       co_return FinalizeBehavior::done;
     }
     if (not framing_probe_.empty()) {
-      octet_counting_ = true;
+      // An incomplete signature at EOF is newline input.
+      octet_counting_ = false;
       auto probe = std::exchange(framing_probe_, {});
       co_await process_bytes(probe, push);
     }

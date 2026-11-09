@@ -4,4 +4,4 @@ error: unexpected end of input in octet-counted syslog message
 7 |   read_syslog
   |   -----------
   |
-  = note: missing 49 of 50 bytes
+  = note: missing 45 of 50 bytes

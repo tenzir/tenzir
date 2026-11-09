@@ -34,16 +34,23 @@ namespace {
 
 class CollectEvents final : public Push<nova::Events> {
 public:
+  explicit CollectEvents(std::string field = "message")
+    : field_{std::move(field)} {
+  }
+
   auto operator()(nova::Events events) -> Task<void> override {
     auto values = nova::Array<nova::Data>{events.data};
     for (auto row : nova::storage::true_bits(events.mask)) {
       messages.push_back(
-        as<record>(nova::materialize_legacy(values.get(row))).at("message"));
+        as<record>(nova::materialize_legacy(values.get(row))).at(field_));
     }
     co_return;
   }
 
   std::vector<data> messages;
+
+private:
+  std::string field_;
 };
 
 auto make_reader(Option<bool> octet_counting = {})
@@ -103,6 +110,77 @@ auto check_diagnostics(collecting_diagnostic_handler& dh,
 }
 
 } // namespace
+
+TEST("Syslog detects valid PRI boundaries across byte chunks") {
+  for (auto pri : {0, 9, 99, 191}) {
+    auto input = frame(
+      fmt::format("<{}>1 2023-01-01T00:00:00Z host app 123 - - First", pri));
+    auto output = CollectEvents{};
+    auto dh = collecting_diagnostic_handler{};
+    auto reg = registry{};
+    auto ctx = test::NovaOpCtx{dh, reg};
+    auto reader = make_reader();
+    folly::coro::blockingWait(reader->start(ctx));
+    for (auto const& byte : input) {
+      folly::coro::blockingWait(
+        reader->process(chunk::copy(std::string_view{&byte, 1}), output, ctx));
+    }
+    folly::coro::blockingWait(reader->finalize(output, ctx));
+    check_diagnostics(dh);
+    CHECK_EQUAL(output.messages, (std::vector<data>{"First"}));
+  }
+}
+
+TEST("Syslog checkpoints preserve rejected and incomplete framing probes") {
+  for (auto input : {
+         "12",
+         "50 ",
+         "50 <",
+         "50 <16",
+         "50 <165",
+         "50 <>",
+         "50 <-1>",
+         "50 <+1>",
+         "50 <192>",
+         "50 <999>",
+         "50 <019>",
+         "50 <000>",
+         "50 <1a>",
+         "50 <1234>",
+         "50\t<165>",
+         "0 <165>x",
+         "01 <165>x",
+         "12345678901 <165>x",
+         "41 2026-11-09T12:00:00Z host app[123]: hello",
+       }) {
+    auto bytes = std::string_view{input};
+    for (auto split = size_t{0}; split <= bytes.size(); ++split) {
+      auto output = CollectEvents{"syslog_message"};
+      auto dh = collecting_diagnostic_handler{};
+      auto reg = registry{};
+      auto ctx = test::NovaOpCtx{dh, reg};
+      auto reader = make_reader();
+      folly::coro::blockingWait(reader->start(ctx));
+      folly::coro::blockingWait(
+        reader->process(chunk::copy(bytes.substr(0, split)), output, ctx));
+      folly::coro::blockingWait(reader->prepare_snapshot(output, ctx));
+      auto saved = caf::byte_buffer{};
+      auto serializer = caf::binary_serializer{saved};
+      auto saving = Serde{serializer};
+      reader->snapshot(saving);
+      reader = make_reader();
+      auto deserializer = caf::binary_deserializer{saved};
+      auto loading = Serde{deserializer};
+      reader->snapshot(loading);
+      folly::coro::blockingWait(reader->start(ctx));
+      folly::coro::blockingWait(
+        reader->process(chunk::copy(bytes.substr(split)), output, ctx));
+      folly::coro::blockingWait(reader->finalize(output, ctx));
+      check_diagnostics(dh);
+      CHECK_EQUAL(output.messages, (std::vector<data>{std::string{bytes}}));
+    }
+  }
+}
 
 TEST("Syslog publishes accepted frames before terminal framing diagnostics") {
   for (auto mode : {Option<bool>{}, Option<bool>{true}}) {
