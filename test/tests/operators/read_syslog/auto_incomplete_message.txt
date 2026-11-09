@@ -1,0 +1,7 @@
+error: unexpected end of input in octet-counted syslog message
+ --> tests/operators/read_syslog/auto_incomplete_message.tql:7:3
+  |
+7 |   read_syslog
+  |   -----------
+  |
+  = note: missing 49 of 50 bytes

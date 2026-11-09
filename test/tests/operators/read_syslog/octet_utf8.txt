@@ -1,3 +1,10 @@
+warning: `octet_counting` is deprecated
+ --> tests/operators/read_syslog/octet_utf8.tql:3:30
+  |
+3 |   read_syslog octet_counting=true, raw_message=raw
+  |                              ~~~~
+  |
+  = hint: omit `octet_counting` to detect syslog framing automatically
 {
   process_id: "123",
   message: "Grüße\nsecond",

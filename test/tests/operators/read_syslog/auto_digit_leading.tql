@@ -1,0 +1,7 @@
+from {line: "18:47:02: %SYS-5-CONFIG_I: First"},
+  {line: "3/1 18:47:02: %SYS-5-CONFIG_I: Second"},
+  {line: "2026-02-11T18:01:45.587Z myhost Hostd[2099494]: Third"}
+write_lines
+split_bytes 1
+read_syslog
+select app_name, content

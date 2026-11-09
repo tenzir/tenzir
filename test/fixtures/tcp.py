@@ -36,6 +36,7 @@ class TcpOptions:
     mode: str = "client"  # "client" sends data; "server" receives data
     payload: str = "foo\n"
     payloads: list[str] | None = None
+    concurrent: bool = False
 
 
 @dataclass(frozen=True)
@@ -68,6 +69,8 @@ def tcp() -> FixtureHandle:
     opts = current_options("tcp")
     if opts.mode not in {"client", "server"}:
         raise RuntimeError("tcp fixture option `mode` must be one of: client, server")
+    if opts.concurrent and (opts.mode != "client" or not opts.payloads):
+        raise RuntimeError("concurrent TCP clients require mode=client and payloads")
     port = find_free_port()
     endpoint = f"{_HOST}:{port}"
     stop_event = threading.Event()
@@ -93,42 +96,58 @@ def tcp() -> FixtureHandle:
         fd, client_capture_path = tempfile.mkstemp(prefix="tcp-client-", suffix=".log")
         os.close(fd)
 
+    workers: list[threading.Thread] = []
+    connected = (
+        threading.Barrier(len(payloads)) if opts.concurrent and payloads else None
+    )
     if opts.mode == "client":
-        worker = threading.Thread(
-            target=_run_client_worker,
-            kwargs={
-                "port": port,
-                "stop_event": stop_event,
-                "state": state,
-                "payload": payload,
-                "payloads": payloads,
-                "tls": opts.tls,
-                "ca_path": ca_path,
-                "capture_path": client_capture_path,
-                "invalid_tls_handshake_first": opts.invalid_tls_handshake_first,
-                "send_delay": opts.client_send_delay,
-                "split_payload_at": opts.client_split_payload_at,
-                "split_send_delay": opts.client_split_send_delay,
-                "inter_connection_delay": opts.inter_connection_delay,
-            },
-            daemon=True,
+        groups = (
+            [[entry] for entry in payloads]
+            if opts.concurrent and payloads
+            else [payloads]
         )
+        for group in groups:
+            workers.append(
+                threading.Thread(
+                    target=_run_client_worker,
+                    kwargs={
+                        "port": port,
+                        "stop_event": stop_event,
+                        "state": state,
+                        "payload": payload,
+                        "payloads": group,
+                        "tls": opts.tls,
+                        "ca_path": ca_path,
+                        "capture_path": client_capture_path,
+                        "invalid_tls_handshake_first": opts.invalid_tls_handshake_first,
+                        "send_delay": opts.client_send_delay,
+                        "split_payload_at": opts.client_split_payload_at,
+                        "split_send_delay": opts.client_split_send_delay,
+                        "inter_connection_delay": opts.inter_connection_delay,
+                        "connected": connected,
+                    },
+                    daemon=True,
+                )
+            )
     else:
-        worker = threading.Thread(
-            target=_run_server_worker,
-            kwargs={
-                "port": port,
-                "stop_event": stop_event,
-                "state": state,
-                "payload": payload,
-                "tls": opts.tls,
-                "capture_path": server_capture_path,
-                "cert_path": cert_path,
-                "key_path": key_path,
-            },
-            daemon=True,
+        workers.append(
+            threading.Thread(
+                target=_run_server_worker,
+                kwargs={
+                    "port": port,
+                    "stop_event": stop_event,
+                    "state": state,
+                    "payload": payload,
+                    "tls": opts.tls,
+                    "capture_path": server_capture_path,
+                    "cert_path": cert_path,
+                    "key_path": key_path,
+                },
+                daemon=True,
+            )
         )
-    worker.start()
+    for worker in workers:
+        worker.start()
 
     env: dict[str, str] = {"TCP_ENDPOINT": endpoint}
     if server_capture_path is not None:
@@ -222,9 +241,12 @@ def tcp() -> FixtureHandle:
 
     def _teardown() -> None:
         stop_event.set()
-        worker.join(timeout=2)
-        if worker.is_alive():
-            raise RuntimeError("tcp fixture worker did not stop within 2 seconds")
+        if connected is not None:
+            connected.abort()
+        for worker in workers:
+            worker.join(timeout=2)
+            if worker.is_alive():
+                raise RuntimeError("tcp fixture worker did not stop within 2 seconds")
         if server_capture_path is not None and os.path.exists(server_capture_path):
             os.remove(server_capture_path)
         if client_capture_path is not None and os.path.exists(client_capture_path):
@@ -263,6 +285,7 @@ def _run_client_worker(
     split_payload_at: int | None,
     split_send_delay: float,
     inter_connection_delay: float,
+    connected: threading.Barrier | None = None,
 ) -> None:
     context: ssl.SSLContext | None = None
     if tls:
@@ -297,6 +320,8 @@ def _run_client_worker(
                     sock = raw_sock
                 with sock:
                     sock.settimeout(0.2)
+                    if connected is not None:
+                        connected.wait(timeout=5)
                     if send_delay > 0:
                         stop_event.wait(send_delay)
                     if current_payload:
@@ -321,7 +346,7 @@ def _run_client_worker(
                         while not stop_event.is_set():
                             try:
                                 chunk = sock.recv(4096)
-                            except socket.timeout:
+                            except TimeoutError:
                                 if time.monotonic() >= idle_deadline:
                                     break
                                 continue
@@ -334,7 +359,7 @@ def _run_client_worker(
                             with state.lock:
                                 state.client_received.extend(chunk)
                             idle_deadline = time.monotonic() + 2
-        except (ssl.SSLError, OSError):
+        except (ssl.SSLError, OSError, threading.BrokenBarrierError):
             pass
         current_payload = None
         if inter_connection_delay > 0:
@@ -360,7 +385,7 @@ def _run_server_worker(
         while not stop_event.is_set():
             try:
                 conn, _ = server.accept()
-            except socket.timeout:
+            except TimeoutError:
                 continue
             with state.lock:
                 state.server_capture_complete = False
@@ -386,7 +411,7 @@ def _run_server_worker(
                         while not stop_event.is_set():
                             try:
                                 data = conn.recv(4096)
-                            except socket.timeout:
+                            except TimeoutError:
                                 if time.monotonic() >= idle_deadline:
                                     break
                                 continue

@@ -1,0 +1,6 @@
+error: unexpected end of input in octet-counting length prefix
+ --> tests/operators/read_syslog/auto_incomplete_prefix.tql:7:3
+  |
+7 |   read_syslog
+  |   -----------
+  |

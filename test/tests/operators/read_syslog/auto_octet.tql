@@ -1,0 +1,5 @@
+from_stdin {
+  split_bytes 1
+  read_syslog raw_message=raw
+}
+select message, raw

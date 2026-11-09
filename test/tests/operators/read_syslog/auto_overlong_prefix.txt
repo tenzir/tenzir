@@ -1,0 +1,6 @@
+error: octet-counting length prefix exceeds 10 bytes without delimiter
+ --> tests/operators/read_syslog/auto_overlong_prefix.tql:7:3
+  |
+7 |   read_syslog
+  |   -----------
+  |

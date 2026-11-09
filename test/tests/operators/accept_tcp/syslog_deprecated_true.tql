@@ -1,0 +1,18 @@
+---
+fixtures:
+  - tcp:
+      mode: client
+      concurrent: true
+      payloads:
+        - "50 <165>1 2026-11-09T12:00:00Z host app 123 - - first"
+        - "51 <165>1 2026-11-09T12:00:00Z host app 123 - - second"
+timeout: 30
+---
+
+accept_tcp env("TCP_ENDPOINT") {
+  split_bytes 1
+  read_syslog octet_counting=true
+}
+head 2
+select message
+sort message
