@@ -12,9 +12,11 @@
 #include "tenzir/async/broadcast.hpp"
 #include "tenzir/async/channel_tap.hpp"
 #include "tenzir/async/task.hpp"
+#include "tenzir/atomic.hpp"
 #include "tenzir/box.hpp"
 #include "tenzir/ir.hpp"
 #include "tenzir/nova/events.hpp"
+#include "tenzir/profiler_snapshot.hpp"
 #include "tenzir/ref.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/uuid.hpp"
@@ -78,6 +80,34 @@ struct GraphSnapshot {
   Option<Arc<SourceMap const>> sources;
 };
 
+struct OperatorMetrics {
+  PlanPath path;
+  size_t index;
+  double cpu_seconds = 0;
+};
+struct ChannelMetrics {
+  PlanPath path;
+  size_t index;
+  uint64_t events = 0;
+  uint64_t bytes = 0;
+  uint64_t queued = 0;
+  /// Zero for channels without a fixed capacity, such as fused ones.
+  uint64_t capacity = 0;
+};
+/// Metrics address operators and channels by graph path and index. Their
+/// layouts come from the graph subscription; the identity fields let consumers
+/// verify that both describe the same execution.
+struct MetricsSnapshot {
+  uuid process_instance_id;
+  Option<PipeId> execution_id;
+  Option<ExecutionOutcome> end;
+  time at;
+  duration interval;
+  bool truncated = false;
+  std::vector<OperatorMetrics> operators;
+  std::vector<ChannelMetrics> channels;
+};
+
 enum class GraphSubscriptionError { not_started };
 
 enum class TapSubscriptionError {
@@ -100,10 +130,36 @@ namespace detail {
 struct InspectionState;
 using GraphBroadcast
   = Broadcast<Arc<GraphSnapshot const>, BroadcastMode::latest>;
+/// A metrics snapshot tagged with the sampling window it belongs to.
+struct MetricsUpdate {
+  Arc<MetricsSnapshot const> snapshot;
+  uint64_t epoch = 0;
+};
+using MetricsBroadcast = Broadcast<MetricsUpdate, BroadcastMode::latest>;
 } // namespace detail
 
 /// Latest snapshots, followed by a final snapshot and EOF.
 using GraphSubscription = detail::GraphBroadcast::Receiver;
+
+/// Latest metric snapshots of the sampling window it joined, followed by a
+/// final snapshot and EOF. A tick prepared before the window reset can still
+/// publish afterwards, so the subscription drops snapshots of earlier windows.
+class MetricsSubscription {
+public:
+  MetricsSubscription() = default;
+
+  /// One receive may be in flight; join it before moving or destroying.
+  auto recv() -> Task<Option<Arc<MetricsSnapshot const>>>;
+
+private:
+  friend class PipelineObserver;
+  MetricsSubscription(detail::MetricsBroadcast::Receiver receiver,
+                      uint64_t epoch);
+
+  detail::MetricsBroadcast::Receiver receiver_;
+  uint64_t epoch_ = 0;
+};
+
 /// Accepted native batches, followed by an execution outcome and EOF.
 using TapSubscription = detail::TapBroadcast::Receiver;
 
@@ -122,6 +178,13 @@ public:
   auto operator=(PlanRegistration const&) -> PlanRegistration& = delete;
   auto plan() const -> ir::Plan const&;
   auto tap(size_t edge) const -> Ref<ChannelTap const>;
+  /// Report these counters for the given operator. Parallel lanes of one
+  /// operator share the counters and may attach them repeatedly. Attach
+  /// factory-owned counters before the corresponding runtime work starts.
+  auto attach_operator_stats(size_t op, Arc<ExecutorStats> stats) -> void;
+  /// Report these counters for the given plan edge. Physical lanes of one
+  /// edge share the counters and may attach them repeatedly.
+  auto attach_channel_stats(size_t edge, Arc<ChannelStats> stats) -> void;
 
 private:
   friend class PipelineObserver;
@@ -133,6 +196,8 @@ private:
   size_t parent_operator_;
   std::vector<ChannelTap> taps_;
   Option<size_t> graph_id_;
+  std::vector<Option<Arc<ExecutorStats>>> operator_stats_;
+  std::vector<Option<Arc<ChannelStats>>> channel_stats_;
 };
 
 /// Inspection for one execution. Must outlive its runtime registrations;
@@ -190,6 +255,10 @@ public:
   /// Rejects before startup; completed executions return the retained final
   /// snapshot. Without prior inspection, it may contain no pipeline graphs.
   auto subscribe_graph() -> Result<GraphSubscription, GraphSubscriptionError>;
+  /// Shared collection policy; counter ownership stays with the factories.
+  auto metrics_collection_enabled() const -> Arc<Atomic<bool>>;
+  auto subscribe_metrics()
+    -> Result<MetricsSubscription, GraphSubscriptionError>;
   /// Validates against reserved identities, including evicted graph layouts.
   auto subscribe_channel(ChannelTarget target)
     -> Result<TapSubscription, TapSubscriptionError>;

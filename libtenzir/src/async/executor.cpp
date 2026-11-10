@@ -872,8 +872,9 @@ private:
     auto [to_control_sender, to_control_receiver] = channel<ToControl>(1);
     TENZIR_UNUSED(from_sub_sender, from_control_receiver, to_control_sender);
     auto push_sub = match(input, [&]<class In>(tag<In>) -> AnyOpPush {
-      auto [push, pull] = exec_ctx_.make_channel<In>(id_.to(sub_id.op(0)));
-      TENZIR_UNUSED(pull);
+      auto [push, pull, stats]
+        = exec_ctx_.make_channel<In>(id_.to(sub_id.op(0)));
+      TENZIR_UNUSED(pull, stats);
       return AnyOpPush{std::move(push)};
     });
     auto dh = std::move(sub_dh);
@@ -896,7 +897,9 @@ private:
                       folly::CancellationToken sub_cancel_token)
     -> Task<AnySubHandle&> {
     auto plan = Arc<ir::Plan const>{std::move(planned)};
-    auto sub_id = id_.sub(next_subpipeline_id_++);
+    // Each physical parent lane has its own sequence. Interleave their IDs so
+    // factory-owned counters never alias different nested runtime instances.
+    auto sub_id = id_.sub(next_subpipeline_id_++ * job_.total + job_.index);
     auto input = plan->input_type();
     auto output = plan->output_type();
     auto input_id = plan->input_id();
@@ -924,28 +927,33 @@ private:
     auto [from_control_sender, from_control_receiver]
       = channel<FromControl>(16);
     auto [to_control_sender, to_control_receiver] = channel<ToControl>(16);
-    auto [runner, push_sub, pull_sub] = match(
-      std::tie(input, output),
-      [&]<class In, class Out>(
-        tag<In>, tag<Out>) -> std::tuple<Task<void>, AnyOpPush, AnyOpPull> {
-        auto [push_upstream, pull_upstream] = exec_ctx_.make_channel<In>(
-          id_.to(sub_id.op(input_id)), std::move(input_tap));
-        auto [push_downstream, pull_downstream] = exec_ctx_.make_channel<Out>(
-          sub_id.op(output_id).to(id_), std::move(output_tap));
-        auto runner = drive_plan(std::move(plan), std::move(pull_upstream),
-                                 std::move(push_downstream),
-                                 std::move(from_control_receiver),
-                                 std::move(to_control_sender),
-                                 std::move(sub_id), exec_ctx_, sys_, *sub_dh,
-                                 registration.map([](auto& owned) {
-                                   return Ref{*owned};
-                                 }));
-        return {
-          std::move(runner),
-          AnyOpPush{std::move(push_upstream)},
-          AnyOpPull{std::move(pull_downstream)},
-        };
-      });
+    auto [runner, push_sub, pull_sub]
+      = match(std::tie(input, output),
+              [&]<class In, class Out>(tag<In>, tag<Out>)
+                -> std::tuple<Task<void>, AnyOpPush, AnyOpPull> {
+                // The boundary channels between this operator and the
+                // subpipeline exist only as boundary edges of the nested
+                // layout. We do not attach their counters, so live metrics omit
+                // them, like the root plan's boundary. Taps still cover them.
+                auto [push_upstream, pull_upstream, upstream_stats]
+                  = exec_ctx_.make_channel<In>(id_.to(sub_id.op(input_id)),
+                                               std::move(input_tap));
+                auto [push_downstream, pull_downstream, downstream_stats]
+                  = exec_ctx_.make_channel<Out>(sub_id.op(output_id).to(id_),
+                                                std::move(output_tap));
+                auto runner = drive_plan(
+                  std::move(plan), std::move(pull_upstream),
+                  std::move(push_downstream), std::move(from_control_receiver),
+                  std::move(to_control_sender), std::move(sub_id), exec_ctx_,
+                  sys_, *sub_dh, registration.map([](auto& owned) {
+                    return Ref{*owned};
+                  }));
+                return {
+                  std::move(runner),
+                  AnyOpPush{std::move(push_upstream)},
+                  AnyOpPull{std::move(pull_downstream)},
+                };
+              });
     auto [to_parent, from_sub] = channel<Checkpoint>(16);
     auto sub_key = key;
     // Insert the resulting subpipeline into our internal state before starting
@@ -1970,9 +1978,12 @@ private:
   /// others use plain channels.
   auto make_channel(size_t edge) -> std::pair<AnyOpPush, AnyOpPull> {
     auto const& c = plan_->channels[edge];
-    auto cid = (c.from == ir::Port::input)  ? ChannelId::first(op_id(c.to))
-               : (c.to == ir::Port::output) ? ChannelId::last(op_id(c.from))
-                                            : op_id(c.from).to(op_id(c.to));
+    // Distinct output ports can feed the same downstream operator. Keep their
+    // counters separate while sharing counters across physical lanes of an edge.
+    auto cid = (c.from == ir::Port::input) ? ChannelId::first(op_id(c.to))
+               : (c.to == ir::Port::output)
+                 ? ChannelId::last(op_id(c.from), c.from_port)
+                 : op_id(c.from).to(op_id(c.to), c.from_port);
     return match(
       c.type, [&]<class T>(tag<T>) -> std::pair<AnyOpPush, AnyOpPull> {
         auto tap = Option<Ref<ChannelTap const>>{};
@@ -1998,6 +2009,9 @@ private:
           }
           TENZIR_UNREACHABLE();
         }();
+        if (registration_ and pp.stats) {
+          (*registration_)->attach_channel_stats(edge, std::move(*pp.stats));
+        }
         return {AnyOpPush{std::move(pp.push)}, AnyOpPull{std::move(pp.pull)}};
       });
   }
@@ -2113,7 +2127,11 @@ private:
       Option<Sender<FromControl>>{std::move(from_control_sender)},
       std::move(to_control_receiver),
     });
-    auto executor = exec_ctx_.make_executor(op_id, name);
+    auto [executor, stats] = exec_ctx_.make_executor(op_id, name);
+    if (registration_ and stats) {
+      (*registration_)
+        ->attach_operator_stats(instance_of_[index], std::move(*stats));
+    }
     auto task = run_operator(std::move(operators_[index]), job_id,
                              std::move(input_pulls), std::move(ports),
                              std::move(from_control_receiver),
@@ -2346,9 +2364,9 @@ auto execute_plan(ir::Plan plan, ExecCtx& exec_ctx, caf::actor_system& sys,
   if (auto observer = exec_ctx.inspection()) {
     (*observer)->start(id);
   }
-  auto [push_input, pull_input]
+  auto [push_input, pull_input, input_stats]
     = exec_ctx.make_channel<void>(ChannelId::first(id.op(plan.input_id())));
-  auto [push_output, pull_output]
+  auto [push_output, pull_output, output_stats]
     = exec_ctx.make_channel<void>(ChannelId::last(id.op(plan.output_id())));
   auto result = co_await async_try([&]() -> Task<void> {
     auto [from_control_sender_raw, from_control_receiver]
@@ -2479,9 +2497,9 @@ auto execute_plan_with_io(ir::Plan plan, ExecCtx& exec_ctx,
                           PipelineDrainer<T> drain_output) -> Task<void> {
   auto num_ops = std::max(plan.size(), size_t{1});
   auto id = new_pipe_id();
-  auto [push_input, pull_input]
+  auto [push_input, pull_input, input_stats]
     = exec_ctx.make_channel<T>(ChannelId::first(id.op(0)));
-  auto [push_output, pull_output]
+  auto [push_output, pull_output, output_stats]
     = exec_ctx.make_channel<T>(ChannelId::last(id.op(num_ops - 1)));
   // A bounded transform has no outside controller, so we keep only the
   // receiver. The matching sender dies with the temporary tuple at the end of

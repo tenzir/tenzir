@@ -24,7 +24,7 @@ struct OpId {
 
   auto sub(size_t index) const -> PipeId;
 
-  auto to(OpId other) const -> ChannelId;
+  auto to(OpId other, size_t from_port = 0) const -> ChannelId;
 
   friend auto format_as(OpId const& self) -> std::string_view {
     return self.value;
@@ -53,14 +53,17 @@ struct PipeId {
 };
 
 struct ChannelId {
+  // Keep the endpoint label independent of the port: profilers use it to
+  // attribute every output port's counters to the same operator.
   std::string value;
+  size_t from_port = 0;
 
   static auto first(OpId id) -> ChannelId {
     return ChannelId{fmt::format("_ -> {}", id.value)};
   }
 
-  static auto last(OpId id) -> ChannelId {
-    return ChannelId{fmt::format("{} -> _", id.value)};
+  static auto last(OpId id, size_t from_port = 0) -> ChannelId {
+    return ChannelId{fmt::format("{} -> _", id.value), from_port};
   }
 
   friend auto format_as(ChannelId const& self) -> std::string_view {
@@ -74,8 +77,8 @@ inline auto OpId::sub(size_t index) const -> PipeId {
   return PipeId{fmt::format("{}-{}", value, index)};
 }
 
-inline auto OpId::to(OpId other) const -> ChannelId {
-  return ChannelId{fmt::format("{} -> {}", value, other.value)};
+inline auto OpId::to(OpId other, size_t from_port) const -> ChannelId {
+  return ChannelId{fmt::format("{} -> {}", value, other.value), from_port};
 }
 
 } // namespace tenzir

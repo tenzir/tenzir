@@ -2041,6 +2041,155 @@ struct std::hash<tenzir::ExecutionGraphSnapshot> {
 
 namespace tenzir {
 
+class ExecutionOperatorMetrics {
+public:
+  ExecutionOperatorMetrics(std::vector<std::int64_t> path,
+                           std::int64_t operator_index, double cpu_seconds)
+    : path{std::move(path)},
+      operator_index{std::move(operator_index)},
+      cpu_seconds{cpu_seconds} {
+  }
+
+  std::vector<std::int64_t> path;
+  std::int64_t operator_index;
+  double cpu_seconds;
+
+  friend auto
+  operator==(ExecutionOperatorMetrics const&, ExecutionOperatorMetrics const&)
+    -> bool
+    = default;
+
+  template <class HashAlgorithm>
+  friend auto
+  hash_append(HashAlgorithm& h, ExecutionOperatorMetrics const& value) -> void {
+    hash_append(h, value.path, value.operator_index, value.cpu_seconds);
+  }
+};
+
+} // namespace tenzir
+
+template <>
+struct std::hash<tenzir::ExecutionOperatorMetrics> {
+  auto operator()(tenzir::ExecutionOperatorMetrics const& value) const
+    -> std::size_t {
+    return tenzir::hash(value);
+  }
+};
+
+namespace tenzir {
+
+class ExecutionChannelMetrics {
+public:
+  ExecutionChannelMetrics(std::vector<std::int64_t> path,
+                          std::int64_t channel_index, std::int64_t events,
+                          std::int64_t bytes, std::int64_t queued_bytes,
+                          std::int64_t capacity_bytes)
+    : path{std::move(path)},
+      channel_index{std::move(channel_index)},
+      events{std::move(events)},
+      bytes{std::move(bytes)},
+      queued_bytes{std::move(queued_bytes)},
+      capacity_bytes{std::move(capacity_bytes)} {
+  }
+
+  std::vector<std::int64_t> path;
+  std::int64_t channel_index;
+  std::int64_t events;
+  std::int64_t bytes;
+  std::int64_t queued_bytes;
+  std::int64_t capacity_bytes;
+
+  friend auto
+  operator==(ExecutionChannelMetrics const&, ExecutionChannelMetrics const&)
+    -> bool
+    = default;
+
+  template <class HashAlgorithm>
+  friend auto
+  hash_append(HashAlgorithm& h, ExecutionChannelMetrics const& value) -> void {
+    hash_append(h, value.path, value.channel_index, value.events, value.bytes,
+                value.queued_bytes, value.capacity_bytes);
+  }
+};
+
+} // namespace tenzir
+
+template <>
+struct std::hash<tenzir::ExecutionChannelMetrics> {
+  auto operator()(tenzir::ExecutionChannelMetrics const& value) const
+    -> std::size_t {
+    return tenzir::hash(value);
+  }
+};
+
+namespace tenzir {
+
+/// Live execution metrics without topology. Operators and channels are
+/// addressed by graph path and index into the layouts of the execution graph;
+/// join them only when run, processInstanceId, and executionId match. Paths of
+/// recently finished nested instances may be absent from the graph. Boundary
+/// channels, whose from or to is null, report no metrics. Counters cover the
+/// measured duration ending at at, not lifetime totals; queuedBytes is the
+/// level at at. Matching runtime instances are summed by graph path and index.
+/// A zero duration establishes a baseline. No data is persisted or replayed;
+/// end marks the final snapshot
+class ExecutionMetricsSnapshot {
+public:
+  ExecutionMetricsSnapshot(std::int64_t run, Uuid process_instance_id,
+                           Option<std::string> execution_id,
+                           Option<ApiExecutionOutcome> end, time at,
+                           double duration_seconds, bool truncated,
+                           std::vector<ExecutionOperatorMetrics> operators,
+                           std::vector<ExecutionChannelMetrics> channels)
+    : run{std::move(run)},
+      process_instance_id{std::move(process_instance_id)},
+      execution_id{std::move(execution_id)},
+      end{std::move(end)},
+      at{at},
+      duration_seconds{duration_seconds},
+      truncated{truncated},
+      operators{std::move(operators)},
+      channels{std::move(channels)} {
+  }
+
+  std::int64_t run;
+  Uuid process_instance_id;
+  /// `executionId`, may be null.
+  Option<std::string> execution_id;
+  /// `end`, may be null.
+  Option<ApiExecutionOutcome> end;
+  time at;
+  double duration_seconds;
+  bool truncated;
+  std::vector<ExecutionOperatorMetrics> operators;
+  std::vector<ExecutionChannelMetrics> channels;
+
+  friend auto
+  operator==(ExecutionMetricsSnapshot const&, ExecutionMetricsSnapshot const&)
+    -> bool
+    = default;
+
+  template <class HashAlgorithm>
+  friend auto
+  hash_append(HashAlgorithm& h, ExecutionMetricsSnapshot const& value) -> void {
+    hash_append(h, value.run, value.process_instance_id, value.execution_id,
+                value.end, value.at, value.duration_seconds, value.truncated,
+                value.operators, value.channels);
+  }
+};
+
+} // namespace tenzir
+
+template <>
+struct std::hash<tenzir::ExecutionMetricsSnapshot> {
+  auto operator()(tenzir::ExecutionMetricsSnapshot const& value) const
+    -> std::size_t {
+    return tenzir::hash(value);
+  }
+};
+
+namespace tenzir {
+
 /// An event tap with a positive event limit; defaults to 100 events
 class ChannelTapRequest {
 public:
@@ -2597,6 +2746,20 @@ public:
   PipelinePath path;
 };
 
+/// `GET /pipelines/:pipelineId/metrics/execution/live`
+/// Streams on-demand operator and channel metrics for one execution, with
+/// measured sample durations. Metrics reference the layouts of
+/// streamPipelineGraph by graph path and index. Disconnecting releases
+/// collection. No persistence or replay; the stream ends with the execution and
+/// never starts one.
+class StreamPipelineMetrics {
+public:
+  explicit StreamPipelineMetrics(PipelinePath path) : path{std::move(path)} {
+  }
+
+  PipelinePath path;
+};
+
 /// `POST /pipelines/:pipelineId/events`
 /// Subscribes to one event channel in an exact execution. The response is typed
 /// SSE event batches followed by an end message, up to limit events (100 by
@@ -2729,6 +2892,10 @@ public:
   virtual auto handle(StreamPipelines) -> Task<HttpBodyStream> = 0;
 
   virtual auto handle(StreamPipelineGraph request)
+    -> Task<Result<HttpBodyStream, ExecutionUnavailable>>
+    = 0;
+
+  virtual auto handle(StreamPipelineMetrics request)
     -> Task<Result<HttpBodyStream, ExecutionUnavailable>>
     = 0;
 
@@ -2876,6 +3043,12 @@ auto parse_source_file(simdjson::dom::element value)
   -> Result<SourceFile, ParseError>;
 auto parse_execution_graph_snapshot(simdjson::dom::element value)
   -> Result<ExecutionGraphSnapshot, ParseError>;
+auto parse_execution_operator_metrics(simdjson::dom::element value)
+  -> Result<ExecutionOperatorMetrics, ParseError>;
+auto parse_execution_channel_metrics(simdjson::dom::element value)
+  -> Result<ExecutionChannelMetrics, ParseError>;
+auto parse_execution_metrics_snapshot(simdjson::dom::element value)
+  -> Result<ExecutionMetricsSnapshot, ParseError>;
 auto parse_channel_tap_request(simdjson::dom::element value)
   -> Result<ChannelTapRequest, ParseError>;
 auto parse_context_status(simdjson::dom::element value)
@@ -2953,6 +3126,11 @@ auto write_json(ApiPipelineGraph const& value, std::string& out) -> void;
 auto write_json(ApiExecutionOutcome const& value, std::string& out) -> void;
 auto write_json(SourceFile const& value, std::string& out) -> void;
 auto write_json(ExecutionGraphSnapshot const& value, std::string& out) -> void;
+auto write_json(ExecutionOperatorMetrics const& value, std::string& out)
+  -> void;
+auto write_json(ExecutionChannelMetrics const& value, std::string& out) -> void;
+auto write_json(ExecutionMetricsSnapshot const& value, std::string& out)
+  -> void;
 auto write_json(ChannelTapRequest const& value, std::string& out) -> void;
 auto write_json(ContextStatus const& value, std::string& out) -> void;
 auto write_json(AdhocPipelineId const& value, std::string& out) -> void;

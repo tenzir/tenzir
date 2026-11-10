@@ -13,6 +13,7 @@
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/detail/scope_guard.hpp"
 #include "tenzir/nova/array_builder.hpp"
+#include "tenzir/profiler_snapshot.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/source.hpp"
 #include "tenzir/substitute_ctx.hpp"
@@ -1676,6 +1677,8 @@ TEST("inspection runtime captures regular tiny fused and nested bridge "
               }
             }
             check_eq(taps.size(), nested ? 5u : 2u);
+            auto metrics = observer->subscribe_metrics().unwrap();
+            require((co_await metrics.recv()).is_some());
             control->produce.notify_one();
             auto result = co_await execution.join();
             check(not result.is_error());
@@ -1689,6 +1692,28 @@ TEST("inspection runtime captures regular tiny fused and nested bridge "
               final = std::move(*next);
             }
             check_eq(*final->end, ExecutionOutcome::completed);
+            auto measured = co_await metrics.recv();
+            require(measured.is_some());
+            while (auto next = co_await metrics.recv()) {
+              measured = std::move(next);
+            }
+            check_eq(*(*measured)->end, ExecutionOutcome::completed);
+            // Metrics carry no layouts; resolve them via the graph stream.
+            auto event_edges = size_t{0};
+            for (auto const& channel : (*measured)->channels) {
+              auto found = std::ranges::find_if(
+                (*initial)->graphs, [&](auto const& graph) {
+                  return graph->path == channel.path;
+                });
+              require(found != (*initial)->graphs.end());
+              if ((**found).channels[channel.index].type.is<nova::Events>()) {
+                ++event_edges;
+                check_eq(channel.events, 12u);
+                check(channel.bytes > 0);
+              }
+            }
+            // Nested boundary edges have taps but no metrics.
+            check_eq(event_edges, nested ? 3u : 2u);
           }));
       }
     }
@@ -1756,7 +1781,54 @@ TEST("inspection aggregates physical lanes across scatter shuffle and gather") {
   }
 }
 
-TEST("inspection separates output ports connected to the same downstream") {
+TEST("metrics sum parallel nested instances without counting shared counters "
+     "twice") {
+  auto config = caf::actor_system_config{};
+  auto system = caf::actor_system{config};
+  auto reg = make_builtin_registry();
+  auto control = Arc<FlowControl>{std::in_place};
+  auto planned = flow_plan(control, ir::ChannelKind::tiny, true);
+  planned.operators[1].parallelism = 2;
+  auto observer = Box<PipelineObserver>{std::in_place, uuid::null()};
+  auto diagnostics = TestDiagnostics{};
+  folly::coro::blockingWait(async_scope([&](AsyncScope& scope) -> Task<void> {
+    auto execution
+      = scope.spawn(run_plan(std::move(planned), reg, system, diagnostics,
+                             NoProfiler{}, false, nullptr, Ref{*observer}));
+    co_await control->ready.wait();
+    auto graphs = (observer->subscribe_graph()).unwrap();
+    auto layout = co_await graphs.recv();
+    require(layout.is_some());
+    check_eq((*layout)->graphs.size(), 2u);
+    auto metrics = observer->subscribe_metrics().unwrap();
+    require((co_await metrics.recv()).is_some());
+    control->produce.notify_one();
+    check(not(co_await execution.join()).is_error());
+    check_eq(control->received.load(std::memory_order_relaxed), 12u);
+    auto final = co_await metrics.recv();
+    require(final.is_some());
+    while (auto next = co_await metrics.recv()) {
+      final = std::move(next);
+    }
+    auto edges = size_t{0};
+    for (auto const& channel : (*final)->channels) {
+      auto graph
+        = std::ranges::find_if((*layout)->graphs, [&](auto const& graph) {
+            return graph->path == channel.path;
+          });
+      require(graph != (*layout)->graphs.end());
+      if ((**graph).channels[channel.index].type.is<nova::Events>()) {
+        ++edges;
+        check_eq(channel.events, 12u);
+      }
+    }
+    // Nested boundary edges have taps but no metrics.
+    check_eq(edges, 3u);
+  }));
+}
+
+TEST("inspection taps and metrics separate output ports connected to the same "
+     "downstream") {
   auto config = caf::actor_system_config{};
   auto system = caf::actor_system{config};
   auto reg = make_builtin_registry();
@@ -1782,6 +1854,8 @@ TEST("inspection separates output ports connected to the same downstream") {
     require_eq((*current)->graphs.size(), 1u);
     auto even = (observer->subscribe_channel(target(*current, 0, 2))).unwrap();
     auto odd = (observer->subscribe_channel(target(*current, 0, 3))).unwrap();
+    auto metrics = observer->subscribe_metrics().unwrap();
+    require((co_await metrics.recv()).is_some());
     control->produce.notify_one();
     check(not(co_await execution.join()).is_error());
     check_eq(control->received.load(std::memory_order_relaxed), 12u);
@@ -1789,6 +1863,19 @@ TEST("inspection separates output ports connected to the same downstream") {
              (std::vector<int64_t>{2, 4, 6, 8, 10, 12}));
     check_eq(co_await tap_values(odd),
              (std::vector<int64_t>{1, 3, 5, 7, 9, 11}));
+    auto final = co_await metrics.recv();
+    require(final.is_some());
+    while (auto next = co_await metrics.recv()) {
+      final = std::move(next);
+    }
+    // Each output port carries half the events, even though both feed the
+    // same downstream operator.
+    for (auto edge : {2u, 3u}) {
+      auto found
+        = std::ranges::find((*final)->channels, edge, &ChannelMetrics::index);
+      require(found != (*final)->channels.end());
+      check_eq(found->events, 6u);
+    }
   }));
 }
 
@@ -1875,6 +1962,129 @@ TEST("run_plan reports diagnostic failure without caller completion") {
     }
     check_eq(*final->end, ExecutionOutcome::failed);
   }));
+}
+
+TEST("live metric collection stops after disconnect and reconnect resets the "
+     "window") {
+  auto observer = PipelineObserver{uuid::null()};
+  observer.start(PipeId{"metrics"});
+  auto descriptions = Arc<Atomic<size_t>>{std::in_place, 0};
+  auto registration = observer.register_plan(plan(descriptions));
+  // Graph-only inspection must not keep CPU collection enabled.
+  auto graph = observer.subscribe_graph().unwrap();
+  auto stats = Arc<ExecutorStats>{std::in_place};
+  auto enabled = observer.metrics_collection_enabled();
+  registration->attach_operator_stats(0, stats);
+  auto channel = Arc<ChannelStats>{std::in_place};
+  registration->attach_channel_stats(0, channel);
+  {
+    auto metrics = observer.subscribe_metrics().unwrap();
+    CHECK(enabled->load(std::memory_order_relaxed));
+    std::ignore = folly::coro::blockingWait(metrics.recv());
+  }
+  for (auto turn = 0; turn < 40 and enabled->load(std::memory_order_relaxed);
+       ++turn) {
+    folly::coro::blockingWait(sleep_for(std::chrono::milliseconds{50}));
+  }
+  CHECK(not enabled->load(std::memory_order_relaxed));
+  stats->cpu_ns.store(1'000'000'000);
+  // Channel counters keep existing backlog observable without a subscriber.
+  channel->in.record(120, 2, false);
+  channel->out.record(120, 2, false);
+  channel->in.record(240, 4, false);
+  channel->capacity.store(500);
+  auto reconnected = observer.subscribe_metrics().unwrap();
+  auto baseline = *folly::coro::blockingWait(reconnected.recv());
+  CHECK_EQUAL(baseline->interval, duration::zero());
+  CHECK_EQUAL(baseline->operators.at(0).cpu_seconds, 0.0);
+  CHECK_EQUAL(baseline->channels.at(0).events, 0u);
+  CHECK_EQUAL(baseline->channels.at(0).bytes, 0u);
+  CHECK_EQUAL(baseline->channels.at(0).queued, 240u);
+  CHECK_EQUAL(baseline->channels.at(0).capacity, 500u);
+}
+
+TEST("inspection accepts factory counters bound after graph discovery") {
+  auto observer = PipelineObserver{uuid::null()};
+  observer.start(PipeId{"metrics"});
+  auto metrics = MetricsSubscription{};
+  {
+    auto descriptions = Arc<Atomic<size_t>>{std::in_place, 0};
+    auto registration = observer.register_plan(plan(descriptions));
+    metrics = observer.subscribe_metrics().unwrap();
+    auto baseline = *folly::coro::blockingWait(metrics.recv());
+    CHECK(baseline->operators.empty());
+    CHECK(baseline->channels.empty());
+    auto cpu = Arc<ExecutorStats>{std::in_place};
+    auto channel = Arc<ChannelStats>{std::in_place};
+    registration->attach_operator_stats(0, cpu);
+    registration->attach_channel_stats(0, channel);
+    // Repeated binding by parallel lanes must not reset the sampling window.
+    cpu->cpu_ns.store(125'000'000);
+    channel->in.record(40, 2, false);
+    channel->out.record(40, 2, false);
+    registration->attach_operator_stats(0, cpu);
+    registration->attach_channel_stats(0, channel);
+  }
+  observer.finish(ExecutionOutcome::completed);
+  auto final = *folly::coro::blockingWait(metrics.recv());
+  REQUIRE_EQUAL(final->operators.size(), 1u);
+  REQUIRE_EQUAL(final->channels.size(), 1u);
+  CHECK_EQUAL(final->operators.front().cpu_seconds, 0.125);
+  CHECK_EQUAL(final->channels.front().events, 2u);
+  CHECK_EQUAL(final->channels.front().bytes, 40u);
+}
+
+TEST("live metrics attach late, share baselines and retain retired instances") {
+  auto observer = PipelineObserver{uuid::null()};
+  CHECK(observer.subscribe_metrics().is_err());
+  observer.start(PipeId{"metrics"});
+  auto descriptions = Arc<Atomic<size_t>>{std::in_place, 0};
+  auto first = MetricsSubscription{};
+  auto second = MetricsSubscription{};
+  {
+    auto layout = plan(descriptions);
+    auto a = observer.register_plan(layout);
+    auto b = observer.register_plan(layout);
+    auto cpu_a = Arc<ExecutorStats>{std::in_place};
+    auto cpu_b = Arc<ExecutorStats>{std::in_place};
+    auto enabled = observer.metrics_collection_enabled();
+    auto channel_a = Arc<ChannelStats>{std::in_place};
+    auto channel_b = Arc<ChannelStats>{std::in_place};
+    a->attach_operator_stats(0, cpu_a);
+    b->attach_operator_stats(0, cpu_b);
+    a->attach_channel_stats(0, channel_a);
+    b->attach_channel_stats(0, channel_b);
+    CHECK(not enabled->load(std::memory_order_relaxed));
+    cpu_a->cpu_ns.store(9'000'000'000);
+    channel_a->out.events.store(90, std::memory_order_relaxed);
+    channel_a->out.bytes.store(900, std::memory_order_relaxed);
+    first = observer.subscribe_metrics().unwrap();
+    auto baseline = *folly::coro::blockingWait(first.recv());
+    CHECK_EQUAL(baseline->interval, duration::zero());
+    CHECK_EQUAL(baseline->operators.at(0).cpu_seconds, 0.0);
+    CHECK_EQUAL(baseline->channels.at(0).events, 0u);
+    CHECK(enabled->load(std::memory_order_relaxed));
+    cpu_a->cpu_ns.fetch_add(250'000'000);
+    channel_a->out.events.fetch_add(3, std::memory_order_relaxed);
+    channel_a->out.bytes.fetch_add(30, std::memory_order_relaxed);
+    // A second subscriber must not reset the first subscriber's window.
+    second = observer.subscribe_metrics().unwrap();
+    cpu_b->cpu_ns.fetch_add(500'000'000);
+    channel_b->out.events.fetch_add(7, std::memory_order_relaxed);
+    channel_b->out.bytes.fetch_add(70, std::memory_order_relaxed);
+  }
+  observer.finish(ExecutionOutcome::completed);
+  auto final_a = *folly::coro::blockingWait(first.recv());
+  auto final_b = *folly::coro::blockingWait(second.recv());
+  CHECK_EQUAL(&*final_a, &*final_b);
+  CHECK(final_a->interval > duration::zero());
+  CHECK_EQUAL(*final_a->end, ExecutionOutcome::completed);
+  CHECK_EQUAL(final_a->operators.at(0).cpu_seconds, 0.75);
+  CHECK_EQUAL(final_a->channels.at(0).events, 10u);
+  CHECK_EQUAL(final_a->channels.at(0).bytes, 100u);
+  CHECK_EQUAL(final_a->channels.at(0).queued, 0u);
+  CHECK(not folly::coro::blockingWait(first.recv()));
+  CHECK(not folly::coro::blockingWait(second.recv()));
 }
 
 } // namespace tenzir

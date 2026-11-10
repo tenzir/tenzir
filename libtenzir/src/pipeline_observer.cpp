@@ -192,6 +192,113 @@ struct InspectionState {
   Option<Arc<SourceMap const>> sources;
   GraphHistory history;
   GraphBroadcast graph_updates;
+  MetricsBroadcast metric_updates;
+  Arc<Atomic<bool>> metric_active{std::in_place, false};
+  struct MetricPlan {
+    PlanPath path;
+    std::vector<Option<Arc<ExecutorStats>>> operator_stats;
+    std::vector<Option<Arc<ChannelStats>>> channel_stats;
+    std::vector<int64_t> cpu;
+    std::vector<std::pair<uint64_t, uint64_t>> flow;
+    bool retired = false;
+  };
+  // Retired plans live until the next tick so even sub-second instances get a
+  // final sample. Bound this separately from the execution's live plan registry.
+  static constexpr auto max_metric_plans = size_t{4096};
+  std::map<uint64_t, MetricPlan> metric_plans;
+  std::chrono::steady_clock::time_point metric_time;
+  bool metric_truncated = false;
+  // Incremented whenever the sampling window resets. Ticks carry the window
+  // they were sampled in, so receivers can drop those that publish late.
+  uint64_t metric_epoch = 0;
+
+  auto track_metrics(PlanRegistration const& plan) -> void {
+    if (not metric_updates.has_receivers() or not plan.graph_id_
+        or metric_plans.contains(plan.id_)) {
+      return;
+    }
+    if (metric_plans.size() >= max_metric_plans) {
+      metric_truncated = true;
+      return;
+    }
+    // Instances found during initialization get their baseline from the
+    // first snapshot, which also covers counters attached in between. Later
+    // instances started after that baseline, so zero is their true origin.
+    metric_plans.emplace(
+      plan.id_, MetricPlan{history.graph(*plan.graph_id_)->path,
+                           plan.operator_stats_, plan.channel_stats_,
+                           std::vector<int64_t>(plan.operator_stats_.size()),
+                           std::vector<std::pair<uint64_t, uint64_t>>(
+                             plan.channel_stats_.size())});
+  }
+
+  auto metrics_snapshot(bool baseline = false) -> Arc<MetricsSnapshot const> {
+    auto now = std::chrono::steady_clock::now();
+    auto interval
+      = (baseline or metric_time == std::chrono::steady_clock::time_point{})
+          ? duration::zero()
+          : std::chrono::duration_cast<duration>(now - metric_time);
+    metric_time = now;
+    auto operators = std::map<std::pair<PlanPath, size_t>, OperatorMetrics>{};
+    auto channels = std::map<std::pair<PlanPath, size_t>, ChannelMetrics>{};
+    // Layouts are not part of metric snapshots. Instances that finished since
+    // the preceding tick still report, so their paths may already be evicted
+    // from graph history and absent from graph snapshots.
+    //
+    // Deltas cannot underflow: counters only grow, and `attach_*_stats`
+    // asserts that a slot never changes its counters once bound.
+    for (auto& [_, plan] : metric_plans) {
+      for (auto i = size_t{0}; i < plan.operator_stats.size(); ++i) {
+        if (not plan.operator_stats[i]) {
+          continue;
+        }
+        auto cpu
+          = (*plan.operator_stats[i])->cpu_ns.load(std::memory_order::relaxed);
+        auto [it, inserted] = operators.try_emplace(
+          {plan.path, i}, OperatorMetrics{plan.path, i});
+        if (not baseline) {
+          it->second.cpu_seconds
+            += static_cast<double>(cpu - plan.cpu[i]) / 1e9;
+        }
+        plan.cpu[i] = cpu;
+      }
+      for (auto i = size_t{0}; i < plan.channel_stats.size(); ++i) {
+        if (not plan.channel_stats[i]) {
+          continue;
+        }
+        auto const& stats = *plan.channel_stats[i];
+        auto events = stats->out.events.load(std::memory_order::relaxed);
+        auto bytes = stats->out.bytes.load(std::memory_order::relaxed);
+        auto [it, inserted]
+          = channels.try_emplace({plan.path, i}, ChannelMetrics{plan.path, i});
+        auto& value = it->second;
+        if (not baseline) {
+          value.events += events - plan.flow[i].first;
+          value.bytes += bytes - plan.flow[i].second;
+        }
+        plan.flow[i] = {events, bytes};
+        // Retired instances hold no queue. Fused channels have no capacity and
+        // at most one message in transit.
+        if (not plan.retired) {
+          value.queued += stats->queued_bytes();
+          value.capacity += stats->capacity.load(std::memory_order_relaxed);
+        }
+      }
+    }
+    auto result = MetricsSnapshot{
+      process_instance_id, execution_id, end, time::clock::now(), interval,
+      metric_truncated,    {},           {}};
+    for (auto& [_, value] : operators) {
+      result.operators.push_back(std::move(value));
+    }
+    for (auto& [_, value] : channels) {
+      result.channels.push_back(std::move(value));
+    }
+    std::erase_if(metric_plans, [](auto const& entry) {
+      return entry.second.retired;
+    });
+    return Arc<MetricsSnapshot const>{std::move(result)};
+  }
   // Layout ID and edge index address each logical channel directly.
   std::map<std::pair<size_t, size_t>, std::shared_ptr<TapBroadcast>> taps;
   Option<folly::CancellationSource> timer;
@@ -209,7 +316,8 @@ struct InspectionState {
   }
 
   auto observing() const -> bool {
-    return initializing or has_readers() or has_taps();
+    return initializing or has_readers() or has_taps()
+           or metric_updates.has_receivers();
   }
 
   auto clear_if_unobserved() -> void {
@@ -281,6 +389,25 @@ private:
         }
         return true;
       });
+      auto metrics = state->metric_updates.has_receivers();
+      state->metric_active->store(metrics, std::memory_order_relaxed);
+      if (not metrics) {
+        state->metric_plans.clear();
+      } else if (not state->initializing
+                 and std::chrono::steady_clock::now() - state->metric_time
+                       >= std::chrono::seconds{1}) {
+        // Initialization unlocks while describing plans. Its baseline
+        // snapshot seeds every tracked counter; publishing before that would
+        // leak lifetime totals as a delta.
+        auto update
+          = MetricsUpdate{state->metrics_snapshot(), state->metric_epoch};
+        lock.unlock();
+        state->metric_updates.publish(update);
+        lock.lock();
+        if (state->end) {
+          co_return;
+        }
+      }
       state->clear_if_unobserved();
       if (not state->observing()) {
         state->timer = None{};
@@ -319,6 +446,7 @@ auto PipelineObserver::ensure_graph(uint64_t id,
   auto& entry = *found->second;
   if (entry.graph_id_) {
     state_->history.observe_instance(*entry.graph_id_, entry);
+    state_->track_metrics(entry);
     return entry.graph_id_;
   }
   // Description invokes operator code. Keep only owned plan data and IDs across
@@ -349,6 +477,7 @@ auto PipelineObserver::ensure_graph(uint64_t id,
                                                parent_operator, *found->second);
   found->second->graph_id_ = graph_id;
   attach_taps(*found->second);
+  state_->track_metrics(*found->second);
   return graph_id;
 }
 
@@ -417,6 +546,10 @@ auto PipelineObserver::finish(ExecutionOutcome outcome) -> void {
   }
   state_->end = outcome;
   auto final = state_->snapshot();
+  auto metrics
+    = detail::MetricsUpdate{state_->metrics_snapshot(), state_->metric_epoch};
+  state_->metric_active->store(false, std::memory_order_relaxed);
+  state_->metric_plans.clear();
   state_->history.finish();
   auto taps = std::exchange(state_->taps, {});
   auto timer = std::exchange(state_->timer, None{});
@@ -426,6 +559,7 @@ auto PipelineObserver::finish(ExecutionOutcome outcome) -> void {
     timer->requestCancellation();
   }
   state->graph_updates.close(std::move(final));
+  state->metric_updates.close(std::move(metrics));
   // Runtime work has joined, so accepted batches precede the terminal outcome.
   for (auto const& [_, channel] : taps) {
     channel->close(outcome);
@@ -482,6 +616,10 @@ auto PipelineObserver::unregister_plan(PlanRegistration& registration) -> void {
     }
   }
   live_.erase(registration.id_);
+  if (auto found = state_->metric_plans.find(registration.id_);
+      found != state_->metric_plans.end()) {
+    found->second.retired = true;
+  }
   if (registration.graph_id_) {
     state_->history.remove_instance(*registration.graph_id_, registration);
   }
@@ -515,6 +653,54 @@ auto PipelineObserver::subscribe_graph()
   }
   return state_->subscribe();
 }
+auto PipelineObserver::metrics_collection_enabled() const -> Arc<Atomic<bool>> {
+  return state_->metric_active;
+}
+
+auto PipelineObserver::subscribe_metrics()
+  -> Result<MetricsSubscription, GraphSubscriptionError> {
+  auto lock = std::unique_lock{state_->mutex};
+  if (not state_->execution_id and not state_->end) {
+    return Err{GraphSubscriptionError::not_started};
+  }
+  state_->begin_observation(Arc{state_}.into_shared());
+  auto first = not state_->metric_updates.has_receivers();
+  if (first and not state_->end) {
+    // A tick of the previous window may be between sampling and publishing.
+    ++state_->metric_epoch;
+  }
+  auto subscription = MetricsSubscription{state_->metric_updates.subscribe(),
+                                          state_->metric_epoch};
+  if (state_->end) {
+    return subscription;
+  }
+  if (first) {
+    state_->metric_plans.clear();
+    state_->metric_truncated = false;
+    state_->metric_active->store(true, std::memory_order_relaxed);
+    initialize_graph(lock);
+    auto baseline = detail::MetricsUpdate{state_->metrics_snapshot(true),
+                                          state_->metric_epoch};
+    lock.unlock();
+    state_->metric_updates.publish(baseline);
+  }
+  return subscription;
+}
+
+MetricsSubscription::MetricsSubscription(
+  detail::MetricsBroadcast::Receiver receiver, uint64_t epoch)
+  : receiver_{std::move(receiver)}, epoch_{epoch} {
+}
+
+auto MetricsSubscription::recv() -> Task<Option<Arc<MetricsSnapshot const>>> {
+  while (auto update = co_await receiver_.recv()) {
+    if (update->epoch >= epoch_) {
+      co_return std::move(update->snapshot);
+    }
+  }
+  co_return None{};
+}
+
 auto PipelineObserver::subscribe_channel(ChannelTarget target)
   -> Result<TapSubscription, TapSubscriptionError> {
   auto lock = std::unique_lock{state_->mutex};
@@ -570,7 +756,31 @@ PlanRegistration::PlanRegistration(PipelineObserver& observer, uint64_t id,
     plan_{std::move(plan)},
     parent_{parent},
     parent_operator_{parent_operator},
-    taps_(plan_->channels.size()) {
+    taps_(plan_->channels.size()),
+    operator_stats_(plan_->operators.size()),
+    channel_stats_(plan_->channels.size()) {
+}
+auto PlanRegistration::attach_operator_stats(size_t op,
+                                             Arc<ExecutorStats> stats) -> void {
+  auto lock = std::scoped_lock{observer_.state_->mutex};
+  auto& slot = operator_stats_.at(op);
+  TENZIR_ASSERT(not slot or &**slot == &*stats);
+  slot = stats;
+  if (auto found = observer_.state_->metric_plans.find(id_);
+      found != observer_.state_->metric_plans.end()) {
+    found->second.operator_stats.at(op) = std::move(stats);
+  }
+}
+auto PlanRegistration::attach_channel_stats(size_t edge,
+                                            Arc<ChannelStats> stats) -> void {
+  auto lock = std::scoped_lock{observer_.state_->mutex};
+  auto& slot = channel_stats_.at(edge);
+  TENZIR_ASSERT(not slot or &**slot == &*stats);
+  slot = stats;
+  if (auto found = observer_.state_->metric_plans.find(id_);
+      found != observer_.state_->metric_plans.end()) {
+    found->second.channel_stats.at(edge) = std::move(stats);
+  }
 }
 auto PlanRegistration::plan() const -> ir::Plan const& {
   return *plan_;

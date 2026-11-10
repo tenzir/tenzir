@@ -312,13 +312,7 @@ public:
   }
 
   auto operator()(OperatorMsg<T> x) -> Task<void> override {
-    stats_->in.bytes.fetch_add(count_bytes(x), std::memory_order::relaxed);
-    if (is<Signal>(x)) {
-      stats_->in.signals.fetch_add(1, std::memory_order::relaxed);
-    } else {
-      stats_->in.batches.fetch_add(1, std::memory_order::relaxed);
-      stats_->in.events.fetch_add(count_events(x), std::memory_order::relaxed);
-    }
+    stats_->in.record(count_bytes(x), count_events(x), is<Signal>(x));
     co_await sender_.send(std::move(x));
   }
 
@@ -339,15 +333,8 @@ public:
   auto operator()() -> Task<Option<OperatorMsg<T>>> override {
     auto result = co_await receiver_.recv();
     if (result.is_some()) {
-      stats_->out.bytes.fetch_add(count_bytes(*result),
-                                  std::memory_order::relaxed);
-      if (is<Signal>(*result)) {
-        stats_->out.signals.fetch_add(1, std::memory_order::relaxed);
-      } else {
-        stats_->out.batches.fetch_add(1, std::memory_order::relaxed);
-        stats_->out.events.fetch_add(count_events(*result),
-                                     std::memory_order::relaxed);
-      }
+      stats_->out.record(count_bytes(*result), count_events(*result),
+                         is<Signal>(*result));
     }
     co_return result;
   }
@@ -388,56 +375,62 @@ protected:
 /// wall-clock time, thread CPU time, and task count. Also sets the
 /// exec_node_name_guard thread-local for each continuation so that
 /// per-operator tracking (e.g. allocator tagging) works in the async path.
+///
+/// An `enabled` flag gates measurement: inspection wraps executors at startup
+/// but collects CPU time only while someone subscribes to metrics, so tasks
+/// skip the clock reads otherwise. Without a flag, it always measures.
 template <class Handle = folly::Executor>
 class ProfilingExecutor final : public ProfilingExecutorBase<Handle> {
 public:
   static auto
   make(folly::Executor::KeepAlive<Handle> inner,
-       Option<Arc<ExecutorStats>> stats, exec_node_name_guard::name_type name)
+       Option<Arc<ExecutorStats>> stats, Option<Arc<Atomic<bool>>> enabled,
+       exec_node_name_guard::name_type name)
     -> folly::Executor::KeepAlive<Handle> {
     // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
     auto* ptr = new ProfilingExecutor{std::move(inner), std::move(stats),
-                                      std::move(name)};
+                                      std::move(enabled), std::move(name)};
     return folly::Executor::makeKeepAlive(static_cast<Handle*>(ptr));
   }
 
   void add(folly::Func f) override {
-    this->inner_->add(
-      [stats = stats_, name = name_, f = std::move(f)]() mutable {
-        auto guard
-          = exec_node_name_guard{name, exec_node_name_guard::type::folly};
-        if (stats.is_none()) {
-          f();
-          return;
-        }
-        auto wall_start = std::chrono::steady_clock::now();
-        struct timespec cpu_start = {};
-        clock_gettime(CLOCK_THREAD_CPUTIME_ID, &cpu_start);
+    this->inner_->add([stats = stats_, enabled = enabled_, name = name_,
+                       f = std::move(f)]() mutable {
+      auto guard
+        = exec_node_name_guard{name, exec_node_name_guard::type::folly};
+      if (stats.is_none()
+          or (enabled and not(*enabled)->load(std::memory_order_relaxed))) {
         f();
-        auto wall_end = std::chrono::steady_clock::now();
-        struct timespec cpu_end = {};
-        clock_gettime(CLOCK_THREAD_CPUTIME_ID, &cpu_end);
-        auto wall_delta = std::chrono::duration_cast<std::chrono::microseconds>(
-                            wall_end - wall_start)
-                            .count();
-        auto cpu_delta = (cpu_end.tv_sec - cpu_start.tv_sec) * 1'000'000'000LL
-                         + (cpu_end.tv_nsec - cpu_start.tv_nsec);
-        if (wall_delta > 1'000'000) {
-          TENZIR_VERBOSE(
-            "add(): wall={}us cpu={}ns total_cpu={}ns "
-            "tasks={}",
-            wall_delta, cpu_delta,
-            (*stats)->cpu_ns.load(std::memory_order::relaxed) + cpu_delta,
-            (*stats)->task_count.load(std::memory_order::relaxed) + 1);
-        }
-        (*stats)->wall_ns.fetch_add(
-          std::chrono::duration_cast<std::chrono::nanoseconds>(wall_end
-                                                               - wall_start)
-            .count(),
-          std::memory_order::relaxed);
-        (*stats)->cpu_ns.fetch_add(cpu_delta, std::memory_order::relaxed);
-        (*stats)->task_count.fetch_add(1, std::memory_order::relaxed);
-      });
+        return;
+      }
+      auto wall_start = std::chrono::steady_clock::now();
+      struct timespec cpu_start = {};
+      clock_gettime(CLOCK_THREAD_CPUTIME_ID, &cpu_start);
+      f();
+      auto wall_end = std::chrono::steady_clock::now();
+      struct timespec cpu_end = {};
+      clock_gettime(CLOCK_THREAD_CPUTIME_ID, &cpu_end);
+      auto wall_delta = std::chrono::duration_cast<std::chrono::microseconds>(
+                          wall_end - wall_start)
+                          .count();
+      auto cpu_delta = (cpu_end.tv_sec - cpu_start.tv_sec) * 1'000'000'000LL
+                       + (cpu_end.tv_nsec - cpu_start.tv_nsec);
+      if (wall_delta > 1'000'000) {
+        TENZIR_VERBOSE(
+          "add(): wall={}us cpu={}ns total_cpu={}ns "
+          "tasks={}",
+          wall_delta, cpu_delta,
+          (*stats)->cpu_ns.load(std::memory_order::relaxed) + cpu_delta,
+          (*stats)->task_count.load(std::memory_order::relaxed) + 1);
+      }
+      (*stats)->wall_ns.fetch_add(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(wall_end
+                                                             - wall_start)
+          .count(),
+        std::memory_order::relaxed);
+      (*stats)->cpu_ns.fetch_add(cpu_delta, std::memory_order::relaxed);
+      (*stats)->task_count.fetch_add(1, std::memory_order::relaxed);
+    });
   }
 
   auto keepAliveAcquire() noexcept -> bool override {
@@ -461,12 +454,15 @@ public:
 private:
   ProfilingExecutor(folly::Executor::KeepAlive<Handle> inner,
                     Option<Arc<ExecutorStats>> stats,
+                    Option<Arc<Atomic<bool>>> enabled,
                     exec_node_name_guard::name_type name)
     : ProfilingExecutorBase<Handle>{std::move(inner)},
       stats_{std::move(stats)},
+      enabled_{std::move(enabled)},
       name_{name} {
   }
   Option<Arc<ExecutorStats>> stats_;
+  Option<Arc<Atomic<bool>>> enabled_;
   Atomic<size_t> refs_{1};
   exec_node_name_guard::name_type name_;
 };
@@ -489,14 +485,7 @@ public:
     auto bytes = count_bytes(x);
     // Update profiling counters.
     if (stats_.is_some()) {
-      (*stats_)->in.bytes.fetch_add(bytes, std::memory_order::relaxed);
-      if (is<Signal>(x)) {
-        (*stats_)->in.signals.fetch_add(1, std::memory_order::relaxed);
-      } else {
-        (*stats_)->in.batches.fetch_add(1, std::memory_order::relaxed);
-        (*stats_)->in.events.fetch_add(count_events(x),
-                                       std::memory_order::relaxed);
-      }
+      (*stats_)->in.record(bytes, count_events(x), is<Signal>(x));
     }
     auto lock = co_await mutex_.lock();
     lock->current_bytes += bytes;
@@ -549,14 +538,7 @@ public:
     }
     // Update profiling counters.
     if (stats_.is_some()) {
-      (*stats_)->out.bytes.fetch_add(bytes, std::memory_order::relaxed);
-      if (is<Signal>(result)) {
-        (*stats_)->out.signals.fetch_add(1, std::memory_order::relaxed);
-      } else {
-        (*stats_)->out.batches.fetch_add(1, std::memory_order::relaxed);
-        (*stats_)->out.events.fetch_add(count_events(result),
-                                        std::memory_order::relaxed);
-      }
+      (*stats_)->out.record(bytes, count_events(result), is<Signal>(result));
     }
     notify_send_.notify_one();
     // Cascade to the next blocked receiver (MPMC safety).
@@ -690,16 +672,17 @@ public:
     return std::exchange(executors_, std::move(alive));
   }
 
-  auto make_executor(OpId id, std::string name)
-    -> folly::Executor::KeepAlive<> override {
-    return wrap_executor(std::move(id), folly::getGlobalCPUExecutor(),
-                         std::move(name));
+  auto make_executor(OpId id, std::string name) -> OperatorExecutor override {
+    auto [executor, stats] = wrap_executor(
+      std::move(id), folly::getGlobalCPUExecutor(), std::move(name));
+    return {std::move(executor), std::move(stats)};
   }
 
   auto make_io_executor(OpId id, std::string name)
     -> folly::Executor::KeepAlive<folly::IOExecutor> override {
     return wrap_executor<folly::IOExecutor>(
-      std::move(id), folly::getGlobalIOExecutor(), std::move(name));
+             std::move(id), folly::getGlobalIOExecutor(), std::move(name))
+      .first;
   }
 
   auto make_counter(MetricsLabel label, MetricsDirection direction,
@@ -807,32 +790,72 @@ protected:
   }
 
 private:
-  /// Wraps an executor to contribute to the stats of the given operator.
+  /// Wraps an executor to contribute to the stats of the given operator and
+  /// returns those stats alongside it.
   template <class Handle = folly::Executor>
   auto wrap_executor(OpId id, folly::Executor::KeepAlive<Handle> inner,
                      std::string name = {})
-    -> folly::Executor::KeepAlive<Handle> {
+    -> std::pair<folly::Executor::KeepAlive<Handle>, Option<Arc<ExecutorStats>>> {
     auto alloc_name = exec_node_name_guard::name_type{};
     std::copy_n(name.begin(), std::min(name.size(), alloc_name.size()),
                 alloc_name.begin());
-    auto stats = Option<Arc<ExecutorStats>>{};
+    if (not profiling_ and not observer_) {
+      return {ProfilingExecutor<Handle>::make(std::move(inner), None{}, None{},
+                                              alloc_name),
+              None{}};
+    }
+    // The profiler needs complete counters. Inspection alone measures only
+    // while metrics are subscribed.
+    auto enabled = Option<Arc<Atomic<bool>>>{};
+    if (not profiling_) {
+      enabled = (*observer_)->metrics_collection_enabled();
+    }
+    auto stats = make_executor_stats(std::move(id), std::move(name));
+    return {ProfilingExecutor<Handle>::make(std::move(inner), stats,
+                                            std::move(enabled), alloc_name),
+            std::move(stats)};
+  }
+
+  /// CPU and IO executors and all parallel lanes share one operator's stats.
+  auto make_executor_stats(OpId id, std::string name) -> Arc<ExecutorStats> {
     auto lock = std::scoped_lock{mutex_};
-    if (profiling_) {
-      // Look for an existing executor with the same ID to share stats with.
-      for (auto& e : executors_) {
-        if (e.id == id) {
-          stats = e.stats;
-          break;
-        }
-      }
-      if (stats.is_none()) {
-        stats = Arc<ExecutorStats>{std::in_place};
-        executors_.push_back(
-          ExecutorProfile{std::move(id), *stats, std::move(name)});
+    if (not profiling_) {
+      std::erase_if(executors_, [](auto const& profile) {
+        return profile.stats.strong_count() == 1;
+      });
+    }
+    for (auto const& profile : executors_) {
+      if (profile.id == id) {
+        return profile.stats;
       }
     }
-    return ProfilingExecutor<Handle>::make(std::move(inner), std::move(stats),
-                                           alloc_name);
+    auto stats = Arc<ExecutorStats>{std::in_place};
+    executors_.push_back(
+      ExecutorProfile{std::move(id), stats, std::move(name)});
+    return stats;
+  }
+
+  /// All physical lanes of one logical edge share its stats.
+  auto make_channel_stats(ChannelId const& id, element_type_tag type)
+    -> Option<Arc<ChannelStats>> {
+    if (not profiling_ and not observer_) {
+      return None{};
+    }
+    auto lock = std::scoped_lock{mutex_};
+    if (not profiling_) {
+      std::erase_if(channels_, [](auto const& profile) {
+        return profile.stats.strong_count() == 1;
+      });
+    }
+    for (auto const& profile : channels_) {
+      if (profile.id == id) {
+        return profile.stats;
+      }
+    }
+    auto stats = Arc<ChannelStats>{std::in_place};
+    stats->record_backpressure = record_backpressure_;
+    channels_.push_back(ChannelProfile{id, stats, type});
+    return stats;
   }
 
   /// Create an operator channel with the specified memory limit and collect
@@ -846,28 +869,14 @@ private:
   auto make_profiled_channel(ChannelId id, size_t max_bytes,
                              Option<Ref<ChannelTap const>> tap = None{})
     -> PushPull<OperatorMsg<T>> {
-    auto stats = Option<Arc<ChannelStats>>{};
-    if (profiling_) {
-      auto lock = std::scoped_lock{mutex_};
-      // Look for an existing channel with the same ID to share stats with.
-      for (auto& c : channels_) {
-        if (c.id == id) {
-          stats = c.stats;
-          break;
-        }
-      }
-      if (stats.is_none()) {
-        stats = Arc<ChannelStats>{std::in_place};
-        (*stats)->record_backpressure = record_backpressure_;
-        channels_.push_back(ChannelProfile{id, *stats, tag_v<T>});
-      }
-      // Accumulate capacity across all channels sharing this ID (e.g. the
-      // lanes of a routing exchange).
+    auto stats = make_channel_stats(id, tag_v<T>);
+    if (stats) {
+      // Every physical lane contributes to the logical edge's capacity.
       (*stats)->capacity.fetch_add(max_bytes, std::memory_order::relaxed);
     }
-    auto shared = std::make_shared<OpChannel<T>>(
-      std::move(id), max_bytes, std::move(stats), std::move(tap));
-    return {OpPush<T>{shared}, OpPull<T>{shared}};
+    auto shared = std::make_shared<OpChannel<T>>(std::move(id), max_bytes,
+                                                 stats, std::move(tap));
+    return {OpPush<T>{shared}, OpPull<T>{shared}, std::move(stats)};
   }
 
   /// Create a fused channel and collect its profile.
@@ -875,24 +884,12 @@ private:
   auto make_profiled_fused_channel(ChannelId id,
                                    Option<Ref<ChannelTap const>> tap = None{})
     -> PushPull<OperatorMsg<T>> {
-    auto stats = Option<Arc<ChannelStats>>{};
-    if (profiling_) {
-      auto lock = std::scoped_lock{mutex_};
-      for (auto& c : channels_) {
-        if (c.id == id) {
-          stats = c.stats;
-          break;
-        }
-      }
-      if (stats.is_none()) {
-        stats = Arc<ChannelStats>{std::in_place};
-        channels_.push_back(ChannelProfile{id, *stats, tag_v<T>});
-      }
-    }
+    auto stats = make_channel_stats(id, tag_v<T>);
     auto [sender, receiver] = fused_channel<OperatorMsg<T>>(std::move(tap));
     if (stats.is_some()) {
       return {MeteredFusedPush<T>{std::move(sender), *stats},
-              MeteredFusedPull<T>{std::move(receiver), *stats}};
+              MeteredFusedPull<T>{std::move(receiver), *stats},
+              std::move(stats)};
     }
     return FusedSenderReceiver<OperatorMsg<T>>{std::move(sender),
                                                std::move(receiver)}

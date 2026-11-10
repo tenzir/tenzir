@@ -78,6 +78,27 @@ auto no_negative_cpu(ProfilerSnapshot const& snapshot) -> bool {
   });
 }
 
+TEST("channel counters track moved bytes, messages, and queued bytes") {
+  auto stats = ChannelStats{};
+  stats.in.record(120, 2, false);
+  stats.in.record(20, 0, true);
+  CHECK_EQUAL(stats.queued_bytes(), 140u);
+  CHECK_EQUAL(stats.in.bytes.load(), 140u);
+  CHECK_EQUAL(stats.in.events.load(), 2u);
+  CHECK_EQUAL(stats.in.batches.load(), 1u);
+  CHECK_EQUAL(stats.in.signals.load(), 1u);
+  stats.out.record(120, 2, false);
+  CHECK_EQUAL(stats.queued_bytes(), 20u);
+  CHECK_EQUAL(stats.out.events.load(), 2u);
+  stats.out.record(20, 0, true);
+  CHECK_EQUAL(stats.queued_bytes(), 0u);
+  CHECK_EQUAL(stats.out.batches.load(), 1u);
+  CHECK_EQUAL(stats.out.signals.load(), 1u);
+  // Independently sampled counters must not wrap to an enormous queue gauge.
+  stats.out.bytes.fetch_add(1);
+  CHECK_EQUAL(stats.queued_bytes(), 0u);
+}
+
 TEST("cpu is the fraction of the elapsed time spent on cpu") {
   auto prev = std::unordered_map<OpId, OpSnapshot>{};
   auto channels = std::vector{make_channel("_", "0", 10, 100)};
@@ -263,6 +284,31 @@ TEST("an executor restarting without cpu time reports zero") {
     = build_profiler_snapshot(channels, restarted, time{}, interval, prev);
   REQUIRE(has_entry(snapshot, "0"));
   CHECK_EQUAL(entry_for(snapshot, "0").cpu, 0.0);
+}
+
+TEST("distinct output ports retain their operator attribution") {
+  auto sender = OpId{"0"};
+  auto receiver = OpId{"1"};
+  CHECK(sender.to(receiver) == sender.to(receiver, 0));
+  CHECK(sender.to(receiver, 0) != sender.to(receiver, 1));
+  CHECK(ChannelId::last(sender, 0) != ChannelId::last(sender, 1));
+  auto channels = std::vector{
+    make_channel("0", "1", 3, 30),
+    make_channel("0", "1", 7, 70),
+  };
+  channels[1].id = sender.to(receiver, 1);
+  auto executors = std::vector{
+    make_executor("0", "split", 0),
+    make_executor("1", "discard", 0),
+  };
+  auto prev = std::unordered_map<OpId, OpSnapshot>{};
+  auto snapshot
+    = build_profiler_snapshot(channels, executors, time{}, interval, prev);
+  REQUIRE_EQUAL(snapshot.operators.size(), 2u);
+  CHECK_EQUAL(entry_for(snapshot, "0").events_out, 10u);
+  CHECK_EQUAL(entry_for(snapshot, "1").events_in, 10u);
+  CHECK_EQUAL(entry_for(snapshot, "0").bytes_out, 100u);
+  CHECK_EQUAL(entry_for(snapshot, "1").bytes_in, 100u);
 }
 
 TEST("boundary channels are not attributed to a placeholder operator") {

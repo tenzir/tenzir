@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "tenzir/arc.hpp"
 #include "tenzir/async/task.hpp"
 #include "tenzir/box.hpp"
 #include "tenzir/option.hpp"
@@ -16,6 +17,8 @@
 #include <vector>
 
 namespace tenzir {
+
+struct ChannelStats;
 
 /// A type-erased, asynchronous sender.
 template <class T>
@@ -47,6 +50,9 @@ template <class T>
 struct PushPull {
   Box<Push<T>> push;
   Box<Pull<T>> pull;
+  /// Counters shared by every physical lane of the same logical channel. Only
+  /// set when the factory profiles or inspects.
+  Option<Arc<ChannelStats>> stats = None{};
 };
 
 /// A type-erased, asynchronous sender on multiple ports.

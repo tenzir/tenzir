@@ -141,7 +141,8 @@ TEST("fused channel works with move-only types") {
 
 TEST("fused push pull wrapper works") {
   folly::coro::blockingWait([&]() -> Task<void> {
-    auto [push, pull] = fused_channel<int>().into_push_pull();
+    auto [push, pull, stats] = fused_channel<int>().into_push_pull();
+    TENZIR_UNUSED(stats);
     co_await folly::coro::collectAll(
       [](Box<Push<int>> p) -> Task<void> {
         co_await p(10);

@@ -144,10 +144,15 @@ public:
     }
   }
 
+  struct OperatorExecutor {
+    folly::Executor::KeepAlive<> executor;
+    /// Counters shared by the operator's CPU and IO executors and by all of
+    /// its parallel lanes. Only set when the factory profiles or inspects.
+    Option<Arc<ExecutorStats>> stats;
+  };
+
   /// Returns a per-operator CPU executor.
-  virtual auto make_executor(OpId id, std::string name)
-    -> folly::Executor::KeepAlive<>
-    = 0;
+  virtual auto make_executor(OpId id, std::string name) -> OperatorExecutor = 0;
 
   /// Returns a per-operator IO executor.
   virtual auto make_io_executor(OpId id, std::string name)

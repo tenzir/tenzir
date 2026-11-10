@@ -1992,6 +1992,161 @@ auto parse_execution_graph_snapshot(simdjson::dom::element value)
     std::move(call_sites)};
 }
 
+auto parse_execution_operator_metrics(simdjson::dom::element value)
+  -> Result<ExecutionOperatorMetrics, ParseError> {
+  TRY(auto object, api::object_of(value, "ExecutionOperatorMetrics"));
+
+  TRY(auto path_raw, api::field(object, "path", "ExecutionOperatorMetrics"));
+  auto path = std::vector<std::int64_t>{};
+  auto path_array = simdjson::dom::array{};
+  if (path_raw.get_array().get(path_array) != simdjson::SUCCESS) {
+    return Err{
+      ParseError{"ExecutionOperatorMetrics.path", "expected an array"}};
+  }
+  for (auto path_item : path_array) {
+    TRY(auto path_decoded,
+        api::int64_of(path_item, "ExecutionOperatorMetrics.path"));
+    path.push_back(std::move(path_decoded));
+  }
+
+  TRY(auto operator_index_raw,
+      api::field(object, "operatorIndex", "ExecutionOperatorMetrics"));
+  TRY(auto operator_index,
+      api::int64_of(operator_index_raw,
+                    "ExecutionOperatorMetrics.operatorIndex"));
+
+  TRY(auto cpu_seconds_raw,
+      api::field(object, "cpuSeconds", "ExecutionOperatorMetrics"));
+  TRY(auto cpu_seconds,
+      api::double_of(cpu_seconds_raw, "ExecutionOperatorMetrics.cpuSeconds"));
+
+  return ExecutionOperatorMetrics{std::move(path), std::move(operator_index),
+                                  cpu_seconds};
+}
+
+auto parse_execution_channel_metrics(simdjson::dom::element value)
+  -> Result<ExecutionChannelMetrics, ParseError> {
+  TRY(auto object, api::object_of(value, "ExecutionChannelMetrics"));
+
+  TRY(auto path_raw, api::field(object, "path", "ExecutionChannelMetrics"));
+  auto path = std::vector<std::int64_t>{};
+  auto path_array = simdjson::dom::array{};
+  if (path_raw.get_array().get(path_array) != simdjson::SUCCESS) {
+    return Err{ParseError{"ExecutionChannelMetrics.path", "expected an array"}};
+  }
+  for (auto path_item : path_array) {
+    TRY(auto path_decoded,
+        api::int64_of(path_item, "ExecutionChannelMetrics.path"));
+    path.push_back(std::move(path_decoded));
+  }
+
+  TRY(auto channel_index_raw,
+      api::field(object, "channelIndex", "ExecutionChannelMetrics"));
+  TRY(auto channel_index,
+      api::int64_of(channel_index_raw, "ExecutionChannelMetrics.channelIndex"));
+
+  TRY(auto events_raw, api::field(object, "events", "ExecutionChannelMetrics"));
+  TRY(auto events, api::int64_of(events_raw, "ExecutionChannelMetrics.events"));
+
+  TRY(auto bytes_raw, api::field(object, "bytes", "ExecutionChannelMetrics"));
+  TRY(auto bytes, api::int64_of(bytes_raw, "ExecutionChannelMetrics.bytes"));
+
+  TRY(auto queued_bytes_raw,
+      api::field(object, "queuedBytes", "ExecutionChannelMetrics"));
+  TRY(auto queued_bytes,
+      api::int64_of(queued_bytes_raw, "ExecutionChannelMetrics.queuedBytes"));
+
+  TRY(auto capacity_bytes_raw,
+      api::field(object, "capacityBytes", "ExecutionChannelMetrics"));
+  TRY(auto capacity_bytes,
+      api::int64_of(capacity_bytes_raw,
+                    "ExecutionChannelMetrics.capacityBytes"));
+
+  return ExecutionChannelMetrics{
+    std::move(path),  std::move(channel_index), std::move(events),
+    std::move(bytes), std::move(queued_bytes),  std::move(capacity_bytes)};
+}
+
+auto parse_execution_metrics_snapshot(simdjson::dom::element value)
+  -> Result<ExecutionMetricsSnapshot, ParseError> {
+  TRY(auto object, api::object_of(value, "ExecutionMetricsSnapshot"));
+
+  TRY(auto run_raw, api::field(object, "run", "ExecutionMetricsSnapshot"));
+  TRY(auto run, api::int64_of(run_raw, "ExecutionMetricsSnapshot.run"));
+
+  TRY(auto process_instance_id_raw,
+      api::field(object, "processInstanceId", "ExecutionMetricsSnapshot"));
+  TRY(auto process_instance_id, parse_uuid(process_instance_id_raw));
+
+  TRY(auto execution_id_raw,
+      api::field(object, "executionId", "ExecutionMetricsSnapshot"));
+  auto execution_id = Option<std::string>{None{}};
+  if (not api::is_null(execution_id_raw)) {
+    TRY(auto execution_id_value,
+        api::string_of(execution_id_raw,
+                       "ExecutionMetricsSnapshot.executionId"));
+    execution_id = std::move(execution_id_value);
+  }
+
+  TRY(auto end_raw, api::field(object, "end", "ExecutionMetricsSnapshot"));
+  auto end = Option<ApiExecutionOutcome>{None{}};
+  if (not api::is_null(end_raw)) {
+    TRY(auto end_value, parse_api_execution_outcome(end_raw));
+    end = std::move(end_value);
+  }
+
+  TRY(auto at_raw, api::field(object, "at", "ExecutionMetricsSnapshot"));
+  TRY(auto at, api::time_of(at_raw, "ExecutionMetricsSnapshot.at"));
+
+  TRY(auto duration_seconds_raw,
+      api::field(object, "durationSeconds", "ExecutionMetricsSnapshot"));
+  TRY(auto duration_seconds,
+      api::double_of(duration_seconds_raw,
+                     "ExecutionMetricsSnapshot.durationSeconds"));
+
+  TRY(auto truncated_raw,
+      api::field(object, "truncated", "ExecutionMetricsSnapshot"));
+  TRY(auto truncated,
+      api::bool_of(truncated_raw, "ExecutionMetricsSnapshot.truncated"));
+
+  TRY(auto operators_raw,
+      api::field(object, "operators", "ExecutionMetricsSnapshot"));
+  auto operators = std::vector<ExecutionOperatorMetrics>{};
+  auto operators_array = simdjson::dom::array{};
+  if (operators_raw.get_array().get(operators_array) != simdjson::SUCCESS) {
+    return Err{
+      ParseError{"ExecutionMetricsSnapshot.operators", "expected an array"}};
+  }
+  for (auto operators_item : operators_array) {
+    TRY(auto operators_decoded,
+        parse_execution_operator_metrics(operators_item));
+    operators.push_back(std::move(operators_decoded));
+  }
+
+  TRY(auto channels_raw,
+      api::field(object, "channels", "ExecutionMetricsSnapshot"));
+  auto channels = std::vector<ExecutionChannelMetrics>{};
+  auto channels_array = simdjson::dom::array{};
+  if (channels_raw.get_array().get(channels_array) != simdjson::SUCCESS) {
+    return Err{
+      ParseError{"ExecutionMetricsSnapshot.channels", "expected an array"}};
+  }
+  for (auto channels_item : channels_array) {
+    TRY(auto channels_decoded, parse_execution_channel_metrics(channels_item));
+    channels.push_back(std::move(channels_decoded));
+  }
+
+  return ExecutionMetricsSnapshot{std::move(run),
+                                  std::move(process_instance_id),
+                                  std::move(execution_id),
+                                  std::move(end),
+                                  at,
+                                  duration_seconds,
+                                  truncated,
+                                  std::move(operators),
+                                  std::move(channels)};
+}
+
 auto parse_channel_tap_request(simdjson::dom::element value)
   -> Result<ChannelTapRequest, ParseError> {
   TRY(auto object, api::object_of(value, "ChannelTapRequest"));
@@ -2888,6 +3043,104 @@ auto write_json(ExecutionGraphSnapshot const& value, std::string& out) -> void {
   out += '}';
 }
 
+auto write_json(ExecutionOperatorMetrics const& value, std::string& out)
+  -> void {
+  out += '{';
+  out += "\"path\":";
+  {
+    out += '[';
+    auto separator0 = "";
+    for (auto const& element0 : value.path) {
+      out += separator0;
+      separator0 = ",";
+      fmt::format_to(std::back_inserter(out), "{}", element0);
+    }
+    out += ']';
+  }
+  out += ",\"operatorIndex\":";
+  fmt::format_to(std::back_inserter(out), "{}", value.operator_index);
+  out += ",\"cpuSeconds\":";
+  fmt::format_to(std::back_inserter(out), "{}", value.cpu_seconds);
+  out += '}';
+}
+
+auto write_json(ExecutionChannelMetrics const& value, std::string& out)
+  -> void {
+  out += '{';
+  out += "\"path\":";
+  {
+    out += '[';
+    auto separator0 = "";
+    for (auto const& element0 : value.path) {
+      out += separator0;
+      separator0 = ",";
+      fmt::format_to(std::back_inserter(out), "{}", element0);
+    }
+    out += ']';
+  }
+  out += ",\"channelIndex\":";
+  fmt::format_to(std::back_inserter(out), "{}", value.channel_index);
+  out += ",\"events\":";
+  fmt::format_to(std::back_inserter(out), "{}", value.events);
+  out += ",\"bytes\":";
+  fmt::format_to(std::back_inserter(out), "{}", value.bytes);
+  out += ",\"queuedBytes\":";
+  fmt::format_to(std::back_inserter(out), "{}", value.queued_bytes);
+  out += ",\"capacityBytes\":";
+  fmt::format_to(std::back_inserter(out), "{}", value.capacity_bytes);
+  out += '}';
+}
+
+auto write_json(ExecutionMetricsSnapshot const& value, std::string& out)
+  -> void {
+  out += '{';
+  out += "\"run\":";
+  fmt::format_to(std::back_inserter(out), "{}", value.run);
+  out += ",\"processInstanceId\":";
+  write_json(value.process_instance_id, out);
+  out += ",\"executionId\":";
+  if (value.execution_id) {
+    api::write_string(*value.execution_id, out);
+  } else {
+    out += "null";
+  }
+  out += ",\"end\":";
+  if (value.end) {
+    write_json(*value.end, out);
+  } else {
+    out += "null";
+  }
+  out += ",\"at\":";
+  api::write_time(value.at, out);
+  out += ",\"durationSeconds\":";
+  fmt::format_to(std::back_inserter(out), "{}", value.duration_seconds);
+  out += ",\"truncated\":";
+  out += value.truncated ? "true" : "false";
+  out += ",\"operators\":";
+  {
+    out += '[';
+    auto separator0 = "";
+    for (auto const& element0 : value.operators) {
+      out += separator0;
+      separator0 = ",";
+      write_json(element0, out);
+    }
+    out += ']';
+  }
+  out += ",\"channels\":";
+  {
+    out += '[';
+    auto separator0 = "";
+    for (auto const& element0 : value.channels) {
+      out += separator0;
+      separator0 = ",";
+      write_json(element0, out);
+    }
+    out += ']';
+  }
+  out += '}';
+}
+
 auto write_json(ChannelTapRequest const& value, std::string& out) -> void {
   out += '{';
   auto field_separator = "";
@@ -3526,6 +3779,22 @@ auto dispatch(DeploymentApi& handler, HttpRequest request)
       }
       auto path = PipelinePath{std::move(pipeline_id).unwrap()};
       auto decoded = StreamPipelineGraph{std::move(path)};
+      co_return api::encode_stream<200>(
+        "text/event-stream", co_await handler.handle(std::move(decoded)));
+    }
+    co_return HttpResponse{405,
+                           R"({"error":"method not allowed","allow":["GET"]})"};
+  }
+  if (api::match_path("/pipelines/:pipelineId/metrics/execution/live",
+                      request.path, parameters)) {
+    if (request.method == "GET") {
+      auto pipeline_id = PipelineId::make(std::move(parameters[0]));
+      if (pipeline_id.is_err()) {
+        co_return api::as_request_failure(api::bad_request)(
+          std::move(pipeline_id).unwrap_err());
+      }
+      auto path = PipelinePath{std::move(pipeline_id).unwrap()};
+      auto decoded = StreamPipelineMetrics{std::move(path)};
       co_return api::encode_stream<200>(
         "text/event-stream", co_await handler.handle(std::move(decoded)));
     }

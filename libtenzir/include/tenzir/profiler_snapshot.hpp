@@ -35,16 +35,36 @@ struct ChannelStats {
   /// We group/align by in and out here, because that is the grouping in which
   /// these are written.
   struct alignas(std::hardware_destructive_interference_size) data {
+    /// Bytes moved through the channel, including message envelopes. This
+    /// matches the channel's memory accounting.
     std::atomic<size_t> bytes{0};
     std::atomic<size_t> signals{0};
     std::atomic<size_t> batches{0};
     std::atomic<size_t> events{0};
+
+    auto record(size_t byte_count, size_t event_count, bool signal) -> void {
+      bytes.fetch_add(byte_count, std::memory_order_relaxed);
+      if (signal) {
+        signals.fetch_add(1, std::memory_order_relaxed);
+      } else {
+        batches.fetch_add(1, std::memory_order_relaxed);
+        events.fetch_add(event_count, std::memory_order_relaxed);
+      }
+    }
   };
   data in;
   data out;
 
   /// Total capacity in bytes across all channels sharing these stats.
   std::atomic<size_t> capacity{0};
+
+  /// Cumulative counters remain enabled for late inspection subscribers.
+  /// Read the consumed side first and clamp concurrent samples defensively.
+  auto queued_bytes() const -> size_t {
+    auto consumed = out.bytes.load(std::memory_order_relaxed);
+    auto produced = in.bytes.load(std::memory_order_relaxed);
+    return produced >= consumed ? produced - consumed : 0;
+  }
 
   /// Backpressure intervals recorded by the sender.
   struct BackpressureEvent {
