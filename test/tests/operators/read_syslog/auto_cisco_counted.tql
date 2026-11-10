@@ -1,5 +1,0 @@
-from_stdin {
-  split_bytes 1
-  read_syslog
-}
-select app_name, content

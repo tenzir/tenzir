@@ -1,3 +1,0 @@
-from_stdin {
-  read_syslog
-}

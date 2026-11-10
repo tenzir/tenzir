@@ -1,6 +1,0 @@
-from {line: "2 18: %SYS-5-CONFIG_I: First"},
-  {line: "3 8: %SYS-5-CONFIG_I: Second"}
-write_lines
-split_bytes 1
-read_syslog
-select app_name, content

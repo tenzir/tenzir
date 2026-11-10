@@ -1,6 +1,0 @@
-error: failed to parse octet-counting length prefix
- --> tests/operators/read_syslog/auto_overflow_message.tql:7:3
-  |
-7 |   read_syslog
-  |   -----------
-  |
