@@ -1,15 +1,8 @@
 {
-  filter: "`id` <= 2",
+  type: "ExceptionBeforeStart",
+  filter: "(`event`.`n` IN (5, 7))",
 }
 {
-  filter: "(((toFloat64OrNull(toString(`event`.`v`)) >= 9007199254740992 OR toFloat64OrNull(toString(`event`.`v`)) <= -9007199254740992) OR (toFloat64OrNull(toString(`event`.`v`)) > 0. AND toFloat64OrNull(toString(`event`.`v`)) < 1e-09)) OR toFloat64OrNull(toString(`event`.`v`)) = 0.1)",
-}
-{
-  filter: "(toFloat64OrNull(toString(`event`.`n`)) = 5 OR toString(`event`.`n`) = '7')",
-}
-{
-  filter: "position(toString(`event`.`tags`), 'x') > 0",
-}
-{
-  filter: "endsWith(toString(`event`.`src`.`host`), '3')",
+  type: "QueryFinish",
+  filter: "endsWith(`event`.`src`.`host`, '3') ORDER BY `id` ASC",
 }

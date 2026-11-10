@@ -1,11 +1,11 @@
-warning: event does not have field
- --> tests/operators/from_clickhouse/29_pushdown_unknown_column.tql:8:12
+error: ClickHouse error 47: DB::Exception: Unknown expression identifier `nope` in scope SELECT id AS __tenzir_column_0, nope AS __tenzir_column_1 FROM (SELECT id FROM fc_pushdown) AS __tenzir_table LIMIT 1
+ --> tests/operators/from_clickhouse/29_pushdown_unknown_column.tql:6:1
   |
-8 | select id, nope
-  |            ~~~~
+6 | from_clickhouse table="fc_pushdown",
+  | ^^^^^^^^^^^^^^^
   |
-  = hint: append `?` to suppress this warning
-{
-  id: 1,
-  nope: null,
-}
+  = note: `tls` is disabled for this connection
+  = note: common ClickHouse ports are `9000` without TLS and `9440` with TLS
+  = hint: if the ClickHouse server requires TLS, set `tls=true`
+  = note: the query computes the operators after `from_clickhouse` with ClickHouse's semantics
+  = hint: use `pushdown=false` to run them in Tenzir instead

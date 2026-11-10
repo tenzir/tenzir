@@ -1,0 +1,6 @@
+from_clickhouse sql="INSERT INTO fc_bindings (id, `n.x`, t, Name, name, j, p) VALUES (1, 1, (10), 'A', 'a', '{\"k\": \"v\"}', (1, 2)), (2, 2, (20), 'B', 'A', '{\"k\": \"w\"}', (3, 4)), (3, 3, (30), 'A', 'c', '{}', (5, 6))",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
+

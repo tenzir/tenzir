@@ -82,10 +82,12 @@ auto make_catch_all_layout(std::span<ColumnDescription const> description,
 /// Rejects a block with columns added after `layout` was described. Such a
 /// column can override a field that a pushed predicate read from the
 /// catch-all instead. Check the zero-row result header too, before decoding:
-/// the stale predicate may have removed every matching row.
+/// the stale predicate may have removed every matching row. The `synthetic`
+/// columns, which the query introduces for itself, pass.
 auto validate_catch_all_block(::clickhouse::Block const& block,
                               CatchAllLayout const& layout,
-                              std::string_view service, diagnostic_handler& dh)
+                              std::string_view service, diagnostic_handler& dh,
+                              std::span<std::string const> synthetic = {})
   -> failure_or<void>;
 
 /// Rebuilds the events that `to_clickhouse` wrote into a catch-all table from

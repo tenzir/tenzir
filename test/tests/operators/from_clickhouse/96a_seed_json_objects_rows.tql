@@ -1,0 +1,5 @@
+from_clickhouse sql="INSERT INTO fc_json_objects VALUES (1, '{\"a\": {\"b\": 1}}'), (2, '{\"a\": 5}'), (3, '{}'), (4, '{\"a\": null}'), (5, '{\"c\": {\"d\": 1}}')",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false

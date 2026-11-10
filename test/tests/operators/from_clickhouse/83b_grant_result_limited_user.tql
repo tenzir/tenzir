@@ -1,0 +1,5 @@
+from_clickhouse sql="GRANT SELECT ON default.fc_stages TO fc_result_limited",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false

@@ -1,5 +1,6 @@
-// TQL treats `null` as a value in `==`, so `not (n == 1)` keeps null rows. The
-// pushed SQL must agree.
+// ClickHouse computes `n = 1` as `NULL` for a `NULL`, and so its negation, so
+// `not (n == 1)` drops the null rows, unlike in TQL (see
+// `30g_pushdown_false.tql`).
 from_clickhouse table="fc_pushdown",
                 host=env("CLICKHOUSE_HOST"),
                 port=int(env("CLICKHOUSE_PORT")),

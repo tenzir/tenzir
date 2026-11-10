@@ -1,10 +1,12 @@
-// A list with mixed types narrows the query, while TQL decides the types
-// locally. Test substring and suffix separately so they cannot mask a lost row.
+---
+error: true
+---
+
+// ClickHouse rejects `IN` on a field below a `JSON` column, whose type is
+// dynamic, which fails the pipeline.
 from_clickhouse table="fc_catch_all_mixed",
                 host=env("CLICKHOUSE_HOST"),
                 port=int(env("CLICKHOUSE_PORT")),
                 password=env("CLICKHOUSE_PASSWORD"),
                 tls=false
-where n in [5, "7"]
-select id
-sort id
+where n in [5, 7]

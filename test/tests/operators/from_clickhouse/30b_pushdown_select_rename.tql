@@ -1,0 +1,10 @@
+// A projection renames fields and reads tuple elements, and the stages after
+// it read its result.
+from_clickhouse table="fc_pushdown",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
+select ident=id, source=meta.source, level=meta.level
+where level > 1
+sort -ident

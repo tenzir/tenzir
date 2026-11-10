@@ -1,0 +1,9 @@
+// A path that holds an object in one row and a scalar in another is not `null`
+// in either.
+from_clickhouse table="fc_json_objects",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
+where j.a != null
+select id

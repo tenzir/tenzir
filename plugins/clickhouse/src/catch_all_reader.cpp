@@ -172,11 +172,13 @@ auto make_catch_all_layout(std::span<ColumnDescription const> description,
 
 auto validate_catch_all_block(::clickhouse::Block const& block,
                               CatchAllLayout const& layout,
-                              std::string_view service, diagnostic_handler& dh)
+                              std::string_view service, diagnostic_handler& dh,
+                              std::span<std::string const> synthetic)
   -> failure_or<void> {
   for (auto i = size_t{0}; i < block.GetColumnCount(); ++i) {
     auto const name = block.GetColumnName(i);
-    if (name == layout.column or layout.find(name)) {
+    if (name == layout.column or layout.find(name)
+        or std::ranges::contains(synthetic, name)) {
       continue;
     }
     diagnostic::error("{} table gained column `{}` after it was described",

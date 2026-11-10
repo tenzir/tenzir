@@ -1,4 +1,5 @@
-// `s != "a"` is true for null rows in TQL; `n == null` is a null check.
+// `s != "a"` is `NULL` for null rows in ClickHouse, so it drops them; `n ==
+// null` is a null check.
 from_clickhouse table="fc_pushdown",
                 host=env("CLICKHOUSE_HOST"),
                 port=int(env("CLICKHOUSE_PORT")),

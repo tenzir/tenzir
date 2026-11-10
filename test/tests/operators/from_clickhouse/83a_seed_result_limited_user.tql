@@ -1,0 +1,6 @@
+// A user whose session truncates results, but reads the whole table.
+from_clickhouse sql="CREATE USER OR REPLACE fc_result_limited IDENTIFIED WITH plaintext_password BY 'limited' SETTINGS max_result_rows = 1, result_overflow_mode = 'break'",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false

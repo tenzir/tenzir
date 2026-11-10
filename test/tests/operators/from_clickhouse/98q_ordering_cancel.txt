@@ -1,0 +1,7 @@
+error: failed to meet minimum throughput requirement
+  --> tests/operators/from_clickhouse/98q_ordering_cancel.tql:16:19
+   |
+16 | assert_throughput 1, within=1s, retries=0
+   |                   ^
+   |
+   = note: observed 0 events, expected at least 1

@@ -1,0 +1,10 @@
+// A top-level field that exists only in the catch-all column sorts in the
+// query by its path below that column, with ClickHouse's ordering of dynamic
+// values and `null` last.
+from_clickhouse table="fc_catch_all",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
+sort -seen
+head 1

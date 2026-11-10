@@ -1,5 +1,6 @@
-// The map predicate and the limit stay local, and the query selects the whole
-// map column.
+// The sort of `48_from_map_table.tql` runs in the query, while the map
+// predicate of `50_map_where_head.tql`, with `?`, stays in Tenzir together with
+// the operators after it, so its query selects the whole map column.
 from_clickhouse sql="SELECT query FROM system.query_log WHERE type = 'QueryFinish' AND query_kind = 'Select' AND has(tables, 'default.fc_maps') AND query NOT LIKE '%system.query_log%' ORDER BY event_time_microseconds",
                 host=env("CLICKHOUSE_HOST"),
                 port=int(env("CLICKHOUSE_PORT")),

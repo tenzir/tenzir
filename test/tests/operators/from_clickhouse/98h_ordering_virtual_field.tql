@@ -1,0 +1,10 @@
+// With `pushdown=false`, Tenzir sorts by a field of the catch-all column.
+from_clickhouse table="fc_catch_all", pushdown=false,
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
+where seen? != null
+sort -seen
+head 1
+select seen, class_uid

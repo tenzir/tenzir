@@ -1,0 +1,32 @@
+{
+  type: "QueryFinish",
+  query: "SELECT * FROM fc_ordering ORDER BY `time` DESC LIMIT 3",
+}
+{
+  type: "QueryFinish",
+  query: "SELECT `id` AS `__tenzir_column_2`, `time` AS `__tenzir_column_3` FROM (SELECT `__tenzir_table`.*, `time` AS `__tenzir_order_0` FROM (SELECT `id`, `time`, `message` FROM fc_ordering) AS `__tenzir_table` WHERE (upperUTF8(`message`) = 'KEEP') ORDER BY `time` DESC LIMIT 2) AS `__tenzir_level_1` ORDER BY `__tenzir_order_0` DESC",
+}
+{
+  type: "QueryFinish",
+  query: "SELECT `id` AS `__tenzir_column_2`, `time` AS `__tenzir_column_3` FROM (SELECT `__tenzir_table`.*, `time` AS `__tenzir_order_0` FROM (SELECT `id`, `time` FROM fc_ordering) AS `__tenzir_table` WHERE (`id` <> 2) ORDER BY `time` DESC LIMIT 2) AS `__tenzir_level_1` ORDER BY `__tenzir_order_0` DESC",
+}
+{
+  type: "QueryFinish",
+  query: "SELECT * FROM fc_ordering",
+}
+{
+  type: "ExceptionBeforeStart",
+  query: "SELECT * FROM fc_ordering ORDER BY `nope` DESC LIMIT 1",
+}
+{
+  type: "QueryFinish",
+  query: "SELECT `id` AS `__tenzir_column_2`, `time` AS `__tenzir_column_3` FROM (SELECT `__tenzir_table`.*, `time` AS `__tenzir_order_0` FROM (SELECT `id`, `time`, `message` FROM fc_ordering) AS `__tenzir_table` ORDER BY `time` DESC LIMIT 2) AS `__tenzir_level_1` WHERE (`message` = 'keep') ORDER BY `__tenzir_order_0` DESC",
+}
+{
+  type: "QueryFinish",
+  query: "SELECT toInt64(count()) AS `__tenzir_column_1`, maxOrNull(`time`) AS `__tenzir_column_2`, minOrNull(`time`) AS `__tenzir_column_3` FROM (SELECT * FROM (SELECT `time` FROM fc_ordering) AS `__tenzir_table` ORDER BY `time` DESC LIMIT 3) AS `__tenzir_level_0`",
+}
+{
+  type: "QueryFinish",
+  query: "SELECT * FROM fc_ordering",
+}

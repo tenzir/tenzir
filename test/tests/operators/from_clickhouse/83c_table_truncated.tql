@@ -1,0 +1,12 @@
+---
+error: true
+---
+
+// A table read that the limits of the session would truncate fails instead of
+// passing for the whole table.
+from_clickhouse table="fc_stages",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                user="fc_result_limited",
+                password="limited",
+                tls=false

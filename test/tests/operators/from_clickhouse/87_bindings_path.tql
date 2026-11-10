@@ -1,0 +1,12 @@
+---
+error: true
+---
+
+// A path binds to the elements of a tuple only, so ClickHouse rejects `n.x`,
+// whose column `n` does not exist.
+from_clickhouse table="fc_bindings",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
+where n.x == 1

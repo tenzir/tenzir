@@ -1,6 +1,5 @@
-// The summary must run locally after catch-all reconstruction. The predicate
-// references a field stored in the JSON catch-all column, so it narrows the
-// query but also stays local.
+// A field access with `?` stays in Tenzir, and so does the summary after it,
+// which runs on the reconstructed events.
 from_clickhouse table="fc_catch_all",
                 host=env("CLICKHOUSE_HOST"),
                 port=int(env("CLICKHOUSE_PORT")),

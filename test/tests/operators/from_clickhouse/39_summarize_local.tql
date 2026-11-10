@@ -1,5 +1,5 @@
-// A predicate that ClickHouse cannot evaluate keeps all rows but stays local,
-// so the operator aggregates locally, with the result of `38_summarize.tql`.
+// A predicate that ClickHouse cannot spell stays in Tenzir, and so do the
+// operators after it, with the result of `38_summarize.tql`.
 from_clickhouse table="fc_pushdown",
                 host=env("CLICKHOUSE_HOST"),
                 port=int(env("CLICKHOUSE_PORT")),

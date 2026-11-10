@@ -1,0 +1,9 @@
+// The summary counts the events that the limit keeps, not the whole table.
+from_clickhouse table="fc_ordering",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
+sort -time
+head 3
+summarize events=count(), newest=max(time), oldest=min(time)

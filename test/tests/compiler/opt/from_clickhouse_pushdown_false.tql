@@ -1,0 +1,4 @@
+// With `pushdown=false`, `from_clickhouse` takes over no stage.
+from_clickhouse table="events", host="localhost", pushdown=false
+where severity >= 3
+head 5

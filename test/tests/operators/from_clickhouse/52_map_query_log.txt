@@ -1,5 +1,5 @@
 {
-  query: "SELECT * FROM fc_maps",
+  query: "SELECT * FROM fc_maps ORDER BY `id` ASC",
 }
 {
   query: "SELECT catchall, nested['b'] AS b FROM fc_maps WHERE id = 3",

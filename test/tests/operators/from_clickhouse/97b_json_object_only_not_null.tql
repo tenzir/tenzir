@@ -1,0 +1,8 @@
+// A path that holds only objects is not `null` where it holds one.
+from_clickhouse table="fc_json_objects",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
+where j.c != null
+select id

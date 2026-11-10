@@ -1,9 +1,13 @@
-// ClickHouse also keeps the string `"7"`, which TQL does not compare with a
-// number, so the predicate stays local and drops it.
+---
+error: true
+---
+
+// A projection of a catch-all table fails before any query reads data, since
+// its fields may live in any column.
 from_clickhouse table="fc_catch_all_mixed",
                 host=env("CLICKHOUSE_HOST"),
                 port=int(env("CLICKHOUSE_PORT")),
                 password=env("CLICKHOUSE_PASSWORD"),
                 tls=false
-where n > 4 and flag
+where id > 0
 select id

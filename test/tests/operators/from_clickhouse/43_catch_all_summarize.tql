@@ -1,6 +1,10 @@
-// A field of a catch-all table may live partly in the catch-all column, so
-// even a summary over an addressable column runs locally, on the reconstructed
-// events. `46_catch_all_query_log.tql` checks that no aggregate query ran.
+---
+error: true
+---
+
+// A field of a catch-all table may live in any of its columns, so a summary
+// fails before any query reads data. `46_catch_all_query_log.tql` checks that
+// no aggregate query ran.
 from_clickhouse table="fc_catch_all",
                 host=env("CLICKHOUSE_HOST"),
                 port=int(env("CLICKHOUSE_PORT")),

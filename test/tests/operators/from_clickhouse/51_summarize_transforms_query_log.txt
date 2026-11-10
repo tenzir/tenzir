@@ -1,9 +1,6 @@
 {
-  query: "SELECT * FROM (SELECT `y` AS `__tenzir_aggregate_0`, toInt64(count()) AS `__tenzir_aggregate_1`, maxOrNull(`meta`.`level`) AS `__tenzir_aggregate_2`, minOrNull(`x`) AS `__tenzir_aggregate_3`, minOrNull(`id`) AS `__tenzir_aggregate_4` FROM fc_pushdown WHERE `id` < 100 GROUP BY `y`) AS `__tenzir_aggregate` ORDER BY `__tenzir_aggregate_0` ASC",
+  query: "SELECT * FROM (SELECT `y` AS `__tenzir_column_0`, toInt64(count()) AS `__tenzir_column_1`, maxOrNull(tupleElement(`meta`, 'level')) AS `__tenzir_column_2`, minOrNull(`x`) AS `__tenzir_column_3`, minOrNull(`id`) AS `__tenzir_column_4` FROM (SELECT `id`, `x`, `y`, CAST(tuple(tupleElement(`meta`, 'level')), 'Tuple(`level` Nullable(Int64))') AS `meta`, `f` FROM fc_pushdown) AS `__tenzir_table` WHERE (`id` < 100) GROUP BY `y`) AS `__tenzir_level_5` ORDER BY `__tenzir_column_0` ASC",
 }
 {
-  query: "SELECT `id`, `x`, `y`, CAST(tuple(`meta`.`level`), 'Tuple(`level` Nullable(Int64))') AS `meta`, `f` FROM fc_pushdown WHERE `id` < 100",
-}
-{
-  query: "SELECT `id`, `f` FROM fc_pushdown WHERE `id` < 100",
+  query: "SELECT * FROM (SELECT `f` AS `__tenzir_column_0`, toInt64(count()) AS `__tenzir_column_1`, maxOrNull(`id`) AS `__tenzir_column_2` FROM (SELECT `id`, `f` FROM fc_pushdown) AS `__tenzir_table` WHERE (`id` < 100) GROUP BY `f`) AS `__tenzir_level_3` ORDER BY `__tenzir_column_0` ASC",
 }

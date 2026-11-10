@@ -1,0 +1,11 @@
+error: ClickHouse error 47: DB::Exception: Unknown expression identifier `nope` in scope SELECT * FROM fc_ordering ORDER BY nope DESC LIMIT 1
+ --> tests/operators/from_clickhouse/98j_ordering_unknown_column.tql:6:1
+  |
+6 | from_clickhouse table="fc_ordering",
+  | ^^^^^^^^^^^^^^^
+  |
+  = note: `tls` is disabled for this connection
+  = note: common ClickHouse ports are `9000` without TLS and `9440` with TLS
+  = hint: if the ClickHouse server requires TLS, set `tls=true`
+  = note: the query computes the operators after `from_clickhouse` with ClickHouse's semantics
+  = hint: use `pushdown=false` to run them in Tenzir instead

@@ -1,18 +1,24 @@
 {
-  filter: "`class_uid` = 4001 AND `src_endpoint.port` = 443 AND toString(`event`.`metadata`.`product`.`name`) = 'Demo' AND toFloat64OrNull(toString(`event`.`a%2Eb`)) = 1",
+  type: "QueryFinish",
+  filter: "(`class_uid` = 4001) AND (`src_endpoint.port` = 443) AND (`event`.`metadata`.`product`.`name` = 'Demo') AND (`event`.`a%2Eb` = 1)",
 }
 {
-  filter: "toString(`event`.`metadata`.`product`.`name`) = 'Demo'",
+  type: "QueryFinish",
+  filter: "(`event`.`metadata`.`version` = '1.9.0') ORDER BY `time` DESC LIMIT 1) AS `__tenzir_level_2` ORDER BY `class_uid` ASC, `__tenzir_order_0` DESC",
 }
 {
-  filter: "toString(`event`.`metadata`.`product`.`name`) = 'test'",
+  type: "ExceptionWhileProcessing",
+  filter: "(`event`.`metadata`.`product`.`name` = 'test')",
 }
 {
-  filter: "toFloat64OrNull(toString(`event`.`n`)) > 4 AND toString(`event`.`flag`) = 'true'",
+  type: "QueryFinish",
+  filter: "((`event`.`obj` IS NOT NULL) OR notEmpty(JSONAllPaths(`event`.^`obj`))) ORDER BY `id` ASC",
 }
 {
-  filter: "((`event`.`obj` IS NOT NULL OR toString(`event`.^`obj`) != '{}') OR toString(`event`.`a%2Eb`) = 'dot')",
+  type: "QueryFinish",
+  filter: "(NOT ((`event`.`obj` IS NOT NULL) OR notEmpty(JSONAllPaths(`event`.^`obj`)))) ORDER BY `id` ASC LIMIT 1",
 }
 {
-  filter: "`src.port` = 443 AND startsWith(toString(`event`.`src`.`host`), 'h') AND toString(`extra`.`k`) = 'v'",
+  type: "QueryFinish",
+  filter: "(`src.port` = 443) AND startsWith(`event`.`src`.`host`, 'h') AND (`extra`.`k` = 'v') ORDER BY `id` ASC",
 }

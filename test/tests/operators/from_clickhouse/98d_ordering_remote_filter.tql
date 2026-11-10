@@ -1,0 +1,9 @@
+from_clickhouse table="fc_ordering",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
+where id != 2
+sort -time
+head 2
+select id, time

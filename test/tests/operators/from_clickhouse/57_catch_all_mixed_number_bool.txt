@@ -1,9 +1,8 @@
-warning: binary operator `>` does not accept the argument type combination `(string, int)`
- --> tests/operators/from_clickhouse/57_catch_all_mixed_number_bool.tql:8:7
+error: cannot bind `id` in ClickHouse table `fc_catch_all_mixed`
+ --> tests/operators/from_clickhouse/57_catch_all_mixed_number_bool.tql:7:1
   |
-8 | where n > 4 and flag
-  |       ~~~~~
+7 | from_clickhouse table="fc_catch_all_mixed",
+  | ^^^^^^^^^^^^^^^
   |
-{
-  id: 1,
-}
+  = note: `select` on a table with the catch-all column `event` reads fields that may live in any of its columns
+  = hint: use `pushdown=false` to run the operators after `from_clickhouse` in Tenzir instead

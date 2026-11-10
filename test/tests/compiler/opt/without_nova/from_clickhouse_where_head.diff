@@ -1,0 +1,105 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "from_clickhouse",
+       store: {
+         op: {
+           path: [
+             `from_clickhouse` @ [1]:56..71 from 0
+           ],
+           ref: std::from_clickhouse/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           {
+             index: 1,
+             value: located "events" @ [1]:78..86 from 0
+           },
+           {
+             index: 2,
+             value: expression constant string "localhost" @ [1]:93..104 from 0
+           }
+         ]
+       },
+       filter: [
+         
+       ],
+-      order: "ordered"
++      order: "ordered",
++      declined: "the operator runs without Nova"
+     },
+     where_ir {
+       op: {
+         path: [
+-          `where` @ [1]:105..110 from 0
++          
+         ],
+-        ref: std::where/op
++        ref: unresolved
+       },
+       args: [
+-        expression binary_expr {
++        Incomplete binary_expr {
+           left: root_field {
+             id: `severity` @ [1]:111..119 from 0,
+             has_question_mark: false
+           },
+           op: "geq",
+           right: constant int64 3 @ [1]:123..124 from 0,
+           location: [1]:111..124 from 0
+         }
+       ],
+       named_args: [
+         
+       ]
+     },
+     GenericIr {
+       desc: "head",
+       store: {
+         op: {
+           path: [
+             `head` @ [1]:125..129 from 0
+           ],
+           ref: std::head/op
+         },
+         args: [
+           located 5 @ [1]:130..131 from 0
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:131..131 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ],
+   definition_location: [1]:56..131 from 0
+ }

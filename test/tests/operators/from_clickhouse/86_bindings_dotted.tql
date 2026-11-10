@@ -1,0 +1,9 @@
+// A literal dotted name binds to the dotted column, and a path to the element
+// of a tuple.
+from_clickhouse table="fc_bindings",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
+where this["n.x"] >= 2 and t.x < 30
+select id, nx=this["n.x"], tx=t.x

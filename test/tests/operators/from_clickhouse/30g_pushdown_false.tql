@@ -1,0 +1,10 @@
+// With `pushdown=false`, the filter runs in Tenzir with TQL semantics, which
+// keeps the null rows that `22_pushdown_nullable_negation.tql` drops.
+from_clickhouse table="fc_pushdown",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false,
+                pushdown=false
+where not (n == 1)
+select id, n

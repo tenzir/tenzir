@@ -1,13 +1,13 @@
-// An integer above `2^53` rounds onto the literal, so the pushed comparison
-// includes it, and the local one drops row 4 (likewise rows 8/9 at -2^53).
-// The smallest subnormal number needs precise parsing of its text.
-// The string, list, and adjacent floating-point value stay apart
-// from numbers locally.
+// With `pushdown=false`, TQL compares the numbers that it reads from the
+// catch-all column: an integer above `2^53` stays apart from the literal, and
+// the string, the list, and the adjacent floating-point value stay apart from
+// numbers.
 from_clickhouse table="fc_catch_all_numbers",
                 host=env("CLICKHOUSE_HOST"),
                 port=int(env("CLICKHOUSE_PORT")),
                 password=env("CLICKHOUSE_PASSWORD"),
-                tls=false
+                tls=false,
+                pushdown=false
 where v > 9007199254740992 or v < -9007199254740992 or (v > 0.0 and v < 0.000000001) or v == 0.1
 select id
 sort id

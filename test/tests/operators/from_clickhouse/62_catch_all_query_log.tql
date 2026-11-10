@@ -1,6 +1,11 @@
 // The filters of the queries against catch-all tables, in the order of the
-// tests that ran them. `60_catch_all_mixed_local.tql` pushes no filter.
-from_clickhouse sql="SELECT replaceRegexpOne(query, '^.* WHERE ', '') AS filter FROM system.query_log WHERE type = 'QueryFinish' AND query_kind = 'Select' AND (has(tables, 'default.fc_catch_all') OR has(tables, 'default.fc_catch_all_mixed')) AND query LIKE '% WHERE %' AND query NOT LIKE '%system.query_log%' ORDER BY event_time_microseconds",
+// tests that ran them. The rejected query of `56_catch_all_mixed_string.tql`
+// ran once, and `57_catch_all_mixed_number_bool.tql` ran no query. The null
+// checks of `58a_catch_all_object_not_null.tql` and
+// `58b_catch_all_object_null.tql` consider the object below the path.
+// `58_catch_all_mixed_exists_dots.tql` and `60_catch_all_mixed_local.tql` push
+// no filter.
+from_clickhouse sql="SELECT toString(type) AS type, replaceRegexpOne(query, '^.* WHERE ', '') AS filter FROM system.query_log WHERE type != 'QueryStart' AND query_kind = 'Select' AND (has(tables, 'default.fc_catch_all') OR has(tables, 'default.fc_catch_all_mixed')) AND query LIKE '% WHERE %' AND query NOT LIKE '%system.query_log%' ORDER BY event_time_microseconds",
                 host=env("CLICKHOUSE_HOST"),
                 port=int(env("CLICKHOUSE_PORT")),
                 password=env("CLICKHOUSE_PASSWORD"),

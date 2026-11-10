@@ -1,0 +1,8 @@
+error: cannot bind `half.bad` in ClickHouse table `fc_half_tuple`
+ --> tests/operators/from_clickhouse/99c_half_tuple_bad_element.tql:6:1
+  |
+6 | from_clickhouse table="fc_half_tuple",
+  | ^^^^^^^^^^^^^^^
+  |
+  = note: `half.bad` has the type `Point`, which the operator cannot read
+  = hint: use `pushdown=false` to run the operators after `from_clickhouse` in Tenzir instead

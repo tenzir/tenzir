@@ -1,0 +1,27 @@
+warning: dropping ClickHouse column `p` with unsupported type `Point`
+ --> tests/operators/from_clickhouse/91_bindings_json.tql:3:1
+  |
+3 | from_clickhouse table="fc_bindings",
+  | ~~~~~~~~~~~~~~~
+  |
+  = hint: cast unsupported columns in SQL or omit them from the result
+{
+  id: 2,
+  "n.x": 2,
+  t: {
+    x: 20,
+  },
+  Name: "B",
+  name: "A",
+  j: "{\"k\":\"w\"}",
+}
+{
+  id: 1,
+  "n.x": 1,
+  t: {
+    x: 10,
+  },
+  Name: "A",
+  name: "a",
+  j: "{\"k\":\"v\"}",
+}

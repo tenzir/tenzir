@@ -1,3 +1,20 @@
 {
+  flag: false,
+  metadata: {
+    product: {
+      name: [
+        "test",
+      ],
+    },
+  },
+  n: 2.5,
+  obj: {
+    k: 1,
+  },
+  src: {
+    host: "x3",
+    port: 443,
+  },
   id: 3,
+  extra: {},
 }

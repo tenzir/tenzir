@@ -1,0 +1,9 @@
+// The query reads the element `b` of the tuple `a`, not the column `a.b`, also
+// where it narrows the tuple to the elements that the stages read.
+from_clickhouse table="fc_tuple_dotted",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
+where a.b > 10
+select a.b

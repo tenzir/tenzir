@@ -1,5 +1,8 @@
-// A projected field that is not a column is left to `select`, which fills it
-// with null.
+---
+error: true
+---
+
+// A projected field that the table lacks fails the query in ClickHouse.
 from_clickhouse table="fc_pushdown",
                 host=env("CLICKHOUSE_HOST"),
                 port=int(env("CLICKHOUSE_PORT")),

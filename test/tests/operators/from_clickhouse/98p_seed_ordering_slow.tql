@@ -1,0 +1,5 @@
+from_clickhouse sql="CREATE OR REPLACE VIEW fc_ordering_slow AS SELECT number AS id, number + sleepEachRow(0.00001) AS stamp FROM numbers(1000000)",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false

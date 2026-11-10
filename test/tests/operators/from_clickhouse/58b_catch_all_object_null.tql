@@ -1,0 +1,10 @@
+// A field of the catch-all column is `null` where it holds neither a value nor
+// an object with values, as an empty object reads.
+from_clickhouse table="fc_catch_all_mixed",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
+where obj == null
+sort id
+head 1

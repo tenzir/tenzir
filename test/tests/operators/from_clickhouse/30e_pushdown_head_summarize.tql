@@ -1,0 +1,9 @@
+// A summary after a limit reads the rows that the limit keeps.
+from_clickhouse table="fc_pushdown",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
+sort id
+head 3
+summarize n=count(), hi=max(x)

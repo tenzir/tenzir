@@ -1,0 +1,109 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "from_clickhouse",
+       store: {
+         op: {
+           path: [
+             `from_clickhouse` @ [1]:65..80 from 0
+           ],
+           ref: std::from_clickhouse/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           {
+             index: 1,
+             value: located "events" @ [1]:87..95 from 0
+           },
+           {
+             index: 2,
+             value: expression constant string "localhost" @ [1]:102..113 from 0
+           },
+           {
+             index: 8,
+             value: located false @ [1]:124..129 from 0
+           }
+         ]
+       },
+       filter: [
+         
+       ],
+-      order: "ordered"
++      order: "ordered",
++      declined: "`pushdown=false`"
+     },
+     where_ir {
+       op: {
+         path: [
+-          `where` @ [1]:130..135 from 0
++          
+         ],
+-        ref: std::where/op
++        ref: unresolved
+       },
+       args: [
+-        expression binary_expr {
++        Incomplete binary_expr {
+           left: root_field {
+             id: `severity` @ [1]:136..144 from 0,
+             has_question_mark: false
+           },
+           op: "geq",
+           right: constant int64 3 @ [1]:148..149 from 0,
+           location: [1]:136..149 from 0
+         }
+       ],
+       named_args: [
+         
+       ]
+     },
+     GenericIr {
+       desc: "head",
+       store: {
+         op: {
+           path: [
+             `head` @ [1]:150..154 from 0
+           ],
+           ref: std::head/op
+         },
+         args: [
+           located 5 @ [1]:155..156 from 0
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:156..156 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ],
+   definition_location: [1]:65..156 from 0
+ }

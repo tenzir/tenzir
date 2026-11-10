@@ -1,0 +1,8 @@
+// A field of the catch-all column that holds an object is not `null`.
+from_clickhouse table="fc_catch_all_mixed",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
+where obj != null
+sort id

@@ -1,3 +1,22 @@
 {
+  "a.b": "dot",
+  flag: true,
+  metadata: {
+    product: {
+      name: "test",
+    },
+  },
+  n: 5,
+  src: {
+    host: "h1",
+    port: 443,
+  },
+  tags: [
+    "x",
+    "it's",
+  ],
   id: 1,
+  extra: {
+    k: "v",
+  },
 }

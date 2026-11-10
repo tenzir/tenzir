@@ -1,0 +1,12 @@
+---
+error: true
+---
+
+// A generated column does not bind, since `SELECT *` includes it only
+// depending on the session's settings.
+from_clickhouse table="fc_bindings",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
+where al == "a!"

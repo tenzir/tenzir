@@ -1,0 +1,7 @@
+// A table with a tuple whose element `bad` has a type that the operator
+// cannot read.
+from_clickhouse sql="CREATE OR REPLACE TABLE fc_half_tuple (id UInt64, half Tuple(ok String, bad Point)) ENGINE = MergeTree ORDER BY id",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false

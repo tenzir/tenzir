@@ -1,0 +1,9 @@
+// A sort by a field of the catch-all column runs in the query when no later
+// stage needs its order.
+from_clickhouse table="fc_catch_all_mixed",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
+where id <= 2
+sort -src.host

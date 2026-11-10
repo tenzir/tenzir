@@ -1,0 +1,9 @@
+// With `pushdown=false`, the filter, the sort, and the limit run in Tenzir.
+from_clickhouse table="fc_ordering", pushdown=false,
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
+where id > 0
+sort -time
+head 3

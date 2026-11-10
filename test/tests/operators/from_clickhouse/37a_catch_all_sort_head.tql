@@ -1,0 +1,11 @@
+// A sort after a limit keeps the order of the limit in a hidden column, which
+// the reconstruction of the catch-all table leaves out.
+from_clickhouse table="fc_catch_all",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
+where metadata.version == "1.9.0"
+sort -time
+head 1
+sort class_uid

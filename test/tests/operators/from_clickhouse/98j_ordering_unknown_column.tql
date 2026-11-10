@@ -1,0 +1,12 @@
+---
+error: true
+---
+
+// A sort key that the table lacks fails the query in ClickHouse.
+from_clickhouse table="fc_ordering",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
+sort -nope
+head 1

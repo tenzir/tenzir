@@ -1,0 +1,9 @@
+// The element `ok` reads on its own, although its sibling `bad` does not
+// decode.
+from_clickhouse table="fc_half_tuple",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
+where half.ok == "b"
+select id, value=half.ok

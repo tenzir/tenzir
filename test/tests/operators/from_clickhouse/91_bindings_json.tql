@@ -1,0 +1,9 @@
+// A field below a `JSON` column compares and sorts in the query, as long as
+// its values share a type.
+from_clickhouse table="fc_bindings",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
+where j.k != null
+sort -j.k

@@ -1,0 +1,9 @@
+// A limit of zero keeps no rows, over which a summary without group keys
+// yields one event.
+from_clickhouse table="fc_pushdown",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
+head 0
+summarize n=count()

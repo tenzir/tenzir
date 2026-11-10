@@ -1,0 +1,12 @@
+{
+  metadata: {
+    version: "1.9.0",
+  },
+  time: 2026-10-12T10:00:01Z,
+  class_uid: 4002,
+  src_endpoint: {
+    ip: null,
+    port: 80,
+  },
+  unmapped: {},
+}

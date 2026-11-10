@@ -1,0 +1,5 @@
+from_clickhouse sql="INSERT INTO fc_tuple_dotted VALUES (1, (1), 99), (2, (20), 5)",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false

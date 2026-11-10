@@ -1,0 +1,11 @@
+---
+error: true
+---
+
+// The element `bad` does not decode, so the read fails before it runs a query.
+from_clickhouse table="fc_half_tuple",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
+select value=half.bad

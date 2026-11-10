@@ -1,0 +1,5 @@
+from_clickhouse sql="INSERT INTO fc_half_tuple VALUES (1, ('a', (0, 0))), (2, ('b', (1, 1)))",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false

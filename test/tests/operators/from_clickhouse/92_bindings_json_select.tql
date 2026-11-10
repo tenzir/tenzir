@@ -1,0 +1,12 @@
+---
+error: true
+---
+
+// A field below a `JSON` column has a dynamic type, which the operator cannot
+// read as a result column.
+from_clickhouse table="fc_bindings",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
+select id, k=j.k

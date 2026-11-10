@@ -1,0 +1,9 @@
+// The projection that downstream needs narrows the tuple for the filter that
+// the query computes.
+from_clickhouse table="fc_tuple_dotted",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
+where a.b > 10
+select id, b=a.b.string()

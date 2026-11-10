@@ -1,4 +1,5 @@
-// `x > 0` goes into SQL; `starts_with` stays local, and so does the limit.
+// The filter, the limit, and the projection all go into the query, with the
+// limit after the filter.
 from_clickhouse table="fc_pushdown",
                 host=env("CLICKHOUSE_HOST"),
                 port=int(env("CLICKHOUSE_PORT")),

@@ -1,0 +1,15 @@
+---
+error: true
+---
+
+// A sort by a field below a `JSON` column whose order a later stage needs
+// fails before any query reads data, since the query would return the field
+// in a result column of a dynamic type.
+from_clickhouse table="fc_bindings",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
+sort j.k
+head 1
+sort id

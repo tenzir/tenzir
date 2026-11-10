@@ -1,0 +1,9 @@
+// Names bind with regard to case, as ClickHouse resolves them.
+from_clickhouse table="fc_bindings",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
+where Name == "A"
+select id, name
+sort id

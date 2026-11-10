@@ -1,0 +1,16 @@
+---
+error: true
+timeout: 5
+---
+
+// The server needs about ten seconds to sort the slow view. Downstream fails
+// after one second, and cancellation stops the read before its first data
+// block.
+from_clickhouse table="fc_ordering_slow",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
+sort -stamp
+head 1
+assert_throughput 1, within=1s, retries=0

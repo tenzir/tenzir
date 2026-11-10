@@ -1,0 +1,6 @@
+// A table whose `JSON` paths hold scalars, objects, or both.
+from_clickhouse sql="CREATE OR REPLACE TABLE fc_json_objects (id UInt64, j JSON) ENGINE = MergeTree ORDER BY id",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false

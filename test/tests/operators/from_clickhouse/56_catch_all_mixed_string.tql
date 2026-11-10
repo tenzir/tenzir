@@ -1,9 +1,14 @@
-// ClickHouse narrows the rows by the text of the catch-all field, which keeps
-// only the string. `62_catch_all_query_log.tql` checks the query.
+---
+error: true
+---
+
+// The catch-all field holds a string, a number, and a list in different
+// events. ClickHouse rejects comparing it with a string, which fails the
+// pipeline, and the operator does not retry. `62_catch_all_query_log.tql`
+// checks that the query ran once.
 from_clickhouse table="fc_catch_all_mixed",
                 host=env("CLICKHOUSE_HOST"),
                 port=int(env("CLICKHOUSE_PORT")),
                 password=env("CLICKHOUSE_PASSWORD"),
                 tls=false
 where metadata.product.name == "test"
-select id

@@ -1,0 +1,9 @@
+// An object compares with a literal as `NULL` in ClickHouse, so only the
+// scalar matches.
+from_clickhouse table="fc_json_objects",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
+where j.a == 5
+select id

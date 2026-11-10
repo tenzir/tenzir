@@ -1,9 +1,9 @@
 # runner: python
-"""Assert the SQL that `from_clickhouse` sends when the optimizer pushes hints.
+"""Assert the SQL that `from_clickhouse` sends for the stages that it takes over.
 
-The tests around this one check the pipeline output, which is identical whether
-a predicate runs in ClickHouse or locally. This test reads back the queries from
-`system.query_log` to prove what went into SQL and what stayed behind.
+The tests around this one check the pipeline output. This test reads back the
+queries from `system.query_log` to prove what went into SQL and what stayed
+behind.
 """
 
 from __future__ import annotations
@@ -132,89 +132,62 @@ INSERT INTO {TABLE} (id, x, y, n, meta, half) VALUES (1, 1, 'foo', NULL, ('a', 1
 """
     )
     source = f'from_clickhouse table="{TABLE}",\n  {CONNECTION}\n'
-    # Everything translates: filter, projection, and limit go into the query.
-    # The projection covers the filter's references, in table order.
+    # The filter, the projection, and the limit go into the query. The inner
+    # selection covers the filter's references, in table order.
     _run_pipeline(
         tenzir,
         source + 'where x > 0 or y == "foo" and n in [1, 2, 3]\nselect x, y\nhead 42',
     )
     assert _last_select() == (
-        f"SELECT `x`, `y`, `n` FROM {TABLE}"
-        " WHERE (`x` > 0 OR (`y` = 'foo' AND (`n` IS NOT NULL AND `n` IN (1, 2, 3))))"
-        " LIMIT 42"
+        "SELECT `x` AS `__tenzir_column_0`, `y` AS `__tenzir_column_1`"
+        f" FROM (SELECT `x`, `y`, `n` FROM {TABLE}) AS `__tenzir_table`"
+        " WHERE ((`x` > 0) OR ((`y` = 'foo') AND (`n` IN (1, 2, 3)))) LIMIT 42"
     ), _last_select()
-    # A conjunct without translation stays local and takes the limit with it.
+    # Each conjunct of a filter goes into the query, and so does the limit.
     _run_pipeline(tenzir, source + 'where x > 0 and y.to_upper() == "FOO"\nhead 5')
-    assert _last_select() == f"SELECT * FROM {TABLE} WHERE `x` > 0", _last_select()
-    # String functions with a ClickHouse counterpart go into the query.
+    assert _last_select() == (
+        f"SELECT * FROM {TABLE} WHERE (`x` > 0) AND (upperUTF8(`y`) = 'FOO') LIMIT 5"
+    ), _last_select()
+    # The query takes over the conjuncts up to the first one that it cannot
+    # spell, a substring search.
     _run_pipeline(
         tenzir,
         source + 'where y.starts_with("f") and "a" in y and y.length_bytes() > 2',
     )
-    assert _last_select() == (
-        f"SELECT * FROM {TABLE} WHERE startsWith(`y`, 'f') AND position(`y`, 'a') > 0"
-        " AND length(`y`) > 2"
-    ), _last_select()
+    assert _last_select() == (f"SELECT * FROM {TABLE} WHERE startsWith(`y`, 'f')"), (
+        _last_select()
+    )
     # Two columns compare directly; arithmetic and literal folding translate.
     _run_pipeline(tenzir, source + "where x < meta.level and x / 2 > 1 - 2")
     assert _last_select() == (
-        f"SELECT * FROM {TABLE} WHERE `x` < `meta`.`level` AND (`x` / 2) > -1."
+        f"SELECT * FROM {TABLE} WHERE (`x` < tupleElement(`meta`, 'level'))"
+        " AND ((`x` / 2) > -1)"
     ), _last_select()
     # A nested projection narrows the tuple to the requested elements.
     output = _run_pipeline(
         tenzir, source + "select id, meta.level\nto_stdout { write_ndjson }"
     )
     assert _last_select() == (
-        f"SELECT `id`, CAST(tuple(`meta`.`level`), 'Tuple(`level` Int64)') AS `meta`"
-        f" FROM {TABLE}"
+        "SELECT `id` AS `__tenzir_column_0`, tupleElement(`meta`, 'level') AS"
+        " `__tenzir_column_1` FROM (SELECT `id`, CAST(tuple(tupleElement(`meta`,"
+        " 'level')), 'Tuple(`level` Int64)') AS `meta` FROM"
+        f" {TABLE}) AS `__tenzir_table`"
     ), _last_select()
     assert output.strip().splitlines() == [
         '{"id":1,"meta":{"level":1}}',
         '{"id":2,"meta":{"level":2}}',
         '{"id":3,"meta":{"level":3}}',
     ], output
-    # A tuple with an element the operator cannot decode is dropped locally as
-    # a whole. Narrowing it to a decodable element would expose a value where
-    # the unoptimized pipeline yields `null`, so it is selected whole and the
-    # local `select` sees no such field.
-    output = _run_pipeline(
-        tenzir, source + "select id, half.ok\nto_stdout { write_ndjson }"
-    )
-    assert _last_select() == f"SELECT `id`, `half` FROM {TABLE}", _last_select()
-    assert output.strip().splitlines() == [
-        '{"id":1,"half":{"ok":null}}',
-        '{"id":2,"half":{"ok":null}}',
-        '{"id":3,"half":{"ok":null}}',
-    ], output
-    # Nullable equality carries a null guard so `not` keeps TQL semantics.
+    # Equality and its negation have ClickHouse's semantics for `NULL`.
     _run_pipeline(tenzir, source + "where not (n == 2)")
-    assert _last_select() == (
-        f"SELECT * FROM {TABLE} WHERE NOT (`n` IS NOT NULL AND `n` = 2)"
-    ), _last_select()
-    # Tuple elements become compound identifiers.
+    assert _last_select() == (f"SELECT * FROM {TABLE} WHERE (NOT (`n` = 2))"), (
+        _last_select()
+    )
+    # Tuple elements are read with `tupleElement`.
     _run_pipeline(tenzir, source + "where meta.level > 1")
-    assert _last_select() == (f"SELECT * FROM {TABLE} WHERE `meta`.`level` > 1"), (
-        _last_select()
-    )
-    # An `ip` literal against a `String` column compares against its text, and
-    # a subnet parses the column locally behind a prefilter, which keeps the
-    # limit local as well.
-    output = _run_pipeline(
-        tenzir, source + "where y == 1.1.1.1\nselect id\nto_stdout { write_ndjson }"
-    )
-    assert _last_select() == (f"SELECT `id`, `y` FROM {TABLE} WHERE `y` = '1.1.1.1'"), (
-        _last_select()
-    )
-    assert output.strip() == '{"id":3}', output
-    output = _run_pipeline(
-        tenzir,
-        source + "where y in 1.0.0.0/8\nhead 1\nselect id\nto_stdout { write_ndjson }",
-    )
     assert _last_select() == (
-        f"SELECT `id`, `y` FROM {TABLE} WHERE (toIPv6OrNull(`y`) IS NULL OR"
-        " toIPv6OrNull(`y`) BETWEEN toIPv6('1.0.0.0') AND toIPv6('1.255.255.255'))"
+        f"SELECT * FROM {TABLE} WHERE (tupleElement(`meta`, 'level') > 1)"
     ), _last_select()
-    assert output.strip() == '{"id":3}', output
     # A limit alone needs the schema only to find a catch-all column, so it
     # takes a single round-trip.
     describes_before = _describe_count()
@@ -222,58 +195,14 @@ INSERT INTO {TABLE} (id, x, y, n, meta, half) VALUES (1, 1, 'foo', NULL, ('a', 1
     assert _last_select() == f"SELECT * FROM {TABLE} LIMIT 1", _last_select()
     describes = _describe_count() - describes_before
     assert describes == 1, f"expected one DESCRIBE, got {describes}"
-    # `SELECT *` omits ALIAS and MATERIALIZED columns, so a predicate on one
-    # stays local, where it sees no such field and drops every row. Pushing it
-    # would match rows instead. A DEFAULT column is an ordinary column.
-    output = _run_pipeline(
-        tenzir, source + 'where a == "foo-alias" or m == 2\nto_stdout { write_ndjson }'
-    )
-    assert _last_select() == f"SELECT * FROM {TABLE}", _last_select()
-    assert output.strip() == "", output
+    # A DEFAULT column is an ordinary column.
     output = _run_pipeline(
         tenzir, source + "where d == 10\nselect id\nto_stdout { write_ndjson }"
     )
-    assert _last_select() == (f"SELECT `id`, `d` FROM {TABLE} WHERE `d` = 10"), (
-        _last_select()
-    )
-    assert output.strip() == '{"id":1}', output
-    # A projection that names a generated column keeps `SELECT *`, because
-    # whether that includes the column depends on the session's settings. With
-    # the defaults it does not, and `select` fills the field with null.
-    output = _run_pipeline(
-        tenzir, source + "select id, a, m\nhead 1\nto_stdout { write_ndjson }"
-    )
-    assert _last_select() == f"SELECT * FROM {TABLE} LIMIT 1", _last_select()
-    assert output.strip() == '{"id":1,"a":null,"m":null}', output
-    # A user whose profile includes generated columns in `SELECT *` gets their
-    # computed values, as before pushdown.
-    _clickhouse(
-        """
-DROP USER IF EXISTS fc_asterisk;
-CREATE USER fc_asterisk IDENTIFIED BY 'fc_asterisk'
-  SETTINGS asterisk_include_alias_columns = 1,
-           asterisk_include_materialized_columns = 1;
-GRANT SELECT ON default.* TO fc_asterisk;
-"""
-    )
-    as_asterisk = (
-        f'from_clickhouse table="{TABLE}",\n'
-        '  host=env("CLICKHOUSE_HOST"),\n'
-        '  port=int(env("CLICKHOUSE_PORT")),\n'
-        '  user="fc_asterisk",\n'
-        '  password="fc_asterisk",\n'
-        "  tls=false\n"
-    )
-    output = _run_pipeline(
-        tenzir, as_asterisk + "select id, a, m\nhead 1\nto_stdout { write_ndjson }"
-    )
-    assert _last_select() == f"SELECT * FROM {TABLE} LIMIT 1", _last_select()
-    assert output.strip() == '{"id":1,"a":"foo-alias","m":2}', output
-    output = _run_pipeline(
-        tenzir,
-        as_asterisk + 'where a == "foo-alias"\nselect id\nto_stdout { write_ndjson }',
-    )
-    assert _last_select() == f"SELECT * FROM {TABLE}", _last_select()
+    assert _last_select() == (
+        f"SELECT `id` AS `__tenzir_column_0` FROM (SELECT `id`, `d` FROM {TABLE})"
+        " AS `__tenzir_table` WHERE (`d` = 10)"
+    ), _last_select()
     assert output.strip() == '{"id":1}', output
     # User-provided SQL is sent verbatim.
     _run_pipeline(

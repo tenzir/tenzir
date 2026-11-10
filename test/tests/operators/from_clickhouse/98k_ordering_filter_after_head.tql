@@ -1,0 +1,11 @@
+// The filter applies to the newest two events, not to the newest two matching
+// events.
+from_clickhouse table="fc_ordering",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
+sort -time
+head 2
+where message == "keep"
+select id, time

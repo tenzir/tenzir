@@ -23,20 +23,24 @@
          ]
        },
        filter: [
--        
--      ],
+         
+       ],
 -      order: "ordered"
--    },
--    where_ir {
--      op: {
--        path: [
++      order: "ordered",
++      declined: "the query of the user is opaque"
+     },
+     where_ir {
+       op: {
+         path: [
 -          `where` @ [1]:40..45 from 0
--        ],
++          
+         ],
 -        ref: std::where/op
--      },
--      args: [
++        ref: unresolved
+       },
+       args: [
 -        expression binary_expr {
-+        binary_expr {
++        Incomplete binary_expr {
            left: root_field {
              id: `x` @ [1]:46..47 from 0,
              has_question_mark: false
@@ -46,11 +50,9 @@
            location: [1]:46..51 from 0
          }
        ],
--      named_args: [
--        
--      ]
-+      order: "ordered",
-+      limit: 5
+       named_args: [
+         
+       ]
      },
      GenericIr {
        desc: "head",

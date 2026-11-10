@@ -1,0 +1,9 @@
+// A computed sort key is no stage that the query can take over, so the sort
+// and the limit after it run in Tenzir.
+from_clickhouse table="fc_ordering",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
+sort -time, message.to_upper()
+head 3

@@ -1,0 +1,9 @@
+// Sorting by a column of a catch-all table keeps the reconstruction of its
+// events.
+from_clickhouse table="fc_catch_all",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
+sort -time
+head 1
