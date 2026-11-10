@@ -1,0 +1,72 @@
+{
+  compacted: {
+    class_uid: 4003,
+    category_uid: 4,
+    metadata: {
+      version: "1.9.0",
+    },
+    activity_id: 2,
+    type_uid: 400302,
+    severity_id: 99,
+    severity: "Elevated",
+    connection_info: {
+      direction_id: 2,
+    },
+    answers: [
+      {
+        flag_ids: [
+          1,
+          2,
+        ],
+      },
+      {
+        flag_ids: [
+          99,
+        ],
+        flags: [
+          "Vendor Flag X",
+        ],
+      },
+    ],
+  },
+  restored: {
+    class_uid: 4003,
+    category_uid: 4,
+    metadata: {
+      version: "1.9.0",
+    },
+    activity_id: 2,
+    type_uid: 400302,
+    severity_id: 99,
+    severity: "Elevated",
+    connection_info: {
+      direction_id: 2,
+      direction: "Outbound",
+    },
+    answers: [
+      {
+        flag_ids: [
+          1,
+          2,
+        ],
+        flags: [
+          "Authoritative Answer",
+          "Truncated Response",
+        ],
+      },
+      {
+        flag_ids: [
+          99,
+        ],
+        flags: [
+          "Vendor Flag X",
+        ],
+      },
+    ],
+    activity_name: "Response",
+    category_name: "Network Activity",
+    class_name: "DNS Activity",
+    type_name: "DNS Activity: Response",
+  },
+  equal: true,
+}

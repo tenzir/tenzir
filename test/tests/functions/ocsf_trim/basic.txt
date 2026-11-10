@@ -2,7 +2,7 @@
   original: {
     class_uid: 4001,
     metadata: {
-      version: "1.5.0",
+      version: "1.9.0",
     },
     activity_id: null,
     message: "",
@@ -16,7 +16,7 @@
   trimmed: {
     class_uid: 4001,
     metadata: {
-      version: "1.5.0",
+      version: "1.9.0",
     },
     activity_id: null,
     message: "",
@@ -25,7 +25,7 @@
   retained: {
     class_uid: 4001,
     metadata: {
-      version: "1.5.0",
+      version: "1.9.0",
     },
     activity_id: null,
     message: "",
@@ -39,7 +39,7 @@
   required: {
     class_uid: 4001,
     metadata: {
-      version: "1.5.0",
+      version: "1.9.0",
     },
     activity_id: null,
     enrichments: [],

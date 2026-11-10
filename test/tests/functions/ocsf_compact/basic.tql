@@ -1,0 +1,23 @@
+// Removes siblings that `ocsf_derive` rebuilds and keeps everything else.
+let $event = {class_uid: 3002, metadata: {version: "1.9.0"}}
+from {...$event,
+      class_name: "Authentication",
+      category_uid: 3, category_name: "Identity & Access Management",
+      activity_id: 1, activity_name: "Logon",
+      type_uid: 300201, type_name: "Authentication: Logon",
+      severity_id: 1, severity: "Informational"},
+     // Other keeps the data source specific value, even if it is "Other".
+     {...$event,
+      activity_id: 99, activity_name: "user_login",
+      type_uid: 300299, type_name: "Authentication: user_login",
+      auth_protocol_id: 99, auth_protocol: "Other"},
+     // Mismatches and unknown values stay for `ocsf_derive` to report.
+     {...$event,
+      status_id: 1, status: "Failure",
+      severity_id: 42, severity: "Severe"},
+     // Strings without an integer stay, null siblings go.
+     {...$event,
+      activity_id: null, activity_name: "Logon",
+      logon_type: "Network",
+      status_id: 1, status: null}
+this = ocsf_compact(this)

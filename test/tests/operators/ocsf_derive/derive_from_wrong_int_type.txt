@@ -6,10 +6,12 @@ warning: expected field `activity_id` to be `int`, but got `float`
    |
 {
   metadata: {
-    version: "1.5.0",
+    version: "1.9.0",
   },
   class_uid: 1001,
   activity_id: 1.5,
+  category_uid: 1,
   activity_name: null,
+  category_name: "System Activity",
   class_name: "File System Activity",
 }

@@ -1,0 +1,15 @@
+// Handles nested records, lists of records, and enum lists.
+from {class_uid: 4003, metadata: {version: "1.9.0"},
+      connection_info: {direction_id: 2, direction: "Outbound"},
+      src_endpoint: {type_id: 99, type: "Workstation"},
+      answers: [
+        {flag_ids: [1, 2], flags: ["Authoritative Answer", "Truncated Response"]},
+        {flag_ids: [1, 99], flags: ["Authoritative Answer", "Vendor Flag X"]},
+        {flag_ids: [1, 2], flags: ["Authoritative Answer"]},
+        {flag_ids: [1, null], flags: ["Authoritative Answer", null]},
+        {flag_ids: [], flags: []},
+        {flag_ids: [1], flags: null},
+        {flags: ["Authoritative Answer"]},
+      ],
+      unmapped: {activity_id: 1, activity_name: "Logon"}}
+this = ocsf_compact(this)

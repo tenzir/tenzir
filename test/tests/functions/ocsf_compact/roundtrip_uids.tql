@@ -1,0 +1,11 @@
+// The siblings of removed uids come back as well.
+from {original: {
+  class_uid: 201003, class_name: "Windows Resource Activity",
+  category_uid: 1, category_name: "System Activity",
+  metadata: {version: "1.9.0"},
+  activity_id: 1, activity_name: "Access",
+  type_uid: 20100301, type_name: "Windows Resource Activity: Access",
+}}
+compacted = ocsf_compact(original, uids=true)
+equal = ocsf_derive(compacted) == original
+drop original

@@ -1,0 +1,24 @@
+// With `uids=true`, also removes `category_uid` and `type_uid`.
+let $event = {class_uid: 3002, metadata: {version: "1.9.0"}}
+from {original: {...$event, category_uid: 3,
+                 category_name: "Identity & Access Management",
+                 activity_id: 1, activity_name: "Logon",
+                 type_uid: 300201, type_name: "Authentication: Logon"}},
+     // The `type_uid` of an "Other" activity goes, its custom name stays.
+     {original: {...$event, category_uid: 3, activity_id: 99,
+                 activity_name: "user_login", type_uid: 300299,
+                 type_name: "Authentication: user_login"}},
+     // Without `activity_id`, `type_uid` stays.
+     {original: {...$event, category_uid: 3, activity_name: "Logon",
+                 type_uid: 300201}},
+     // Values that do not match the class stay.
+     {original: {...$event, category_uid: 7, activity_id: 1,
+                 type_uid: 300202}}
+compacted = ocsf_compact(original, uids=true)
+restored = ocsf_derive(compacted)
+restored = {
+  category_uid: restored.category_uid,
+  type_uid: restored.type_uid,
+  type_name: restored.type_name,
+}
+drop original

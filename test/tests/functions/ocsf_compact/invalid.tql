@@ -1,0 +1,4 @@
+from {x: null}, {x: "bad"}, {x: {}},
+     {x: {class_uid: 1, metadata: {version: "1.9.0"}, activity_name: "x"}},
+     {x: {class_uid: 1001, metadata: {version: "1.9.0"}, activity_id: 1, activity_name: "Create"}}
+result = ocsf_compact(x)

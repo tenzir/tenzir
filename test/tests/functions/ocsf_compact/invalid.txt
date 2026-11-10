@@ -1,0 +1,60 @@
+warning: ocsf_compact expects a record
+ --> tests/functions/ocsf_compact/invalid.tql:4:23
+  |
+4 | result = ocsf_compact(x)
+  |                       ~
+  |
+
+warning: dropping events where `metadata` does not exist
+ --> tests/functions/ocsf_compact/invalid.tql:4:10
+  |
+4 | result = ocsf_compact(x)
+  |          ~~~~~~~~~~~~~~~
+  |
+
+warning: dropping events where `class_uid` is unknown
+ --> tests/functions/ocsf_compact/invalid.tql:4:10
+  |
+4 | result = ocsf_compact(x)
+  |          ~~~~~~~~~~~~~~~
+  |
+  = note: could not find class for value `1`
+{
+  x: null,
+  result: null,
+}
+{
+  x: "bad",
+  result: null,
+}
+{
+  x: {},
+  result: null,
+}
+{
+  x: {
+    class_uid: 1,
+    metadata: {
+      version: "1.9.0",
+    },
+    activity_name: "x",
+  },
+  result: null,
+}
+{
+  x: {
+    class_uid: 1001,
+    metadata: {
+      version: "1.9.0",
+    },
+    activity_id: 1,
+    activity_name: "Create",
+  },
+  result: {
+    class_uid: 1001,
+    metadata: {
+      version: "1.9.0",
+    },
+    activity_id: 1,
+  },
+}

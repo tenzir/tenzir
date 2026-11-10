@@ -1,0 +1,15 @@
+// Computes `category_uid` and `type_uid` where they are missing.
+from {class_uid: 1001, metadata: {version: "1.9.0"}, activity_id: 1},
+     // From `activity_name` when `activity_id` is missing.
+     {class_uid: 3002, metadata: {version: "1.9.0"}, activity_name: "Logon"},
+     // Extension classes have their own category.
+     {class_uid: 201003, metadata: {version: "1.9.0"}, activity_id: 1},
+     // An "Other" type keeps its data source specific name.
+     {class_uid: 3002, metadata: {version: "1.9.0"}, activity_id: 99,
+      activity_name: "user_login", type_name: "Authentication: user_login"},
+     // Existing values stay, and a mismatching `type_uid` warns.
+     {class_uid: 3002, metadata: {version: "1.9.0"}, activity_id: 1,
+      category_uid: 3, type_uid: 300202},
+     // Unknown activities have no `type_uid`.
+     {class_uid: 3002, metadata: {version: "1.9.0"}, activity_id: 4711}
+this = ocsf_derive(this)

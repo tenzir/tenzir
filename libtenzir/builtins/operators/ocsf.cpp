@@ -602,6 +602,13 @@ auto mangle_version(std::string_view version) -> std::string {
   return result;
 }
 
+/// Returns whether `name` is the caption of an "Other" enum value, whose
+/// sibling carries a data source specific value. Class-specific `type_uid`
+/// enums prefix the caption with the class name.
+auto is_other(std::string_view name) -> bool {
+  return name == "Other" or name.ends_with(": Other");
+}
+
 auto mangle_class_name(std::string_view class_name) -> std::string {
   auto result = std::string{};
   for (auto c : class_name) {
@@ -1446,9 +1453,9 @@ private:
         // When the integer maps to "Other" (typically 99), the string sibling
         // is explicitly a free-form, source-specific value per the OCSF spec.
         // Do not validate it against the enum lookup or check consistency.
-        auto is_other = expected_string != enum_lookup.end()
-                        and expected_string->second == "Other";
-        if (not is_other) {
+        auto other = expected_string != enum_lookup.end()
+                     and is_other(expected_string->second);
+        if (not other) {
           auto expected_int = reverse_lookup.find(*string_value);
           if (expected_int == reverse_lookup.end()) {
             diagnostic::warning("found invalid value for `{}`", string_path)
@@ -2431,7 +2438,7 @@ auto derive_pair(Builder& integers, Builder& strings, RowView<Data> number,
         .emit(dh);
     }
     if (expected_string == forward.end()
-        or expected_string->second != "Other") {
+        or not is_other(expected_string->second)) {
       auto expected_int = reverse.find(**string);
       if (expected_int == reverse.end()) {
         diagnostic::warning("found invalid value for `{}`", text_path)
@@ -2576,11 +2583,299 @@ auto derive_record(Array<Record> input, record_type const& schema,
   return input;
 }
 
+/// Returns the integer of `name` in `row`, if it holds one.
+auto int_at(Array<Record> const& input, std::string_view name,
+            storage::Index row) -> Option<int64_t> {
+  auto value = input.field(name);
+  if (not value or not value->present.get(row)) {
+    return None{};
+  }
+  auto data = value->data.get(row);
+  if (auto integer = try_as<RowView<Int>>(data)) {
+    return **integer;
+  }
+  return None{};
+}
+
+/// Returns the only value of the enum of the field `name`, which the schema
+/// defines for `category_uid` of every class.
+auto single_enum_value(record_type const& schema, std::string_view name)
+  -> Option<int64_t> {
+  auto field = schema.field(name);
+  auto enum_id = field ? field->attribute("enum") : None{};
+  if (not enum_id) {
+    return None{};
+  }
+  auto const& lookup = check(get_ocsf_int_to_string(*enum_id)).get();
+  if (lookup.size() != 1) {
+    return None{};
+  }
+  return lookup.begin()->first;
+}
+
+/// Returns the `type_uid` that the schema defines for `activity_id`.
+auto expected_type_uid(record_type const& schema, int64_t class_uid,
+                       int64_t activity_id) -> Option<int64_t> {
+  auto field = schema.field("type_uid");
+  auto enum_id = field ? field->attribute("enum") : None{};
+  if (not enum_id) {
+    return None{};
+  }
+  auto const& lookup = check(get_ocsf_int_to_string(*enum_id)).get();
+  auto result = class_uid * 100 + activity_id;
+  if (not lookup.contains(result)) {
+    return None{};
+  }
+  return result;
+}
+
+/// Returns the `activity_id` of `row`, falling back to `activity_name`.
+auto activity_at(Array<Record> const& input, record_type const& schema,
+                 storage::Index row) -> Option<int64_t> {
+  if (auto id = int_at(input, "activity_id", row)) {
+    return id;
+  }
+  auto field = schema.field("activity_id");
+  auto enum_id = field ? field->attribute("enum") : None{};
+  auto name = input.field("activity_name");
+  if (not enum_id or not name or not name->present.get(row)) {
+    return None{};
+  }
+  auto data = name->data.get(row);
+  auto text = try_as<RowView<String>>(data);
+  if (not text) {
+    return None{};
+  }
+  auto const& lookup = check(get_ocsf_string_to_int(*enum_id)).get();
+  if (auto it = lookup.find(**text); it != lookup.end()) {
+    return it->second;
+  }
+  return None{};
+}
+
+/// Fills `category_uid` and `type_uid` where they are missing or `null`, and
+/// warns where `type_uid` differs from `class_uid` and `activity_id`. The
+/// enum validation already reports a `category_uid` of another class.
+auto derive_uids(Array<Record> input, Group const& group, location self,
+                 diagnostic_handler& dh) -> Array<Record> {
+  auto const& schema = as<record_type>(group.schema.type);
+  auto category = single_enum_value(schema, "category_uid");
+  auto fill = [&](std::string_view name, auto expected) {
+    auto filled = storage::BitMap::Mutable{input.length()};
+    auto builder = ArrayBuilder<Data>{};
+    auto mismatch = Option<std::pair<int64_t, int64_t>>{};
+    auto old = input.field(name);
+    for (auto row : storage::true_bits(group.rows)) {
+      auto want = expected(row);
+      if (not want) {
+        continue;
+      }
+      auto present = old and old->present.get(row)
+                     and not is<RowView<Null>>(old->data.get(row));
+      if (present) {
+        auto have = int_at(input, name, row);
+        if (have and *have != *want and not mismatch) {
+          mismatch = std::pair{*have, *want};
+        }
+        continue;
+      }
+      builder.skip_n(row - builder.length());
+      builder.data(*want);
+      filled.set(row, true);
+    }
+    if (mismatch and name == "type_uid") {
+      diagnostic::warning("found inconsistency between `type_uid` and "
+                          "`class_uid` and `activity_id`")
+        .primary(self)
+        .note("got {}, expected {}", mismatch->first, mismatch->second)
+        .emit(dh);
+    }
+    auto mask = std::move(filled).finish();
+    if (not mask.any()) {
+      return;
+    }
+    builder.skip_n(input.length() - builder.length());
+    auto replacement = builder.finish();
+    auto present = mask;
+    if (old) {
+      replacement = with_merged(*old, {std::move(replacement), mask});
+      present = present | old->present;
+    }
+    input = std::move(input).with_field_overwrite(name, {std::move(replacement),
+                                                         std::move(present)});
+  };
+  fill("category_uid", [&](storage::Index) {
+    return category;
+  });
+  fill("type_uid", [&](storage::Index row) -> Option<int64_t> {
+    auto activity = activity_at(input, schema, row);
+    if (not activity) {
+      return None{};
+    }
+    return expected_type_uid(schema, group.class_uid, *activity);
+  });
+  return input;
+}
+
 auto derive(Array<Record> input, storage::BitMap& rows, location self,
             diagnostic_handler& dh) -> Array<Record> {
   for (auto& group : groups(input, rows, self, dh)) {
+    input = derive_uids(std::move(input), group, self, dh);
     input = derive_record(std::move(input), as<record_type>(group.schema.type),
                           group.rows, self, dh, {});
+  }
+  return input;
+}
+
+using EnumLookup = boost::unordered_flat_map<int64_t, std::string_view>;
+
+/// Returns whether `ocsf_derive` rebuilds `text` exactly from `number`. A
+/// missing or null `text` is rebuildable whenever `number` is.
+auto rebuildable(RowView<Data> number, Option<RowView<Data>> text,
+                 EnumLookup const& lookup) -> bool {
+  if (text and is<RowView<Null>>(*text)) {
+    text = None{};
+  }
+  if (auto numbers = try_as<RowView<List>>(number)) {
+    auto texts = static_cast<RowView<List> const*>(nullptr);
+    if (text) {
+      texts = try_as<RowView<List>>(*text);
+      if (not texts or texts->length() != numbers->length()) {
+        return false;
+      }
+    }
+    for (auto i = storage::Index{0}; i < numbers->length(); ++i) {
+      auto item = texts ? Option<RowView<Data>>{texts->get(i)}
+                        : Option<RowView<Data>>{None{}};
+      if (not rebuildable(numbers->get(i), item, lookup)) {
+        return false;
+      }
+    }
+    return true;
+  }
+  auto integer = try_as<RowView<Int>>(number);
+  if (not integer) {
+    return false;
+  }
+  auto expected = lookup.find(**integer);
+  if (expected == lookup.end() or is_other(expected->second)) {
+    return false;
+  }
+  if (not text) {
+    return true;
+  }
+  auto string = try_as<RowView<String>>(*text);
+  return string and **string == expected->second;
+}
+
+auto compact_record(Array<Record> input, record_type const& schema,
+                    storage::BitMap const& rows) -> Array<Record>;
+
+auto compact_value(Array<Data> input, type const& schema,
+                   storage::BitMap const& rows) -> Array<Data> {
+  if (schema.attribute("variant")) {
+    return input;
+  }
+  if (auto record = try_as<record_type>(schema)) {
+    return std::move(input).map_alternative<Record>([&](auto records) {
+      return compact_record(std::move(records.data), *record,
+                            rows & records.present);
+    });
+  }
+  if (auto list = try_as<list_type>(schema)) {
+    return map_lists(std::move(input), rows, [&](auto values, auto elements) {
+      return compact_value(std::move(values), list->value_type(), elements);
+    });
+  }
+  return input;
+}
+
+auto compact_record(Array<Record> input, record_type const& schema,
+                    storage::BitMap const& rows) -> Array<Record> {
+  if (not rows.any()) {
+    return input;
+  }
+  auto siblings = boost::unordered_flat_set<std::string_view>{};
+  for (auto const& [name, ty] : schema.fields()) {
+    if (ty.attribute("enum")) {
+      if (auto sibling = ty.attribute("sibling")) {
+        siblings.insert(*sibling);
+      }
+    }
+  }
+  for (auto const& [name, ty] : schema.fields()) {
+    auto value = input.field(name);
+    if (not value) {
+      continue;
+    }
+    auto enum_id = ty.attribute("enum");
+    auto sibling = ty.attribute("sibling");
+    if (not enum_id or not sibling) {
+      auto nested = is<record_type>(ty) or is<list_type>(ty);
+      if (nested and not siblings.contains(name)) {
+        value->data
+          = compact_value(std::move(value->data), ty, rows & value->present);
+        input = std::move(input).with_field_overwrite(name, std::move(*value));
+      }
+      continue;
+    }
+    auto other = input.field(*sibling);
+    if (not other) {
+      continue;
+    }
+    auto const& lookup = check(get_ocsf_int_to_string(*enum_id)).get();
+    auto removable = storage::BitMap::Mutable{input.length()};
+    auto candidates = rows & value->present & other->present;
+    for (auto row : storage::true_bits(candidates)) {
+      if (rebuildable(value->data.get(row), other->data.get(row), lookup)) {
+        removable.set(row, true);
+      }
+    }
+    auto mask = std::move(removable).finish();
+    if (mask.any()) {
+      auto names = std::array{*sibling};
+      input = std::move(input).without_fields(names, std::move(mask));
+    }
+  }
+  return input;
+}
+
+/// Removes `category_uid` and `type_uid` where `ocsf_derive` rebuilds them.
+auto compact_uids(Array<Record> input, Group const& group) -> Array<Record> {
+  auto const& schema = as<record_type>(group.schema.type);
+  auto category = single_enum_value(schema, "category_uid");
+  auto category_rows = storage::BitMap::Mutable{input.length()};
+  auto type_rows = storage::BitMap::Mutable{input.length()};
+  for (auto row : storage::true_bits(group.rows)) {
+    auto category_uid = int_at(input, "category_uid", row);
+    if (category_uid and category_uid == category) {
+      category_rows.set(row, true);
+    }
+    auto type_uid = int_at(input, "type_uid", row);
+    auto activity_id = int_at(input, "activity_id", row);
+    if (type_uid and activity_id
+        and type_uid
+              == expected_type_uid(schema, group.class_uid, *activity_id)) {
+      type_rows.set(row, true);
+    }
+  }
+  auto category_name = std::array{std::string_view{"category_uid"}};
+  auto type_name = std::array{std::string_view{"type_uid"}};
+  input = std::move(input).without_fields(category_name,
+                                          std::move(category_rows).finish());
+  return std::move(input).without_fields(type_name,
+                                         std::move(type_rows).finish());
+}
+
+auto compact(Array<Record> input, storage::BitMap& rows, location self,
+             diagnostic_handler& dh, bool uids) -> Array<Record> {
+  for (auto& group : groups(input, rows, self, dh)) {
+    // Remove the uids last, so that their siblings compare against them.
+    input = compact_record(std::move(input), as<record_type>(group.schema.type),
+                           group.rows);
+    if (uids) {
+      input = compact_uids(std::move(input), group);
+    }
   }
   return input;
 }
@@ -3489,7 +3784,7 @@ public:
 
 } // namespace ocsf_rewrite
 
-enum class NovaTransform { cast, trim, derive };
+enum class NovaTransform { cast, trim, derive, compact };
 
 struct OcsfFunctionArgs {
   nova::ValueArgument x;
@@ -3498,6 +3793,7 @@ struct OcsfFunctionArgs {
   bool timestamp_to_ms = false;
   bool drop_optional = true;
   bool drop_recommended = false;
+  bool uids = false;
   location call;
 };
 
@@ -3508,8 +3804,10 @@ struct OcsfFunction {
       return "ocsf_cast";
     } else if constexpr (Mode == NovaTransform::trim) {
       return "ocsf_trim";
-    } else {
+    } else if constexpr (Mode == NovaTransform::derive) {
       return "ocsf_derive";
+    } else {
+      return "ocsf_compact";
     }
   }
 
@@ -3539,9 +3837,12 @@ struct OcsfFunction {
         return nova_ocsf::trim(std::move(records->data), selected, args.call,
                                frame.dh(), args.drop_optional,
                                args.drop_recommended);
-      } else {
+      } else if constexpr (Mode == NovaTransform::derive) {
         return nova_ocsf::derive(std::move(records->data), selected, args.call,
                                  frame.dh());
+      } else {
+        return nova_ocsf::compact(std::move(records->data), selected, args.call,
+                                  frame.dh(), args.uids);
       }
     }();
     return nova::Array<nova::Data>{std::move(result)}.null_where(
@@ -3571,6 +3872,8 @@ public:
     } else if constexpr (Mode == NovaTransform::trim) {
       d.named_optional("drop_optional", &OcsfFunctionArgs::drop_optional);
       d.named_optional("drop_recommended", &OcsfFunctionArgs::drop_recommended);
+    } else if constexpr (Mode == NovaTransform::compact) {
+      d.named_optional("uids", &OcsfFunctionArgs::uids);
     }
     return std::move(d).finish();
   }
@@ -3712,3 +4015,5 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::ocsf::OcsfFunctionPlugin<
                        tenzir::plugins::ocsf::NovaTransform::trim>)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::ocsf::OcsfFunctionPlugin<
                        tenzir::plugins::ocsf::NovaTransform::derive>)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::ocsf::OcsfFunctionPlugin<
+                       tenzir::plugins::ocsf::NovaTransform::compact>)

@@ -1,0 +1,18 @@
+{
+  event: {
+    class_uid: 1001,
+    metadata: {
+      version: "1.9.0",
+    },
+    activity_id: 1,
+  },
+}
+{
+  event: {
+    class_uid: 1001,
+    metadata: {
+      version: "1.9.0",
+    },
+    activity_id: 1,
+  },
+}

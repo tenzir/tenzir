@@ -1,9 +1,13 @@
 {
   metadata: {
-    version: "1.5.0",
+    version: "1.9.0",
   },
   class_uid: 1001,
   activity_id: 99,
   activity_name: "CustomOp",
+  category_uid: 1,
+  type_uid: 100199,
+  category_name: "System Activity",
   class_name: "File System Activity",
+  type_name: "File System Activity: Other",
 }

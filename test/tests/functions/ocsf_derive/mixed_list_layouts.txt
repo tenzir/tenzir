@@ -9,7 +9,7 @@ warning: found inconsistent list layout between `answers[].flag_ids` and `answer
     {
       class_uid: 4003,
       metadata: {
-        version: "1.5.0",
+        version: "1.9.0",
       },
       answers: [
         {
@@ -22,7 +22,7 @@ warning: found inconsistent list layout between `answers[].flag_ids` and `answer
     {
       class_uid: 4003,
       metadata: {
-        version: "1.5.0",
+        version: "1.9.0",
       },
       answers: [
         {
@@ -36,7 +36,7 @@ warning: found inconsistent list layout between `answers[].flag_ids` and `answer
     {
       class_uid: 4003,
       metadata: {
-        version: "1.5.0",
+        version: "1.9.0",
       },
       answers: [
         {
@@ -54,7 +54,7 @@ warning: found inconsistent list layout between `answers[].flag_ids` and `answer
     {
       class_uid: 4003,
       metadata: {
-        version: "1.5.0",
+        version: "1.9.0",
       },
       answers: [
         {
@@ -66,12 +66,14 @@ warning: found inconsistent list layout between `answers[].flag_ids` and `answer
           ],
         },
       ],
+      category_uid: 4,
+      category_name: "Network Activity",
       class_name: "DNS Activity",
     },
     {
       class_uid: 4003,
       metadata: {
-        version: "1.5.0",
+        version: "1.9.0",
       },
       answers: [
         {
@@ -81,12 +83,14 @@ warning: found inconsistent list layout between `answers[].flag_ids` and `answer
           flags: [],
         },
       ],
+      category_uid: 4,
+      category_name: "Network Activity",
       class_name: "DNS Activity",
     },
     {
       class_uid: 4003,
       metadata: {
-        version: "1.5.0",
+        version: "1.9.0",
       },
       answers: [
         {
@@ -98,6 +102,8 @@ warning: found inconsistent list layout between `answers[].flag_ids` and `answer
           ],
         },
       ],
+      category_uid: 4,
+      category_name: "Network Activity",
       class_name: "DNS Activity",
     },
   ],

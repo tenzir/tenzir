@@ -1,0 +1,76 @@
+warning: found inconsistency between `type_uid` and `class_uid` and `activity_id`
+  --> tests/functions/ocsf_compact/uids.tql:18:12
+   |
+18 | restored = ocsf_derive(compacted)
+   |            ~~~~~~~~~~~~~~~~~~~~~~
+   |
+   = note: got 300202, expected 300201
+
+warning: found invalid value for `category_uid`
+  --> tests/functions/ocsf_compact/uids.tql:18:12
+   |
+18 | restored = ocsf_derive(compacted)
+   |            ~~~~~~~~~~~~~~~~~~~~~~
+   |
+   = note: got 7
+{
+  compacted: {
+    class_uid: 3002,
+    metadata: {
+      version: "1.9.0",
+    },
+    activity_id: 1,
+  },
+  restored: {
+    category_uid: 3,
+    type_uid: 300201,
+    type_name: "Authentication: Logon",
+  },
+}
+{
+  compacted: {
+    class_uid: 3002,
+    metadata: {
+      version: "1.9.0",
+    },
+    activity_id: 99,
+    activity_name: "user_login",
+    type_name: "Authentication: user_login",
+  },
+  restored: {
+    category_uid: 3,
+    type_uid: 300299,
+    type_name: "Authentication: user_login",
+  },
+}
+{
+  compacted: {
+    class_uid: 3002,
+    metadata: {
+      version: "1.9.0",
+    },
+    activity_name: "Logon",
+    type_uid: 300201,
+  },
+  restored: {
+    category_uid: 3,
+    type_uid: 300201,
+    type_name: "Authentication: Logon",
+  },
+}
+{
+  compacted: {
+    class_uid: 3002,
+    metadata: {
+      version: "1.9.0",
+    },
+    category_uid: 7,
+    activity_id: 1,
+    type_uid: 300202,
+  },
+  restored: {
+    category_uid: 7,
+    type_uid: 300202,
+    type_name: "Authentication: Logoff",
+  },
+}

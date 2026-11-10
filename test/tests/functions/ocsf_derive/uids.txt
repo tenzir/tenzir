@@ -1,0 +1,91 @@
+warning: found inconsistency between `type_uid` and `class_uid` and `activity_id`
+  --> tests/functions/ocsf_derive/uids.tql:15:8
+   |
+15 | this = ocsf_derive(this)
+   |        ~~~~~~~~~~~~~~~~~
+   |
+   = note: got 300202, expected 300201
+
+warning: found invalid value for `activity_id`
+  --> tests/functions/ocsf_derive/uids.tql:15:8
+   |
+15 | this = ocsf_derive(this)
+   |        ~~~~~~~~~~~~~~~~~
+   |
+   = note: got 4711
+{
+  class_uid: 1001,
+  metadata: {
+    version: "1.9.0",
+  },
+  activity_id: 1,
+  category_uid: 1,
+  type_uid: 100101,
+  activity_name: "Create",
+  category_name: "System Activity",
+  class_name: "File System Activity",
+  type_name: "File System Activity: Create",
+}
+{
+  class_uid: 3002,
+  metadata: {
+    version: "1.9.0",
+  },
+  activity_name: "Logon",
+  category_uid: 3,
+  type_uid: 300201,
+  activity_id: 1,
+  category_name: "Identity & Access Management",
+  class_name: "Authentication",
+  type_name: "Authentication: Logon",
+}
+{
+  class_uid: 201003,
+  metadata: {
+    version: "1.9.0",
+  },
+  activity_id: 1,
+  category_uid: 1,
+  type_uid: 20100301,
+  activity_name: "Access",
+  category_name: "System Activity",
+  class_name: "Windows Resource Activity",
+  type_name: "Windows Resource Activity: Access",
+}
+{
+  class_uid: 3002,
+  metadata: {
+    version: "1.9.0",
+  },
+  activity_id: 99,
+  activity_name: "user_login",
+  type_name: "Authentication: user_login",
+  category_uid: 3,
+  type_uid: 300299,
+  category_name: "Identity & Access Management",
+  class_name: "Authentication",
+}
+{
+  class_uid: 3002,
+  metadata: {
+    version: "1.9.0",
+  },
+  activity_id: 1,
+  category_uid: 3,
+  type_uid: 300202,
+  activity_name: "Logon",
+  category_name: "Identity & Access Management",
+  class_name: "Authentication",
+  type_name: "Authentication: Logoff",
+}
+{
+  class_uid: 3002,
+  metadata: {
+    version: "1.9.0",
+  },
+  activity_id: 4711,
+  category_uid: 3,
+  activity_name: null,
+  category_name: "Identity & Access Management",
+  class_name: "Authentication",
+}

@@ -1,6 +1,6 @@
 from {
   metadata: {
-    version: "1.5.0",
+    version: "1.9.0",
     log_name: "test.log",
     log_level: "INFO",
   },

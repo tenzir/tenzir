@@ -1,0 +1,10 @@
+{
+  compacted: {
+    class_uid: 201003,
+    metadata: {
+      version: "1.9.0",
+    },
+    activity_id: 1,
+  },
+  equal: true,
+}

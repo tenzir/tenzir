@@ -27,7 +27,7 @@ warning: dropping events where `metadata` does not exist
   x: {
     class_uid: 1001,
     metadata: {
-      version: "1.5.0",
+      version: "1.9.0",
     },
     activity_id: 99,
     activity_name: "custom",
@@ -35,10 +35,14 @@ warning: dropping events where `metadata` does not exist
   result: {
     class_uid: 1001,
     metadata: {
-      version: "1.5.0",
+      version: "1.9.0",
     },
     activity_id: 99,
     activity_name: "custom",
+    category_uid: 1,
+    type_uid: 100199,
+    category_name: "System Activity",
     class_name: "File System Activity",
+    type_name: "File System Activity: Other",
   },
 }

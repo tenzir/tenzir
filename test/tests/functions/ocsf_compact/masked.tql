@@ -1,0 +1,6 @@
+from {keep: false, x: 42},
+     {keep: true, x: {class_uid: 1001, metadata: {version: "1.9.0"}, activity_id: 1, activity_name: "Create"}},
+     {keep: false, x: {class_uid: 0}},
+     {keep: true, x: {class_uid: 4001, metadata: {version: "1.6.0"}, activity_id: 2, activity_name: "Close"}}
+where keep
+this = ocsf_compact(x)

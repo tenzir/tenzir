@@ -3,21 +3,21 @@
     {
       class_uid: 1001,
       metadata: {
-        version: "1.5.0",
+        version: "1.9.0",
       },
       activity_id: 1,
     },
     {
       class_uid: 1001,
       metadata: {
-        version: "1.5.0",
+        version: "1.9.0",
       },
       activity_name: "Read",
     },
     {
       class_uid: 4003,
       metadata: {
-        version: "1.5.0",
+        version: "1.9.0",
       },
       answers: [
         {
@@ -39,25 +39,33 @@
     {
       class_uid: 1001,
       metadata: {
-        version: "1.5.0",
+        version: "1.9.0",
       },
       activity_id: 1,
+      category_uid: 1,
+      type_uid: 100101,
       activity_name: "Create",
+      category_name: "System Activity",
       class_name: "File System Activity",
+      type_name: "File System Activity: Create",
     },
     {
       class_uid: 1001,
       metadata: {
-        version: "1.5.0",
+        version: "1.9.0",
       },
       activity_name: "Read",
+      category_uid: 1,
+      type_uid: 100102,
       activity_id: 2,
+      category_name: "System Activity",
       class_name: "File System Activity",
+      type_name: "File System Activity: Read",
     },
     {
       class_uid: 4003,
       metadata: {
-        version: "1.5.0",
+        version: "1.9.0",
       },
       answers: [
         {
@@ -81,6 +89,8 @@
           ],
         },
       ],
+      category_uid: 4,
+      category_name: "Network Activity",
       class_name: "DNS Activity",
     },
   ],

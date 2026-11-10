@@ -1,0 +1,42 @@
+{
+  class_uid: 3002,
+  metadata: {
+    version: "1.9.0",
+  },
+  category_uid: 3,
+  activity_id: 1,
+  type_uid: 300201,
+  severity_id: 1,
+}
+{
+  class_uid: 3002,
+  metadata: {
+    version: "1.9.0",
+  },
+  activity_id: 99,
+  activity_name: "user_login",
+  type_uid: 300299,
+  type_name: "Authentication: user_login",
+  auth_protocol_id: 99,
+  auth_protocol: "Other",
+}
+{
+  class_uid: 3002,
+  metadata: {
+    version: "1.9.0",
+  },
+  status_id: 1,
+  status: "Failure",
+  severity_id: 42,
+  severity: "Severe",
+}
+{
+  class_uid: 3002,
+  metadata: {
+    version: "1.9.0",
+  },
+  activity_id: null,
+  activity_name: "Logon",
+  logon_type: "Network",
+  status_id: 1,
+}

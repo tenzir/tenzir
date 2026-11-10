@@ -1,11 +1,15 @@
 {
   class_uid: 1001,
   metadata: {
-    version: "1.5.0",
+    version: "1.9.0",
   },
   activity_id: 1,
+  category_uid: 1,
+  type_uid: 100101,
   activity_name: "Create",
+  category_name: "System Activity",
   class_name: "File System Activity",
+  type_name: "File System Activity: Create",
 }
 {
   class_uid: 4001,
@@ -13,6 +17,10 @@
     version: "1.6.0",
   },
   activity_id: 2,
+  category_uid: 4,
+  type_uid: 400102,
   activity_name: "Close",
+  category_name: "Network Activity",
   class_name: "Network Activity",
+  type_name: "Network Activity: Close",
 }

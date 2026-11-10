@@ -1,0 +1,18 @@
+// `ocsf_derive` restores what `ocsf_compact` removes.
+from {original: {
+  class_uid: 4003, class_name: "DNS Activity",
+  category_uid: 4, category_name: "Network Activity",
+  metadata: {version: "1.9.0"},
+  activity_id: 2, activity_name: "Response",
+  type_uid: 400302, type_name: "DNS Activity: Response",
+  severity_id: 99, severity: "Elevated",
+  connection_info: {direction_id: 2, direction: "Outbound"},
+  answers: [
+    {flag_ids: [1, 2], flags: ["Authoritative Answer", "Truncated Response"]},
+    {flag_ids: [99], flags: ["Vendor Flag X"]},
+  ],
+}}
+compacted = ocsf_compact(original)
+restored = ocsf_derive(compacted)
+equal = restored == original
+drop original
