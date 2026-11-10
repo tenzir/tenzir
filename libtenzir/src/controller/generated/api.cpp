@@ -721,7 +721,8 @@ auto parse_deployment_path(simdjson::dom::element value)
 
   TRY(auto deployment_id_raw,
       api::field(object, "deploymentId", "DeploymentPath"));
-  TRY(auto deployment_id, parse_deployment_id(deployment_id_raw));
+  TRY(auto deployment_id,
+      api::string_of(deployment_id_raw, "DeploymentPath.deploymentId"));
 
   return DeploymentPath{std::move(org), std::move(workspace),
                         std::move(deployment_id)};
@@ -1355,7 +1356,9 @@ auto parse_attach_ingest_endpoint_path(simdjson::dom::element value)
 
   TRY(auto deployment_id_raw,
       api::field(object, "deploymentId", "AttachIngestEndpointPath"));
-  TRY(auto deployment_id, parse_deployment_id(deployment_id_raw));
+  TRY(auto deployment_id,
+      api::string_of(deployment_id_raw,
+                     "AttachIngestEndpointPath.deploymentId"));
 
   TRY(auto name_raw, api::field(object, "name", "AttachIngestEndpointPath"));
   TRY(auto name, parse_ingest_endpoint_name(name_raw));
@@ -1488,7 +1491,8 @@ auto parse_deployment_secret_path(simdjson::dom::element value)
 
   TRY(auto deployment_id_raw,
       api::field(object, "deploymentId", "DeploymentSecretPath"));
-  TRY(auto deployment_id, parse_deployment_id(deployment_id_raw));
+  TRY(auto deployment_id,
+      api::string_of(deployment_id_raw, "DeploymentSecretPath.deploymentId"));
 
   TRY(auto name_raw, api::field(object, "name", "DeploymentSecretPath"));
   TRY(auto name, parse_secret_name(name_raw));
@@ -2394,7 +2398,7 @@ auto write_json(DeploymentPath const& value, std::string& out) -> void {
   out += ",\"workspace\":";
   api::write_string(value.workspace, out);
   out += ",\"deploymentId\":";
-  write_json(value.deployment_id, out);
+  api::write_string(value.deployment_id, out);
   out += '}';
 }
 
@@ -2704,7 +2708,7 @@ auto write_json(AttachIngestEndpointPath const& value, std::string& out)
   out += ",\"workspace\":";
   api::write_string(value.workspace, out);
   out += ",\"deploymentId\":";
-  write_json(value.deployment_id, out);
+  api::write_string(value.deployment_id, out);
   out += ",\"name\":";
   write_json(value.name, out);
   out += '}';
@@ -2774,7 +2778,7 @@ auto write_json(DeploymentSecretPath const& value, std::string& out) -> void {
   out += ",\"workspace\":";
   api::write_string(value.workspace, out);
   out += ",\"deploymentId\":";
-  write_json(value.deployment_id, out);
+  api::write_string(value.deployment_id, out);
   out += ",\"name\":";
   write_json(value.name, out);
   out += '}';
@@ -3358,11 +3362,10 @@ auto call(Transport& transport, ReadAccount)
 
 auto call(Transport& transport, ReadDeployment request)
   -> Task<Result<DeploymentInfo, variant<ReadDeploymentError, CallError>>> {
-  auto path
-    = fmt::format("/api/organizations/{}/workspaces/{}/deployments/{}",
-                  api::encode_segment(request.path.org),
-                  api::encode_segment(request.path.workspace),
-                  api::encode_segment(request.path.deployment_id.to_string()));
+  auto path = fmt::format("/api/organizations/{}/workspaces/{}/deployments/{}",
+                          api::encode_segment(request.path.org),
+                          api::encode_segment(request.path.workspace),
+                          api::encode_segment(request.path.deployment_id));
   auto body = std::string{};
   CO_TRY(auto response, (co_await transport.request(HttpRequest{
                            "GET", std::move(path), std::move(body)}))
@@ -3450,11 +3453,11 @@ auto call(Transport& transport, ReadDeployment request)
 
 auto call(Transport& transport, PushTelemetry request)
   -> Task<Result<void, variant<PushTelemetryError, CallError>>> {
-  auto path = fmt::format(
-    "/api/organizations/{}/workspaces/{}/deployments/{}/telemetry",
-    api::encode_segment(request.path.org),
-    api::encode_segment(request.path.workspace),
-    api::encode_segment(request.path.deployment_id.to_string()));
+  auto path = fmt::format("/api/organizations/{}/workspaces/{}/deployments/{}/"
+                          "telemetry",
+                          api::encode_segment(request.path.org),
+                          api::encode_segment(request.path.workspace),
+                          api::encode_segment(request.path.deployment_id));
   auto body = std::string{};
   write_json(request.payload, body);
   CO_TRY(auto response, (co_await transport.request(
@@ -3561,13 +3564,12 @@ auto call(Transport& transport, PushTelemetry request)
 auto call(Transport& transport, AttachIngestEndpoint request)
   -> Task<Result<IngestEndpointAttachment,
                  variant<AttachIngestEndpointError, CallError>>> {
-  auto path
-    = fmt::format("/api/organizations/{}/workspaces/{}/deployments/{}/"
-                  "ingest-endpoints/{}/attach",
-                  api::encode_segment(request.path.org),
-                  api::encode_segment(request.path.workspace),
-                  api::encode_segment(request.path.deployment_id.to_string()),
-                  api::encode_segment(request.path.name.to_string()));
+  auto path = fmt::format("/api/organizations/{}/workspaces/{}/deployments/{}/"
+                          "ingest-endpoints/{}/attach",
+                          api::encode_segment(request.path.org),
+                          api::encode_segment(request.path.workspace),
+                          api::encode_segment(request.path.deployment_id),
+                          api::encode_segment(request.path.name.to_string()));
   if (request.query.group) {
     path += path.contains('?') ? '&' : '?';
     path += "group=";
@@ -3671,12 +3673,12 @@ auto call(Transport& transport, AttachIngestEndpoint request)
 
 auto call(Transport& transport, ResolveSecret request)
   -> Task<Result<ResolvedSecret, variant<ResolveSecretError, CallError>>> {
-  auto path = fmt::format(
-    "/api/organizations/{}/workspaces/{}/deployments/{}/secrets/{}/resolve",
-    api::encode_segment(request.path.org),
-    api::encode_segment(request.path.workspace),
-    api::encode_segment(request.path.deployment_id.to_string()),
-    api::encode_segment(request.path.name.to_string()));
+  auto path = fmt::format("/api/organizations/{}/workspaces/{}/deployments/{}/"
+                          "secrets/{}/resolve",
+                          api::encode_segment(request.path.org),
+                          api::encode_segment(request.path.workspace),
+                          api::encode_segment(request.path.deployment_id),
+                          api::encode_segment(request.path.name.to_string()));
   auto body = std::string{};
   write_json(request.payload, body);
   CO_TRY(auto response, (co_await transport.request(

@@ -58,7 +58,8 @@ auto describe(variant<ReadAccountError, CallError> const& error)
 
 auto DeploymentIdentity::path() const -> DeploymentPath {
   return DeploymentPath{std::string{org_id.to_string()},
-                        std::string{workspace_id.to_string()}, deployment_id};
+                        std::string{workspace_id.to_string()},
+                        std::string{deployment_id.to_string()}};
 }
 
 auto DeploymentIdentity::route() const -> std::string {
