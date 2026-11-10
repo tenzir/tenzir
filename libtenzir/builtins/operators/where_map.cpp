@@ -650,7 +650,21 @@ public:
   }
 
   auto main_location() const -> location override {
-    return args_.main_location();
+    // The predicate, which is what the user wrote even for a `where` that the
+    // optimizer materialized without a keyword. A predicate that a package
+    // operator took as an argument lies in the caller's source, though, where
+    // it would be looked up under the callee's call site, so the keyword
+    // stands in for it there.
+    auto const keyword = args_.main_location();
+    auto const predicate = args_.positional_expression(0)
+                             .map([](const ast::expression& expr) {
+                               return expr.get_location();
+                             })
+                             .value_or(location::unknown);
+    if (not keyword or keyword.same_origin(predicate)) {
+      return predicate;
+    }
+    return keyword;
   }
 
   auto substitute(substitute_ctx ctx, bool instantiate)

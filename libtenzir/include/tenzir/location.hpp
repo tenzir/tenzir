@@ -70,6 +70,13 @@ struct location {
     return {first, last, source_index, callsite_index};
   }
 
+  /// Whether both locations are positions in the same source file, reached
+  /// through the same call site, so that their offsets are comparable.
+  auto same_origin(const location& other) const -> bool {
+    return source_index == other.source_index
+           and callsite_index == other.callsite_index;
+  }
+
   auto combine(into_location other) const -> location;
 
   auto operator<=>(const location&) const = default;

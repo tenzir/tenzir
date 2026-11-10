@@ -131,23 +131,30 @@ TEST("inspection locates both fork_merge output ports at its keyword") {
   check_eq(ports, (std::vector<size_t>{0, 1}));
 }
 
-TEST("custom operators preserve their source keyword through compilation") {
-  for (auto text :
-       {"match x { 1 => { y = 1 } _ => { y = 2 } }", "fork { discard }",
-        "from {x: 1}", "where flag", "merge { from {x: 1} }"}) {
+TEST("custom operators preserve their source location through compilation") {
+  struct expectation {
+    std::string_view text;
+    std::string_view location;
+  };
+  for (auto [text, expected] : std::initializer_list<expectation>{
+         {"match x { 1 => { y = 1 } _ => { y = 2 } }", "match x"},
+         {"fork { discard }", "fork"},
+         {"from {x: 1}", "from"},
+         {"where flag", "flag"},
+         {"merge { from {x: 1} }", "merge"},
+       }) {
     auto fixture = CompileFixture{};
     auto prefix = std::string{"// source offset\n"};
-    auto compiled = fixture.compile(prefix + text);
+    auto compiled = fixture.compile(prefix + std::string{text});
     require_eq(compiled.operators.size(), 1u);
     // Planning copies operators when binding nested pipelines.
     auto copy = compiled;
     auto source = copy.operators.front()->main_location();
     auto file = fixture.sources.source(source.source_index);
     require(file.is_some());
-    check_eq(source.begin, prefix.size());
+    check_eq(source.begin, prefix.size() + text.find(expected));
     check_eq(file->text.substr(source.begin, source.end - source.begin),
-             std::string_view{text}.substr(0,
-                                           std::string_view{text}.find(' ')));
+             expected);
   }
 }
 
@@ -197,10 +204,10 @@ TEST("inspection source locations resolve through nested package calls") {
     return candidate.name == "If";
   });
   require(branch != operators.end());
-  check_eq(branch->source.begin, inner_file->text.find("if flag"));
+  check_eq(branch->source.begin, inner_file->text.find("flag"));
   check_eq(inner_file->text.substr(branch->source.begin,
                                    branch->source.end - branch->source.begin),
-           "if flag { y = 2");
+           "flag");
   check_eq(branch->source.source_index, op.source.source_index);
   check_eq(branch->source.callsite_index, op.source.callsite_index);
   auto const& sources = **current.sources;
@@ -228,6 +235,106 @@ TEST("inspection source locations resolve through nested package calls") {
                                outer_call->end - outer_call->begin),
            "sourcepkg::outer");
   check_eq(outer_call->callsite_index, 0u);
+}
+
+TEST("inspection keeps where, if and match inside a package operator that "
+     "takes their predicate as an argument") {
+  auto fixture = CompileFixture{};
+  auto pkg = package{};
+  pkg.id = "predpkg";
+  pkg.name = "Predicate Package";
+  auto inner = package_operator{};
+  // The optimizer carries a `where` predicate upstream and materializes a
+  // `where` without a keyword where it can go no further: at the plan's input,
+  // or behind `head`. The written `where` is only in the IR before planning.
+  auto inner_file = Source::new_source(
+    "---\nname: Inner\n---\nwhere $pred\nhead 1\nwhere $pred\n"
+    "if $pred { y = 2 }\n"
+    "match $pred { true => { z = 1 } _ => { z = 2 } }",
+    "operators/inner.tql", false);
+  inner.file_source = inner_file;
+  inner.tql_body
+    = std::string_view{inner_file->text}.substr(inner_file->text.find("where"));
+  inner.args.positional.push_back(
+    package_operator_parameter{"pred", None{}, None{}, None{}});
+  pkg.operators.emplace(std::vector<std::string>{"inner"}, std::move(inner));
+  auto module
+    = build_package_operator_module(pkg, fixture.diagnostics, *fixture.reg);
+  REQUIRE(module);
+  auto registry = fixture.provider.as_session().reg().clone();
+  registry->add_module(std::string{"packages"}, "predpkg",
+                       std::move((*module)->defs.at("predpkg").mod));
+  auto context = base_ctx{fixture.diagnostics, *registry};
+  auto root = compile_ctx::make_root(context, fixture.sources);
+  auto source
+    = Source::new_source("predpkg::inner x > 1", "<inspection>", false);
+  auto compiled = fixture.compile(source, root);
+  // As written, the predicate `x > 1` lies in the caller's source, but under
+  // the call site of `inner`, where no reader finds it. The keywords stand in
+  // for it.
+  auto written = compiled;
+  for (auto const& [name, keyword] :
+       {std::pair{"where_ir", "where"}, std::pair{"If", "if"},
+        std::pair{"Match", "match"}}) {
+    MESSAGE("{}", keyword);
+    auto found = std::ranges::find_if(written.operators, [&](auto const& op) {
+      return op->name() == name;
+    });
+    REQUIRE(found != written.operators.end());
+    auto const location = (*found)->main_location();
+    check_eq(location.source_index, inner_file->index);
+    check_eq(location.begin, inner_file->text.find(keyword));
+    check_eq(inner_file->text.substr(location.begin,
+                                     location.end - location.begin),
+             keyword);
+    check_ne(location.callsite_index, 0u);
+  }
+  auto lowered
+    = ir::make_plan(std::move(compiled), tag_v<nova::Events>, context);
+  REQUIRE(lowered);
+  auto observer = test::InspectionFixture{uuid::null()};
+  observer.set_sources(fixture.sources);
+  observer.start(PipeId{"root"});
+  auto registration
+    = observer.register_plan(Arc<ir::Plan const>{std::move(*lowered)});
+  auto graph = observer.subscribe_graph();
+  auto current = snapshot(graph);
+  require_eq(current.graphs.size(), 1u);
+  auto const& operators = current.graphs.front()->operators;
+  auto find = [&](std::string_view name, size_t skip = 0) {
+    auto found = std::ranges::find(operators, name, &GraphOperator::name);
+    for (; skip > 0 and found != operators.end(); --skip) {
+      found = std::ranges::find(std::next(found), operators.end(), name,
+                                &GraphOperator::name);
+    }
+    REQUIRE(found != operators.end());
+    return *found;
+  };
+  auto branch = find("If");
+  auto match = find("Match");
+  for (auto const& [op, keyword] :
+       {std::pair{branch, "if"}, std::pair{match, "match"}}) {
+    MESSAGE("{}", keyword);
+    check_eq(op.source.source_index, inner_file->index);
+    check_eq(op.source.begin, inner_file->text.find(keyword));
+    check_eq(inner_file->text.substr(op.source.begin,
+                                     op.source.end - op.source.begin),
+             keyword);
+    check_ne(op.source.callsite_index, 0u);
+    check_eq(op.source.callsite_index, match.source.callsite_index);
+  }
+  // A `where` the optimizer materialized has no keyword, so it points at the
+  // predicate, in the frame the predicate was written in: the top level, not
+  // the call site of `inner` that the substitution stamped on it.
+  for (auto skip : {size_t{0}, size_t{1}}) {
+    auto materialized = find("where", skip);
+    check_eq(materialized.source.source_index, source->index);
+    check_eq(materialized.source.callsite_index, 0u);
+    check_eq(
+      source->text.substr(materialized.source.begin,
+                          materialized.source.end - materialized.source.begin),
+      "x > 1");
+  }
 }
 
 TEST("inspection identifies compiled definitions after binding and "
@@ -331,6 +438,36 @@ TEST("inspection describes surviving operators after filter simplification") {
     check_eq(pipeline.operators[i].source,
              lowered->operators[i].op->main_location());
   }
+}
+
+TEST("inspection locates built-in operators in their source") {
+  auto fixture = CompileFixture{};
+  auto const text = std::string{"where value != 5\n"
+                                "fork {\n"
+                                "  discard\n"
+                                "}\n"
+                                "if value > 0 {\n"
+                                "  value = 1\n"
+                                "} else {\n"
+                                "  value = 2\n"
+                                "}\n"
+                                "match value {\n"
+                                "  1 => { value = 3 }\n"
+                                "  _ => { value = 4 }\n"
+                                "}\n"};
+  auto lowered = fixture.lower(fixture.compile(text));
+  auto excerpt = [&](std::string_view name) {
+    auto op = std::ranges::find_if(lowered->operators, [&](auto const& op) {
+      return op.op->display_name() == name;
+    });
+    REQUIRE(op != lowered->operators.end());
+    auto const source = op->op->main_location();
+    return text.substr(source.begin, source.end - source.begin);
+  };
+  check_eq(excerpt("where"), "value != 5");
+  check_eq(excerpt("fork"), "fork");
+  check_eq(excerpt("If"), "value > 0");
+  check_eq(excerpt("Match"), "match value");
 }
 
 TEST("inspection aggregates repeated read_auto runtime compilations") {

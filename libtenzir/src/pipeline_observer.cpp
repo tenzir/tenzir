@@ -370,7 +370,7 @@ struct InspectionState {
 private:
   static auto publish_loop(std::weak_ptr<InspectionState> self) -> Task<void> {
     while (true) {
-      co_await sleep_for(std::chrono::milliseconds{250});
+      co_await sleep_for(std::chrono::seconds{1});
       auto state = self.lock();
       if (not state) {
         co_return;
@@ -421,12 +421,41 @@ private:
 };
 
 namespace {
-auto describe_plan(ir::Plan const& plan) -> PipelineGraph {
+/// A location in the frame it belongs to. An argument that a package operator
+/// took keeps the position in the caller's source it was written at, but is
+/// stamped with the callee's call site, so that the body it was substituted
+/// into has one call site throughout. No reader finds that pairing: it looks a
+/// call site's locations up in the callee's source. The frame such a location
+/// belongs to is the deepest one whose call was written in the same source,
+/// and the location takes that call's own call site.
+auto in_own_frame(location source, Option<Arc<SourceMap const>> const& sources)
+  -> location {
+  if (not source or not sources) {
+    return source;
+  }
+  auto call_site = source.callsite_index;
+  while (call_site != 0) {
+    auto call = (*sources)->call_site(call_site);
+    if (not call) {
+      break;
+    }
+    if (call->source_index == source.source_index) {
+      source.callsite_index = call->callsite_index;
+      break;
+    }
+    call_site = call->callsite_index;
+  }
+  return source;
+}
+
+auto describe_plan(ir::Plan const& plan,
+                   Option<Arc<SourceMap const>> const& sources)
+  -> PipelineGraph {
   auto graph = PipelineGraph{};
   graph.definition_location = plan.definition_location;
   for (auto const& op : plan.operators) {
-    graph.operators.push_back(
-      {op.id, op.op->display_name(), op.op->main_location()});
+    graph.operators.push_back({op.id, op.op->display_name(),
+                               in_own_frame(op.op->main_location(), sources)});
   }
   graph.channels = plan.channels;
   return graph;
@@ -456,12 +485,13 @@ auto PipelineObserver::ensure_graph(uint64_t id,
     return parent->id_;
   });
   auto parent_operator = entry.parent_operator_;
+  auto sources = state_->sources;
   auto graph = [&] {
     lock.unlock();
     auto relock = detail::scope_guard{[&]() noexcept {
       lock.lock();
     }};
-    return detail::describe_plan(*plan);
+    return detail::describe_plan(*plan, sources);
   }();
   auto parent = parent_id.and_then([&](auto id) {
     return ensure_graph(id, lock);
@@ -701,8 +731,10 @@ auto MetricsSubscription::recv() -> Task<Option<Arc<MetricsSnapshot const>>> {
   co_return None{};
 }
 
-auto PipelineObserver::subscribe_channel(ChannelTarget target)
+auto PipelineObserver::subscribe_channel(ChannelTarget target,
+                                         Option<uint32_t> queue_capacity)
   -> Result<TapSubscription, TapSubscriptionError> {
+  TENZIR_ASSERT(not queue_capacity or *queue_capacity > 0);
   auto lock = std::unique_lock{state_->mutex};
   if (state_->end) {
     return Err{TapSubscriptionError::finished};
@@ -736,7 +768,7 @@ auto PipelineObserver::subscribe_channel(ChannelTarget target)
               .first;
   }
   auto channel = found->second;
-  auto subscription = channel->subscribe();
+  auto subscription = channel->subscribe(queue_capacity);
   for (auto registration : state_->history.instances(target.path.back())) {
     registration->taps_[target.channel_index].broadcast_.store(channel);
   }

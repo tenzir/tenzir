@@ -23,8 +23,7 @@ auto location::combine(into_location other) const -> location {
   if (not other) {
     return *this;
   }
-  if (source_index != other.source_index
-      or callsite_index != other.callsite_index) {
+  if (not same_origin(other)) {
     // The two locations originate from different sources, so their byte
     // offsets are not comparable and combining them would produce a
     // nonsensical span. AST nodes store their location at parse time, so this

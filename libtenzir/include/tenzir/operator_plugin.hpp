@@ -742,6 +742,21 @@ public:
     return op_.get_location();
   }
 
+  /// The expression of positional argument `index`, if the argument stays an
+  /// expression rather than being evaluated to a value. This is the case for
+  /// every argument whose setter takes an `ast::expression`, and it avoids
+  /// materializing all arguments to look at one of them.
+  auto positional_expression(size_t index) const
+    -> Option<const ast::expression&> {
+    if (index >= args_.size()) {
+      return None{};
+    }
+    if (const auto* incomplete = try_as<Incomplete>(args_[index])) {
+      return incomplete->expr;
+    }
+    return None{};
+  }
+
   /// The compiled subpipeline argument, if the invocation had one.
   auto pipeline() const -> const Option<PipelineArg>& {
     return pipeline_;
@@ -836,6 +851,13 @@ public:
 
   auto main_location() const -> location {
     return store_.main_location();
+  }
+
+  /// The expression of positional argument `index`, without materializing;
+  /// see `ArgumentStore::positional_expression`.
+  auto positional_expression(size_t index) const
+    -> Option<const ast::expression&> {
+    return store_.positional_expression(index);
   }
 
   /// The compiled subpipeline argument, if the invocation had one.

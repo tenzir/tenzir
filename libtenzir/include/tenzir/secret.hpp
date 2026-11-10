@@ -217,7 +217,7 @@ struct secret_printer : printer_base<secret_printer<T>> {
 
   template <class Iterator>
   bool print(Iterator& out, const attribute&) const {
-    std::ranges::copy("***", out);
+    std::ranges::copy(std::string_view{"***"}, out);
     return true;
   }
 };

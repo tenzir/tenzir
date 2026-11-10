@@ -226,7 +226,15 @@ public:
   }
 
   auto main_location() const -> location override {
-    return args_.source;
+    // The condition, unless a package operator took it as an argument: that
+    // lies in the caller's source, where it would be looked up under the
+    // callee's call site. The statement's location starts at its `if` keyword,
+    // which stands in for the condition then.
+    auto const condition = args_.condition.get_location();
+    if (not args_.source or args_.source.same_origin(condition)) {
+      return condition;
+    }
+    return args_.source.subloc(0, 2);
   }
 
   auto copy() const -> Box<ir::Operator> override {
