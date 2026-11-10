@@ -584,7 +584,8 @@ auto parse_user_principal(simdjson::dom::element value)
 }
 
 auto DeploymentId::make(std::string value) -> Result<DeploymentId, ParseError> {
-  static auto const pattern = std::regex{R"(^[A-Za-z0-9][A-Za-z0-9_-]*$)"};
+  static auto const pattern = std::regex{
+    R"(^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$)"};
   if (not std::regex_match(value, pattern)) {
     return Err{ParseError{
       "DeploymentId", fmt::format("`{}` does not match the pattern", value)}};

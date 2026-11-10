@@ -81,7 +81,7 @@ auto known() -> PlatformConnection {
   return PlatformConnection::confirmed_as(DeploymentIdentity{
     OrganizationId::make("00000000-0000-4000-8000-000000000001").unwrap(),
     WorkspaceId::make("00000000-0000-4000-8000-000000000002").unwrap(),
-    DeploymentId::make("dev").unwrap()});
+    DeploymentId::make("00000000-0000-4000-8000-000000000003").unwrap()});
 }
 
 class PathTransport final : public Transport {
@@ -137,7 +137,8 @@ TEST("platform telemetry goes to the deployment's nested route") {
   folly::coro::blockingWait(profiler.flush());
   CHECK_EQUAL(*path, "/organizations/00000000-0000-4000-8000-000000000001/"
                      "workspaces/00000000-0000-4000-8000-000000000002/"
-                     "deployments/dev/telemetry");
+                     "deployments/00000000-0000-4000-8000-000000000003/"
+                     "telemetry");
 }
 
 TEST("platform profiler differences connector counters and folds diagnostics") {
