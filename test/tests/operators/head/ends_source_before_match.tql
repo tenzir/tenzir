@@ -1,0 +1,14 @@
+// As with `if`: `head` stops `every` through the arms of `match`, which join
+// again before it.
+every 1h {
+  from {x: 1}, {x: 2}, {x: 3}
+}
+match x {
+  0 => {
+    y = 0
+  }
+  _ => {
+    y = 1
+  }
+}
+head 2

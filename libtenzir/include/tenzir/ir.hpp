@@ -1016,8 +1016,9 @@ struct Plan {
   };
 
   /// Compute the planned operators strictly upstream of `op` that feed
-  /// exclusively into its branch. Backward traversal stops at any fan-out
-  /// operator (out-degree > 1).
+  /// exclusively into its branch: all of whose outputs lead to `op`. A fan-out
+  /// operator belongs to it when all of its paths join again before `op`, as
+  /// those of `if` and `match` do, and not when one of them leads elsewhere.
   auto upstream_branch(size_t op) const -> PlanNodeSet;
 };
 

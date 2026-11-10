@@ -527,40 +527,41 @@ auto ir::PlanBuilder::assign_ids(std::vector<IdEntry> const& entries,
 }
 
 auto ir::Plan::upstream_branch(size_t op) const -> PlanNodeSet {
-  auto out_degree = std::vector<size_t>(operators.size(), 0);
-  for (auto const& channel : channels) {
-    if (channel.from < out_degree.size()) {
-      out_degree[channel.from] += 1;
-    }
-  }
   auto result = PlanNodeSet{
     .operators = std::vector<bool>(operators.size(), false),
     .input = false,
   };
-  auto stack = std::vector<size_t>{op};
-  while (not stack.empty()) {
-    auto x = stack.back();
-    stack.pop_back();
+  // Whether all that leaves `from` goes into the branch: to `op`, or to an
+  // operator already found to feed it. A fan-out whose paths all join again
+  // before `op`, as those of `if` and `match` do, feeds the branch, while one
+  // with a path that leads elsewhere does not.
+  auto feeds_branch = [&](size_t from) {
+    auto any = false;
     for (auto const& channel : channels) {
-      if (channel.to != x) {
+      if (channel.from != from) {
         continue;
       }
-      if (channel.from == Port::input) {
-        // Input is always exclusive
-        result.input = true;
-        continue;
+      if (channel.to != op
+          and (channel.to >= result.operators.size()
+               or not result.operators[channel.to])) {
+        return false;
       }
-      // Only follow predecessors that feed exclusively into this branch.
-      if (channel.from >= result.operators.size()) {
-        continue;
-      }
-      if (not result.operators[channel.from]
-          and out_degree[channel.from] == 1) {
-        result.operators[channel.from] = true;
-        stack.push_back(channel.from);
+      any = true;
+    }
+    return any;
+  };
+  // Until nothing changes, since finding one operator can complete the paths
+  // of another further upstream.
+  for (auto changed = true; changed;) {
+    changed = false;
+    for (auto x = size_t{0}; x < operators.size(); ++x) {
+      if (x != op and not result.operators[x] and feeds_branch(x)) {
+        result.operators[x] = true;
+        changed = true;
       }
     }
   }
+  result.input = feeds_branch(Port::input);
   return result;
 }
 
