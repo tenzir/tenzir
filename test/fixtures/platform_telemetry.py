@@ -6,6 +6,8 @@ under them. It answers the first telemetry request with 503 to exercise
 retries. It exports:
 
 - **PLATFORM_TELEMETRY_URL** - Platform URL to pass to ``--platform``.
+- **PLATFORM_TELEMETRY_DEPLOYMENT_ID** - Deployment ID to pass to
+  ``--deployment-id``.
 - **PLATFORM_TELEMETRY_KEY_FILE** - Key file to pass to ``--key-file``.
 - **PLATFORM_TELEMETRY_DIR** - Directory in which the fixture creates
   ``running-<pipeline-id>`` once a run reports the ``running`` state.
@@ -27,13 +29,13 @@ from tenzir_test import FixtureHandle, fixture
 
 _HOST = "127.0.0.1"
 _KEY = "fixture-key"
-_DEPLOYMENT = "test-deployment"
+_DEPLOYMENT = "00000000-0000-0000-0000-000000000003"
 _ORG = "00000000-0000-0000-0000-000000000001"
 _WORKSPACE = "00000000-0000-0000-0000-000000000002"
 _ACCOUNT = {
     "_tag": "DeploymentPrincipal",
     "orgId": _ORG,
-    "deployment": {"id": _DEPLOYMENT, "workspaceId": _WORKSPACE, "name": _DEPLOYMENT},
+    "deployment": {"id": _DEPLOYMENT, "workspaceId": _WORKSPACE, "name": "test"},
 }
 _TELEMETRY_PATH = (
     f"/api/organizations/{_ORG}/workspaces/{_WORKSPACE}"
@@ -167,6 +169,7 @@ def platform_telemetry() -> FixtureHandle:
     return FixtureHandle(
         env={
             "PLATFORM_TELEMETRY_URL": f"http://{_HOST}:{server.server_port}",
+            "PLATFORM_TELEMETRY_DEPLOYMENT_ID": _DEPLOYMENT,
             "PLATFORM_TELEMETRY_KEY_FILE": str(key_file),
             "PLATFORM_TELEMETRY_DIR": str(directory),
         },

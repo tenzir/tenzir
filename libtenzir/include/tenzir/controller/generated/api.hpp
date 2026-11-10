@@ -166,8 +166,9 @@ struct std::hash<tenzir::UserPrincipal> {
 
 namespace tenzir {
 
-/// A path-safe identifier
-/// Values must match `^[A-Za-z0-9][A-Za-z0-9_-]*$`.
+/// A UUID
+/// Values must match
+/// `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`.
 class DeploymentId {
 public:
   static auto make(std::string value) -> Result<DeploymentId, ParseError>;
