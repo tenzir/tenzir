@@ -1858,6 +1858,18 @@
   {"5df7f6b9", {
     {5022, "Startup Item Query"},
   }},
+  {"5e501dcc", {
+    {0, "Unknown"},
+    {1, "Open"},
+    {2, "WEP"},
+    {3, "WPA"},
+    {4, "WPA2-Personal"},
+    {5, "WPA2-Enterprise"},
+    {6, "WPA3-Personal"},
+    {7, "WPA3-Enterprise"},
+    {8, "Opportunistic Wireless Encryption"},
+    {99, "Other"},
+  }},
   {"5eeff15e", {
     {201001, "Registry Key Activity"},
   }},
@@ -3072,6 +3084,14 @@
   {"973d793e", {
     {4006, "SMB Activity"},
   }},
+  {"97c17073", {
+    {0, "Unknown"},
+    {1, "2.4 GHz"},
+    {2, "5 GHz"},
+    {3, "6 GHz"},
+    {4, "60 GHz"},
+    {99, "Other"},
+  }},
   {"9861ed01", {
     {0, "Unknown"},
     {1, "Assign Privileges"},
@@ -4240,6 +4260,14 @@
   }},
   {"e80d1a49", {
     {5008, "Folder Query"},
+  }},
+  {"e95f0f5d", {
+    {0, "Unknown"},
+    {1, "Authorized"},
+    {2, "Unclassified"},
+    {3, "Rogue"},
+    {4, "Contained"},
+    {99, "Other"},
   }},
   {"e99fee11", {
     {401400, "Tunnel Activity: Unknown"},
