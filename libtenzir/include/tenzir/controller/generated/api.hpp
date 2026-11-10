@@ -376,7 +376,7 @@ namespace tenzir {
 class DeploymentPath {
 public:
   DeploymentPath(std::string org, std::string workspace,
-                 DeploymentId deployment_id)
+                 std::string deployment_id)
     : org{std::move(org)},
       workspace{std::move(workspace)},
       deployment_id{std::move(deployment_id)} {
@@ -384,7 +384,7 @@ public:
 
   std::string org;
   std::string workspace;
-  DeploymentId deployment_id;
+  std::string deployment_id;
 
   friend auto operator==(DeploymentPath const&, DeploymentPath const&) -> bool
     = default;
@@ -1269,7 +1269,7 @@ namespace tenzir {
 class AttachIngestEndpointPath {
 public:
   AttachIngestEndpointPath(std::string org, std::string workspace,
-                           DeploymentId deployment_id, IngestEndpointName name)
+                           std::string deployment_id, IngestEndpointName name)
     : org{std::move(org)},
       workspace{std::move(workspace)},
       deployment_id{std::move(deployment_id)},
@@ -1278,7 +1278,7 @@ public:
 
   std::string org;
   std::string workspace;
-  DeploymentId deployment_id;
+  std::string deployment_id;
   IngestEndpointName name;
 
   friend auto
@@ -1480,7 +1480,7 @@ namespace tenzir {
 class DeploymentSecretPath {
 public:
   DeploymentSecretPath(std::string org, std::string workspace,
-                       DeploymentId deployment_id, SecretName name)
+                       std::string deployment_id, SecretName name)
     : org{std::move(org)},
       workspace{std::move(workspace)},
       deployment_id{std::move(deployment_id)},
@@ -1489,7 +1489,7 @@ public:
 
   std::string org;
   std::string workspace;
-  DeploymentId deployment_id;
+  std::string deployment_id;
   SecretName name;
 
   friend auto
