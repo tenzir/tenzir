@@ -23,6 +23,7 @@
 #include <folly/coro/BoundedQueue.h>
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <concepts>
 #include <limits>
