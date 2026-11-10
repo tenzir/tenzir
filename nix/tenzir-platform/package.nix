@@ -12,6 +12,8 @@
 }:
 
 let
+  # The CLI ships with the engine, so it carries the engine's version.
+  version = (lib.importJSON ../../version.json).tenzir-version;
   compiler = if stdenvNoCC.hostPlatform.isLinux then pkgsStatic.bun-unwrapped else bun;
   source = lib.fileset.toSource {
     root = src;
@@ -30,7 +32,7 @@ let
 in
 stdenvNoCC.mkDerivation {
   pname = "tenzir-platform";
-  version = "unstable";
+  inherit version;
   src = source;
 
   dontConfigure = true;
@@ -46,6 +48,7 @@ stdenvNoCC.mkDerivation {
     ''}
     ${compiler}/bin/bun build --compile \
       ${lib.optionalString stdenvNoCC.hostPlatform.isDarwin "--compile-executable-path=bun-runtime/bun-darwin-aarch64/bun"} \
+      --define TENZIR_VERSION=${lib.escapeShellArg (builtins.toJSON version)} \
       tools/platform-cli/main.ts \
       --outfile tenzir-platform
 
@@ -74,6 +77,7 @@ stdenvNoCC.mkDerivation {
       ! ${cctools}/bin/otool -L "$out/bin/tenzir-platform" | grep -q /nix/store
     ''}
     "$out/bin/tenzir-platform" --help >/dev/null
+    test "$("$out/bin/tenzir-platform" --version)" = "tenzir v${version}"
 
     runHook postInstallCheck
   '';
