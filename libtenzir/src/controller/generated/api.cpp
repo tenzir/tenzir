@@ -563,8 +563,14 @@ auto parse_user(simdjson::dom::element value) -> Result<User, ParseError> {
     name = std::move(name_present);
   }
 
-  return User{std::move(id), std::move(issuer), std::move(subject),
-              std::move(email), std::move(name)};
+  auto tombed = Option<bool>{None{}};
+  if (auto tombed_raw = api::optional_field(object, "tombed")) {
+    TRY(auto tombed_present, api::bool_of(*tombed_raw, "User.tombed"));
+    tombed = std::move(tombed_present);
+  }
+
+  return User{std::move(id),    std::move(issuer), std::move(subject),
+              std::move(email), std::move(name),   std::move(tombed)};
 }
 
 auto parse_user_principal(simdjson::dom::element value)
@@ -2311,23 +2317,44 @@ auto write_json(UserId const& value, std::string& out) -> void {
 
 auto write_json(User const& value, std::string& out) -> void {
   out += '{';
+  auto field_separator = "";
+  out += field_separator;
+  field_separator = ",";
   out += "\"id\":";
   write_json(value.id, out);
-  out += ",\"issuer\":";
+  out += field_separator;
+  field_separator = ",";
+  out += "\"issuer\":";
   api::write_string(value.issuer, out);
-  out += ",\"subject\":";
+  out += field_separator;
+  field_separator = ",";
+  out += "\"subject\":";
   api::write_string(value.subject, out);
-  out += ",\"email\":";
+  out += field_separator;
+  field_separator = ",";
+  out += "\"email\":";
   if (value.email) {
     api::write_string(*value.email, out);
   } else {
     out += "null";
   }
-  out += ",\"name\":";
+  out += field_separator;
+  field_separator = ",";
+  out += "\"name\":";
   if (value.name) {
     api::write_string(*value.name, out);
   } else {
     out += "null";
+  }
+  if (value.tombed) {
+    out += field_separator;
+    field_separator = ",";
+    out += "\"tombed\":";
+    if (value.tombed) {
+      out += *value.tombed ? "true" : "false";
+    } else {
+      out += "null";
+    }
   }
   out += '}';
 }

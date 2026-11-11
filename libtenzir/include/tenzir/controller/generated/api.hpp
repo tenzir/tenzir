@@ -97,17 +97,17 @@ struct std::hash<tenzir::UserId> {
 
 namespace tenzir {
 
-/// A user as the platform knows one: its own id, and the identity a provider
-/// vouched for
+/// A user account, including deleted accounts retained for historical references
 class User {
 public:
   User(UserId id, std::string issuer, std::string subject,
-       Option<std::string> email, Option<std::string> name)
+       Option<std::string> email, Option<std::string> name, Option<bool> tombed)
     : id{std::move(id)},
       issuer{std::move(issuer)},
       subject{std::move(subject)},
       email{std::move(email)},
-      name{std::move(name)} {
+      name{std::move(name)},
+      tombed{std::move(tombed)} {
   }
 
   UserId id;
@@ -117,13 +117,15 @@ public:
   Option<std::string> email;
   /// `name`, may be absent, may be null.
   Option<std::string> name;
+  /// `tombed`, may be absent.
+  Option<bool> tombed;
 
   friend auto operator==(User const&, User const&) -> bool = default;
 
   template <class HashAlgorithm>
   friend auto hash_append(HashAlgorithm& h, User const& value) -> void {
     hash_append(h, value.id, value.issuer, value.subject, value.email,
-                value.name);
+                value.name, value.tombed);
   }
 };
 
