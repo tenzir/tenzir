@@ -30,6 +30,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 
 namespace tenzir::plugins::read_syslog {
 
@@ -49,20 +50,94 @@ auto make_dh(diagnostic_handler& dh, location operator_loc)
 }
 
 struct ReadSyslogArgs {
-  bool octet_counting = false;
+  Option<located<bool>> octet_counting;
   bool accept_pri_only = false;
   Option<ast::field_path> raw_message;
   multi_series_builder::options msb_options;
   location operator_location = location::unknown;
 };
 
+auto warn_deprecated_octet_counting(ReadSyslogArgs const& args,
+                                    diagnostic_handler& dh) -> void {
+  if (args.octet_counting) {
+    diagnostic::warning("`octet_counting` is deprecated")
+      .primary(*args.octet_counting)
+      .hint("omit `octet_counting` to detect syslog framing automatically")
+      .emit(dh);
+  }
+}
+
+auto detect_octet_counting(std::string_view& bytes, std::string& probe)
+  -> Option<bool> {
+  constexpr auto max_prefix_bytes = std::numeric_limits<uint32_t>::digits10 + 1;
+  while (not bytes.empty()) {
+    auto byte = bytes.front();
+    bytes.remove_prefix(1);
+    probe.push_back(byte);
+    auto space = probe.find(' ');
+    if (space == std::string::npos) {
+      if (probe.front() == '0' or byte < '0' or byte > '9'
+          or probe.size() > max_prefix_bytes) {
+        return false;
+      }
+      continue;
+    }
+    if (space == 0) {
+      return false;
+    }
+    // Require a complete PRI after the count so digit-leading legacy
+    // timestamps remain newline-framed. The probe is bounded to 16 bytes:
+    // ten count digits, one space, and at most five bytes for the PRI.
+    auto pri = std::string_view{probe}.substr(space + 1);
+    if (pri.empty()) {
+      continue;
+    }
+    if (pri.front() != '<') {
+      return false;
+    }
+    pri.remove_prefix(1);
+    if (pri.empty()) {
+      continue;
+    }
+    auto complete = pri.back() == '>';
+    if (complete) {
+      pri.remove_suffix(1);
+    }
+    if (pri.empty() or pri.size() > 3
+        or (pri.size() > 1 and pri.front() == '0')) {
+      return false;
+    }
+    auto value = uint16_t{0};
+    for (auto digit : pri) {
+      if (digit < '0' or digit > '9') {
+        return false;
+      }
+      value = value * 10 + digit - '0';
+    }
+    if (value > 191) {
+      return false;
+    }
+    if (complete) {
+      // The counted reader validates the declared length after selection.
+      return true;
+    }
+  }
+  return None{};
+}
+
 class ReadSyslog final : public Operator<chunk_ptr, table_slice> {
 public:
-  explicit ReadSyslog(ReadSyslogArgs args) : args_{std::move(args)} {
+  explicit ReadSyslog(ReadSyslogArgs args)
+    : args_{std::move(args)},
+      octet_counting_{args_.octet_counting.map([](auto const& value) {
+        return value.inner;
+      })} {
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
     co_await Operator<chunk_ptr, table_slice>::start(ctx);
+    // Runtime diagnostics share one deduplicator across connection pipelines.
+    warn_deprecated_octet_counting(args_, ctx.dh());
     dh_.emplace(make_dh(ctx.dh(), args_.operator_location));
     auto raw = args_.raw_message;
     new_builder_.emplace(syslog::infuse_new_schema(args_.msb_options), *dh_,
@@ -78,22 +153,23 @@ public:
 
   auto process(chunk_ptr input, Push<table_slice>& push, OpCtx&)
     -> Task<void> override {
-    if (done_) {
+    if (done_ or not input or input->size() == 0) {
       co_return;
     }
-    if (args_.octet_counting) {
-      TENZIR_ASSERT(dh_);
-      auto result = co_await process_octet(input, push, *dh_);
-      if (not result) {
-        // malformed octet framing is terminal
-        co_await finalize_builders(push);
-        done_ = true;
+    auto bytes = std::string_view{reinterpret_cast<char const*>(input->data()),
+                                  input->size()};
+    if (not octet_counting_) {
+      octet_counting_ = detect_octet_counting(bytes, framing_probe_);
+      if (not octet_counting_) {
         co_return;
       }
-    } else {
-      co_await process_lines(input, push);
+      auto probe = std::exchange(framing_probe_, {});
+      co_await process_bytes(probe, push);
     }
-    co_await push_ready(push);
+    co_await process_bytes(bytes, push);
+    if (not done_) {
+      co_await push_ready(push);
+    }
   }
 
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
@@ -118,7 +194,13 @@ public:
   auto finalize(Push<table_slice>& push, OpCtx&)
     -> Task<FinalizeBehavior> override {
     TENZIR_ASSERT(dh_);
-    if (args_.octet_counting) {
+    if (not framing_probe_.empty()) {
+      // An incomplete signature at EOF is newline input.
+      octet_counting_ = false;
+      auto probe = std::exchange(framing_probe_, {});
+      co_await process_bytes(probe, push);
+    }
+    if (octet_counting_.value_or(false)) {
       if (remaining_message_length_ > 0) {
         auto const buffered_bytes = buffer_.size();
         auto const missing_bytes
@@ -153,6 +235,8 @@ public:
   }
 
   auto snapshot(Serde& serde) -> void override {
+    serde("octet_counting", octet_counting_);
+    serde("framing_probe", framing_probe_);
     serde("buffer", buffer_);
     serde("line_nr", line_nr_);
     serde("ended_on_cr", ended_on_carriage_return_);
@@ -173,6 +257,23 @@ public:
   }
 
 private:
+  auto process_bytes(std::string_view bytes, Push<table_slice>& push)
+    -> Task<void> {
+    if (done_ or bytes.empty()) {
+      co_return;
+    }
+    TENZIR_ASSERT(octet_counting_);
+    if (*octet_counting_) {
+      TENZIR_ASSERT(dh_);
+      if (not co_await process_octet(bytes, push, *dh_)) {
+        co_await finalize_builders(push);
+        done_ = true;
+      }
+    } else {
+      co_await process_lines(bytes, push);
+    }
+  }
+
   struct PeriodicTick {};
 
   // Returns slices that must be pushed immediately when switching schema
@@ -314,11 +415,11 @@ private:
     unknown_builder_->add_new({std::string{line}, line_nr_});
   }
 
-  // Scan `input` for newlines and dispatch each complete line.
-  auto process_lines(chunk_ptr const& input, Push<table_slice>& push)
+  // Scan `bytes` for newlines and dispatch each complete line.
+  auto process_lines(std::string_view bytes, Push<table_slice>& push)
     -> Task<void> {
-    auto const* begin = reinterpret_cast<char const*>(input->data());
-    auto const* const end = begin + input->size();
+    auto const* begin = bytes.begin();
+    auto const* const end = bytes.end();
 
     if (ended_on_carriage_return_ and begin != end and *begin == '\n') {
       ++begin;
@@ -350,7 +451,7 @@ private:
     buffer_.append(begin, end);
   }
 
-  // Process `input` as an RFC 6587 octet-counting stream.
+  // Process `bytes` as an RFC 6587 octet-counting stream.
   //
   // `buffer_` serves a dual role depending on `remaining_message_length_`:
   //   == 0: accumulates length-prefix bytes (e.g. "57 ") until a space is found
@@ -358,9 +459,9 @@ private:
   //
   // Splitting into 1-byte chunks is handled correctly because both the prefix
   // and the message are buffered across chunk boundaries.
-  auto process_octet(chunk_ptr const& input, Push<table_slice>& push,
+  auto process_octet(std::string_view bytes, Push<table_slice>& push,
                      diagnostic_handler& dh) -> Task<failure_or<void>> {
-    buffer_.append(reinterpret_cast<char const*>(input->data()), input->size());
+    buffer_.append(bytes);
     while (not buffer_.empty()) {
       if (remaining_message_length_ > 0) {
         // Accumulating message content — wait until we have enough bytes.
@@ -438,6 +539,8 @@ private:
   SeriesPusher pusher_;
 
   // Snapshotted mutable state.
+  Option<bool> octet_counting_;
+  std::string framing_probe_;
   std::string buffer_;
   size_t line_nr_ = 0;
   bool ended_on_carriage_return_ = false;
@@ -448,10 +551,15 @@ private:
 class ReadSyslogEvents final : public Operator<chunk_ptr, nova::Events> {
 public:
   explicit ReadSyslogEvents(ReadSyslogArgs args)
-    : args_{std::move(args)}, wait_for_{std::in_place, 1u} {
+    : args_{std::move(args)},
+      wait_for_{std::in_place, 1u},
+      octet_counting_{args_.octet_counting.map([](auto const& value) {
+        return value.inner;
+      })} {
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
+    warn_deprecated_octet_counting(args_, ctx.dh());
     dh_.emplace(make_dh(ctx.dh(), args_.operator_location));
     co_return;
   }
@@ -473,11 +581,15 @@ public:
     }
     auto bytes = std::string_view{reinterpret_cast<char const*>(input->data()),
                                   input->size()};
-    if (args_.octet_counting) {
-      co_await process_octet(bytes, push);
-    } else {
-      co_await process_lines(bytes, push);
+    if (not octet_counting_) {
+      octet_counting_ = detect_octet_counting(bytes, framing_probe_);
+      if (not octet_counting_) {
+        co_return;
+      }
+      auto probe = std::exchange(framing_probe_, {});
+      co_await process_bytes(probe, push);
     }
+    co_await process_bytes(bytes, push);
     if (not done_) {
       co_await emit_expired(push);
     }
@@ -488,7 +600,13 @@ public:
     if (done_) {
       co_return FinalizeBehavior::done;
     }
-    if (args_.octet_counting) {
+    if (not framing_probe_.empty()) {
+      // An incomplete signature at EOF is newline input.
+      octet_counting_ = false;
+      auto probe = std::exchange(framing_probe_, {});
+      co_await process_bytes(probe, push);
+    }
+    if (octet_counting_.value_or(false)) {
       co_await finish_and_flush(push);
       if (remaining_message_length_ > 0) {
         diagnostic::error(
@@ -522,6 +640,8 @@ public:
   }
 
   auto snapshot(Serde& serde) -> void override {
+    serde("octet_counting", octet_counting_);
+    serde("framing_probe", framing_probe_);
     serde("buffer", buffer_);
     serde("ended_on_cr", ended_on_carriage_return_);
     serde("remaining_msg_len", remaining_message_length_);
@@ -546,6 +666,19 @@ public:
   }
 
 private:
+  auto process_bytes(std::string_view bytes, Push<nova::Events>& push)
+    -> Task<void> {
+    if (done_ or bytes.empty()) {
+      co_return;
+    }
+    TENZIR_ASSERT(octet_counting_);
+    if (*octet_counting_) {
+      co_await process_octet(bytes, push);
+    } else {
+      co_await process_lines(bytes, push);
+    }
+  }
+
   using Clock = std::chrono::steady_clock;
   using Pending = variant<syslog::message, syslog::legacy_message>;
 
@@ -901,6 +1034,8 @@ private:
   Option<Clock::time_point> pending_started_;
   Option<Pending> pending_;
   std::string pending_raw_;
+  Option<bool> octet_counting_;
+  std::string framing_probe_;
   std::string buffer_;
   size_t remaining_message_length_ = 0;
   syslog::builder_tag last_ = syslog::builder_tag::unknown_syslog_builder;

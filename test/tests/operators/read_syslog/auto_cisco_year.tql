@@ -1,0 +1,6 @@
+from {line: "2026 Apr 4 08:45:52 PDT: %SYS-5-CONFIG_I: First"},
+  {line: "2026 Nov 9 12:00:00 UTC: %SYS-5-CONFIG_I: Second"}
+write_lines
+split_bytes 1
+read_syslog
+select app_name, content

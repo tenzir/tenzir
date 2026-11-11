@@ -1,3 +1,10 @@
+warning: `octet_counting` is deprecated
+  --> tests/operators/read_syslog/customer_formats_octet.tql:11:28
+   |
+11 | read_syslog octet_counting=true, raw_message=raw, accept_pri_only=true
+   |                            ~~~~
+   |
+   = hint: omit `octet_counting` to detect syslog framing automatically
 {
   facility: 20,
   severity: 6,

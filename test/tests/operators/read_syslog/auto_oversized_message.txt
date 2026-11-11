@@ -1,0 +1,6 @@
+error: octet-counted message length 16777217 exceeds maximum 16777216
+ --> tests/operators/read_syslog/auto_oversized_message.tql:7:3
+  |
+7 |   read_syslog
+  |   -----------
+  |

@@ -12,6 +12,7 @@
 #include "tenzir/nova/bitmap_iteration.hpp"
 #include "tenzir/nova/materialize.hpp"
 #include "tenzir/operator_plugin.hpp"
+#include "tenzir/option.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/test/nova.hpp"
 #include "tenzir/test/test.hpp"
@@ -33,28 +34,36 @@ namespace {
 
 class CollectEvents final : public Push<nova::Events> {
 public:
+  explicit CollectEvents(std::string field = "message")
+    : field_{std::move(field)} {
+  }
+
   auto operator()(nova::Events events) -> Task<void> override {
     auto values = nova::Array<nova::Data>{events.data};
     for (auto row : nova::storage::true_bits(events.mask)) {
       messages.push_back(
-        as<record>(nova::materialize_legacy(values.get(row))).at("message"));
+        as<record>(nova::materialize_legacy(values.get(row))).at(field_));
     }
     co_return;
   }
 
   std::vector<data> messages;
+
+private:
+  std::string field_;
 };
 
-auto make_reader(bool octet_counting)
+auto make_reader(Option<bool> octet_counting = {})
   -> Box<Operator<chunk_ptr, nova::Events>> {
   auto const* plugin = plugins::find<OperatorPlugin>("read_syslog");
   REQUIRE(plugin);
   auto desc = plugin->describe();
   auto args = desc.make_args();
   for (auto const& named : desc.named) {
-    if (std::ranges::contains(named.names, "octet_counting")) {
+    if (std::ranges::contains(named.names, "octet_counting")
+        and octet_counting) {
       as<std::function<void(Any&, located<bool>)>>(
-        named.setter)(args, located{octet_counting, location::unknown});
+        named.setter)(args, located{*octet_counting, location::unknown});
     }
     if (std::ranges::contains(named.names, "_batch_timeout")) {
       as<std::function<void(Any&, located<duration>)>>(
@@ -79,10 +88,15 @@ auto messages() -> std::string {
 }
 
 auto check_diagnostics(collecting_diagnostic_handler& dh,
-                       std::string_view expected_error = {}) -> void {
+                       std::string_view expected_error = {},
+                       size_t expected_deprecations = 0) -> void {
   auto errors = size_t{0};
+  auto deprecations = size_t{0};
   for (auto const& diag : std::move(dh).collect()) {
-    if (diag.severity == severity::warning) {
+    if (diag.severity == severity::warning
+        and diag.message == "`octet_counting` is deprecated") {
+      ++deprecations;
+    } else if (diag.severity == severity::warning) {
       // The unit context has no schema registry.
       CHECK_EQUAL(diag.message, "schema `syslog.rfc5424` does not exist");
     } else {
@@ -92,74 +106,154 @@ auto check_diagnostics(collecting_diagnostic_handler& dh,
     }
   }
   CHECK_EQUAL(errors, expected_error.empty() ? size_t{0} : size_t{1});
+  CHECK_EQUAL(deprecations, expected_deprecations);
 }
 
 } // namespace
 
-TEST("Syslog publishes accepted frames before terminal framing diagnostics") {
-  for (auto const& [tail, error] : {
-         std::pair{"x", "failed to parse octet-counting length prefix"},
-         std::pair{" ", "failed to parse octet-counting length prefix"},
-         std::pair{"4294967296 ", "failed to parse octet-counting length "
-                                  "prefix"},
-         std::pair{"16777217 ", "octet-counted message length 16777217 exceeds "
-                                "maximum 16777216"},
-         std::pair{"12345678901", "octet-counting length prefix exceeds 10 "
-                                  "bytes without delimiter"},
-       }) {
+TEST("Syslog detects valid PRI boundaries across byte chunks") {
+  for (auto pri : {0, 9, 99, 191}) {
+    auto input = frame(
+      fmt::format("<{}>1 2023-01-01T00:00:00Z host app 123 - - First", pri));
     auto output = CollectEvents{};
-    auto diagnostics = collecting_diagnostic_handler{};
-    auto dh = transforming_diagnostic_handler{
-      diagnostics, [&](diagnostic diag) {
-        if (diag.severity == severity::error) {
-          CHECK_EQUAL(output.messages, (std::vector<data>{"First", "Second"}));
-        }
-        return diag;
-      }};
+    auto dh = collecting_diagnostic_handler{};
     auto reg = registry{};
     auto ctx = test::NovaOpCtx{dh, reg};
-    auto reader = make_reader(true);
+    auto reader = make_reader();
     folly::coro::blockingWait(reader->start(ctx));
-    folly::coro::blockingWait(
-      reader->process(chunk::copy(messages() + tail), output, ctx));
-    CHECK_EQUAL(reader->state(), OperatorState::done);
-    check_diagnostics(diagnostics, error);
-    CHECK_EQUAL(output.messages, (std::vector<data>{"First", "Second"}));
-    folly::coro::blockingWait(reader->process(
-      chunk::copy(frame("<165>1 2023-01-01T00:00:00Z host app 123 - - Third")),
-      output, ctx));
+    for (auto const& byte : input) {
+      folly::coro::blockingWait(
+        reader->process(chunk::copy(std::string_view{&byte, 1}), output, ctx));
+    }
     folly::coro::blockingWait(reader->finalize(output, ctx));
-    check_diagnostics(diagnostics);
-    CHECK_EQUAL(output.messages, (std::vector<data>{"First", "Second"}));
+    check_diagnostics(dh);
+    CHECK_EQUAL(output.messages, (std::vector<data>{"First"}));
+  }
+}
+
+TEST("Syslog checkpoints preserve rejected and incomplete framing probes") {
+  for (auto input : {
+         "12",
+         "50 ",
+         "50 <",
+         "50 <16",
+         "50 <165",
+         "50 <>",
+         "50 <-1>",
+         "50 <+1>",
+         "50 <192>",
+         "50 <999>",
+         "50 <019>",
+         "50 <000>",
+         "50 <1a>",
+         "50 <1234>",
+         "50\t<165>",
+         "0 <165>x",
+         "01 <165>x",
+         "12345678901 <165>x",
+         "41 2026-11-09T12:00:00Z host app[123]: hello",
+       }) {
+    auto bytes = std::string_view{input};
+    for (auto split = size_t{0}; split <= bytes.size(); ++split) {
+      auto output = CollectEvents{"syslog_message"};
+      auto dh = collecting_diagnostic_handler{};
+      auto reg = registry{};
+      auto ctx = test::NovaOpCtx{dh, reg};
+      auto reader = make_reader();
+      folly::coro::blockingWait(reader->start(ctx));
+      folly::coro::blockingWait(
+        reader->process(chunk::copy(bytes.substr(0, split)), output, ctx));
+      folly::coro::blockingWait(reader->prepare_snapshot(output, ctx));
+      auto saved = caf::byte_buffer{};
+      auto serializer = caf::binary_serializer{saved};
+      auto saving = Serde{serializer};
+      reader->snapshot(saving);
+      reader = make_reader();
+      auto deserializer = caf::binary_deserializer{saved};
+      auto loading = Serde{deserializer};
+      reader->snapshot(loading);
+      folly::coro::blockingWait(reader->start(ctx));
+      folly::coro::blockingWait(
+        reader->process(chunk::copy(bytes.substr(split)), output, ctx));
+      folly::coro::blockingWait(reader->finalize(output, ctx));
+      check_diagnostics(dh);
+      CHECK_EQUAL(output.messages, (std::vector<data>{std::string{bytes}}));
+    }
+  }
+}
+
+TEST("Syslog publishes accepted frames before terminal framing diagnostics") {
+  for (auto mode : {Option<bool>{}, Option<bool>{true}}) {
+    for (auto const& [tail, error] : {
+           std::pair{"x", "failed to parse octet-counting length prefix"},
+           std::pair{" ", "failed to parse octet-counting length prefix"},
+           std::pair{"4294967296 ", "failed to parse octet-counting length "
+                                    "prefix"},
+           std::pair{"16777217 ", "octet-counted message length 16777217 "
+                                  "exceeds "
+                                  "maximum 16777216"},
+           std::pair{"12345678901", "octet-counting length prefix exceeds 10 "
+                                    "bytes without delimiter"},
+         }) {
+      auto output = CollectEvents{};
+      auto diagnostics = collecting_diagnostic_handler{};
+      auto dh = transforming_diagnostic_handler{
+        diagnostics, [&](diagnostic diag) {
+          if (diag.severity == severity::error) {
+            CHECK_EQUAL(output.messages,
+                        (std::vector<data>{"First", "Second"}));
+          }
+          return diag;
+        }};
+      auto reg = registry{};
+      auto ctx = test::NovaOpCtx{dh, reg};
+      auto reader = make_reader(mode);
+      folly::coro::blockingWait(reader->start(ctx));
+      folly::coro::blockingWait(
+        reader->process(chunk::copy(messages() + tail), output, ctx));
+      CHECK_EQUAL(reader->state(), OperatorState::done);
+      check_diagnostics(diagnostics, error, mode ? 1 : 0);
+      CHECK_EQUAL(output.messages, (std::vector<data>{"First", "Second"}));
+      folly::coro::blockingWait(
+        reader->process(chunk::copy(frame("<165>1 2023-01-01T00:00:00Z host "
+                                          "app 123 - - Third")),
+                        output, ctx));
+      folly::coro::blockingWait(reader->finalize(output, ctx));
+      check_diagnostics(diagnostics);
+      CHECK_EQUAL(output.messages, (std::vector<data>{"First", "Second"}));
+    }
   }
 }
 
 TEST("Syslog publishes accepted frames before incomplete-input diagnostics") {
-  for (auto const& [tail, error] : {
-         std::pair{"12", "unexpected end of input in octet-counting length "
-                         "prefix"},
-         std::pair{"50 x", "unexpected end of input in octet-counted syslog "
-                           "message"},
-       }) {
-    auto output = CollectEvents{};
-    auto diagnostics = collecting_diagnostic_handler{};
-    auto dh = transforming_diagnostic_handler{
-      diagnostics, [&](diagnostic diag) {
-        if (diag.severity == severity::error) {
-          CHECK_EQUAL(output.messages, (std::vector<data>{"First", "Second"}));
-        }
-        return diag;
-      }};
-    auto reg = registry{};
-    auto ctx = test::NovaOpCtx{dh, reg};
-    auto reader = make_reader(true);
-    folly::coro::blockingWait(reader->start(ctx));
-    folly::coro::blockingWait(
-      reader->process(chunk::copy(messages() + tail), output, ctx));
-    check_diagnostics(diagnostics);
-    folly::coro::blockingWait(reader->finalize(output, ctx));
-    check_diagnostics(diagnostics, error);
-    CHECK_EQUAL(output.messages, (std::vector<data>{"First", "Second"}));
+  for (auto mode : {Option<bool>{}, Option<bool>{true}}) {
+    for (auto const& [tail, error] : {
+           std::pair{"12", "unexpected end of input in octet-counting length "
+                           "prefix"},
+           std::pair{"50 x", "unexpected end of input in octet-counted syslog "
+                             "message"},
+         }) {
+      auto output = CollectEvents{};
+      auto diagnostics = collecting_diagnostic_handler{};
+      auto dh = transforming_diagnostic_handler{
+        diagnostics, [&](diagnostic diag) {
+          if (diag.severity == severity::error) {
+            CHECK_EQUAL(output.messages,
+                        (std::vector<data>{"First", "Second"}));
+          }
+          return diag;
+        }};
+      auto reg = registry{};
+      auto ctx = test::NovaOpCtx{dh, reg};
+      auto reader = make_reader(mode);
+      folly::coro::blockingWait(reader->start(ctx));
+      folly::coro::blockingWait(
+        reader->process(chunk::copy(messages() + tail), output, ctx));
+      check_diagnostics(diagnostics, {}, mode ? 1 : 0);
+      folly::coro::blockingWait(reader->finalize(output, ctx));
+      check_diagnostics(diagnostics, error);
+      CHECK_EQUAL(output.messages, (std::vector<data>{"First", "Second"}));
+    }
   }
 }
 
@@ -191,7 +285,7 @@ TEST("Syslog publishes accepted messages before rejecting oversized lines") {
       folly::coro::blockingWait(reader->process(
         chunk::copy(std::string_view{input}.substr(0, split)), output, ctx));
       CHECK_EQUAL(reader->state(), OperatorState::normal);
-      check_diagnostics(diagnostics);
+      check_diagnostics(diagnostics, {}, 1);
       folly::coro::blockingWait(reader->process(
         chunk::copy(std::string_view{input}.substr(split)), output, ctx));
       CHECK_EQUAL(reader->state(), OperatorState::done);
@@ -217,31 +311,33 @@ TEST("Syslog checkpoints retain pending frames and multiline messages") {
       = std::string{"<165>1 2023-01-01T00:00:00Z host app 123 - - Second"};
     auto input
       = octet_counting ? frame(first) + frame(second) : first + "\r\n" + second;
-    for (auto split = size_t{0}; split <= input.size(); ++split) {
-      auto dh = collecting_diagnostic_handler{};
-      auto reg = registry{};
-      auto ctx = test::NovaOpCtx{dh, reg};
-      auto output = CollectEvents{};
-      auto reader = make_reader(octet_counting);
-      folly::coro::blockingWait(reader->start(ctx));
-      folly::coro::blockingWait(reader->process(
-        chunk::copy(std::string_view{input}.substr(0, split)), output, ctx));
-      folly::coro::blockingWait(reader->prepare_snapshot(output, ctx));
-      auto bytes = caf::byte_buffer{};
-      auto serializer = caf::binary_serializer{bytes};
-      auto saving = Serde{serializer};
-      reader->snapshot(saving);
-      reader = make_reader(octet_counting);
-      auto deserializer = caf::binary_deserializer{bytes};
-      auto loading = Serde{deserializer};
-      reader->snapshot(loading);
-      folly::coro::blockingWait(reader->start(ctx));
-      folly::coro::blockingWait(reader->process(
-        chunk::copy(std::string_view{input}.substr(split)), output, ctx));
-      folly::coro::blockingWait(reader->finalize(output, ctx));
-      check_diagnostics(dh);
-      CHECK_EQUAL(output.messages,
-                  (std::vector<data>{"First\ncontinuation", "Second"}));
+    for (auto mode : {Option<bool>{}, Option<bool>{octet_counting}}) {
+      for (auto split = size_t{0}; split <= input.size(); ++split) {
+        auto dh = collecting_diagnostic_handler{};
+        auto reg = registry{};
+        auto ctx = test::NovaOpCtx{dh, reg};
+        auto output = CollectEvents{};
+        auto reader = make_reader(mode);
+        folly::coro::blockingWait(reader->start(ctx));
+        folly::coro::blockingWait(reader->process(
+          chunk::copy(std::string_view{input}.substr(0, split)), output, ctx));
+        folly::coro::blockingWait(reader->prepare_snapshot(output, ctx));
+        auto bytes = caf::byte_buffer{};
+        auto serializer = caf::binary_serializer{bytes};
+        auto saving = Serde{serializer};
+        reader->snapshot(saving);
+        reader = make_reader(mode);
+        auto deserializer = caf::binary_deserializer{bytes};
+        auto loading = Serde{deserializer};
+        reader->snapshot(loading);
+        folly::coro::blockingWait(reader->start(ctx));
+        folly::coro::blockingWait(reader->process(
+          chunk::copy(std::string_view{input}.substr(split)), output, ctx));
+        folly::coro::blockingWait(reader->finalize(output, ctx));
+        check_diagnostics(dh, {}, mode ? 2 : 0);
+        CHECK_EQUAL(output.messages,
+                    (std::vector<data>{"First\ncontinuation", "Second"}));
+      }
     }
   }
 }

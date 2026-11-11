@@ -1,0 +1,10 @@
+warning: `octet_counting` is deprecated
+ --> tests/operators/read_syslog/deprecated_false.tql:3:28
+  |
+3 | read_syslog octet_counting=false
+  |                            ~~~~~
+  |
+  = hint: omit `octet_counting` to detect syslog framing automatically
+{
+  syslog_message: "50 <165>1 2026-11-09T12:00:00Z host app 123 - - hello",
+}

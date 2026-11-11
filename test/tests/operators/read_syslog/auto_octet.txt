@@ -1,0 +1,8 @@
+{
+  message: "Grüße\ncontinuation",
+  raw: "<165>1 2026-11-09T12:00:00Z host app 123 - - Grüße\ncontinuation",
+}
+{
+  message: "Second",
+  raw: "<165>1 2026-11-09T12:00:00Z host app 123 - - Second",
+}

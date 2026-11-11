@@ -1,0 +1,15 @@
+warning: `octet_counting` is deprecated
+ --> tests/operators/read_syslog/deprecated_true_without_pri.tql:3:30
+  |
+3 |   read_syslog octet_counting=true
+  |                              ~~~~
+  |
+  = hint: omit `octet_counting` to detect syslog framing automatically
+{
+  app_name: "app",
+  content: "hello",
+}
+{
+  app_name: "SYS-5-CONFIG_I",
+  content: "Cisco uptime",
+}

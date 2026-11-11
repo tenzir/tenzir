@@ -1,0 +1,10 @@
+suite:
+  name: tcp-syslog-mixed-framing
+  mode: parallel
+  min_jobs: 3
+fixtures:
+  - tcp:
+      mode: client
+      # Reuse the fixture's dynamic endpoint; this empty client emits no events.
+      payloads: [""]
+timeout: 30
