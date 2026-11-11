@@ -182,9 +182,32 @@ TEST("physical reduction releases excluded payloads and skips absent records") {
                       Events::Meta::make_empty(3)};
   auto result = physically_reduce_to_mask(input);
   CHECK_EQUAL(result.length(), 1);
-  CHECK_LESS(result.approx_bytes(), size_t{64 * 1024});
+  CHECK_LESS(result.approx_held_storage(), size_t{64 * 1024});
   CHECK(equal(RowView<nova::Data>{result.data.get(0)},
               RowView<nova::Data>{input.data.get(2)}));
+}
+
+TEST("active bytes scale with the mask while held storage does not") {
+  auto data = ArrayBuilder<nova::Record>{};
+  for (auto row = 0; row < 4; ++row) {
+    data.record().field("payload").data(std::string(4096, 'x'));
+  }
+  auto finished = data.finish();
+  auto all
+    = Events{finished, storage::BitMap{4, true}, Events::Meta::make_empty(4)};
+  CHECK_EQUAL(all.approx_active_bytes(), all.approx_held_storage());
+  auto mask = storage::BitMap::Mutable{4};
+  mask.set(0, true);
+  mask.set(1, true);
+  auto half
+    = Events{finished, std::move(mask).finish(), Events::Meta::make_empty(4)};
+  CHECK_GREATER_EQUAL(half.approx_held_storage(), size_t{4 * 4096});
+  CHECK_EQUAL(half.approx_active_bytes(), half.approx_held_storage() / 2);
+  auto none
+    = Events{finished, storage::BitMap{4, false}, Events::Meta::make_empty(4)};
+  CHECK_EQUAL(none.approx_active_bytes(), size_t{0});
+  CHECK_GREATER(none.approx_held_storage(), size_t{0});
+  CHECK_EQUAL(Events{}.approx_active_bytes(), size_t{0});
 }
 
 TEST("mask slicing composes physical ranges without reactivating rows") {

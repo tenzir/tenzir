@@ -146,7 +146,7 @@ public:
                   + free_batches_.capacity() * sizeof(size_t)
                   + (heap_.capacity() + ready_.capacity()) * sizeof(Index);
     for (auto const& batch : batches_) {
-      result += batch.events.approx_bytes();
+      result += batch.events.approx_held_storage();
     }
     return result;
   }

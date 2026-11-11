@@ -54,15 +54,11 @@ struct Events {
     return mask.true_count();
   }
 
-  /// A cheap estimate of this batch's memory footprint. Omits nested heap
-  /// allocations in constants, shape-table overflow, and record field names.
-  /// Unused capacity is only partly included. Shared buffers count once per
-  /// reference.
-  auto approx_bytes() const noexcept -> std::size_t {
-    return sizeof(Events) + data.approx_bytes() + mask.approx_bytes()
-           + meta.name.approx_bytes() + meta.import_time.approx_bytes()
-           + meta.internal.approx_bytes();
-  }
+  /// Approximate bytes of the rows selected by `mask`, for throughput metrics.
+  auto approx_active_bytes() const noexcept -> std::size_t;
+
+  /// Approximate memory this batch keeps alive, for memory accounting.
+  auto approx_held_storage() const noexcept -> std::size_t;
 };
 
 /// Bitz is only materialized when an inspector serializes an event message.

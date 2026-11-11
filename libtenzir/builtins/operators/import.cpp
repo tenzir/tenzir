@@ -125,7 +125,7 @@ public:
           .note("fields will be `\"***\"`")
           .emit(ctx.dh());
       }
-      write_bytes_counter_.add(input.approx_bytes());
+      write_bytes_counter_.add(input.approx_active_bytes());
       write_events_counter_.add(input.active_count());
       if (input.active_count() == 0) {
         co_return;

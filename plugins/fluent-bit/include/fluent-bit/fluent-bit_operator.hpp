@@ -1522,7 +1522,7 @@ private:
     }
     auto events = builder_->finish();
     timeout_.reset();
-    auto const bytes = events.approx_bytes();
+    auto const bytes = events.approx_active_bytes();
     auto const rows = events.active_count();
     co_await push(std::move(events));
     read_bytes_counter_.add(bytes);
