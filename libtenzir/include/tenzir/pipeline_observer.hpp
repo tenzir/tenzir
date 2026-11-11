@@ -230,7 +230,7 @@ private:
 /// the observer; full queues drop inspection copies. The graph broadcast
 /// instead replaces pending snapshots and orders completion after publication.
 ///
-/// Every 250 ms, changed history is copied to an ordered vector of immutable
+/// Every second, changed history is copied to an ordered vector of immutable
 /// graph references. Producer lookup indexes stay private; readers receive only
 /// GraphSnapshot values. Unread snapshots are replaced. All metadata and
 /// history changes use state_->mutex. Description callbacks and delivery run
@@ -260,7 +260,10 @@ public:
   auto subscribe_metrics()
     -> Result<MetricsSubscription, GraphSubscriptionError>;
   /// Validates against reserved identities, including evicted graph layouts.
-  auto subscribe_channel(ChannelTarget target)
+  /// The subscription queues `queue_capacity` batches, or `tap_capacity`
+  /// without one; a request on many channels takes less per channel.
+  auto subscribe_channel(ChannelTarget target, Option<uint32_t> queue_capacity
+                                               = None{})
     -> Result<TapSubscription, TapSubscriptionError>;
 
   /// Execution-side operations. Start once, register plans before receiving

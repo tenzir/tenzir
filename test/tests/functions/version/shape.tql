@@ -1,0 +1,13 @@
+from {x: 1}, {x: 2}
+v = version()
+this = {
+  x: x,
+  version: v.version.type_kind(),
+  major: v.major.type_kind(),
+  features: v.features.type_kind(),
+  feature: v.features[0].type_kind(),
+  build: v.build.type_kind(),
+  assertions: v.build.assertions.type_kind(),
+  dependencies: v.dependencies.type_kind(),
+  dependency_name: v.dependencies[0].name.type_kind(),
+}

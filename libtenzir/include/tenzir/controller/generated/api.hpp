@@ -166,8 +166,9 @@ struct std::hash<tenzir::UserPrincipal> {
 
 namespace tenzir {
 
-/// A path-safe identifier
-/// Values must match `^[A-Za-z0-9][A-Za-z0-9_-]*$`.
+/// A UUID
+/// Values must match
+/// `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`.
 class DeploymentId {
 public:
   static auto make(std::string value) -> Result<DeploymentId, ParseError>;
@@ -375,7 +376,7 @@ namespace tenzir {
 class DeploymentPath {
 public:
   DeploymentPath(std::string org, std::string workspace,
-                 DeploymentId deployment_id)
+                 std::string deployment_id)
     : org{std::move(org)},
       workspace{std::move(workspace)},
       deployment_id{std::move(deployment_id)} {
@@ -383,7 +384,7 @@ public:
 
   std::string org;
   std::string workspace;
-  DeploymentId deployment_id;
+  std::string deployment_id;
 
   friend auto operator==(DeploymentPath const&, DeploymentPath const&) -> bool
     = default;
@@ -1268,7 +1269,7 @@ namespace tenzir {
 class AttachIngestEndpointPath {
 public:
   AttachIngestEndpointPath(std::string org, std::string workspace,
-                           DeploymentId deployment_id, IngestEndpointName name)
+                           std::string deployment_id, IngestEndpointName name)
     : org{std::move(org)},
       workspace{std::move(workspace)},
       deployment_id{std::move(deployment_id)},
@@ -1277,7 +1278,7 @@ public:
 
   std::string org;
   std::string workspace;
-  DeploymentId deployment_id;
+  std::string deployment_id;
   IngestEndpointName name;
 
   friend auto
@@ -1479,7 +1480,7 @@ namespace tenzir {
 class DeploymentSecretPath {
 public:
   DeploymentSecretPath(std::string org, std::string workspace,
-                       DeploymentId deployment_id, SecretName name)
+                       std::string deployment_id, SecretName name)
     : org{std::move(org)},
       workspace{std::move(workspace)},
       deployment_id{std::move(deployment_id)},
@@ -1488,7 +1489,7 @@ public:
 
   std::string org;
   std::string workspace;
-  DeploymentId deployment_id;
+  std::string deployment_id;
   SecretName name;
 
   friend auto
@@ -2190,25 +2191,71 @@ struct std::hash<tenzir::ExecutionMetricsSnapshot> {
 
 namespace tenzir {
 
-/// An event tap with a positive event limit; defaults to 100 events
+/// One channel of an execution: the exact path of its graph, and its index there
+class ApiChannelTarget {
+public:
+  ApiChannelTarget(std::vector<std::int64_t> path, std::int64_t channel_index)
+    : path{std::move(path)}, channel_index{std::move(channel_index)} {
+  }
+
+  std::vector<std::int64_t> path;
+  std::int64_t channel_index;
+
+  friend auto operator==(ApiChannelTarget const&, ApiChannelTarget const&)
+    -> bool
+    = default;
+
+  template <class HashAlgorithm>
+  friend auto hash_append(HashAlgorithm& h, ApiChannelTarget const& value)
+    -> void {
+    hash_append(h, value.path, value.channel_index);
+  }
+};
+
+} // namespace tenzir
+
+template <>
+struct std::hash<tenzir::ApiChannelTarget> {
+  auto operator()(tenzir::ApiChannelTarget const& value) const -> std::size_t {
+    return tenzir::hash(value);
+  }
+};
+
+namespace tenzir {
+
+/// How the deployment renders event values to JSON: `json` renders every value
+/// the way a terminal wants it, and `typed_json` renders int64 and uint64
+/// values as strings, so that they survive every JSON parser with their
+/// precision intact and a reader with the schema can take them back to numbers.
+/// `json` where left out
+enum class Encoding {
+  json,
+  typed_json,
+};
+
+auto to_string(Encoding value) -> std::string_view;
+
+/// An event tap on one or more channels of an execution, in one stream. Ends
+/// after at most five minutes without stopping the pipeline
 class ChannelTapRequest {
 public:
   ChannelTapRequest(Uuid process_instance_id, std::string execution_id,
-                    std::vector<std::int64_t> path, std::int64_t channel_index,
-                    Option<std::int64_t> limit)
+                    std::vector<ApiChannelTarget> channels,
+                    Option<std::int64_t> limit, Option<Encoding> encoding)
     : process_instance_id{std::move(process_instance_id)},
       execution_id{std::move(execution_id)},
-      path{std::move(path)},
-      channel_index{std::move(channel_index)},
-      limit{std::move(limit)} {
+      channels{std::move(channels)},
+      limit{std::move(limit)},
+      encoding{std::move(encoding)} {
   }
 
   Uuid process_instance_id;
   std::string execution_id;
-  std::vector<std::int64_t> path;
-  std::int64_t channel_index;
+  std::vector<ApiChannelTarget> channels;
   /// `limit`, may be absent.
   Option<std::int64_t> limit;
+  /// `encoding`, may be absent.
+  Option<Encoding> encoding;
 
   friend auto operator==(ChannelTapRequest const&, ChannelTapRequest const&)
     -> bool
@@ -2217,8 +2264,8 @@ public:
   template <class HashAlgorithm>
   friend auto hash_append(HashAlgorithm& h, ChannelTapRequest const& value)
     -> void {
-    hash_append(h, value.process_instance_id, value.execution_id, value.path,
-                value.channel_index, value.limit);
+    hash_append(h, value.process_instance_id, value.execution_id,
+                value.channels, value.limit, value.encoding);
   }
 };
 
@@ -2308,17 +2355,6 @@ struct std::hash<tenzir::AdhocPipelineId> {
 };
 
 namespace tenzir {
-
-/// How the deployment renders event values to JSON: `json` renders every value
-/// the way a terminal wants it, and `typed_json` renders int64 and uint64
-/// values as strings, so that they survive every JSON parser with their
-/// precision intact and a reader with the schema can take them back to numbers
-enum class Encoding {
-  json,
-  typed_json,
-};
-
-auto to_string(Encoding value) -> std::string_view;
 
 class AdhocPipelineDefinition {
 public:
@@ -2761,11 +2797,12 @@ public:
 };
 
 /// `POST /pipelines/:pipelineId/events`
-/// Subscribes to one event channel in an exact execution. The response is typed
-/// SSE event batches followed by an end message, up to limit events (100 by
-/// default). Slow readers may miss batches. Disconnecting detaches the tap
-/// without stopping the pipeline. The subscription never follows a replacement
-/// execution.
+/// Subscribes to up to 256 event channels of an exact execution, in one stream.
+/// The response is typed SSE event batches followed by an end message, up to
+/// limit events in total (100 by default, 10000 at most) and 64 MiB in all,
+/// each batch after the schema it uses. Slow readers may miss batches.
+/// Disconnecting detaches the tap without stopping the pipeline. The
+/// subscription never follows a replacement execution.
 class StreamPipelineEvents {
 public:
   StreamPipelineEvents(PipelinePath path, ChannelTapRequest payload)
@@ -3049,14 +3086,16 @@ auto parse_execution_channel_metrics(simdjson::dom::element value)
   -> Result<ExecutionChannelMetrics, ParseError>;
 auto parse_execution_metrics_snapshot(simdjson::dom::element value)
   -> Result<ExecutionMetricsSnapshot, ParseError>;
+auto parse_api_channel_target(simdjson::dom::element value)
+  -> Result<ApiChannelTarget, ParseError>;
+auto parse_encoding(simdjson::dom::element value)
+  -> Result<Encoding, ParseError>;
 auto parse_channel_tap_request(simdjson::dom::element value)
   -> Result<ChannelTapRequest, ParseError>;
 auto parse_context_status(simdjson::dom::element value)
   -> Result<ContextStatus, ParseError>;
 auto parse_adhoc_pipeline_id(simdjson::dom::element value)
   -> Result<AdhocPipelineId, ParseError>;
-auto parse_encoding(simdjson::dom::element value)
-  -> Result<Encoding, ParseError>;
 auto parse_adhoc_pipeline_definition(simdjson::dom::element value)
   -> Result<AdhocPipelineDefinition, ParseError>;
 
@@ -3131,10 +3170,11 @@ auto write_json(ExecutionOperatorMetrics const& value, std::string& out)
 auto write_json(ExecutionChannelMetrics const& value, std::string& out) -> void;
 auto write_json(ExecutionMetricsSnapshot const& value, std::string& out)
   -> void;
+auto write_json(ApiChannelTarget const& value, std::string& out) -> void;
+auto write_json(Encoding const& value, std::string& out) -> void;
 auto write_json(ChannelTapRequest const& value, std::string& out) -> void;
 auto write_json(ContextStatus const& value, std::string& out) -> void;
 auto write_json(AdhocPipelineId const& value, std::string& out) -> void;
-auto write_json(Encoding const& value, std::string& out) -> void;
 auto write_json(AdhocPipelineDefinition const& value, std::string& out) -> void;
 
 } // namespace tenzir

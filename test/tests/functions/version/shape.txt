@@ -1,0 +1,22 @@
+{
+  x: 1,
+  version: "string",
+  major: "uint",
+  features: "list",
+  feature: "string",
+  build: "record",
+  assertions: "bool",
+  dependencies: "list",
+  dependency_name: "string",
+}
+{
+  x: 2,
+  version: "string",
+  major: "uint",
+  features: "list",
+  feature: "string",
+  build: "record",
+  assertions: "bool",
+  dependencies: "list",
+  dependency_name: "string",
+}

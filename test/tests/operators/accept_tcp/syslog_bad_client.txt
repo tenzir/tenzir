@@ -1,0 +1,12 @@
+warning: octet-counted message length 16777217 exceeds maximum 16777216
+  --> tests/operators/accept_tcp/syslog_bad_client.tql:14:3
+   |
+14 |   read_syslog
+   |   -----------
+   |
+{
+  message: "counted",
+}
+{
+  message: "newline",
+}

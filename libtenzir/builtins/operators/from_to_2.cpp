@@ -153,7 +153,7 @@ public:
     auto events
       = nova::Events{std::move(record->data), std::move(record->present),
                      nova::Events::Meta::make_empty(length)};
-    auto const bytes = events.approx_bytes();
+    auto const bytes = events.approx_active_bytes();
     auto const rows = events.length();
     co_await push(std::move(events));
     read_bytes_counter_.add(bytes);

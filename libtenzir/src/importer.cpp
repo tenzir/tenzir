@@ -186,7 +186,8 @@ auto importer::handle_events(nova::Events events) -> caf::result<void> {
       });
     }
     unpersisted_nova_events.push_back(std::move(selected));
-    unpersisted_nova_bytes += unpersisted_nova_events.back().approx_bytes();
+    unpersisted_nova_bytes
+      += unpersisted_nova_events.back().approx_held_storage();
   }
   if (import_buffer_timeout == duration::zero()
       or unpersisted_nova_bytes >= max_unpersisted_nova_bytes) {

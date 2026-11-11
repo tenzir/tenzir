@@ -102,7 +102,7 @@ public:
         accepted = false;
       }
       if (event_count > 0) {
-        const auto bytes = events.approx_bytes();
+        const auto bytes = events.approx_held_storage();
         if (byte_size_ + bytes > max_bytes_ and not exceeded_events) {
           exceeded_bytes = true;
           accepted = false;

@@ -584,7 +584,8 @@ auto parse_user_principal(simdjson::dom::element value)
 }
 
 auto DeploymentId::make(std::string value) -> Result<DeploymentId, ParseError> {
-  static auto const pattern = std::regex{R"(^[A-Za-z0-9][A-Za-z0-9_-]*$)"};
+  static auto const pattern = std::regex{
+    R"(^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$)"};
   if (not std::regex_match(value, pattern)) {
     return Err{ParseError{
       "DeploymentId", fmt::format("`{}` does not match the pattern", value)}};
@@ -720,7 +721,8 @@ auto parse_deployment_path(simdjson::dom::element value)
 
   TRY(auto deployment_id_raw,
       api::field(object, "deploymentId", "DeploymentPath"));
-  TRY(auto deployment_id, parse_deployment_id(deployment_id_raw));
+  TRY(auto deployment_id,
+      api::string_of(deployment_id_raw, "DeploymentPath.deploymentId"));
 
   return DeploymentPath{std::move(org), std::move(workspace),
                         std::move(deployment_id)};
@@ -1354,7 +1356,9 @@ auto parse_attach_ingest_endpoint_path(simdjson::dom::element value)
 
   TRY(auto deployment_id_raw,
       api::field(object, "deploymentId", "AttachIngestEndpointPath"));
-  TRY(auto deployment_id, parse_deployment_id(deployment_id_raw));
+  TRY(auto deployment_id,
+      api::string_of(deployment_id_raw,
+                     "AttachIngestEndpointPath.deploymentId"));
 
   TRY(auto name_raw, api::field(object, "name", "AttachIngestEndpointPath"));
   TRY(auto name, parse_ingest_endpoint_name(name_raw));
@@ -1487,7 +1491,8 @@ auto parse_deployment_secret_path(simdjson::dom::element value)
 
   TRY(auto deployment_id_raw,
       api::field(object, "deploymentId", "DeploymentSecretPath"));
-  TRY(auto deployment_id, parse_deployment_id(deployment_id_raw));
+  TRY(auto deployment_id,
+      api::string_of(deployment_id_raw, "DeploymentSecretPath.deploymentId"));
 
   TRY(auto name_raw, api::field(object, "name", "DeploymentSecretPath"));
   TRY(auto name, parse_secret_name(name_raw));
@@ -2147,6 +2152,52 @@ auto parse_execution_metrics_snapshot(simdjson::dom::element value)
                                   std::move(channels)};
 }
 
+auto parse_api_channel_target(simdjson::dom::element value)
+  -> Result<ApiChannelTarget, ParseError> {
+  TRY(auto object, api::object_of(value, "ApiChannelTarget"));
+
+  TRY(auto path_raw, api::field(object, "path", "ApiChannelTarget"));
+  auto path = std::vector<std::int64_t>{};
+  auto path_array = simdjson::dom::array{};
+  if (path_raw.get_array().get(path_array) != simdjson::SUCCESS) {
+    return Err{ParseError{"ApiChannelTarget.path", "expected an array"}};
+  }
+  for (auto path_item : path_array) {
+    TRY(auto path_decoded, api::int64_of(path_item, "ApiChannelTarget.path"));
+    path.push_back(std::move(path_decoded));
+  }
+
+  TRY(auto channel_index_raw,
+      api::field(object, "channelIndex", "ApiChannelTarget"));
+  TRY(auto channel_index,
+      api::int64_of(channel_index_raw, "ApiChannelTarget.channelIndex"));
+
+  return ApiChannelTarget{std::move(path), std::move(channel_index)};
+}
+
+auto to_string(Encoding value) -> std::string_view {
+  switch (value) {
+    case Encoding::json:
+      return "json";
+    case Encoding::typed_json:
+      return "typed_json";
+  }
+  TENZIR_UNREACHABLE();
+}
+
+auto parse_encoding(simdjson::dom::element value)
+  -> Result<Encoding, ParseError> {
+  TRY(auto raw, api::string_of(value, "Encoding"));
+  if (raw == "json") {
+    return Encoding::json;
+  }
+  if (raw == "typed_json") {
+    return Encoding::typed_json;
+  }
+  return Err{ParseError{
+    "Encoding", fmt::format("`{}` is not one of json, typed_json", raw)}};
+}
+
 auto parse_channel_tap_request(simdjson::dom::element value)
   -> Result<ChannelTapRequest, ParseError> {
   TRY(auto object, api::object_of(value, "ChannelTapRequest"));
@@ -2160,21 +2211,16 @@ auto parse_channel_tap_request(simdjson::dom::element value)
   TRY(auto execution_id,
       api::string_of(execution_id_raw, "ChannelTapRequest.executionId"));
 
-  TRY(auto path_raw, api::field(object, "path", "ChannelTapRequest"));
-  auto path = std::vector<std::int64_t>{};
-  auto path_array = simdjson::dom::array{};
-  if (path_raw.get_array().get(path_array) != simdjson::SUCCESS) {
-    return Err{ParseError{"ChannelTapRequest.path", "expected an array"}};
+  TRY(auto channels_raw, api::field(object, "channels", "ChannelTapRequest"));
+  auto channels = std::vector<ApiChannelTarget>{};
+  auto channels_array = simdjson::dom::array{};
+  if (channels_raw.get_array().get(channels_array) != simdjson::SUCCESS) {
+    return Err{ParseError{"ChannelTapRequest.channels", "expected an array"}};
   }
-  for (auto path_item : path_array) {
-    TRY(auto path_decoded, api::int64_of(path_item, "ChannelTapRequest.path"));
-    path.push_back(std::move(path_decoded));
+  for (auto channels_item : channels_array) {
+    TRY(auto channels_decoded, parse_api_channel_target(channels_item));
+    channels.push_back(std::move(channels_decoded));
   }
-
-  TRY(auto channel_index_raw,
-      api::field(object, "channelIndex", "ChannelTapRequest"));
-  TRY(auto channel_index,
-      api::int64_of(channel_index_raw, "ChannelTapRequest.channelIndex"));
 
   auto limit = Option<std::int64_t>{None{}};
   if (auto limit_raw = api::optional_field(object, "limit")) {
@@ -2183,9 +2229,15 @@ auto parse_channel_tap_request(simdjson::dom::element value)
     limit = std::move(limit_present);
   }
 
+  auto encoding = Option<Encoding>{None{}};
+  if (auto encoding_raw = api::optional_field(object, "encoding")) {
+    TRY(auto encoding_present, parse_encoding(*encoding_raw));
+    encoding = std::move(encoding_present);
+  }
+
   return ChannelTapRequest{std::move(process_instance_id),
-                           std::move(execution_id), std::move(path),
-                           std::move(channel_index), std::move(limit)};
+                           std::move(execution_id), std::move(channels),
+                           std::move(limit), std::move(encoding)};
 }
 
 auto parse_context_status(simdjson::dom::element value)
@@ -2220,29 +2272,6 @@ auto parse_adhoc_pipeline_id(simdjson::dom::element value)
   -> Result<AdhocPipelineId, ParseError> {
   TRY(auto raw, api::string_of(value, "AdhocPipelineId"));
   return AdhocPipelineId::make(std::move(raw));
-}
-
-auto to_string(Encoding value) -> std::string_view {
-  switch (value) {
-    case Encoding::json:
-      return "json";
-    case Encoding::typed_json:
-      return "typed_json";
-  }
-  TENZIR_UNREACHABLE();
-}
-
-auto parse_encoding(simdjson::dom::element value)
-  -> Result<Encoding, ParseError> {
-  TRY(auto raw, api::string_of(value, "Encoding"));
-  if (raw == "json") {
-    return Encoding::json;
-  }
-  if (raw == "typed_json") {
-    return Encoding::typed_json;
-  }
-  return Err{ParseError{
-    "Encoding", fmt::format("`{}` is not one of json, typed_json", raw)}};
 }
 
 auto parse_adhoc_pipeline_definition(simdjson::dom::element value)
@@ -2369,7 +2398,7 @@ auto write_json(DeploymentPath const& value, std::string& out) -> void {
   out += ",\"workspace\":";
   api::write_string(value.workspace, out);
   out += ",\"deploymentId\":";
-  write_json(value.deployment_id, out);
+  api::write_string(value.deployment_id, out);
   out += '}';
 }
 
@@ -2679,7 +2708,7 @@ auto write_json(AttachIngestEndpointPath const& value, std::string& out)
   out += ",\"workspace\":";
   api::write_string(value.workspace, out);
   out += ",\"deploymentId\":";
-  write_json(value.deployment_id, out);
+  api::write_string(value.deployment_id, out);
   out += ",\"name\":";
   write_json(value.name, out);
   out += '}';
@@ -2749,7 +2778,7 @@ auto write_json(DeploymentSecretPath const& value, std::string& out) -> void {
   out += ",\"workspace\":";
   api::write_string(value.workspace, out);
   out += ",\"deploymentId\":";
-  write_json(value.deployment_id, out);
+  api::write_string(value.deployment_id, out);
   out += ",\"name\":";
   write_json(value.name, out);
   out += '}';
@@ -3141,6 +3170,28 @@ auto write_json(ExecutionMetricsSnapshot const& value, std::string& out)
   out += '}';
 }
 
+auto write_json(ApiChannelTarget const& value, std::string& out) -> void {
+  out += '{';
+  out += "\"path\":";
+  {
+    out += '[';
+    auto separator0 = "";
+    for (auto const& element0 : value.path) {
+      out += separator0;
+      separator0 = ",";
+      fmt::format_to(std::back_inserter(out), "{}", element0);
+    }
+    out += ']';
+  }
+  out += ",\"channelIndex\":";
+  fmt::format_to(std::back_inserter(out), "{}", value.channel_index);
+  out += '}';
+}
+
+auto write_json(Encoding const& value, std::string& out) -> void {
+  api::write_string(to_string(value), out);
+}
+
 auto write_json(ChannelTapRequest const& value, std::string& out) -> void {
   out += '{';
   auto field_separator = "";
@@ -3154,27 +3205,33 @@ auto write_json(ChannelTapRequest const& value, std::string& out) -> void {
   api::write_string(value.execution_id, out);
   out += field_separator;
   field_separator = ",";
-  out += "\"path\":";
+  out += "\"channels\":";
   {
     out += '[';
     auto separator0 = "";
-    for (auto const& element0 : value.path) {
+    for (auto const& element0 : value.channels) {
       out += separator0;
       separator0 = ",";
-      fmt::format_to(std::back_inserter(out), "{}", element0);
+      write_json(element0, out);
     }
     out += ']';
   }
-  out += field_separator;
-  field_separator = ",";
-  out += "\"channelIndex\":";
-  fmt::format_to(std::back_inserter(out), "{}", value.channel_index);
   if (value.limit) {
     out += field_separator;
     field_separator = ",";
     out += "\"limit\":";
     if (value.limit) {
       fmt::format_to(std::back_inserter(out), "{}", *value.limit);
+    } else {
+      out += "null";
+    }
+  }
+  if (value.encoding) {
+    out += field_separator;
+    field_separator = ",";
+    out += "\"encoding\":";
+    if (value.encoding) {
+      write_json(*value.encoding, out);
     } else {
       out += "null";
     }
@@ -3195,10 +3252,6 @@ auto write_json(ContextStatus const& value, std::string& out) -> void {
 
 auto write_json(AdhocPipelineId const& value, std::string& out) -> void {
   api::write_string(value.to_string(), out);
-}
-
-auto write_json(Encoding const& value, std::string& out) -> void {
-  api::write_string(to_string(value), out);
 }
 
 auto write_json(AdhocPipelineDefinition const& value, std::string& out)
@@ -3309,11 +3362,10 @@ auto call(Transport& transport, ReadAccount)
 
 auto call(Transport& transport, ReadDeployment request)
   -> Task<Result<DeploymentInfo, variant<ReadDeploymentError, CallError>>> {
-  auto path
-    = fmt::format("/api/organizations/{}/workspaces/{}/deployments/{}",
-                  api::encode_segment(request.path.org),
-                  api::encode_segment(request.path.workspace),
-                  api::encode_segment(request.path.deployment_id.to_string()));
+  auto path = fmt::format("/api/organizations/{}/workspaces/{}/deployments/{}",
+                          api::encode_segment(request.path.org),
+                          api::encode_segment(request.path.workspace),
+                          api::encode_segment(request.path.deployment_id));
   auto body = std::string{};
   CO_TRY(auto response, (co_await transport.request(HttpRequest{
                            "GET", std::move(path), std::move(body)}))
@@ -3401,11 +3453,11 @@ auto call(Transport& transport, ReadDeployment request)
 
 auto call(Transport& transport, PushTelemetry request)
   -> Task<Result<void, variant<PushTelemetryError, CallError>>> {
-  auto path = fmt::format(
-    "/api/organizations/{}/workspaces/{}/deployments/{}/telemetry",
-    api::encode_segment(request.path.org),
-    api::encode_segment(request.path.workspace),
-    api::encode_segment(request.path.deployment_id.to_string()));
+  auto path = fmt::format("/api/organizations/{}/workspaces/{}/deployments/{}/"
+                          "telemetry",
+                          api::encode_segment(request.path.org),
+                          api::encode_segment(request.path.workspace),
+                          api::encode_segment(request.path.deployment_id));
   auto body = std::string{};
   write_json(request.payload, body);
   CO_TRY(auto response, (co_await transport.request(
@@ -3512,13 +3564,12 @@ auto call(Transport& transport, PushTelemetry request)
 auto call(Transport& transport, AttachIngestEndpoint request)
   -> Task<Result<IngestEndpointAttachment,
                  variant<AttachIngestEndpointError, CallError>>> {
-  auto path
-    = fmt::format("/api/organizations/{}/workspaces/{}/deployments/{}/"
-                  "ingest-endpoints/{}/attach",
-                  api::encode_segment(request.path.org),
-                  api::encode_segment(request.path.workspace),
-                  api::encode_segment(request.path.deployment_id.to_string()),
-                  api::encode_segment(request.path.name.to_string()));
+  auto path = fmt::format("/api/organizations/{}/workspaces/{}/deployments/{}/"
+                          "ingest-endpoints/{}/attach",
+                          api::encode_segment(request.path.org),
+                          api::encode_segment(request.path.workspace),
+                          api::encode_segment(request.path.deployment_id),
+                          api::encode_segment(request.path.name.to_string()));
   if (request.query.group) {
     path += path.contains('?') ? '&' : '?';
     path += "group=";
@@ -3622,12 +3673,12 @@ auto call(Transport& transport, AttachIngestEndpoint request)
 
 auto call(Transport& transport, ResolveSecret request)
   -> Task<Result<ResolvedSecret, variant<ResolveSecretError, CallError>>> {
-  auto path = fmt::format(
-    "/api/organizations/{}/workspaces/{}/deployments/{}/secrets/{}/resolve",
-    api::encode_segment(request.path.org),
-    api::encode_segment(request.path.workspace),
-    api::encode_segment(request.path.deployment_id.to_string()),
-    api::encode_segment(request.path.name.to_string()));
+  auto path = fmt::format("/api/organizations/{}/workspaces/{}/deployments/{}/"
+                          "secrets/{}/resolve",
+                          api::encode_segment(request.path.org),
+                          api::encode_segment(request.path.workspace),
+                          api::encode_segment(request.path.deployment_id),
+                          api::encode_segment(request.path.name.to_string()));
   auto body = std::string{};
   write_json(request.payload, body);
   CO_TRY(auto response, (co_await transport.request(

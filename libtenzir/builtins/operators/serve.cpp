@@ -2343,7 +2343,7 @@ public:
       co_return;
     }
     auto const rows = static_cast<uint64_t>(input.active_count());
-    auto const bytes = static_cast<uint64_t>(input.approx_bytes());
+    auto const bytes = static_cast<uint64_t>(input.approx_active_bytes());
     // Keep draining accepted input during graceful shutdown. The manager
     // retains buffered rows but may discard subsequent rows when its buffer
     // fills, allowing the pipeline to complete without a polling client.

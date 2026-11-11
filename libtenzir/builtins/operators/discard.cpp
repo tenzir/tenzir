@@ -52,8 +52,10 @@ public:
 
   auto process(Input input, OpCtx&) -> Task<void> override {
     auto bytes = std::size_t{};
-    if constexpr (concepts::one_of<Input, table_slice, nova::Events>) {
+    if constexpr (std::same_as<Input, table_slice>) {
       bytes = input.approx_bytes();
+    } else if constexpr (std::same_as<Input, nova::Events>) {
+      bytes = input.approx_active_bytes();
     } else {
       if (input) {
         bytes = input->size();

@@ -1,3 +1,11 @@
+warning: `octet_counting` is deprecated
+  --> tests/operators/read_syslog/overlong_octet_prefix_no_delimiter.tql:15:28
+   |
+15 | read_syslog octet_counting=true
+   |                            ~~~~
+   |
+   = hint: omit `octet_counting` to detect syslog framing automatically
+
 error: octet-counting length prefix exceeds 10 bytes without delimiter
   --> tests/operators/read_syslog/overlong_octet_prefix_no_delimiter.tql:15:1
    |

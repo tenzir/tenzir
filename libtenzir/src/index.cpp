@@ -236,7 +236,7 @@ auto index_state::handle_events(nova::Events events) -> caf::result<void> {
     return caf::make_error(ec::type_clash, std::move(grouped).unwrap_err());
   }
   auto rp = self->make_response_promise<void>();
-  auto const retained_bytes = events.approx_bytes();
+  auto const retained_bytes = events.approx_held_storage();
   auto pending = std::make_shared<size_t>(1);
   auto first_error = std::make_shared<caf::error>();
   auto finish = [this, pending, first_error, rp]() mutable {

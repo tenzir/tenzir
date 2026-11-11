@@ -1830,7 +1830,7 @@ public:
         state_->add(input, ctx.dh());
       }
       buffered_bytes_ = detail::saturating_add(
-        buffered_bytes_, static_cast<uint64_t>(input.approx_bytes()));
+        buffered_bytes_, static_cast<uint64_t>(input.approx_held_storage()));
       buffered_.push_back(std::move(input));
       warn_about_buffering(ctx);
       co_return;

@@ -34,9 +34,10 @@ public:
   auto subscribe_graph() -> GraphSubscription {
     return observer_.subscribe_graph().unwrap();
   }
-  auto subscribe_channel(ChannelTarget target)
+  auto subscribe_channel(ChannelTarget target, Option<uint32_t> queue_capacity
+                                               = None{})
     -> Result<TapSubscription, TapSubscriptionError> {
-    return observer_.subscribe_channel(std::move(target));
+    return observer_.subscribe_channel(std::move(target), queue_capacity);
   }
   auto finish(ExecutionOutcome outcome) -> void {
     observer_.finish(outcome);

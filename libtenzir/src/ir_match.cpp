@@ -829,7 +829,7 @@ public:
   }
 
   auto main_location() const -> location override {
-    return args_.match_keyword;
+    return args_.match_keyword.combine(args_.scrutinee);
   }
 
   auto copy() const -> Box<ir::Operator> override {

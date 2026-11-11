@@ -115,7 +115,7 @@ public:
     auto result = indices_.capacity() * sizeof(size_t)
                   + candidates_.capacity() * sizeof(Index);
     for (auto const& batch : batches_) {
-      result += batch.events.approx_bytes();
+      result += batch.events.approx_held_storage();
       for (auto const& key : batch.keys) {
         result += key.approx_bytes();
       }

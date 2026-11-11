@@ -54,8 +54,9 @@ class Broadcast {
       TENZIR_ASSERT(Mode != BroadcastMode::latest or capacity == 2);
     }
 
-    auto subscribe() -> Arc<Queue> {
-      auto queue = Arc<Queue>{capacity};
+    auto subscribe(Option<uint32_t> queue_capacity) -> Arc<Queue> {
+      TENZIR_ASSERT(Mode != BroadcastMode::latest or not queue_capacity);
+      auto queue = Arc<Queue>{queue_capacity.value_or(capacity)};
       auto lock = std::unique_lock{mutex};
       if (closed) {
         auto final = Message{terminal, true};
@@ -228,9 +229,12 @@ public:
   Broadcast(Broadcast const&) = delete;
   auto operator=(Broadcast const&) -> Broadcast& = delete;
 
-  auto subscribe() -> Receiver {
+  /// A receiver with a queue of `queue_capacity` values, or of the broadcast's
+  /// capacity. Only `buffered` takes a capacity of its own: a smaller queue
+  /// drops more of what a receiver falls behind on, but pins less of it.
+  auto subscribe(Option<uint32_t> queue_capacity = None{}) -> Receiver {
     auto receiver = Receiver{};
-    receiver.queue_ = state_->subscribe();
+    receiver.queue_ = state_->subscribe(queue_capacity);
     receiver.state_ = Arc{state_}.into_shared();
     return receiver;
   }

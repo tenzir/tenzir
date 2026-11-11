@@ -3905,7 +3905,7 @@ TEST("import transport preserves selected values, order, and metadata") {
               tenzir::time{std::chrono::seconds{7}});
   CHECK_EQUAL(record_field_names(restored.data.get(1)),
               (std::vector<std::string>{"b", "a"}));
-  CHECK_GREATER(events.approx_bytes(), size_t{0});
+  CHECK_GREATER(events.approx_held_storage(), size_t{0});
   CHECK_EQUAL(materialize_legacy(RowView<Data>{restored.data.get(1)}),
               (tenzir::data{tenzir::record{
                 {"b", tenzir::list{Int{1}, caf::none, Int{2}}},
@@ -4011,7 +4011,7 @@ TEST("import memory accounting charges backing behind sparse selections") {
   builder.record().field("payload").data(String{"selected"});
   auto events = Events{builder.finish(), bitmap({false, true}),
                        Events::Meta::make_empty(2, "events")};
-  CHECK_GREATER(events.approx_bytes(), size_t{4096});
+  CHECK_GREATER(events.approx_held_storage(), size_t{4096});
 }
 
 TEST("event import rejects unredacted secrets") {

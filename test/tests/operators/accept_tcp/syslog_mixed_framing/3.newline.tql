@@ -1,0 +1,8 @@
+---
+quiet: true
+---
+
+from {line: "<165>1 2026-11-09T12:00:00Z host app 123 - - newline"}
+to_tcp env("TCP_ENDPOINT"), max_retry_count=5 {
+  write_lines
+}

@@ -48,6 +48,31 @@ Events::Events(Array<Record> data, storage::BitMap mask, Meta meta)
   : data{std::move(data)}, mask{std::move(mask)}, meta{std::move(meta)} {
 }
 
+auto Events::approx_active_bytes() const noexcept -> std::size_t {
+  // Scales the held storage by the fraction of active rows. This stays O(1)
+  // but assumes rows of roughly uniform size; an exact count would have to
+  // walk every active row of every column.
+  auto const total_rows = static_cast<std::size_t>(length());
+  auto const active_rows = static_cast<std::size_t>(active_count());
+  if (active_rows == 0) {
+    return 0;
+  }
+  auto const held = approx_held_storage();
+  if (active_rows == total_rows) {
+    return held;
+  }
+  return held * active_rows / total_rows;
+}
+
+auto Events::approx_held_storage() const noexcept -> std::size_t {
+  // Counts rows that `mask` deselects. Omits nested heap allocations in
+  // constants, shape-table overflow, and record field names, and includes
+  // unused capacity only partly. Shared buffers count once per reference.
+  return sizeof(Events) + data.approx_bytes() + mask.approx_bytes()
+         + meta.name.approx_bytes() + meta.import_time.approx_bytes()
+         + meta.internal.approx_bytes();
+}
+
 auto encode_events(Events const& events)
   -> Result<std::vector<std::byte>, std::string> {
   if (events.length() == 0) {

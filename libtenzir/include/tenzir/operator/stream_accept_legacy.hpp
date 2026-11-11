@@ -30,6 +30,7 @@
 
 #include <limits>
 #include <unordered_map>
+#include <unordered_set>
 
 namespace tenzir::legacy {
 
@@ -167,8 +168,11 @@ public:
         if (auto it = connections_.find(closed.conn_id);
             it != connections_.end()) {
           connections_.erase(it);
+          // Keep the connection slot until the subpipeline finishes. Otherwise
+          // subpipelines of closed connections can pile up without bound while
+          // they wait for downstream to accept their output.
+          draining_subs_.insert(closed.conn_id);
           co_await close_subpipeline(closed.conn_id, ctx);
-          release_connection_slot();
         }
         maybe_finish_draining();
         co_return;
@@ -198,6 +202,9 @@ public:
       connections_.erase(it);
       release_connection_slot();
       close_stream_transport(std::move(connection));
+      maybe_finish_draining();
+    } else if (draining_subs_.erase(conn_id) > 0) {
+      release_connection_slot();
       maybe_finish_draining();
     }
     co_return;
@@ -278,6 +285,10 @@ private:
       release_connection_slot();
     }
     connections_.clear();
+    for (auto i = size_t{0}; i < draining_subs_.size(); ++i) {
+      release_connection_slot();
+    }
+    draining_subs_.clear();
   }
 
   auto maybe_finish_draining() -> void {
@@ -400,6 +411,8 @@ private:
   Semaphore connection_slots_;
   Box<folly::CancellationSource> accept_cancel_{std::in_place};
   std::unordered_map<uint64_t, ConnectionEntry> connections_;
+  /// Closed connections whose subpipelines still hold a connection slot.
+  std::unordered_set<uint64_t> draining_subs_;
   MetricsCounter events_read_counter_;
   uint64_t next_conn_id_{0};
   Lifecycle lifecycle_ = Lifecycle::running;

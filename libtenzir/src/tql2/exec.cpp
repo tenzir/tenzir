@@ -270,7 +270,7 @@ auto count_bytes(const OperatorMsg<T>& item) -> size_t {
       // this charges shared buffers once per message. That overestimates the
       // resident bytes of an exchange, but a queued message does keep the whole
       // batch alive, and an unaccounted one would make the limit meaningless.
-      return events.approx_bytes();
+      return events.approx_held_storage();
     },
     [](const FileHandle&) -> size_t {
       // The bytes behind a handle are accounted where they are read.

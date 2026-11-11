@@ -941,9 +941,7 @@ private:
   auto buffer(std::string table, nova::Events events, OpCtx& ctx)
     -> Task<void> {
     auto const rows = static_cast<uint64_t>(events.active_count());
-    auto const bytes
-      = events.approx_bytes() * rows
-        / std::max(uint64_t{1}, static_cast<uint64_t>(events.length()));
+    auto const bytes = static_cast<uint64_t>(events.approx_active_bytes());
     auto it = buffers_.find(table);
     if (it == buffers_.end()) {
       it = buffers_
