@@ -167,12 +167,213 @@ auto stringify_heterogeneous_lists(nova::Array<nova::Data> const& values)
     });
 }
 
-auto make_slice(nova::Events const& events, record_type const& schema,
+/// Returns the number of enumerations in `schema`. Enumerations are numbered
+/// in the order of a depth-first walk over the fields of `schema`.
+auto count_enumerations(type const& schema) -> size_t {
+  return match(
+    schema,
+    [](enumeration_type const&) -> size_t {
+      return 1;
+    },
+    [](list_type const& list) -> size_t {
+      return count_enumerations(list.value_type());
+    },
+    [](record_type const& record) -> size_t {
+      auto result = size_t{0};
+      for (auto const& field : record.fields()) {
+        result += count_enumerations(field.type);
+      }
+      return result;
+    },
+    [](auto const&) -> size_t {
+      return 0;
+    });
+}
+
+/// The selected rows of one column of buffered events.
+struct SelectedValues {
+  nova::Array<nova::Data> values;
+  std::vector<nova::storage::Index> rows;
+};
+
+auto select_field(SelectedValues const& selected, std::string_view name)
+  -> Option<SelectedValues> {
+  auto records = selected.values.get_alternative<nova::Record>();
+  if (not records) {
+    return None{};
+  }
+  auto primary = records->data.to_primary();
+  auto const& storage = *as<nova::storage::RecordStorage>(primary.storage());
+  auto it = storage.names.find(name);
+  if (it == storage.names.end()) {
+    return None{};
+  }
+  auto const& field = storage.arrays[it->second];
+  auto rows = std::vector<nova::storage::Index>{};
+  for (auto row : selected.rows) {
+    if (records->present.get(row) and field.present.get(row)) {
+      rows.push_back(row);
+    }
+  }
+  return SelectedValues{field.data, std::move(rows)};
+}
+
+auto select_elements(SelectedValues const& selected) -> Option<SelectedValues> {
+  auto lists = selected.values.get_alternative<nova::List>();
+  if (not lists) {
+    return None{};
+  }
+  // Inspect a constant list once, not once for every selected row.
+  auto const* constant = try_as<
+    nova::storage::ConstantStorage<nova::List, nova::RowView<nova::List>>>(
+    lists->data.storage());
+  auto primary
+    = constant
+        ? nova::Array<nova::List>{nova::storage::ConstantStorage<
+                                    nova::List, nova::RowView<nova::List>>{
+                                    1, constant->value()}}
+            .to_primary()
+        : lists->data.to_primary();
+  auto const& storage = as<nova::storage::ListStorage>(primary.storage());
+  auto rows = std::vector<nova::storage::Index>{};
+  for (auto row : selected.rows) {
+    if (not lists->present.get(row)) {
+      continue;
+    }
+    auto span = storage.spans()[constant ? 0 : row];
+    for (auto i = span.begin; i < span.end; ++i) {
+      rows.push_back(i);
+    }
+    if (constant) {
+      break;
+    }
+  }
+  return SelectedValues{storage.values(), std::move(rows)};
+}
+
+/// Returns whether every selected string names a value of `enumeration`.
+auto names_values_of(SelectedValues const& selected,
+                     enumeration_type const& enumeration) -> bool {
+  auto strings = selected.values.get_alternative<nova::String>();
+  if (not strings) {
+    return true;
+  }
+  for (auto row : selected.rows) {
+    if (strings->present.get(row)
+        and not enumeration.resolve(*strings->data.get(row))) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/// Marks each enumeration of `reference`, numbered from `first`, in `invalid`
+/// if a selected string at its position names none of its values.
+auto find_invalid_enumerations(type const& reference,
+                               SelectedValues const& selected, size_t first,
+                               std::vector<bool>& invalid) -> void {
+  match(
+    reference,
+    [&](enumeration_type const& enumeration) {
+      if (not names_values_of(selected, enumeration)) {
+        invalid[first] = true;
+      }
+    },
+    [&](list_type const& list) {
+      if (count_enumerations(list.value_type()) == 0) {
+        return;
+      }
+      if (auto elements = select_elements(selected)) {
+        find_invalid_enumerations(list.value_type(), *elements, first, invalid);
+      }
+    },
+    [&](record_type const& record) {
+      for (auto const& field : record.fields()) {
+        auto count = count_enumerations(field.type);
+        if (count > 0) {
+          if (auto values = select_field(selected, field.name)) {
+            find_invalid_enumerations(field.type, *values, first, invalid);
+          }
+        }
+        first += count;
+      }
+    },
+    [](auto const&) {});
+}
+
+/// Gives the parts of `schema` that agree in kind with `reference` its names
+/// and attributes, matching record fields by name, and turns strings back into
+/// enumerations unless marked in `invalid`, where the enumerations of
+/// `reference` are numbered from `first`. This reproduces the types of events
+/// built according to `reference`.
+auto restore_metadata(type const& schema, type const& reference, size_t first,
+                      std::vector<bool> const& invalid) -> type {
+  auto restored = match(
+    schema,
+    [&](record_type const& record) -> Option<type> {
+      auto const* other = try_as<record_type>(reference);
+      if (not other) {
+        return None{};
+      }
+      auto fields = std::vector<struct record_type::field>{};
+      fields.reserve(record.num_fields());
+      for (auto const& field : record.fields()) {
+        auto field_type = field.type;
+        // Match names exactly, as a field name may itself contain a dot.
+        auto offset = first;
+        for (auto const& candidate : other->fields()) {
+          if (candidate.name == field.name) {
+            field_type
+              = restore_metadata(field.type, candidate.type, offset, invalid);
+            break;
+          }
+          offset += count_enumerations(candidate.type);
+        }
+        fields.emplace_back(std::string{field.name}, std::move(field_type));
+      }
+      return type{record_type{fields}};
+    },
+    [&](list_type const& list) -> Option<type> {
+      auto const* other = try_as<list_type>(reference);
+      if (not other) {
+        return None{};
+      }
+      return type{list_type{restore_metadata(
+        list.value_type(), other->value_type(), first, invalid)}};
+    },
+    [&](string_type const&) -> Option<type> {
+      if (auto const* enumeration = try_as<enumeration_type>(reference)) {
+        if (not invalid[first]) {
+          return type{*enumeration};
+        }
+        return None{};
+      }
+      if (is<string_type>(reference)) {
+        return type{string_type{}};
+      }
+      return None{};
+    },
+    [&]<basic_type T>(T const& basic) -> Option<type> {
+      if (is<T>(reference)) {
+        return type{basic};
+      }
+      return None{};
+    },
+    [](auto const&) -> Option<type> {
+      return None{};
+    });
+  if (not restored) {
+    return schema;
+  }
+  restored->assign_metadata(reference);
+  return std::move(*restored);
+}
+
+auto make_slice(nova::Events const& events, type const& schema,
                 std::vector<nova::storage::Index> const& rows,
                 std::string const& name, bool internal, time import_time)
   -> Result<table_slice, std::string> {
-  auto output_schema
-    = nova::ArrowMetadata{name, internal}.apply(type{name, schema});
+  auto output_schema = nova::ArrowMetadata{name, internal}.apply(schema);
   TRY(auto batch,
       nova::to_arrow_record_batch(events.data, output_schema, rows));
   auto slice = table_slice{std::move(batch)};
@@ -197,16 +398,20 @@ auto redact_import_secrets(nova::Events events)
 
 ImportConversionBuffer::ImportConversionBuffer(std::string name, bool internal,
                                                Option<type> schema)
-  : name_{std::move(name)}, internal_{internal}, schema_{std::move(schema)} {
+  : name_{std::move(name)},
+    internal_{internal},
+    schema_{std::move(schema)},
+    enumerations_{schema_ ? count_enumerations(*schema_) : 0} {
 }
 
 auto ImportConversionBuffer::output_schema(Candidate const& candidate) const
-  -> record_type {
+  -> type {
   if (not schema_) {
-    return candidate.schema;
+    return type{candidate.schema};
   }
-  return as<record_type>(
-    nova::fill_null_types(type{candidate.schema}, *schema_));
+  return restore_metadata(nova::fill_null_types(type{candidate.schema},
+                                                *schema_),
+                          *schema_, 0, candidate.invalid_enumerations);
 }
 
 auto ImportConversionBuffer::add(nova::Events events,
@@ -300,20 +505,33 @@ auto ImportConversionBuffer::add(nova::Events events,
   auto selected_rows = size_t{0};
   for (auto i = size_t{0}; i < staged_schemas.size(); ++i) {
     auto mask = nova::storage::BitMap::Mutable{events.length()};
+    auto rows = std::vector<nova::storage::Index>{};
     for (auto row = nova::storage::Index{0}; row < events.length(); ++row) {
       if (assignments[row] == i) {
         mask.set(row, true);
         ++selected_rows;
+        if (enumerations_ > 0) {
+          rows.push_back(row);
+        }
       }
     }
     if (i == candidates_.size()) {
-      candidates_.push_back(Candidate{std::move(staged_schemas[i]), {}});
+      candidates_.push_back(Candidate{
+        std::move(staged_schemas[i]), {}, std::vector<bool>(enumerations_)});
     } else {
       candidates_[i].schema = std::move(staged_schemas[i]);
     }
     if (mask.true_count() > 0) {
       candidates_[i].selections.push_back(
         Selection{batch_index, std::move(mask).finish()});
+      // Values never change once buffered, so checking only the new rows keeps
+      // the enumerations up to date without scanning the buffer again.
+      if (enumerations_ > 0) {
+        find_invalid_enumerations(
+          *schema_,
+          SelectedValues{nova::Array<nova::Data>{events.data}, std::move(rows)},
+          0, candidates_[i].invalid_enumerations);
+      }
     }
   }
   if (selected_rows > 0) {
@@ -361,8 +579,8 @@ auto ImportConversionBuffer::selected_events() const
   -> std::vector<std::pair<type, nova::Events>> {
   auto result = std::vector<std::pair<type, nova::Events>>{};
   for (auto const& candidate : candidates_) {
-    auto schema = nova::ArrowMetadata{name_, internal_}.apply(
-      type{name_, output_schema(candidate)});
+    auto schema
+      = nova::ArrowMetadata{name_, internal_}.apply(output_schema(candidate));
     for (auto const& selection : candidate.selections) {
       auto events = batches_[selection.batch];
       events.mask = selection.mask;

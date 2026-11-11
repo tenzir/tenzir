@@ -206,6 +206,26 @@ auto export_column(Array<Data> const& array, type const& schema,
         }
         return std::shared_ptr<arrow::Array>{
           std::make_shared<arrow::NullArray>(rows.size())};
+      } else if constexpr (std::same_as<T, enumeration_type>) {
+        // Events hold enumerations as the names of their values.
+        auto values = array.get_alternative<String>();
+        auto builder = target.make_arrow_builder(arrow_memory_pool());
+        TRY(export_status(builder->Reserve(rows.size())));
+        for (auto row : rows) {
+          if (absent(row)) {
+            TRY(export_status(builder->AppendNull()));
+            continue;
+          }
+          if (not values or not values->present.get(row)) {
+            return Err{"concrete value type differs from Arrow schema"};
+          }
+          auto key = target.resolve(*values->data.get(row));
+          if (not key) {
+            return Err{"string is not a value of the enumeration"};
+          }
+          TRY(export_status(builder->Append(static_cast<enumeration>(*key))));
+        }
+        return finish_array(*builder);
       } else if constexpr (fundamental_type<type_to_data_t<T>>) {
         auto values = array.get_alternative<type_to_data_t<T>>();
         auto builder = target.make_arrow_builder(arrow_memory_pool());
