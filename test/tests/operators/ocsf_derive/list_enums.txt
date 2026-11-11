@@ -1,3 +1,12 @@
+warning: the `ocsf_derive` operator is deprecated
+  --> tests/operators/ocsf_derive/list_enums.tql:21:1
+   |
+21 | ocsf_derive
+   | ~~~~~~~~~~~
+   |
+   = note: the function returns `null` for unresolved events instead of dropping them
+   = hint: use the `ocsf_derive` function instead
+   = docs: https://tenzir.com/docs/reference/functions/ocsf_derive
 {
   metadata: {
     version: "1.9.0",

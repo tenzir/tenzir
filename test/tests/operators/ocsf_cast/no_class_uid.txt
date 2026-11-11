@@ -1,3 +1,14 @@
+warning: the `ocsf_cast` operator is deprecated
+ --> tests/operators/ocsf_cast/no_class_uid.tql:2:1
+  |
+2 | ocsf_cast null_fill=true
+  | ~~~~~~~~~
+  |
+  = note: the function returns `null` for unresolved events instead of dropping them
+  = note: the function does not assign `@name` and also validates required fields and constraints
+  = hint: use the `ocsf_cast` function instead, preserving any named options
+  = docs: https://tenzir.com/docs/reference/functions/ocsf_cast
+
 warning: dropping events where `class_uid` does not exist
  --> tests/operators/ocsf_cast/no_class_uid.tql:2:1
   |

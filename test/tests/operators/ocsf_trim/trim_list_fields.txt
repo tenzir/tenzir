@@ -1,3 +1,12 @@
+warning: the `ocsf_trim` operator is deprecated
+  --> tests/operators/ocsf_trim/trim_list_fields.tql:30:1
+   |
+30 | ocsf_trim
+   | ~~~~~~~~~
+   |
+   = note: the function returns `null` for unresolved events instead of dropping them
+   = hint: use the `ocsf_trim` function instead, preserving any named options
+   = docs: https://tenzir.com/docs/reference/functions/ocsf_trim
 {
   metadata: {
     version: "1.9.0",

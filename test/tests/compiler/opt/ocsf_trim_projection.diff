@@ -1,3 +1,12 @@
+ warning: the `ocsf_trim` operator is deprecated
+  --> tests/compiler/opt/ocsf_trim_projection.tql:2:1
+   |
+ 2 | ocsf_trim
+   | ~~~~~~~~~
+   |
+   = note: the function returns `null` for unresolved events instead of dropping them
+   = hint: use the `ocsf_trim` function instead, preserving any named options
+   = docs: https://tenzir.com/docs/reference/functions/ocsf_trim
  {
    lets: [
      

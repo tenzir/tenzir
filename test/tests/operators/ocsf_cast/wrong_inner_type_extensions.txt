@@ -1,3 +1,14 @@
+warning: the `ocsf_cast` operator is deprecated
+ --> tests/operators/ocsf_cast/wrong_inner_type_extensions.tql:9:1
+  |
+9 | ocsf_cast null_fill=true
+  | ~~~~~~~~~
+  |
+  = note: the function returns `null` for unresolved events instead of dropping them
+  = note: the function does not assign `@name` and also validates required fields and constraints
+  = hint: use the `ocsf_cast` function instead, preserving any named options
+  = docs: https://tenzir.com/docs/reference/functions/ocsf_cast
+
 warning: ignoring extensions for events where `metadata.extensions` is not a list of records
  --> tests/operators/ocsf_cast/wrong_inner_type_extensions.tql:9:1
   |

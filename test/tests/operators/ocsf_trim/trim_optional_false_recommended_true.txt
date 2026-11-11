@@ -1,3 +1,12 @@
+warning: the `ocsf_trim` operator is deprecated
+  --> tests/operators/ocsf_trim/trim_optional_false_recommended_true.tql:23:1
+   |
+23 | ocsf_trim drop_optional=false, drop_recommended=true
+   | ~~~~~~~~~
+   |
+   = note: the function returns `null` for unresolved events instead of dropping them
+   = hint: use the `ocsf_trim` function instead, preserving any named options
+   = docs: https://tenzir.com/docs/reference/functions/ocsf_trim
 {
   metadata: {
     version: "1.9.0",
