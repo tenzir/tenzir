@@ -628,7 +628,8 @@ public:
                        Option<SecretStore&> secrets = None{},
                        Option<Ref<ContextHandles const>> contexts = None{})
     : reg_{std::move(reg)},
-      profiling_{is<NodeProfiler>(profiler) or is<PerfettoProfiler>(profiler)},
+      profiling_{is<NodeProfiler>(profiler) or is<PerfettoProfiler>(profiler)
+                 or is<PlatformProfiler>(profiler)},
       record_backpressure_{is<PerfettoProfiler>(profiler)},
       metrics_receiver_{try_as<NodeProfiler>(profiler)
                           ? try_as<NodeProfiler>(profiler)->metrics
@@ -706,6 +707,44 @@ public:
 
   auto take_metrics_snapshot() -> std::vector<MetricsSnapshotEntry> {
     return metrics_->take_snapshot();
+  }
+
+  /// What all operators cost: their CPU time since the previous call, and the
+  /// bytes waiting between them now.
+  ///
+  /// This drains the channel and executor profiles, so it must not be mixed
+  /// with other consumers of them, and must be called regularly while
+  /// profiling for the profiles of terminated operators to be reaped.
+  auto take_resources() -> PipelineResources {
+    auto now = std::chrono::steady_clock::now();
+    auto interval
+      = std::chrono::duration_cast<duration>(now - resources_taken_);
+    resources_taken_ = now;
+    auto executors = get_executor_profiles();
+    auto channels = get_channel_profiles();
+    auto cpu_ns = int64_t{0};
+    auto baseline = std::unordered_map<OpId, int64_t>{};
+    for (auto const& profile : executors) {
+      auto current = profile.stats->cpu_ns.load(std::memory_order::relaxed);
+      auto previous = resource_baseline_.find(profile.id);
+      // A counter that decreased started over, so all of it is new.
+      cpu_ns
+        += previous == resource_baseline_.end() or current < previous->second
+             ? current
+             : current - previous->second;
+      baseline.emplace(profile.id, current);
+    }
+    // A terminated operator was reported for the last time above.
+    resource_baseline_ = std::move(baseline);
+    auto queued = uint64_t{0};
+    for (auto const& profile : channels) {
+      // A channel reported for the last time is gone, and what it held with
+      // it, so only the profiles that are still shared count.
+      if (profile.stats.strong_count() > 1) {
+        queued += profile.stats->queued_bytes();
+      }
+    }
+    return {std::chrono::nanoseconds{cpu_ns}, interval, queued};
   }
 
   auto checkpoint_settings() const
@@ -908,6 +947,12 @@ private:
   Option<Ref<ContextHandles const>> contexts_;
   std::mutex mutex_;
   std::vector<ChannelProfile> channels_;
+  /// The CPU time of each operator at the previous `take_resources`.
+  std::unordered_map<OpId, int64_t> resource_baseline_;
+  /// When `take_resources` last ran, or the context was made, which precedes
+  /// any operator.
+  std::chrono::steady_clock::time_point resources_taken_
+    = std::chrono::steady_clock::now();
   std::vector<ExecutorProfile> executors_;
 #if TENZIR_DEBUG_ASYNC
   // These numbers block the channel immediately for testing purposes.
@@ -1553,8 +1598,18 @@ auto run_profiler(Profiler const& profiler, TestExecCtx& exec_ctx,
       co_await async_scope([&](AsyncScope& scope) -> Task<void> {
         scope.spawn(platform.send());
         while (true) {
-          platform.sample(exec_ctx.take_metrics_snapshot());
-          co_await folly::coro::sleep(std::chrono::seconds{1});
+          platform.sample(exec_ctx.take_metrics_snapshot(),
+                          exec_ctx.take_resources());
+          // Waking at the start of every second puts one sample into each
+          // second the platform aggregates by, rather than none into some and
+          // two into others as the wake-ups drift.
+          auto now = time::clock::now();
+          auto boundary
+            = floor(now, std::chrono::seconds{1}) + std::chrono::seconds{1};
+          auto delay = std::clamp(boundary - now, duration::zero(),
+                                  duration{std::chrono::seconds{1}});
+          co_await folly::coro::sleep(
+            std::chrono::duration_cast<folly::HighResDuration>(delay));
         }
       });
     },
@@ -1686,7 +1741,8 @@ auto run_plan_impl(ir::Plan plan, Arc<registry const> reg,
   // its tasks join, even when execution unwinds through cancellation.
   auto final_sample = detail::scope_guard{[&]() noexcept {
     if (auto* platform = try_as<PlatformProfiler>(profiler)) {
-      platform->sample(exec_ctx.take_metrics_snapshot());
+      platform->sample(exec_ctx.take_metrics_snapshot(),
+                       exec_ctx.take_resources());
     }
   }};
   // Take the profiling baseline before any operator can run, so that the first
@@ -1759,7 +1815,8 @@ auto run_plan_with_io(ir::Plan plan, Arc<registry const> reg,
                               /*has_terminal=*/false, is_hidden};
   auto final_sample = detail::scope_guard{[&]() noexcept {
     if (auto* platform = try_as<PlatformProfiler>(profiler)) {
-      platform->sample(exec_ctx.take_metrics_snapshot());
+      platform->sample(exec_ctx.take_metrics_snapshot(),
+                       exec_ctx.take_resources());
     }
   }};
   auto num_ops = plan.size();

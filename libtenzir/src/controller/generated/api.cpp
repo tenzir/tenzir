@@ -816,6 +816,64 @@ auto parse_connector_flow(simdjson::dom::element value)
                        std::move(bytes)};
 }
 
+auto TelemetrySeconds::make(double value)
+  -> Result<TelemetrySeconds, ParseError> {
+  return TelemetrySeconds{std::move(value)};
+}
+
+auto parse_telemetry_seconds(simdjson::dom::element value)
+  -> Result<TelemetrySeconds, ParseError> {
+  TRY(auto raw, api::double_of(value, "TelemetrySeconds"));
+  return TelemetrySeconds::make(std::move(raw));
+}
+
+auto TenzirTelemetryTelemetrySeconds::make(double value)
+  -> Result<TenzirTelemetryTelemetrySeconds, ParseError> {
+  return TenzirTelemetryTelemetrySeconds{std::move(value)};
+}
+
+auto parse_tenzir_telemetry_telemetry_seconds(simdjson::dom::element value)
+  -> Result<TenzirTelemetryTelemetrySeconds, ParseError> {
+  TRY(auto raw, api::double_of(value, "TenzirTelemetryTelemetrySeconds"));
+  return TenzirTelemetryTelemetrySeconds::make(std::move(raw));
+}
+
+auto TelemetryCount3::make(std::int64_t value)
+  -> Result<TelemetryCount3, ParseError> {
+  if (value < -9'007'199'254'740'991 or value > 9'007'199'254'740'991) {
+    return Err{ParseError{"TelemetryCount3",
+                          "integer exceeds the wire safe-integer range"}};
+  }
+  if (value < 0) {
+    return Err{ParseError{"TelemetryCount3", "integer is below the minimum"}};
+  }
+  return TelemetryCount3{std::move(value)};
+}
+
+auto parse_telemetry_count3(simdjson::dom::element value)
+  -> Result<TelemetryCount3, ParseError> {
+  TRY(auto raw, api::int64_of(value, "TelemetryCount3"));
+  return TelemetryCount3::make(std::move(raw));
+}
+
+auto TelemetryCount4::make(std::int64_t value)
+  -> Result<TelemetryCount4, ParseError> {
+  if (value < -9'007'199'254'740'991 or value > 9'007'199'254'740'991) {
+    return Err{ParseError{"TelemetryCount4",
+                          "integer exceeds the wire safe-integer range"}};
+  }
+  if (value < 0) {
+    return Err{ParseError{"TelemetryCount4", "integer is below the minimum"}};
+  }
+  return TelemetryCount4{std::move(value)};
+}
+
+auto parse_telemetry_count4(simdjson::dom::element value)
+  -> Result<TelemetryCount4, ParseError> {
+  TRY(auto raw, api::int64_of(value, "TelemetryCount4"));
+  return TelemetryCount4::make(std::move(raw));
+}
+
 auto parse_pipeline_sample(simdjson::dom::element value)
   -> Result<PipelineSample, ParseError> {
   TRY(auto object, api::object_of(value, "PipelineSample"));
@@ -851,147 +909,68 @@ auto parse_pipeline_sample(simdjson::dom::element value)
     sinks.push_back(std::move(sinks_decoded));
   }
 
-  return PipelineSample{std::move(pipeline_id), std::move(run), window,
-                        std::move(sources), std::move(sinks)};
-}
-
-auto parse_flow(simdjson::dom::element value) -> Result<Flow, ParseError> {
-  TRY(auto object, api::object_of(value, "Flow"));
-
-  TRY(auto events_raw, api::field(object, "events", "Flow"));
-  TRY(auto events, parse_telemetry_count2(events_raw));
-
-  TRY(auto bytes_raw, api::field(object, "bytes", "Flow"));
-  TRY(auto bytes, parse_telemetry_count2(bytes_raw));
-
-  return Flow{std::move(events), std::move(bytes)};
-}
-
-auto TelemetrySeconds::make(double value)
-  -> Result<TelemetrySeconds, ParseError> {
-  return TelemetrySeconds{std::move(value)};
-}
-
-auto parse_telemetry_seconds(simdjson::dom::element value)
-  -> Result<TelemetrySeconds, ParseError> {
-  TRY(auto raw, api::double_of(value, "TelemetrySeconds"));
-  return TelemetrySeconds::make(std::move(raw));
-}
-
-auto TelemetryCount3::make(std::int64_t value)
-  -> Result<TelemetryCount3, ParseError> {
-  if (value < -9'007'199'254'740'991 or value > 9'007'199'254'740'991) {
-    return Err{ParseError{"TelemetryCount3",
-                          "integer exceeds the wire safe-integer range"}};
+  auto cpu_seconds = Option<TelemetrySeconds>{None{}};
+  if (auto cpu_seconds_raw = api::optional_field(object, "cpuSeconds")) {
+    TRY(auto cpu_seconds_present, parse_telemetry_seconds(*cpu_seconds_raw));
+    cpu_seconds = std::move(cpu_seconds_present);
   }
-  if (value < 0) {
-    return Err{ParseError{"TelemetryCount3", "integer is below the minimum"}};
+
+  auto interval_seconds = Option<TenzirTelemetryTelemetrySeconds>{None{}};
+  if (auto interval_seconds_raw
+      = api::optional_field(object, "intervalSeconds")) {
+    TRY(auto interval_seconds_present,
+        parse_tenzir_telemetry_telemetry_seconds(*interval_seconds_raw));
+    interval_seconds = std::move(interval_seconds_present);
   }
-  return TelemetryCount3{std::move(value)};
-}
 
-auto parse_telemetry_count3(simdjson::dom::element value)
-  -> Result<TelemetryCount3, ParseError> {
-  TRY(auto raw, api::int64_of(value, "TelemetryCount3"));
-  return TelemetryCount3::make(std::move(raw));
-}
-
-auto TelemetrySmallCount::make(std::int64_t value)
-  -> Result<TelemetrySmallCount, ParseError> {
-  if (value < -9'007'199'254'740'991 or value > 9'007'199'254'740'991) {
-    return Err{ParseError{"TelemetrySmallCount",
-                          "integer exceeds the wire safe-integer range"}};
+  auto queued_bytes = Option<TelemetryCount3>{None{}};
+  if (auto queued_bytes_raw = api::optional_field(object, "queuedBytes")) {
+    TRY(auto queued_bytes_present, parse_telemetry_count3(*queued_bytes_raw));
+    queued_bytes = std::move(queued_bytes_present);
   }
-  if (value < 0) {
-    return Err{
-      ParseError{"TelemetrySmallCount", "integer is below the minimum"}};
+
+  auto activity = Option<TelemetryCount4>{None{}};
+  if (auto activity_raw = api::optional_field(object, "activity")) {
+    TRY(auto activity_present, parse_telemetry_count4(*activity_raw));
+    activity = std::move(activity_present);
   }
-  if (value > 4294967295) {
-    return Err{
-      ParseError{"TelemetrySmallCount", "integer exceeds the maximum"}};
-  }
-  return TelemetrySmallCount{std::move(value)};
-}
 
-auto parse_telemetry_small_count(simdjson::dom::element value)
-  -> Result<TelemetrySmallCount, ParseError> {
-  TRY(auto raw, api::int64_of(value, "TelemetrySmallCount"));
-  return TelemetrySmallCount::make(std::move(raw));
-}
-
-auto parse_operator_sample(simdjson::dom::element value)
-  -> Result<OperatorSample, ParseError> {
-  TRY(auto object, api::object_of(value, "OperatorSample"));
-
-  TRY(auto pipeline_id_raw, api::field(object, "pipelineId", "OperatorSample"));
-  TRY(auto pipeline_id, parse_pipeline_id(pipeline_id_raw));
-
-  TRY(auto run_raw, api::field(object, "run", "OperatorSample"));
-  TRY(auto run, parse_telemetry_count2(run_raw));
-
-  TRY(auto operator_id_raw, api::field(object, "operatorId", "OperatorSample"));
-  TRY(auto operator_id,
-      api::string_of(operator_id_raw, "OperatorSample.operatorId"));
-
-  TRY(auto name_raw, api::field(object, "name", "OperatorSample"));
-  TRY(auto name, api::string_of(name_raw, "OperatorSample.name"));
-
-  TRY(auto window_raw, api::field(object, "window", "OperatorSample"));
-  TRY(auto window, api::time_of(window_raw, "OperatorSample.window"));
-
-  TRY(auto input_raw, api::field(object, "input", "OperatorSample"));
-  TRY(auto input, parse_flow(input_raw));
-
-  TRY(auto output_raw, api::field(object, "output", "OperatorSample"));
-  TRY(auto output, parse_flow(output_raw));
-
-  TRY(auto cpu_seconds_raw, api::field(object, "cpuSeconds", "OperatorSample"));
-  TRY(auto cpu_seconds, parse_telemetry_seconds(cpu_seconds_raw));
-
-  TRY(auto input_bytes_raw, api::field(object, "inputBytes", "OperatorSample"));
-  TRY(auto input_bytes, parse_telemetry_count3(input_bytes_raw));
-
-  TRY(auto input_capacity_raw,
-      api::field(object, "inputCapacity", "OperatorSample"));
-  TRY(auto input_capacity, parse_telemetry_count2(input_capacity_raw));
-
-  TRY(auto tasks_raw, api::field(object, "tasks", "OperatorSample"));
-  TRY(auto tasks, parse_telemetry_small_count(tasks_raw));
-
-  return OperatorSample{std::move(pipeline_id),
+  return PipelineSample{std::move(pipeline_id),
                         std::move(run),
-                        std::move(operator_id),
-                        std::move(name),
                         window,
-                        std::move(input),
-                        std::move(output),
+                        std::move(sources),
+                        std::move(sinks),
                         std::move(cpu_seconds),
-                        std::move(input_bytes),
-                        std::move(input_capacity),
-                        std::move(tasks)};
+                        std::move(interval_seconds),
+                        std::move(queued_bytes),
+                        std::move(activity)};
 }
 
-auto TenzirTelemetryTelemetrySmallCount::make(std::int64_t value)
-  -> Result<TenzirTelemetryTelemetrySmallCount, ParseError> {
+auto parse_retired_operator_sample(simdjson::dom::element value)
+  -> Result<RetiredOperatorSample, ParseError> {
+  TRY(api::object_of(value, "RetiredOperatorSample"));
+
+  return RetiredOperatorSample{};
+}
+
+auto SmallCount::make(std::int64_t value) -> Result<SmallCount, ParseError> {
   if (value < -9'007'199'254'740'991 or value > 9'007'199'254'740'991) {
-    return Err{ParseError{"TenzirTelemetryTelemetrySmallCount",
-                          "integer exceeds the wire safe-integer range"}};
+    return Err{
+      ParseError{"SmallCount", "integer exceeds the wire safe-integer range"}};
   }
   if (value < 0) {
-    return Err{ParseError{"TenzirTelemetryTelemetrySmallCount",
-                          "integer is below the minimum"}};
+    return Err{ParseError{"SmallCount", "integer is below the minimum"}};
   }
   if (value > 4294967295) {
-    return Err{ParseError{"TenzirTelemetryTelemetrySmallCount",
-                          "integer exceeds the maximum"}};
+    return Err{ParseError{"SmallCount", "integer exceeds the maximum"}};
   }
-  return TenzirTelemetryTelemetrySmallCount{std::move(value)};
+  return SmallCount{std::move(value)};
 }
 
-auto parse_tenzir_telemetry_telemetry_small_count(simdjson::dom::element value)
-  -> Result<TenzirTelemetryTelemetrySmallCount, ParseError> {
-  TRY(auto raw, api::int64_of(value, "TenzirTelemetryTelemetrySmallCount"));
-  return TenzirTelemetryTelemetrySmallCount::make(std::move(raw));
+auto parse_small_count(simdjson::dom::element value)
+  -> Result<SmallCount, ParseError> {
+  TRY(auto raw, api::int64_of(value, "SmallCount"));
+  return SmallCount::make(std::move(raw));
 }
 
 auto to_string(Severity value) -> std::string_view {
@@ -1090,8 +1069,7 @@ auto parse_diagnostic_sample(simdjson::dom::element value)
 
   TRY(auto occurrences_raw,
       api::field(object, "occurrences", "DiagnosticSample"));
-  TRY(auto occurrences,
-      parse_tenzir_telemetry_telemetry_small_count(occurrences_raw));
+  TRY(auto occurrences, parse_small_count(occurrences_raw));
 
   TRY(auto fingerprint_raw,
       api::field(object, "fingerprint", "DiagnosticSample"));
@@ -1206,15 +1184,15 @@ auto parse_run_transition(simdjson::dom::element value)
                        std::move(state), std::move(error)};
 }
 
-auto TenzirTelemetryTelemetrySeconds::make(double value)
-  -> Result<TenzirTelemetryTelemetrySeconds, ParseError> {
-  return TenzirTelemetryTelemetrySeconds{std::move(value)};
+auto TelemetrySeconds2::make(double value)
+  -> Result<TelemetrySeconds2, ParseError> {
+  return TelemetrySeconds2{std::move(value)};
 }
 
-auto parse_tenzir_telemetry_telemetry_seconds(simdjson::dom::element value)
-  -> Result<TenzirTelemetryTelemetrySeconds, ParseError> {
-  TRY(auto raw, api::double_of(value, "TenzirTelemetryTelemetrySeconds"));
-  return TenzirTelemetryTelemetrySeconds::make(std::move(raw));
+auto parse_telemetry_seconds2(simdjson::dom::element value)
+  -> Result<TelemetrySeconds2, ParseError> {
+  TRY(auto raw, api::double_of(value, "TelemetrySeconds2"));
+  return TelemetrySeconds2::make(std::move(raw));
 }
 
 auto parse_deployment_sample(simdjson::dom::element value)
@@ -1226,8 +1204,7 @@ auto parse_deployment_sample(simdjson::dom::element value)
 
   TRY(auto cpu_seconds_raw,
       api::field(object, "cpuSeconds", "DeploymentSample"));
-  TRY(auto cpu_seconds,
-      parse_tenzir_telemetry_telemetry_seconds(cpu_seconds_raw));
+  TRY(auto cpu_seconds, parse_telemetry_seconds2(cpu_seconds_raw));
 
   TRY(auto memory_bytes_raw,
       api::field(object, "memoryBytes", "DeploymentSample"));
@@ -1263,15 +1240,20 @@ auto parse_batch(simdjson::dom::element value) -> Result<Batch, ParseError> {
     pipelines.push_back(std::move(pipelines_decoded));
   }
 
-  TRY(auto operators_raw, api::field(object, "operators", "Batch"));
-  auto operators = std::vector<OperatorSample>{};
-  auto operators_array = simdjson::dom::array{};
-  if (operators_raw.get_array().get(operators_array) != simdjson::SUCCESS) {
-    return Err{ParseError{"Batch.operators", "expected an array"}};
-  }
-  for (auto operators_item : operators_array) {
-    TRY(auto operators_decoded, parse_operator_sample(operators_item));
-    operators.push_back(std::move(operators_decoded));
+  auto operators = Option<std::vector<RetiredOperatorSample>>{None{}};
+  if (auto operators_raw = api::optional_field(object, "operators")) {
+    auto operators_present = std::vector<RetiredOperatorSample>{};
+    auto operators_present_array = simdjson::dom::array{};
+    if ((*operators_raw).get_array().get(operators_present_array)
+        != simdjson::SUCCESS) {
+      return Err{ParseError{"Batch.operators", "expected an array"}};
+    }
+    for (auto operators_present_item : operators_present_array) {
+      TRY(auto operators_present_decoded,
+          parse_retired_operator_sample(operators_present_item));
+      operators_present.push_back(std::move(operators_present_decoded));
+    }
+    operators = std::move(operators_present);
   }
 
   TRY(auto diagnostics_raw, api::field(object, "diagnostics", "Batch"));
@@ -2430,15 +2412,41 @@ auto write_json(ConnectorFlow const& value, std::string& out) -> void {
   out += '}';
 }
 
+auto write_json(TelemetrySeconds const& value, std::string& out) -> void {
+  fmt::format_to(std::back_inserter(out), "{}", value.value());
+}
+
+auto write_json(TenzirTelemetryTelemetrySeconds const& value, std::string& out)
+  -> void {
+  fmt::format_to(std::back_inserter(out), "{}", value.value());
+}
+
+auto write_json(TelemetryCount3 const& value, std::string& out) -> void {
+  fmt::format_to(std::back_inserter(out), "{}", value.value());
+}
+
+auto write_json(TelemetryCount4 const& value, std::string& out) -> void {
+  fmt::format_to(std::back_inserter(out), "{}", value.value());
+}
+
 auto write_json(PipelineSample const& value, std::string& out) -> void {
   out += '{';
+  auto field_separator = "";
+  out += field_separator;
+  field_separator = ",";
   out += "\"pipelineId\":";
   write_json(value.pipeline_id, out);
-  out += ",\"run\":";
+  out += field_separator;
+  field_separator = ",";
+  out += "\"run\":";
   write_json(value.run, out);
-  out += ",\"window\":";
+  out += field_separator;
+  field_separator = ",";
+  out += "\"window\":";
   api::write_time(value.window, out);
-  out += ",\"sources\":";
+  out += field_separator;
+  field_separator = ",";
+  out += "\"sources\":";
   {
     out += '[';
     auto separator0 = "";
@@ -2449,7 +2457,9 @@ auto write_json(PipelineSample const& value, std::string& out) -> void {
     }
     out += ']';
   }
-  out += ",\"sinks\":";
+  out += field_separator;
+  field_separator = ",";
+  out += "\"sinks\":";
   {
     out += '[';
     auto separator0 = "";
@@ -2460,59 +2470,55 @@ auto write_json(PipelineSample const& value, std::string& out) -> void {
     }
     out += ']';
   }
+  if (value.cpu_seconds) {
+    out += field_separator;
+    field_separator = ",";
+    out += "\"cpuSeconds\":";
+    if (value.cpu_seconds) {
+      write_json(*value.cpu_seconds, out);
+    } else {
+      out += "null";
+    }
+  }
+  if (value.interval_seconds) {
+    out += field_separator;
+    field_separator = ",";
+    out += "\"intervalSeconds\":";
+    if (value.interval_seconds) {
+      write_json(*value.interval_seconds, out);
+    } else {
+      out += "null";
+    }
+  }
+  if (value.queued_bytes) {
+    out += field_separator;
+    field_separator = ",";
+    out += "\"queuedBytes\":";
+    if (value.queued_bytes) {
+      write_json(*value.queued_bytes, out);
+    } else {
+      out += "null";
+    }
+  }
+  if (value.activity) {
+    out += field_separator;
+    field_separator = ",";
+    out += "\"activity\":";
+    if (value.activity) {
+      write_json(*value.activity, out);
+    } else {
+      out += "null";
+    }
+  }
   out += '}';
 }
 
-auto write_json(Flow const& value, std::string& out) -> void {
+auto write_json(RetiredOperatorSample const&, std::string& out) -> void {
   out += '{';
-  out += "\"events\":";
-  write_json(value.events, out);
-  out += ",\"bytes\":";
-  write_json(value.bytes, out);
   out += '}';
 }
 
-auto write_json(TelemetrySeconds const& value, std::string& out) -> void {
-  fmt::format_to(std::back_inserter(out), "{}", value.value());
-}
-
-auto write_json(TelemetryCount3 const& value, std::string& out) -> void {
-  fmt::format_to(std::back_inserter(out), "{}", value.value());
-}
-
-auto write_json(TelemetrySmallCount const& value, std::string& out) -> void {
-  fmt::format_to(std::back_inserter(out), "{}", value.value());
-}
-
-auto write_json(OperatorSample const& value, std::string& out) -> void {
-  out += '{';
-  out += "\"pipelineId\":";
-  write_json(value.pipeline_id, out);
-  out += ",\"run\":";
-  write_json(value.run, out);
-  out += ",\"operatorId\":";
-  api::write_string(value.operator_id, out);
-  out += ",\"name\":";
-  api::write_string(value.name, out);
-  out += ",\"window\":";
-  api::write_time(value.window, out);
-  out += ",\"input\":";
-  write_json(value.input, out);
-  out += ",\"output\":";
-  write_json(value.output, out);
-  out += ",\"cpuSeconds\":";
-  write_json(value.cpu_seconds, out);
-  out += ",\"inputBytes\":";
-  write_json(value.input_bytes, out);
-  out += ",\"inputCapacity\":";
-  write_json(value.input_capacity, out);
-  out += ",\"tasks\":";
-  write_json(value.tasks, out);
-  out += '}';
-}
-
-auto write_json(TenzirTelemetryTelemetrySmallCount const& value,
-                std::string& out) -> void {
+auto write_json(SmallCount const& value, std::string& out) -> void {
   fmt::format_to(std::back_inserter(out), "{}", value.value());
 }
 
@@ -2612,8 +2618,7 @@ auto write_json(RunTransition const& value, std::string& out) -> void {
   out += '}';
 }
 
-auto write_json(TenzirTelemetryTelemetrySeconds const& value, std::string& out)
-  -> void {
+auto write_json(TelemetrySeconds2 const& value, std::string& out) -> void {
   fmt::format_to(std::back_inserter(out), "{}", value.value());
 }
 
@@ -2632,13 +2637,22 @@ auto write_json(DeploymentSample const& value, std::string& out) -> void {
 
 auto write_json(Batch const& value, std::string& out) -> void {
   out += '{';
+  auto field_separator = "";
+  out += field_separator;
+  field_separator = ",";
   out += "\"boot\":";
   api::write_string(value.boot, out);
-  out += ",\"seq\":";
+  out += field_separator;
+  field_separator = ",";
+  out += "\"seq\":";
   write_json(value.seq, out);
-  out += ",\"dropped\":";
+  out += field_separator;
+  field_separator = ",";
+  out += "\"dropped\":";
   write_json(value.dropped, out);
-  out += ",\"pipelines\":";
+  out += field_separator;
+  field_separator = ",";
+  out += "\"pipelines\":";
   {
     out += '[';
     auto separator0 = "";
@@ -2649,18 +2663,28 @@ auto write_json(Batch const& value, std::string& out) -> void {
     }
     out += ']';
   }
-  out += ",\"operators\":";
-  {
-    out += '[';
-    auto separator0 = "";
-    for (auto const& element0 : value.operators) {
-      out += separator0;
-      separator0 = ",";
-      write_json(element0, out);
+  if (value.operators) {
+    out += field_separator;
+    field_separator = ",";
+    out += "\"operators\":";
+    if (value.operators) {
+      {
+        out += '[';
+        auto separator0 = "";
+        for (auto const& element0 : *value.operators) {
+          out += separator0;
+          separator0 = ",";
+          write_json(element0, out);
+        }
+        out += ']';
+      }
+    } else {
+      out += "null";
     }
-    out += ']';
   }
-  out += ",\"diagnostics\":";
+  out += field_separator;
+  field_separator = ",";
+  out += "\"diagnostics\":";
   {
     out += '[';
     auto separator0 = "";
@@ -2671,7 +2695,9 @@ auto write_json(Batch const& value, std::string& out) -> void {
     }
     out += ']';
   }
-  out += ",\"runs\":";
+  out += field_separator;
+  field_separator = ",";
+  out += "\"runs\":";
   {
     out += '[';
     auto separator0 = "";
@@ -2682,7 +2708,9 @@ auto write_json(Batch const& value, std::string& out) -> void {
     }
     out += ']';
   }
-  out += ",\"deployment\":";
+  out += field_separator;
+  field_separator = ",";
+  out += "\"deployment\":";
   {
     out += '[';
     auto separator0 = "";
