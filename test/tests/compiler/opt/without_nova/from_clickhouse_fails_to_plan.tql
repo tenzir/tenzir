@@ -1,0 +1,10 @@
+---
+runner: tenzir
+error: true
+---
+
+// Without Nova, `from_clickhouse` fails to plan, since only the new executor
+// reads from ClickHouse.
+from_clickhouse table="events", host="localhost"
+where severity >= 3
+head 5

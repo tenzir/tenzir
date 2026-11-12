@@ -8,8 +8,6 @@
 
 #include "clickhouse/block_to_events.hpp"
 
-#include "clickhouse/block_to_table_slice.hpp"
-
 #include <tenzir/concept/parseable/tenzir/ip.hpp>
 #include <tenzir/concept/parseable/to.hpp>
 #include <tenzir/data.hpp>
@@ -17,7 +15,6 @@
 #include <tenzir/nova/materialize.hpp>
 #include <tenzir/nova/union_array.hpp>
 #include <tenzir/option.hpp>
-#include <tenzir/table_slice.hpp>
 #include <tenzir/test/test.hpp>
 
 #include <arrow/util/utf8.h>
@@ -65,17 +62,6 @@ auto rows(nova::Events const& events) -> std::vector<data> {
   auto result = std::vector<data>{};
   for (auto i = nova::storage::Index{0}; i < all.length(); ++i) {
     result.push_back(nova::materialize_legacy(all.get(i)));
-  }
-  return result;
-}
-
-auto legacy_rows(ch::Block const& block) -> std::vector<data> {
-  auto dh = null_diagnostic_handler{};
-  auto slice = block_to_table_slice(block, "test", "ClickHouse", dh);
-  REQUIRE(slice);
-  auto result = std::vector<data>{};
-  for (auto&& row : slice->values()) {
-    result.emplace_back(materialize(row));
   }
   return result;
 }
@@ -140,7 +126,7 @@ auto make_strings(std::vector<std::string_view> const& values)
   return result;
 }
 
-/// A block with the types that decode the same with either data model.
+/// A block with columns of most of the types that the decoder supports.
 auto mixed_block() -> ch::Block {
   auto i8 = std::make_shared<ch::ColumnInt8>();
   auto u16 = std::make_shared<ch::ColumnUInt16>();
@@ -254,13 +240,79 @@ auto mixed_block() -> ch::Block {
 
 } // namespace
 
-TEST("decoding matches the table slice decoder") {
+TEST("decoding yields the values of every column") {
   auto block = mixed_block();
   auto decoded = decode(block);
   REQUIRE(decoded.events);
   CHECK(decoded.diagnostics.empty());
   CHECK_EQUAL(*decoded.events->meta.name.get(0), "test");
-  CHECK_EQUAL(rows(*decoded.events), legacy_rows(block));
+  auto const epoch = tenzir::time{};
+  auto const uuid = data{"01234567-89ab-cdef-fedc-ba9876543210"};
+  auto const expected = std::vector<data>{
+    record{
+      {"i8", int64_t{-128}},
+      {"u16", uint64_t{0}},
+      {"i64", std::numeric_limits<int64_t>::min()},
+      {"u64", std::numeric_limits<uint64_t>::max()},
+      {"f32", 1.5},
+      {"boolean", true},
+      {"str", "foo"},
+      {"fixed", std::string{"ab\0", 3}},
+      {"i128", "-1267650600228229401496703205376"},
+      {"u128", "170141183460469231731687303715884105728"},
+      {"uuid", uuid},
+      {"dec", "-12.345"},
+      {"date", epoch},
+      {"date32", epoch - std::chrono::days{1000}},
+      {"datetime", epoch},
+      {"dt64", epoch - std::chrono::milliseconds{1}},
+      {"tm", duration{std::chrono::seconds{-5}}},
+      {"tm64", duration{std::chrono::microseconds{1'234'567}}},
+      {"v4", ip_of("10.0.0.1")},
+      {"v6", ip_of("2001:db8::1")},
+      {"nullable", data{}},
+      {"bytes", blob{std::byte{0}, std::byte{255}, std::byte{7}}},
+      {"list", list{"a", "b"}},
+      {"nested", list{list{int64_t{1}, int64_t{2}}, list{}, list{int64_t{3}}}},
+      {"lc_string", "x"},
+      {"lc_nullable", data{}},
+      {"nothing", data{}},
+      {"named", record{{"a", int64_t{1}}, {"b", "b"}}},
+      {"unnamed", record{{"field0", uint64_t{1}}, {"field1", "p"}}},
+    },
+    record{
+      {"i8", int64_t{127}},
+      {"u16", uint64_t{65535}},
+      {"i64", int64_t{42}},
+      {"u64", uint64_t{7}},
+      {"f32", -0.25},
+      {"boolean", false},
+      {"str", ""},
+      {"fixed", "xyz"},
+      {"i128", "12"},
+      {"u128", "0"},
+      {"uuid", uuid},
+      {"dec", "0.005"},
+      {"date", epoch + std::chrono::days{20'000}},
+      {"date32", epoch + std::chrono::days{20'000}},
+      {"datetime", epoch + std::chrono::seconds{1'700'000'000}},
+      {"dt64", epoch + std::chrono::milliseconds{1'700'000'000'123}},
+      {"tm", duration{std::chrono::seconds{86'399}}},
+      {"tm64", duration{}},
+      {"v4", ip_of("192.168.1.255")},
+      {"v6", ip_of("::ffff:1.2.3.4")},
+      {"nullable", int64_t{3}},
+      {"bytes", blob{}},
+      {"list", list{}},
+      {"nested", list{}},
+      {"lc_string", "x"},
+      {"lc_nullable", "y"},
+      {"nothing", data{}},
+      {"named", record{{"a", int64_t{2}}, {"b", data{}}}},
+      {"unnamed", record{{"field0", uint64_t{2}}, {"field1", "q"}}},
+    },
+  };
+  CHECK_EQUAL(rows(*decoded.events), expected);
 }
 
 TEST("decoded values") {
@@ -420,22 +472,6 @@ TEST("map keys that are not valid UTF-8 are skipped") {
   CHECK_EQUAL(rows(*decoded.events),
               (std::vector<data>{record{{"m", record{{"ok", "a"}}}},
                                  record{{"m", record{}}}}));
-}
-
-TEST("the table slice decoder drops maps") {
-  auto ok = std::make_shared<ch::ColumnUInt64>();
-  ok->Append(1);
-  auto map = make_map(make_strings({"k"}), make_strings({"v"}), {1});
-  auto dh = collecting_diagnostic_handler{};
-  auto slice = block_to_table_slice(make_block({{"ok", ok}, {"m", map}}),
-                                    "test", "ClickHouse", dh);
-  REQUIRE(slice);
-  auto diagnostics = std::move(dh).collect();
-  REQUIRE_EQUAL(diagnostics.size(), size_t{1});
-  CHECK_EQUAL(diagnostics[0].message,
-              "dropping ClickHouse column `m` with unsupported type "
-              "`Map(String, String)`");
-  CHECK_EQUAL(slice->columns(), size_t{1});
 }
 
 TEST("unsupported columns are dropped") {

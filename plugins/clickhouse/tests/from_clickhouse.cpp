@@ -67,20 +67,21 @@ auto check_rejects_checkpoints(std::string_view name) -> void {
 
 TEST("from_clickhouse rejects saving and restoring checkpoints") {
   check_rejects_checkpoints<nova::Events>("from_clickhouse");
-  check_rejects_checkpoints<table_slice>("from_clickhouse");
 }
 
 TEST("from_hydrolix rejects saving and restoring checkpoints") {
   check_rejects_checkpoints<nova::Events>("from_hydrolix");
 }
 
-TEST("from_hydrolix runs only with Nova") {
-  auto const* plugin = plugins::find<OperatorPlugin>("from_hydrolix");
-  REQUIRE(plugin);
-  auto desc = plugin->describe();
-  REQUIRE_EQUAL(desc.spawns.size(), size_t{1});
-  auto const nova = is<Spawn<void, nova::Events>>(desc.spawns.front());
-  CHECK(nova);
+TEST("from_clickhouse and from_hydrolix run only with Nova") {
+  for (auto name : {"from_clickhouse", "from_hydrolix"}) {
+    auto const* plugin = plugins::find<OperatorPlugin>(name);
+    REQUIRE(plugin);
+    auto desc = plugin->describe();
+    REQUIRE_EQUAL(desc.spawns.size(), size_t{1});
+    auto const nova = is<Spawn<void, nova::Events>>(desc.spawns.front());
+    CHECK(nova);
+  }
 }
 
 TEST("from_hydrolix authentication diagnostics omit ClickHouse advice") {

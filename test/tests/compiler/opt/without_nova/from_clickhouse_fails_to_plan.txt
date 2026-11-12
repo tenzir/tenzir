@@ -1,0 +1,7 @@
+error: operator does not accept void
+ --> tests/compiler/opt/without_nova/from_clickhouse_fails_to_plan.tql:8:1
+  |
+8 | from_clickhouse table="events", host="localhost"
+  | ^^^^^^^^^^^^^^^
+  |
+  = docs: https://tenzir.com/docs/reference/operators/from_clickhouse

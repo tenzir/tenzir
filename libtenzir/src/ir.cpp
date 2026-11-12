@@ -203,10 +203,10 @@ auto ir::split_filter_by_substitution(OptimizeFilter filter,
   return result;
 }
 
-auto ir::rewrite_aggregation(OptimizeAggregation aggregation,
-                             ast::FieldSubstitution const& fields)
-  -> Option<OptimizeAggregation> {
-  for (auto& column : aggregation.columns) {
+auto ir::rewrite_aggregate(QueryStage::Aggregate aggregate,
+                           ast::FieldSubstitution const& fields)
+  -> Option<QueryStage::Aggregate> {
+  for (auto& column : aggregate.columns) {
     if (not column.input) {
       continue;
     }
@@ -241,7 +241,7 @@ auto ir::rewrite_aggregation(OptimizeAggregation aggregation,
     }
     column.input = std::move(segments);
   }
-  return aggregation;
+  return aggregate;
 }
 
 auto ir::is_field_path_prefix(const ast::field_path& prefix,
@@ -676,53 +676,6 @@ auto ir::pipeline::infer_type(element_type_tag input, base_ctx ctx) const
 
 namespace {
 
-/// Collects the stages of the operators at the front of `ops` for as long as
-/// a source can compute them after an aggregation: predicates and at most one
-/// sort, optionally followed by a limit, after which nothing follows. A
-/// predicate after a sort that keeps only its first events would no longer
-/// commute with it, so it ends the stages, too.
-auto aggregation_stages(std::span<Box<ir::Operator> const> ops,
-                        ir::OptimizeCtx const& octx)
-  -> std::vector<ir::QueryStage> {
-  auto result = std::vector<ir::QueryStage>{};
-  auto sorted = false;
-  auto bounded = false;
-  for (auto const& op : ops) {
-    auto stage = op->query_stage(octx);
-    if (not stage) {
-      break;
-    }
-    auto proceed = match(
-      stage->kind,
-      [&](ir::QueryStage::Filter const&) {
-        return not bounded;
-      },
-      [&](ir::QueryStage::Sort const& sort) {
-        if (sorted) {
-          return false;
-        }
-        sorted = true;
-        bounded = sort.bound.has_value();
-        return true;
-      },
-      [&](ir::QueryStage::Limit const&) {
-        return true;
-      },
-      [](auto const&) {
-        return false;
-      });
-    if (not proceed) {
-      break;
-    }
-    auto const limit = is<ir::QueryStage::Limit>(stage->kind);
-    result.push_back(std::move(*stage));
-    if (limit) {
-      break;
-    }
-  }
-  return result;
-}
-
 /// A stage of a chain, and the index of the last operator that it stands for.
 /// It stands for the operators from the one after the previous stage.
 struct ChainStage {
@@ -736,22 +689,21 @@ struct ChainStage {
 auto fold_aggregation(std::span<Box<ir::Operator> const> ops,
                       ir::OptimizeCtx const& octx) -> Option<ChainStage> {
   for (auto j = size_t{0}; j < ops.size(); ++j) {
-    auto aggregation = ops[j]->aggregation();
-    if (not aggregation) {
+    auto stage = ops[j]->query_stage(octx);
+    auto* aggregate
+      = stage ? try_as<ir::QueryStage::Aggregate>(stage->kind) : nullptr;
+    if (not aggregate) {
       continue;
     }
-    for (auto m = j; aggregation and m > 0; --m) {
-      aggregation
-        = ops[m - 1]->rewrite_aggregation(std::move(*aggregation), octx);
+    auto folded = Option{std::move(*aggregate)};
+    for (auto m = j; folded and m > 0; --m) {
+      folded = ops[m - 1]->rewrite_aggregate(std::move(*folded), octx);
     }
-    if (not aggregation) {
+    if (not folded) {
       return None{};
     }
     return ChainStage{
-      .stage = {ir::QueryStage::Aggregate{
-        .columns = std::move(aggregation->columns),
-        .schema_name = std::move(aggregation->schema_name),
-      }},
+      .stage = {std::move(*folded)},
       .last = j,
     };
   }
@@ -802,31 +754,6 @@ auto collect_chain(std::span<Box<ir::Operator> const> ops,
   return {std::move(result), std::string{}};
 }
 
-/// Offers `aggregation` to `op` with the longest prefix of `stages` first,
-/// whose operators are `stage_ops`, and returns the number of stages that
-/// `op` took over, or `None` if it declined. The fallback of each candidate
-/// replays the operators of its stages after the aggregation.
-auto absorb_with_stages(ir::Operator& op,
-                        ir::OptimizeAggregation const& aggregation,
-                        std::span<ir::QueryStage const> stages,
-                        std::span<Box<ir::Operator> const> stage_ops)
-  -> Option<size_t> {
-  TENZIR_ASSERT(stage_ops.size() >= stages.size());
-  for (auto n = stages.size() + 1; n > 0; --n) {
-    auto const count = n - 1;
-    auto candidate = aggregation;
-    candidate.stages.assign(
-      stages.begin(), stages.begin() + detail::narrow<std::ptrdiff_t>(count));
-    for (auto const& stage_op : stage_ops.first(count)) {
-      candidate.fallback.operators.push_back(stage_op->copy());
-    }
-    if (op.absorb_aggregation(candidate)) {
-      return count;
-    }
-  }
-  return None{};
-}
-
 } // namespace
 
 auto ir::pipeline::optimize(OptimizeRequest req,
@@ -856,8 +783,7 @@ auto ir::pipeline::optimize(OptimizeRequest req,
   }
   // Let a source take over the stages that follow it, such as filters,
   // projections, an aggregation, sorts, and limits. This runs after the walk,
-  // so that the stages see the predicates as the walk left them, and before
-  // aggregations are offered to the other sources below.
+  // so that the stages see the predicates as the walk left them.
   auto& ops = replacement.operators;
   for (auto k = size_t{0}; k + 1 < ops.size(); ++k) {
     if (not ops[k]->takes_query_stages()) {
@@ -874,35 +800,6 @@ auto ir::pipeline::optimize(OptimizeRequest req,
       auto const last = k + 1 + entries[absorption.prefix - 1].last;
       ops.erase(ops.begin() + detail::narrow<std::ptrdiff_t>(k + 1),
                 ops.begin() + detail::narrow<std::ptrdiff_t>(last + 1));
-    }
-  }
-  // Let an operator compute an aggregation that follows it, either directly
-  // or behind operators that can rewrite the aggregation over their input,
-  // such as renames. This runs after the walk, when every operator has
-  // absorbed what it can, so that predicates kept between the operators
-  // prevent the fusion. The fallback replays the skipped operators.
-  for (auto j = size_t{1}; j < ops.size(); ++j) {
-    auto aggregation = ops[j]->aggregation();
-    // The source may also take over the stages that follow the aggregation,
-    // as many as it accepts, which then leave the pipeline, too.
-    auto stages = aggregation
-                    ? aggregation_stages(std::span{ops}.subspan(j + 1), octx)
-                    : std::vector<QueryStage>{};
-    for (auto k = j; aggregation and k > 0;) {
-      --k;
-      if (auto absorbed = absorb_with_stages(*ops[k], *aggregation, stages,
-                                             std::span{ops}.subspan(j + 1))) {
-        ops.erase(ops.begin() + detail::narrow<std::ptrdiff_t>(k + 1),
-                  ops.begin()
-                    + detail::narrow<std::ptrdiff_t>(j + 1 + *absorbed));
-        j = k;
-        break;
-      }
-      aggregation = ops[k]->rewrite_aggregation(std::move(*aggregation), octx);
-      if (aggregation) {
-        auto& fallback = aggregation->fallback.operators;
-        fallback.insert(fallback.begin(), ops[k]->copy());
-      }
     }
   }
   return {
@@ -926,16 +823,6 @@ auto ir::Operator::optimize(OptimizeRequest req,
     EventOrder::ordered,
     pipeline{{}, std::move(replacement)},
   };
-}
-
-auto ir::Operator::aggregation() const -> Option<OptimizeAggregation> {
-  return None{};
-}
-
-auto ir::Operator::absorb_aggregation(OptimizeAggregation const& aggregation)
-  -> bool {
-  TENZIR_UNUSED(aggregation);
-  return false;
 }
 
 auto ir::Operator::query_stage(OptimizeCtx const& octx) const
@@ -963,17 +850,10 @@ auto ir::substitute(QueryPlan& plan, substitute_ctx ctx) -> failure_or<void> {
   return {};
 }
 
-auto ir::OptimizeAggregation::substitute(substitute_ctx ctx, bool instantiate)
-  -> failure_or<void> {
-  TRY(fallback.substitute(ctx, instantiate));
-  TRY(ir::substitute(stages, ctx));
-  return {};
-}
-
-auto ir::Operator::rewrite_aggregation(OptimizeAggregation aggregation,
-                                       OptimizeCtx const& octx) const
-  -> Option<OptimizeAggregation> {
-  TENZIR_UNUSED(aggregation, octx);
+auto ir::Operator::rewrite_aggregate(QueryStage::Aggregate aggregate,
+                                     OptimizeCtx const& octx) const
+  -> Option<QueryStage::Aggregate> {
+  TENZIR_UNUSED(aggregate, octx);
   return None{};
 }
 

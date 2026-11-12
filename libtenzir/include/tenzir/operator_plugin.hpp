@@ -250,16 +250,11 @@ struct Description {
   Option<Setter<Option<ir::OptimizeProjection>>> set_projection;
   Option<Setter<location>> set_operator_location;
   Option<Setter<EventOrder>> set_order;
-  Option<Setter<Option<ir::OptimizeAggregation>>> set_aggregation;
-  /// Decides whether the operator takes over an aggregation, given its
-  /// materialized arguments. Set by `Describer::aggregation`.
-  Option<std::function<auto(const Any&, const ir::OptimizeAggregation&)->bool>>
-    accepts_aggregation;
   /// Rewrites an aggregation over the operator's output into one over its
-  /// input. Set by `Describer::rewrite_aggregation`.
-  Option<std::function<auto(DescribeCtx&, ir::OptimizeAggregation)
-                         ->Option<ir::OptimizeAggregation>>>
-    rewrite_aggregation;
+  /// input. Set by `Describer::rewrite_aggregate`.
+  Option<std::function<auto(DescribeCtx&, ir::QueryStage::Aggregate)
+                         ->Option<ir::QueryStage::Aggregate>>>
+    rewrite_aggregate;
   /// Takes over the stages behind the operator. Set by
   /// `Describer::query_plan`.
   Option<std::function<auto(const Any&, const ir::QueryChain&)->ir::Absorption>>
@@ -716,11 +711,9 @@ public:
   /// right after parsing.
   ///
   /// `consumed` holds the parts of the optimization request that the operator
-  /// took over from downstream, which the description maps onto `Args`.
-  /// `aggregation` is the aggregation that the operator took over, if any,
-  /// and `plan` the stages that it took over, if any.
+  /// took over from downstream, which the description maps onto `Args`, and
+  /// `plan` the stages that it took over, if any.
   auto materialize(const Description& desc, ir::OptimizeRequest consumed = {},
-                   Option<ir::OptimizeAggregation> aggregation = None{},
                    Option<ir::QueryPlan> plan = None{}) const -> Any;
 
   /// Returns whether `materialize` can run, which requires every argument
@@ -1463,63 +1456,26 @@ public:
             (args.as<Args>().*ptr).projection = std::move(value);
           };
     }
-    if constexpr (Bundle::template contains<opt::Aggregation>) {
-      TENZIR_ASSERT(not desc_.set_aggregation);
-      desc_.set_aggregation
-        = [ptr](Any& args, Option<ir::OptimizeAggregation> value) {
-            (args.as<Args>().*ptr).aggregation = std::move(value);
-          };
-    }
-  }
-
-  /// Lets the operator take over an aggregation that follows it, such as a
-  /// `summarize`, if `accepts` returns `true` for the operator's arguments and
-  /// the aggregation. The aggregation may follow directly or behind operators
-  /// that rewrote it, as in `ir::Operator::absorb_aggregation`. Requires
-  /// binding `opt::Aggregation`.
-  ///
-  /// The optimizer asks after absorbing filters, limits, and projections into
-  /// the operator, and only if no limit applies to its events. Decide on what
-  /// the arguments show, such as a query mode that cannot aggregate; columns
-  /// and functions that the source turns out not to support at runtime are
-  /// the job of `opt::Aggregation::aggregation->fallback`. Once the operator
-  /// emits an aggregation, it is a barrier for later optimization passes.
-  ///
-  /// The optimizer first offers the aggregation with every stage that follows
-  /// it, then with ever fewer, down to none (see
-  /// `ir::OptimizeAggregation::stages`). An operator that accepts stages must
-  /// compute all of them whenever it computes the aggregation, so it decides
-  /// from their syntax alone, which does not change at runtime.
-  template <class F>
-    requires concepts::invokable_r<bool, F&, const Args&,
-                                   const ir::OptimizeAggregation&>
-  auto aggregation(F accepts) -> void {
-    TENZIR_ASSERT(not desc_.accepts_aggregation);
-    desc_.accepts_aggregation
-      = [accepts = std::move(accepts)](
-          const Any& args, const ir::OptimizeAggregation& aggregation) mutable {
-          return accepts(args.as<Args>(), aggregation);
-        };
   }
 
   /// Lets the operator pass an aggregation that follows it to the operator
-  /// before it, as in `ir::Operator::rewrite_aggregation`, whose contract the
+  /// before it, as in `ir::Operator::rewrite_aggregate`, whose contract the
   /// callback must meet. The callback returns the aggregation over the
   /// operator's input whose result equals that of the given aggregation over
-  /// its output, or `None`, typically through `ir::rewrite_aggregation`.
+  /// its output, or `None`, typically through `ir::rewrite_aggregate`.
   ///
   /// The callback sees the parsed arguments, but not the filters, limits, or
   /// projections that the operator absorbed. The optimizer does not call it
-  /// while the operator has absorbed a filter, a limit, or an aggregation, or
-  /// has unresolved arguments. It does not exclude operators with a pipeline
+  /// while the operator has absorbed a filter, a limit, or stages, or has
+  /// unresolved arguments. It does not exclude operators with a pipeline
   /// argument, whose effects the callback must account for. Diagnostics of
   /// the callback are discarded, so it declines by returning `None`.
   template <class F>
-    requires concepts::invokable_r<Option<ir::OptimizeAggregation>, F&,
-                                   DescribeCtx&, ir::OptimizeAggregation>
-  auto rewrite_aggregation(F rewrite) -> void {
-    TENZIR_ASSERT(not desc_.rewrite_aggregation);
-    desc_.rewrite_aggregation = std::move(rewrite);
+    requires concepts::invokable_r<Option<ir::QueryStage::Aggregate>, F&,
+                                   DescribeCtx&, ir::QueryStage::Aggregate>
+  auto rewrite_aggregate(F rewrite) -> void {
+    TENZIR_ASSERT(not desc_.rewrite_aggregate);
+    desc_.rewrite_aggregate = std::move(rewrite);
   }
 
   /// Lets the operator take over a prefix of the stages behind it, as in
@@ -1547,7 +1503,7 @@ public:
   /// Describes the operator as a stage that a source before it may take over,
   /// as in `ir::Operator::query_stage`, whose contract the callback must meet.
   /// The optimizer does not call it while the operator has absorbed a filter,
-  /// a limit, or an aggregation, or has unresolved arguments. Diagnostics of
+  /// a limit, or stages, or has unresolved arguments. Diagnostics of
   /// the callback are discarded, so it declines by returning `None`.
   template <class F>
     requires concepts::invokable_r<Option<ir::QueryStage>, F&, DescribeCtx&>
@@ -1599,8 +1555,8 @@ public:
   ///
   /// The filters are not propagated.
   /// Upstream is required to produce ordered events.
-  /// This concerns the optimization walk only. Aggregations still reach the
-  /// operator through `aggregation` and `rewrite_aggregation`.
+  /// This concerns the optimization walk only. Stages still reach the
+  /// operator through `query_plan`, `query_stage`, and `rewrite_aggregate`.
   auto without_optimize() -> Description {
     return optimize(
       [](DescribeCtx&, EventOrder, ir::OptimizeFilter filter) -> Optimization {

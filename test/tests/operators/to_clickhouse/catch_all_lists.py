@@ -64,7 +64,7 @@ to_clickhouse table={table},
 
 def main() -> None:
     # Exercise each documented omission/preservation case through native writes,
-    # SQL storage, native reads, and structured JSON parsing.
+    # SQL storage, and native reads that reconstruct the catch-all fields.
     cases = [
         ("{name:null}", {}),
         ("{parent:{name:null}}", {}),
@@ -100,18 +100,17 @@ ENGINE=MergeTree ORDER BY tuple();
 from_clickhouse table="ca_list_contract",
                 host=env("CLICKHOUSE_HOST"), port=int(env("CLICKHOUSE_PORT")),
                 password=env("CLICKHOUSE_PASSWORD"), tls=false
-extra = extra.parse_json(raw=true)
 write_ndjson
 """
         result = subprocess.run(
-            [*shlex.split(os.environ["TENZIR_BINARY"]), "--nova=false", program],
+            [*shlex.split(os.environ["TENZIR_BINARY"]), "--nova=true", program],
             capture_output=True,
             text=True,
             timeout=60,
         )
         assert result.returncode == 0, result.stderr
         assert "warning:" not in result.stderr, result.stderr
-        assert json.loads(result.stdout) == {"extra": expected}, result.stdout
+        assert json.loads(result.stdout) == expected, result.stdout
 
     # A mixed list keeps the types of its elements.
     query("TRUNCATE TABLE ca_list_contract")

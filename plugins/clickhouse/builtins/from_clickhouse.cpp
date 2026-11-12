@@ -8,10 +8,8 @@
 
 #include "clickhouse/arguments.hpp"
 #include "clickhouse/block_to_events.hpp"
-#include "clickhouse/block_to_table_slice.hpp"
 #include "clickhouse/catch_all_reader.hpp"
 #include "clickhouse/connection.hpp"
-#include "clickhouse/easy_client.hpp"
 #include "clickhouse/query_diagnostics.hpp"
 #include "clickhouse/query_plan.hpp"
 #include "clickhouse/sql_pushdown.hpp"
@@ -25,13 +23,11 @@
 #include "tenzir/http.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/nova/events.hpp"
-#include "tenzir/nova_flag.hpp"
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/pipeline_metrics.hpp"
 #include "tenzir/plugin/register.hpp"
 #include "tenzir/pushdown/layout.hpp"
 #include "tenzir/pushdown/plan.hpp"
-#include "tenzir/tql2/filter.hpp"
 #include "tenzir/tql2/plugin.hpp"
 
 #include <boost/url/parse.hpp>
@@ -82,12 +78,6 @@ struct ReadSource {
   /// arguments replace the explicit ones.
   Option<HydrolixConnectionArgs> hydrolix = None{};
 };
-
-/// The hints of the legacy reader that runs without Nova, which applies every
-/// accepted predicate, in SQL where exact and locally otherwise, and counts
-/// the limit after them. It receives only the projection.
-using LocalOptimization
-  = OptimizationArgs<opt::Filter, opt::Limit, opt::Projection, opt::Aggregation>;
 
 struct FromClickhouseArgs {
   Option<StartupArgument<nova::Secret>> uri;
@@ -376,29 +366,8 @@ auto query_error(bool hydrolix, std::string_view token, bool tls_enabled,
 
 namespace {
 
-struct QueryPlan {
-  /// The table to read from; `None` when the user provided `sql`.
-  Option<std::string> table;
-  /// The user-provided SQL; empty when `table` is set.
-  std::string sql;
-  std::string schema_name;
-  LocalOptimization optimization;
-};
-
-/// Announces the predicates that the operator evaluates itself. Sent before
-/// the first slice so that `process_task` never sees data it cannot filter.
-struct PlanMessage {
-  ir::OptimizeFilter local_filter;
-};
-
-struct SliceMessage {
-  table_slice slice;
-};
-
 struct DoneMessage {};
 
-using Message = variant<PlanMessage, SliceMessage, DoneMessage>;
-using MessageQueue = folly::coro::BoundedQueue<Message, true, true>;
 constexpr auto message_queue_capacity = uint32_t{16};
 constexpr auto message_queue_backoff = std::chrono::milliseconds{1};
 
@@ -443,49 +412,6 @@ struct QueryChannel {
   }
 };
 
-struct RuntimeState {
-  RuntimeState() : queue{message_queue_capacity} {
-  }
-
-  MessageQueue queue;
-  Option<type> first_schema;
-  Atomic<bool> stop_requested = false;
-
-  auto produce_plan(ir::OptimizeFilter local_filter) -> void {
-    produce(PlanMessage{std::move(local_filter)});
-  }
-
-  auto produce_data(table_slice slice) -> void {
-    produce(SliceMessage{std::move(slice)});
-  }
-
-  /// Enqueues from the blocking query thread, giving up once downstream has
-  /// declared that it needs no more data.
-  auto produce(Message msg) -> void {
-    while (not stop_requested.load(std::memory_order_acquire)) {
-      if (queue.try_enqueue(msg)) {
-        return;
-      }
-      std::this_thread::sleep_for(message_queue_backoff);
-    }
-  }
-
-  auto produce_end_of_data() -> Task<void> {
-    co_await queue.enqueue(DoneMessage{});
-  }
-
-  auto should_cancel() const -> bool {
-    return stop_requested.load(std::memory_order::acquire);
-  }
-
-  auto request_cancellation() -> void {
-    stop_requested.store(true, std::memory_order_release);
-    while (queue.try_dequeue()) {
-      // Drop buffered slices; downstream has already declared it needs no more.
-    }
-  }
-};
-
 auto split_validated_table_name(std::string_view table)
   -> split_table_name_result {
   if (auto split = table_name_quoting.split_at_unquoted(table, '.')) {
@@ -509,105 +435,6 @@ auto make_schema_name_from_table(std::string_view prefix,
 /// Whether `SELECT *` may leave out a column with the default kind `kind`.
 auto is_generated_kind(std::string_view kind) -> bool {
   return kind == "ALIAS" or kind == "MATERIALIZED" or kind == "EPHEMERAL";
-}
-
-/// Reads the columns of `table` that `SELECT *` returns.
-auto fetch_schema(::clickhouse::Client& client, std::string_view table)
-  -> SqlSchema {
-  // Any privilege on the table grants `DESCRIBE`, so this cannot fail where
-  // the `SELECT` that follows would succeed.
-  auto query = ::clickhouse::Query{fmt::format("DESCRIBE TABLE {}", table)};
-  auto schema = SqlSchema{};
-  query.OnData([&](::clickhouse::Block const& block) {
-    if (block.GetColumnCount() < 3) {
-      return;
-    }
-    auto names = block[0]->As<::clickhouse::ColumnString>();
-    auto types = block[1]->As<::clickhouse::ColumnString>();
-    auto default_types = block[2]->As<::clickhouse::ColumnString>();
-    if (not names or not types or not default_types) {
-      return;
-    }
-    for (auto i = size_t{0}; i < block.GetRowCount(); ++i) {
-      // Whether `SELECT *` returns a generated column depends on the
-      // session's `asterisk_include_*` settings, so the schema keeps them
-      // apart: predicates on them stay local and projections that name them
-      // fall back to `*`, which matches the local result under any setting.
-      schema.add_column(names->At(i), types->At(i),
-                        is_generated_kind(default_types->At(i)));
-    }
-  });
-  client.Execute(query);
-  return schema;
-}
-
-struct PreparedQuery {
-  std::string text;
-  ir::OptimizeFilter local_filter;
-  /// The layout of a catch-all table, whose events need reconstruction.
-  Option<CatchAllLayout> catch_all = None{};
-  /// Whether the query computes the plan's aggregation.
-  bool aggregated = false;
-  /// Whether the SELECT applies any filter based on the described schema.
-  bool has_pushed_filter = false;
-};
-
-/// Pushes as much of `plan`'s hints into a `SELECT` from its table as
-/// `schema` allows.
-auto prepare_table_query(QueryPlan& plan, SqlSchema const& schema,
-                         Option<ir::OptimizeProjection> const& projection,
-                         registry const& reg) -> PreparedQuery {
-  auto table_plan = make_table_plan(schema, std::move(plan.optimization.filter),
-                                    projection, reg);
-  auto text
-    = make_table_query(table_plan, *plan.table, plan.optimization.limit);
-  return {
-    .text = std::move(text),
-    .local_filter = std::move(table_plan.local),
-    .has_pushed_filter = not table_plan.pushed.empty(),
-  };
-}
-
-/// Decides the query text and which predicates stay local. Runs on the
-/// query thread because it may need a round-trip for the schema.
-auto prepare_query(::clickhouse::Client& client, QueryPlan& plan,
-                   registry const& reg) -> PreparedQuery {
-  if (not plan.table) {
-    // TODO: Weaving hints into user-provided SQL requires parsing it. Until
-    // then, everything runs locally.
-    return {.text = std::move(plan.sql),
-            .local_filter = std::move(plan.optimization.filter)};
-  }
-  // A limit alone needs no schema; only filter and projection do.
-  if (plan.optimization.filter.empty() and not plan.optimization.projection) {
-    return {
-      .text = make_select_query(*plan.table, nullptr, None{}, {},
-                                plan.optimization.limit),
-      .local_filter = {},
-    };
-  }
-  auto schema = fetch_schema(client, *plan.table);
-  return prepare_table_query(plan, schema, plan.optimization.projection, reg);
-}
-
-/// Plans the query of `source` with the optimizer's hints of a read that
-/// applies what SQL cannot locally.
-auto make_query_plan(ReadSource const& source, LocalOptimization optimization)
-  -> QueryPlan {
-  auto plan = QueryPlan{
-    .table = None{},
-    .sql = {},
-    .schema_name = "clickhouse.query",
-    .optimization = std::move(optimization),
-  };
-  if (source.table) {
-    plan.table = source.table->inner;
-    plan.schema_name
-      = make_schema_name_from_table("clickhouse", source.table->inner);
-  } else {
-    plan.sql = source.sql->inner;
-  }
-  return plan;
 }
 
 /// Sets the query settings that every read needs.
@@ -705,237 +532,6 @@ auto resolve_connection(ReadSource const& source, OpCtx& ctx)
   }
   co_return connection;
 }
-
-class FromClickhouse final : public Operator<void, table_slice> {
-public:
-  FromClickhouse() = default;
-
-  /// Takes over no stage, which only the Nova operator computes, so the read
-  /// uses the projection only.
-  explicit FromClickhouse(FromClickhouseArgs args) : source_{args.source()} {
-    optimization_.projection = std::move(args.optimization.projection);
-  }
-
-  auto start(OpCtx& ctx) -> Task<void> override {
-    events_counter_ = make_events_counter(false, ctx);
-    auto options = co_await make_client_options(ctx);
-    if (not options) {
-      // No query task runs that could end the operator, so it ends here, as
-      // `FromClickhouseEvents` does.
-      done_ = true;
-      co_return;
-    }
-    // The query text is only decided on the query thread: with optimizer hints
-    // in table mode, it depends on the table's schema.
-    auto plan = make_query_plan(source_, optimization_);
-    // Helper task to shutdown our query on cancellation.
-    ctx.spawn_task([runtime = runtime_]() mutable -> Task<void> {
-      if (not co_await catch_cancellation(wait_forever())) {
-        runtime->request_cancellation();
-      }
-    });
-    // The actual query task.
-    ctx.spawn_task([this, options = std::move(*options), plan = std::move(plan),
-                    &dh = ctx.dh(), &reg = ctx.reg(),
-                    loc = source_.operator_location]() mutable -> Task<void> {
-      auto transformed_dh = transforming_diagnostic_handler{
-        dh, [loc](diagnostic diag) {
-          if (not has_primary_annotation(diag)) {
-            diag.annotations.emplace_back(true, std::string{}, loc);
-          }
-          return diag;
-        }};
-      co_await run_query(std::move(options), std::move(plan), transformed_dh,
-                         reg);
-    });
-  }
-
-  auto await_task(diagnostic_handler&) const -> Task<Any> override {
-    co_return co_await runtime_->queue.dequeue();
-  }
-
-  auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
-    auto message = std::move(result).as<Message>();
-    co_await co_match(
-      std::move(message),
-      [&](PlanMessage x) -> Task<void> {
-        local_filter_ = std::move(x.local_filter);
-        co_return;
-      },
-      [&](SliceMessage x) -> Task<void> {
-        if (runtime_->stop_requested.load(std::memory_order_acquire)) {
-          co_return;
-        }
-        auto slice = std::move(x.slice);
-        // Predicates without an exact SQL translation run here, with the same
-        // semantics as the `where` they came from.
-        for (auto const& expr : local_filter_) {
-          slice = filter2(slice, expr, ctx, false);
-          if (slice.rows() == 0) {
-            co_return;
-          }
-        }
-        // The limit counts events after the filter chain. When it went into
-        // the SQL query this is a no-op; otherwise it ends the query early.
-        if (optimization_.limit) {
-          auto remaining = *optimization_.limit - emitted_;
-          if (slice.rows() > remaining) {
-            slice = subslice(slice, 0, remaining);
-          }
-        }
-        emitted_ += slice.rows();
-        if (slice.rows() > 0) {
-          events_counter_.add(slice.rows());
-          co_await push(std::move(slice));
-        }
-        if (optimization_.limit and emitted_ >= *optimization_.limit) {
-          runtime_->request_cancellation();
-          done_ = true;
-        }
-      },
-      [&](DoneMessage) -> Task<void> {
-        done_ = true;
-        co_return;
-      });
-  }
-
-  auto stop(OpCtx& ctx) -> Task<void> override {
-    TENZIR_UNUSED(ctx);
-    runtime_->request_cancellation();
-    co_return;
-  }
-
-  auto state() -> OperatorState override {
-    return done_ ? OperatorState::done : OperatorState::normal;
-  }
-
-  auto snapshot(Serde&) -> void override {
-    reject_checkpoint(source_);
-  }
-
-private:
-  /// Resolves the connection arguments, which may be secrets.
-  auto make_client_options(OpCtx& ctx)
-    -> Task<Option<::clickhouse::ClientOptions>> {
-    auto ssl_opts = source_.tls ? tls_options{*source_.tls} : tls_options{};
-    auto ssl = ssl_opts.resolve(ctx.actor_system().config(), ctx.dh());
-    if (not ssl) {
-      co_return None{};
-    }
-    tls_enabled_ = ssl->tls.inner;
-    auto const default_port
-      = tls_enabled_ ? clickhouse_tls_port : clickhouse_plaintext_port;
-    auto client_args = easy_client::arguments{
-      .host = "",
-      .port = source_.port ? *source_.port
-                           : located<uint64_t>{default_port, location::unknown},
-      .user = "default",
-      .password = "",
-      .default_database = None{},
-      .ssl = std::move(*ssl),
-      .table = {},
-      .mode = {mode::append, location::unknown},
-      .primary = None{},
-      .operator_location = source_.operator_location,
-    };
-    if (source_.uri) {
-      auto uri = co_await source_.uri->evaluate_string(ctx, "uri");
-      if (not uri) {
-        co_return None{};
-      }
-      auto parsed
-        = parse_connection_uri(*uri, source_.uri->get_location(), ctx.dh());
-      if (not parsed) {
-        co_return None{};
-      }
-      apply_connection_uri(client_args, *parsed);
-      if (not parsed->has_port()) {
-        client_args.port = located<uint64_t>{default_port, location::unknown};
-      }
-    } else {
-      auto host = co_await source_.host.evaluate_string(ctx, "host");
-      if (not host) {
-        co_return None{};
-      }
-      client_args.host = std::move(*host);
-      auto user = co_await source_.user.evaluate_string(ctx, "user");
-      if (not user) {
-        co_return None{};
-      }
-      client_args.user = std::move(*user);
-      auto password
-        = co_await source_.password.evaluate_string(ctx, "password");
-      if (not password) {
-        co_return None{};
-      }
-      client_args.password = std::move(*password);
-    }
-    co_return with_read_compression(client_args.make_options());
-  }
-
-  auto run_query(::clickhouse::ClientOptions options, QueryPlan plan,
-                 diagnostic_handler& dh, registry const& reg) -> Task<void> {
-    try {
-      auto first_schema = Option<type>{};
-      auto on_data = [&](::clickhouse::Block const& block) {
-        if (runtime_->should_cancel()) {
-          return false;
-        }
-        auto slice
-          = block_to_table_slice(block, plan.schema_name, "ClickHouse", dh);
-        if (not slice) {
-          return not runtime_->should_cancel();
-        }
-        if (not first_schema) {
-          first_schema = slice->schema();
-        } else if (slice->schema() != *first_schema) {
-          diagnostic::warning(
-            "ClickHouse query schema changed during execution")
-            .hint("continuing to emit data with the new schema")
-            .emit(dh);
-        }
-        runtime_->produce_data(std::move(*slice));
-        return not runtime_->should_cancel();
-      };
-      co_await spawn_blocking([&]() {
-        auto client = ::clickhouse::Client{options};
-        auto prepared = prepare_query(client, plan, reg);
-        TENZIR_DEBUG("from_clickhouse runs `{}`", prepared.text);
-        runtime_->produce_plan(std::move(prepared.local_filter));
-        auto query = ::clickhouse::Query{std::move(prepared.text)};
-        apply_read_settings(query);
-        query.OnDataCancelable(on_data);
-        select_cancelable(client, query, [&] {
-          return runtime_->should_cancel();
-        });
-      });
-    } catch (const panic_exception&) {
-      throw;
-    } catch (const ::clickhouse::ServerError& e) {
-      if (not runtime_->stop_requested.load(std::memory_order_acquire)) {
-        query_error(false, options.password, tls_enabled_, e.GetCode(),
-                    e.what())
-          .emit(dh);
-      }
-    } catch (const std::exception& e) {
-      if (not runtime_->stop_requested.load(std::memory_order_acquire)) {
-        query_error(false, options.password, tls_enabled_, None{}, e.what())
-          .emit(dh);
-      }
-    }
-    co_await runtime_->produce_end_of_data();
-  }
-
-  ReadSource source_;
-  LocalOptimization optimization_;
-  mutable Arc<RuntimeState> runtime_ = Arc<RuntimeState>{std::in_place};
-  bool tls_enabled_ = false;
-  bool done_ = false;
-  ir::OptimizeFilter local_filter_;
-  MetricsCounter events_counter_;
-  uint64_t emitted_ = 0;
-};
 
 /// Reads a ClickHouse or Hydrolix table, or the result of a query of the user,
 /// and in `table` mode computes the stages that it took over in its query,
@@ -1282,8 +878,8 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d
-      = Describer<FromClickhouseArgs, FromClickhouse, FromClickhouseEvents>{};
+    // Only the Nova operator reads from ClickHouse.
+    auto d = Describer<FromClickhouseArgs, FromClickhouseEvents>{};
     auto uri_arg = d.named("uri", &FromClickhouseArgs::uri);
     auto table_arg = d.named("table", &FromClickhouseArgs::table);
     auto host_arg = d.named_optional("host", &FromClickhouseArgs::host);
@@ -1339,7 +935,7 @@ public:
     pushdown::add_pushdown_argument(d, &FromClickhouseArgs::pushdown);
     d.optimization(&FromClickhouseArgs::optimization);
     // A table read takes over the stages that ClickHouse spells. A query of
-    // the user is opaque. Only the Nova operator computes stages.
+    // the user is opaque.
     d.query_plan([](FromClickhouseArgs const& args,
                     ir::QueryChain const& chain) -> ir::Absorption {
       if (not pushdown::pushdown_enabled(args.pushdown)) {
@@ -1347,9 +943,6 @@ public:
       }
       if (not args.table or args.sql) {
         return {.prefix = 0, .declined = "the query of the user is opaque"};
-      }
-      if (not nova_enabled()) {
-        return {.prefix = 0, .declined = "the operator runs without Nova"};
       }
       return absorb_stages(chain, "ClickHouse");
     });
