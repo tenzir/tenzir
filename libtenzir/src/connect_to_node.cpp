@@ -10,6 +10,7 @@
 
 #include "tenzir/fwd.hpp"
 
+#include "tenzir/concept/parseable/numeric/bool.hpp"
 #include "tenzir/concept/parseable/tenzir/endpoint.hpp"
 #include "tenzir/configuration.hpp"
 #include "tenzir/connect_request.hpp"
@@ -58,9 +59,27 @@ auto node_connection_timeout(const caf::settings& options) -> caf::timespan {
 }
 
 auto get_node_endpoint(const caf::settings& opts) -> caf::expected<Endpoint> {
+  // A disabled endpoint means that no node listens, so there is nothing to
+  // connect to. Without this check, the default endpoint would take its place
+  // and a client would retry it until the connection timeout.
+  auto disabled = caf::make_error(ec::invalid_configuration,
+                                  "there is no node to connect to because "
+                                  "`tenzir.endpoint` is disabled");
+  if (const auto* enabled = caf::get_if<bool>(&opts, "tenzir.endpoint")) {
+    if (not *enabled) {
+      return disabled;
+    }
+  }
   Endpoint node_endpoint;
   auto endpoint_str
     = get_or(opts, "tenzir.endpoint", defaults::endpoint.data());
+  // Options from the command line or the environment arrive as strings.
+  if (auto enabled = true; parsers::boolean(endpoint_str, enabled)) {
+    if (not enabled) {
+      return disabled;
+    }
+    endpoint_str = defaults::endpoint.data();
+  }
   if (not parsers::endpoint(endpoint_str, node_endpoint)) {
     return caf::make_error(ec::parse_error, "invalid endpoint",
                            endpoint_str.data());
