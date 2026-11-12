@@ -2312,6 +2312,37 @@ struct std::hash<tenzir::ContextStatus> {
 
 namespace tenzir {
 
+class StopPipelineOptions {
+public:
+  explicit StopPipelineOptions(Option<bool> force) : force{std::move(force)} {
+  }
+
+  /// `force`, may be absent.
+  Option<bool> force;
+
+  friend auto operator==(StopPipelineOptions const&, StopPipelineOptions const&)
+    -> bool
+    = default;
+
+  template <class HashAlgorithm>
+  friend auto hash_append(HashAlgorithm& h, StopPipelineOptions const& value)
+    -> void {
+    hash_append(h, value.force);
+  }
+};
+
+} // namespace tenzir
+
+template <>
+struct std::hash<tenzir::StopPipelineOptions> {
+  auto operator()(tenzir::StopPipelineOptions const& value) const
+    -> std::size_t {
+    return tenzir::hash(value);
+  }
+};
+
+namespace tenzir {
+
 /// The id the platform gave an ad-hoc pipeline when it started it
 /// Values must match
 /// `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`.
@@ -2840,13 +2871,17 @@ using StartPipelineFailure = variant<InvalidPipeline, PipelineNotFound>;
 /// Gracefully stops a running pipeline and remembers the stopped state, without
 /// waiting for its run to drain: until it has, `listPipelines` shows the
 /// pipeline as `stopping`. A pipeline that is not running keeps its outcome, so
-/// a stop after a failure does not erase the reason. Safe to retry either way.
+/// a stop after a failure does not erase the reason. With `force`, the run ends
+/// at once instead, including one that is already `stopping`. Safe to retry
+/// either way.
 class StopPipeline {
 public:
-  explicit StopPipeline(PipelinePath path) : path{std::move(path)} {
+  StopPipeline(PipelinePath path, StopPipelineOptions payload)
+    : path{std::move(path)}, payload{std::move(payload)} {
   }
 
   PipelinePath path;
+  StopPipelineOptions payload;
 };
 
 /// `DELETE /pipelines/:pipelineId`
@@ -3092,6 +3127,8 @@ auto parse_channel_tap_request(simdjson::dom::element value)
   -> Result<ChannelTapRequest, ParseError>;
 auto parse_context_status(simdjson::dom::element value)
   -> Result<ContextStatus, ParseError>;
+auto parse_stop_pipeline_options(simdjson::dom::element value)
+  -> Result<StopPipelineOptions, ParseError>;
 auto parse_adhoc_pipeline_id(simdjson::dom::element value)
   -> Result<AdhocPipelineId, ParseError>;
 auto parse_adhoc_pipeline_definition(simdjson::dom::element value)
@@ -3171,6 +3208,7 @@ auto write_json(ApiChannelTarget const& value, std::string& out) -> void;
 auto write_json(Encoding const& value, std::string& out) -> void;
 auto write_json(ChannelTapRequest const& value, std::string& out) -> void;
 auto write_json(ContextStatus const& value, std::string& out) -> void;
+auto write_json(StopPipelineOptions const& value, std::string& out) -> void;
 auto write_json(AdhocPipelineId const& value, std::string& out) -> void;
 auto write_json(AdhocPipelineDefinition const& value, std::string& out) -> void;
 

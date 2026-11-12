@@ -2238,6 +2238,20 @@ auto parse_context_status(simdjson::dom::element value)
   return ContextStatus{std::move(name), std::move(type), std::move(details)};
 }
 
+auto parse_stop_pipeline_options(simdjson::dom::element value)
+  -> Result<StopPipelineOptions, ParseError> {
+  TRY(auto object, api::object_of(value, "StopPipelineOptions"));
+
+  auto force = Option<bool>{None{}};
+  if (auto force_raw = api::optional_field(object, "force")) {
+    TRY(auto force_present,
+        api::bool_of(*force_raw, "StopPipelineOptions.force"));
+    force = std::move(force_present);
+  }
+
+  return StopPipelineOptions{std::move(force)};
+}
+
 auto AdhocPipelineId::make(std::string value)
   -> Result<AdhocPipelineId, ParseError> {
   static auto const pattern = std::regex{
@@ -3278,6 +3292,22 @@ auto write_json(ContextStatus const& value, std::string& out) -> void {
   out += '}';
 }
 
+auto write_json(StopPipelineOptions const& value, std::string& out) -> void {
+  out += '{';
+  auto field_separator = "";
+  if (value.force) {
+    out += field_separator;
+    field_separator = ",";
+    out += "\"force\":";
+    if (value.force) {
+      out += *value.force ? "true" : "false";
+    } else {
+      out += "null";
+    }
+  }
+  out += '}';
+}
+
 auto write_json(AdhocPipelineId const& value, std::string& out) -> void {
   api::write_string(value.to_string(), out);
 }
@@ -3940,7 +3970,18 @@ auto dispatch(DeploymentApi& handler, HttpRequest request)
           std::move(pipeline_id).unwrap_err());
       }
       auto path = PipelinePath{std::move(pipeline_id).unwrap()};
-      auto decoded = StopPipeline{std::move(path)};
+      auto parsed = api::Document::parse(request.body, "stopPipeline");
+      if (parsed.is_err()) {
+        co_return api::as_request_failure(api::bad_request)(
+          std::move(parsed).unwrap_err());
+      }
+      auto document = std::move(parsed).unwrap();
+      auto payload = parse_stop_pipeline_options(document.root());
+      if (payload.is_err()) {
+        co_return api::as_request_failure(api::bad_request)(
+          std::move(payload).unwrap_err());
+      }
+      auto decoded = StopPipeline{std::move(path), std::move(payload).unwrap()};
       co_return api::encode<204>(co_await handler.handle(std::move(decoded)));
     }
     co_return HttpResponse{
