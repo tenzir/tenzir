@@ -25,6 +25,10 @@ default_configuration::default_configuration() {
   set("caf.middleman.enable-automatic-connections", true);
   set("caf.middleman.app-identifiers", caf::make_config_value_list("tenzir"));
   set("caf.scheduler.max-throughput", 1);
+  // The work-stealing scheduler keeps idle workers polling for work, which
+  // costs CPU even when nothing happens. Workers of the work-sharing scheduler
+  // block until a job arrives.
+  set("caf.scheduler.policy", "sharing");
 }
 
 } // namespace tenzir
