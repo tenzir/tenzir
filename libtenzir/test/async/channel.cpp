@@ -44,6 +44,28 @@ struct NonDefaultMoveOnly {
 
 } // namespace
 
+TEST("channel preserves FIFO order across many items") {
+  constexpr auto count = 200;
+  folly::coro::blockingWait([&]() -> Task<void> {
+    auto [sender, receiver] = channel<int>(64);
+    co_await folly::coro::collectAll(
+      [](Sender<int> sender) -> Task<void> {
+        for (auto i = 0; i < count; ++i) {
+          co_await sender.send(i);
+        }
+      }(std::move(sender)),
+      [&]() -> Task<void> {
+        for (auto i = 0; i < count; ++i) {
+          auto value = co_await receiver.recv();
+          require(value.is_some());
+          check_eq(*value, i);
+        }
+        auto none = co_await receiver.recv();
+        check(none.is_none());
+      }());
+  }());
+}
+
 TEST("channel sends and receives a single item") {
   folly::coro::blockingWait([&]() -> Task<void> {
     auto [sender, receiver] = channel<int>(1);

@@ -8,10 +8,10 @@
 
 #pragma once
 
+#include "tenzir/async/unbounded_queue.hpp"
 #include "tenzir/option.hpp"
 
 #include <folly/coro/Task.h>
-#include <folly/coro/UnboundedQueue.h>
 #include <folly/fibers/Semaphore.h>
 
 #include <cstdint>
@@ -127,7 +127,7 @@ private:
     bool forced;
   };
 
-  folly::coro::UnboundedQueue<Slot, SingleProducer, SingleConsumer> queue_;
+  UnboundedQueue<Slot, SingleProducer, SingleConsumer> queue_;
   folly::fibers::Semaphore sem_;
 };
 
