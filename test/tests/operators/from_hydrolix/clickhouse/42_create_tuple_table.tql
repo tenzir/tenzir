@@ -1,0 +1,7 @@
+// A table with a tuple `a` and a column `a.b`, which only the `Memory` engine
+// accepts.
+from_clickhouse sql="CREATE TABLE fh_tuples (id Int64, a Tuple(b Int64), `a.b` Int64) ENGINE = Memory",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false

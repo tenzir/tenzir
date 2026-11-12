@@ -82,6 +82,14 @@ public:
   /// on a larger one overrides this. Defaults to the largest `uint64_t`.
   virtual auto max_limit() const -> uint64_t;
 
+  /// Whether a table read that projects the table in a derived table, as in
+  /// `SELECT ... FROM (SELECT a, b FROM t) AS ...`, evaluates the filters
+  /// that directly follow the source in the `WHERE` of that derived table,
+  /// next to the table itself. A target that analyzes only the `WHERE` that
+  /// reads a table, for example to find the partitions to read, needs this.
+  /// Defaults to `false`.
+  virtual auto filters_in_projection() const -> bool;
+
   /// Spells a string literal, or returns `None` if the dialect cannot spell
   /// `text`. Defaults to single quotes, which doubles a quote inside.
   auto quote_string(std::string_view text) const

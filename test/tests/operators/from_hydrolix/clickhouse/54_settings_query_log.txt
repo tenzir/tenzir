@@ -1,0 +1,14 @@
+{
+  query: "SELECT toInt64(count()) AS `__tenzir_column_0`, maxOrNull(`id`) AS `__tenzir_column_1` FROM (SELECT `id` FROM default.fh_events WHERE (`id` > 100)) AS `__tenzir_table`",
+  settings: {
+    result_overflow_mode: "break",
+    aggregate_functions_null_for_empty: "0",
+  },
+}
+{
+  query: "SELECT count() AS events FROM default.fh_events WHERE id > 100",
+  settings: {
+    result_overflow_mode: "break",
+    aggregate_functions_null_for_empty: "1",
+  },
+}

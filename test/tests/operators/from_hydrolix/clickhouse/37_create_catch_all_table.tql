@@ -1,0 +1,7 @@
+// A table whose marked `JSON` column holds the fields without a column of their
+// own, as `to_clickhouse` creates it.
+from_clickhouse sql="CREATE TABLE fh_catch_all (time DateTime64(3, 'UTC'), id Int64, `src.port` UInt16, event JSON COMMENT 'tenzir:catch_all') ENGINE = MergeTree ORDER BY time",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false

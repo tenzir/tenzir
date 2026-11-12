@@ -1,0 +1,6 @@
+// `from_hydrolix` takes over the stages that Hydrolix's ClickHouse engine
+// spells, up to the `capitalize`, which stays in Tenzir.
+from_hydrolix "https://acme.hydrolix.live", token="t", table="db.tbl"
+where time > 2026-01-01
+summarize src, n=count()
+where src.capitalize() == "A"

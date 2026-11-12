@@ -1,0 +1,9 @@
+{
+  level: "high",
+  src: {
+    host: "c.example",
+    port: 443,
+  },
+  time: 2026-01-01T00:00:03Z,
+  id: 3,
+}

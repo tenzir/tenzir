@@ -1,0 +1,14 @@
+---
+error: true
+timeout: 5
+---
+
+// Downstream fails after one second, and cancellation stops the read while
+// the server still sorts, before its first data block.
+from_hydrolix f"http://{env("CLICKHOUSE_HOST")}",
+              token="test-token",
+              port=int(env("CLICKHOUSE_PORT")),
+              table="default.fh_slow"
+sort -stamp
+head 1
+assert_throughput 1, within=1s, retries=0

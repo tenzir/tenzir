@@ -3920,6 +3920,20 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<CastArgs, Cast, NovaCast>{};
+    d.validate([](DescribeCtx& ctx) -> Empty {
+      diagnostic::warning("the `ocsf_cast` operator is deprecated")
+        .primary(ctx.operator_location())
+        .note("the function returns `null` for unresolved events instead of "
+              "dropping them")
+        .note(
+          "the function does not assign `@name` and also validates required "
+          "fields and constraints")
+        .hint("use the `ocsf_cast` function instead, preserving any named "
+              "options")
+        .docs("https://tenzir.com/docs/reference/functions/ocsf_cast")
+        .emit(ctx);
+      return {};
+    });
     d.parallelizable();
     d.named("encode_variants", &CastArgs::encode_variants);
     d.named("null_fill", &CastArgs::null_fill);
@@ -3952,6 +3966,17 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<TrimArgs, Trim, NovaTrim>{};
+    d.validate([](DescribeCtx& ctx) -> Empty {
+      diagnostic::warning("the `ocsf_trim` operator is deprecated")
+        .primary(ctx.operator_location())
+        .note("the function returns `null` for unresolved events instead of "
+              "dropping them")
+        .hint("use the `ocsf_trim` function instead, preserving any named "
+              "options")
+        .docs("https://tenzir.com/docs/reference/functions/ocsf_trim")
+        .emit(ctx);
+      return {};
+    });
     d.parallelizable();
     d.named("drop_optional", &TrimArgs::drop_optional);
     d.named("drop_recommended", &TrimArgs::drop_recommended);
@@ -3986,6 +4011,16 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<DeriveArgs, Derive, NovaDerive>{};
+    d.validate([](DescribeCtx& ctx) -> Empty {
+      diagnostic::warning("the `ocsf_derive` operator is deprecated")
+        .primary(ctx.operator_location())
+        .note("the function returns `null` for unresolved events instead of "
+              "dropping them")
+        .hint("use the `ocsf_derive` function instead")
+        .docs("https://tenzir.com/docs/reference/functions/ocsf_derive")
+        .emit(ctx);
+      return {};
+    });
     d.parallelizable();
     d.operator_location(&DeriveArgs::operator_location);
     // Derivation may change either side of arbitrary schema-defined enum and

@@ -1,0 +1,10 @@
+// ClickHouse filters, sorts, and selects the value of the key `b`, which is `0`
+// for the third row, whose map lacks the key.
+from_clickhouse table="fc_map_ints",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
+where counts.b >= 0
+sort -counts.b
+select id, b=counts.b

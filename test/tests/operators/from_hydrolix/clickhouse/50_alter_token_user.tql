@@ -1,0 +1,8 @@
+// A session that truncates results instead of failing, and that sums up empty
+// input as `NULL`. Hydrolix manages its limits itself, with circuit breakers
+// that fail a query, so the reads keep the session's overflow modes.
+from_clickhouse sql="ALTER USER `__api_token__` SETTINGS result_overflow_mode = 'break', aggregate_functions_null_for_empty = 1",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false

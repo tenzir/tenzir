@@ -4,4 +4,5 @@ error: Hydrolix error 395: DB::Exception: hdx_query_timerange_required is set to
 5 | from_hydrolix f"http://{env("CLICKHOUSE_HOST")}",
   | ^^^^^^^^^^^^^
   |
-  = hint: restrict the query to a time range on the table's primary timestamp, e.g., with `let $since = now() - 1h` before `from_hydrolix` and `where time > $since` after it
+  = hint: restrict the query to a time range on the table's primary timestamp, e.g., with `let $since = now() - 1h` before `from_hydrolix` and `where time > $since` directly after it
+  = hint: place the `where` before any `head` or `summarize`, whose result it would read instead of the table

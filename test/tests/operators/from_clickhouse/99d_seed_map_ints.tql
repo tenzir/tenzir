@@ -1,0 +1,6 @@
+// A map of numbers, whose missing keys read as `0` in ClickHouse.
+from_clickhouse sql="CREATE OR REPLACE TABLE fc_map_ints ENGINE = MergeTree ORDER BY id AS SELECT * FROM values('id Int64, counts Map(String, Int64)', (1, map('a', 5, 'b', 1)), (2, map('b', 2)), (3, map()))",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false

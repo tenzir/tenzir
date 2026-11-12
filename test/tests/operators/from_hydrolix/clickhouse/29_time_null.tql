@@ -1,4 +1,5 @@
-// The guards decide which rows are `null` in TQL.
+// Hydrolix holds a value for every row, also for those that Tenzir decodes as
+// `null`, so no row has a `null` time.
 from_hydrolix f"http://{env("CLICKHOUSE_HOST")}",
               token="test-token",
               port=int(env("CLICKHOUSE_PORT")),

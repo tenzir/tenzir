@@ -24,6 +24,7 @@
 #include <tenzir/tql2/resolve.hpp>
 
 #include <fmt/format.h>
+#include <fmt/ranges.h>
 
 #include <limits>
 #include <string_view>
@@ -268,16 +269,61 @@ TEST("absorption takes over the stages that ClickHouse spells") {
                filter("x.capitalize() == \"A\"")},
     .end = "",
   };
-  auto absorption = absorb_stages(chain);
+  auto absorption = absorb_stages(chain, "ClickHouse");
   CHECK_EQUAL(absorption.prefix, size_t{3});
   CHECK_EQUAL(absorption.declined, "ClickHouse cannot spell the stage");
   chain.stages = {aggregate({key({"y"}), call("n", "count")}), filter("n > 1")};
-  CHECK_EQUAL(absorb_stages(chain).prefix, size_t{2});
+  CHECK_EQUAL(absorb_stages(chain, "ClickHouse").prefix, size_t{2});
   chain.stages = {aggregate({call("s", "sum", std::vector<std::string>{"x"})})};
-  CHECK_EQUAL(absorb_stages(chain).prefix, size_t{0});
+  CHECK_EQUAL(absorb_stages(chain, "ClickHouse").prefix, size_t{0});
   // Names that start with `__tenzir_` belong to the query.
   chain.stages = {filter("__tenzir_x > 0")};
-  CHECK_EQUAL(absorb_stages(chain).prefix, size_t{0});
+  CHECK_EQUAL(absorb_stages(chain, "ClickHouse").prefix, size_t{0});
+  // Hydrolix takes over the same stages and names itself when it declines.
+  chain.stages = {filter("x > 0"), sort({"x"}, true), limit(3),
+                  filter("x.capitalize() == \"A\"")};
+  absorption = absorb_stages(chain, "Hydrolix");
+  CHECK_EQUAL(absorption.prefix, size_t{3});
+  CHECK_EQUAL(absorption.declined, "Hydrolix cannot spell the stage");
+}
+
+TEST("table reads set the settings of their target") {
+  auto const plain = make_binding(plain_table());
+  auto const settings
+    = [](TableBinding const& table, ir::QueryPlan const& plan, bool hydrolix) {
+        auto bound = bind_plan(table, plan);
+        REQUIRE(bound.is_ok());
+        auto result = std::vector<std::string>{};
+        for (auto const& setting : table_read_settings(
+               bound.unwrap(), table.catch_all().is_some(), hydrolix)) {
+          result.push_back(fmt::format("{}={}", setting.name, setting.value));
+        }
+        return fmt::to_string(fmt::join(result, " "));
+      };
+  auto const overflow
+    = std::string{"read_overflow_mode=throw read_overflow_mode_leaf=throw "
+                  "group_by_overflow_mode=throw sort_overflow_mode=throw "
+                  "result_overflow_mode=throw timeout_overflow_mode=throw "
+                  "timeout_overflow_mode_leaf=throw"};
+  // A read of ClickHouse fails rather than truncating, while Hydrolix's
+  // circuit breakers fail by themselves.
+  CHECK_EQUAL(settings(plain, {}, false), overflow);
+  CHECK_EQUAL(settings(plain, {}, true), "");
+  CHECK_EQUAL(settings(plain, {filter("x > 0"), limit(1)}, true), "");
+  // A summary counts `0` for no rows.
+  auto const summary = ir::QueryPlan{aggregate({call("n", "count")})};
+  CHECK_EQUAL(settings(plain, summary, false),
+              "aggregate_functions_null_for_empty=0 " + overflow);
+  CHECK_EQUAL(settings(plain, summary, true),
+              "aggregate_functions_null_for_empty=0");
+  // Values below a `JSON` column keep dotted keys apart, and sort by type.
+  CHECK_EQUAL(settings(plain, {filter("j.k == 1")}, true),
+              "json_type_escape_dots_in_keys=1");
+  CHECK_EQUAL(settings(plain, {sort({"j", "k"})}, true),
+              "json_type_escape_dots_in_keys=1 "
+              "allow_suspicious_types_in_order_by=1");
+  CHECK_EQUAL(settings(make_binding(catch_all_table()), {}, true),
+              "json_type_escape_dots_in_keys=1");
 }
 
 TEST("fields of a plain table bind to its columns") {
@@ -307,9 +353,7 @@ TEST("fields of a plain table bind to its columns") {
               "error: the tuple `meta` has no element `nope`");
   CHECK_EQUAL(bind(table, {"x", "y"}),
               "error: `x` has the type `Int64`, which has no fields");
-  CHECK_EQUAL(bind(table, {"m", "k"}),
-              "error: `m` has the type `Map(String,Int64)`, which has no "
-              "fields");
+  CHECK_EQUAL(bind(table, {"m", "k"}), "`m`['k']");
   CHECK_EQUAL(bind(table, {"p"}), "error: the column `p` has the type `Point`, "
                                   "which the operator cannot read");
   // An element of a tuple reads on its own, also next to an element that
@@ -328,6 +372,60 @@ TEST("fields of a plain table bind to its columns") {
   CHECK_EQUAL(bind(table, {"mat"}),
               "error: `mat` is an `MATERIALIZED` column, which `SELECT *` "
               "includes only depending on the session's settings");
+}
+
+TEST("fields below maps bind to the values of their keys") {
+  auto const table = make_binding({
+    column("id", "UInt64"),
+    column("catchall", "Map(String, Nullable(String))"),
+    column("counts", "Map(LowCardinality(String), Int64)"),
+    column("mm", "Map(String, Map(String, Int64))"),
+    column("tm", "Tuple(inner Map(String, String))"),
+    column("mt", "Map(String, Tuple(a Int64))"),
+    column("codes", "Map(UInt16, String)"),
+    column("points", "Map(String, Point)"),
+  });
+  CHECK_EQUAL(bind(table, {"catchall", "class_uid"}),
+              "`catchall`['class_uid']");
+  // A key is a string literal, also where it looks like a path.
+  CHECK_EQUAL(bind(table, {"catchall", "a.b'c\\d"}),
+              R"(`catchall`['a.b\'c\\d'])");
+  CHECK_EQUAL(bind(table, {"counts", "a"}), "`counts`['a']");
+  // Maps and tuples nest.
+  CHECK_EQUAL(bind(table, {"mm", "o", "i"}), "`mm`['o']['i']");
+  CHECK_EQUAL(bind(table, {"tm", "inner", "k"}),
+              "tupleElement(`tm`, 'inner')['k']");
+  CHECK_EQUAL(bind(table, {"mt", "k", "a"}), "tupleElement(`mt`['k'], 'a')");
+  // The value has the type of the map's values.
+  CHECK_EQUAL(bind(table, {"counts", "a", "b"}),
+              "error: `counts.a` has the type `Int64`, which has no fields");
+  CHECK_EQUAL(bind(table, {"mt", "k", "nope"}),
+              "error: the tuple `mt.k` has no element `nope`");
+  CHECK_EQUAL(bind(table, {"points", "k"}),
+              "error: `points.k` has the type `Point`, which the operator "
+              "cannot read");
+  // Only string keys have names that a field addresses.
+  CHECK_EQUAL(bind(table, {"codes", "200"}),
+              "error: the map `codes` has the type `Map(UInt16,String)`, whose "
+              "keys are no strings that a field name could address");
+  // A missing key yields the default value of the map's values, which is
+  // `NULL` for `Nullable` values, so a null check spells as for a column.
+  CHECK_EQUAL(query(table, {filter("catchall.missing == null")}),
+              "SELECT * FROM tbl WHERE (`catchall`['missing'] IS NULL)");
+  // The value of a key is a result column like any other.
+  CHECK_EQUAL(
+    query(table,
+          {aggregate({key({"catchall", "class_uid"}), call("n", "count")}),
+           sort({"n"}, true)}),
+    "SELECT * FROM (SELECT `catchall`['class_uid'] AS `__tenzir_column_0`, "
+    "toInt64(count()) AS `__tenzir_column_1` FROM tbl GROUP BY "
+    "`catchall`['class_uid']) AS `__tenzir_level_2` ORDER BY "
+    "`__tenzir_column_1` DESC");
+  CHECK_EQUAL(
+    query(table, {select({{{"v"}, {"catchall", "class_uid"}}}), sort({"v"})}),
+    "SELECT * FROM (SELECT `catchall`['class_uid'] AS "
+    "`__tenzir_column_0` FROM tbl) AS `__tenzir_level_1` ORDER BY "
+    "`__tenzir_column_0` ASC");
 }
 
 TEST("fields of a catch-all table bind to their single origin") {
@@ -420,15 +518,11 @@ TEST("narrowed tuples read their elements unambiguously") {
   projection.push_back(*ast::field_path::try_from(parse("a.c.d")));
   projection.push_back(*ast::field_path::try_from(parse("a.b")));
   // `a`.`b` would read the column `a.b`.
-  CHECK_EQUAL(select_columns(&schema, projection, TupleAccess::element),
+  CHECK_EQUAL(select_columns(&schema, projection),
               "CAST(tuple(tupleElement(`a`, 'b'), "
               "CAST(tuple(tupleElement(tupleElement(`a`, 'c'), 'd')), "
               "'Tuple(`d` String)')), 'Tuple(`b` Int64, `c` Tuple(`d` "
               "String))') AS `a`");
-  // Hydrolix keeps the dotted spelling.
-  CHECK_EQUAL(select_columns(&schema, projection, TupleAccess::dotted),
-              "CAST(tuple(`a`.`b`, CAST(tuple(`a`.`c`.`d`), 'Tuple(`d` "
-              "String)')), 'Tuple(`b` Int64, `c` Tuple(`d` String))') AS `a`");
 }
 
 TEST("plans bind the fields that they read from the table") {
@@ -482,8 +576,8 @@ TEST("table reads compute the stages in their query") {
   CHECK_EQUAL(query(table, {}), "SELECT * FROM tbl");
   CHECK_EQUAL(query(table, {filter("meta.source == \"a\""), limit(0)},
                     "`id`, `meta`"),
-              "SELECT * FROM (SELECT `id`, `meta` FROM tbl) AS "
-              "`__tenzir_table` WHERE (tupleElement(`meta`, 'source') = 'a') "
+              "SELECT * FROM (SELECT `id`, `meta` FROM tbl WHERE "
+              "(tupleElement(`meta`, 'source') = 'a')) AS `__tenzir_table` "
               "LIMIT 0");
   CHECK_EQUAL(query(table, {drop({{"x"}, {"p"}}), limit(2)}),
               "SELECT * EXCEPT (`x`, `p`) FROM tbl LIMIT 2");
@@ -505,6 +599,41 @@ TEST("table reads compute the stages in their query") {
               "`__tenzir_order_0` FROM tbl AS `__tenzir_source_1` ORDER BY "
               "`x` DESC LIMIT 2) AS `__tenzir_level_2` ORDER BY `id` ASC, "
               "`__tenzir_order_0` DESC");
+}
+
+TEST("leading filters constrain the table in its projection") {
+  // Hydrolix derives the time range of a query from the `WHERE` that reads
+  // the table, so the filters that directly follow the source go there, also
+  // when the query projects the table.
+  auto const table = make_binding(plain_table());
+  auto const selection = "`id`, `x`, `Y`";
+  CHECK_EQUAL(query(table, {filter("x > 0"), filter("id < 9")}, selection),
+              "SELECT `id`, `x`, `Y` FROM tbl WHERE (`x` > 0) AND (`id` < "
+              "9)");
+  CHECK_EQUAL(
+    query(table, {filter("x > 0"), select({{{"i"}, {"id"}}}), filter("i > 1")},
+          selection),
+    "SELECT * FROM (SELECT `id` AS `__tenzir_column_0` FROM (SELECT "
+    "`id`, `x`, `Y` FROM tbl WHERE (`x` > 0)) AS `__tenzir_table`) "
+    "AS `__tenzir_level_1` WHERE (`__tenzir_column_0` > 1)");
+  CHECK_EQUAL(
+    query(table,
+          {filter("x > 0"), aggregate({key({"Y"}), call("n", "count")}),
+           sort({"n"}, true), limit(3)},
+          selection),
+    "SELECT * FROM (SELECT `Y` AS `__tenzir_column_0`, "
+    "toInt64(count()) AS `__tenzir_column_1` FROM (SELECT `id`, `x`, "
+    "`Y` FROM tbl WHERE (`x` > 0)) AS `__tenzir_table` GROUP BY `Y`) "
+    "AS `__tenzir_level_2` ORDER BY `__tenzir_column_1` DESC LIMIT 3");
+  // A filter after another stage reads the result of that stage, and stays
+  // where it is.
+  CHECK_EQUAL(
+    query(table, {limit(5), filter("x > 0")}, selection),
+    "SELECT * FROM (SELECT * FROM (SELECT `id`, `x`, `Y` FROM tbl) AS "
+    "`__tenzir_table` LIMIT 5) AS `__tenzir_level_0` WHERE (`x` > 0)");
+  CHECK_EQUAL(query(table, {sort({"x"}), filter("x > 0")}, selection),
+              "SELECT * FROM (SELECT `id`, `x`, `Y` FROM tbl) AS "
+              "`__tenzir_table` WHERE (`x` > 0) ORDER BY `x` ASC");
 }
 
 } // namespace tenzir::plugins::clickhouse

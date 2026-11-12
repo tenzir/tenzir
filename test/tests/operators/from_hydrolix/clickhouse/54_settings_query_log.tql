@@ -1,0 +1,8 @@
+// The settings of the queries of the last two tests: the summary sets
+// `aggregate_functions_null_for_empty`, but neither query overrides the
+// overflow mode of the session.
+from_clickhouse sql="SELECT query, mapFilter((k, v) -> k LIKE '%overflow_mode%' OR k = 'aggregate_functions_null_for_empty', Settings) AS settings FROM system.query_log WHERE type = 'QueryFinish' AND query_kind = 'Select' AND user = '__api_token__' AND query LIKE '%> 100%' ORDER BY event_time_microseconds",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false

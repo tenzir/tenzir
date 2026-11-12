@@ -3,4 +3,4 @@ every 1s {
   where topic? == "metric-topic"
 }
 head 1
-select topic, schema, events, has_schema_id=(schema_id != "")
+select topic, schema, events, matches_schema_id=(schema_id == type_id({value: 42}))

@@ -11,6 +11,7 @@
 #include "tenzir/arc.hpp"
 #include "tenzir/async/semaphore.hpp"
 #include "tenzir/async/task.hpp"
+#include "tenzir/async/unbounded_queue.hpp"
 #include "tenzir/atomic.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/option.hpp"
@@ -36,7 +37,7 @@ struct Channel {
   }
 
   /// The thread-safe queue backing our channel.
-  folly::UMPMCQueue<T, false> data;
+  folly::UMPMCQueue<T, false, queue_lg_segment_size> data;
   /// Number of remaining send permits.
   Semaphore capacity;
   /// Number of ready-to-dequeue items, plus a sticky wakeup permit after close.

@@ -1,0 +1,10 @@
+// Hydrolix computes the operators after a summary, too.
+from_hydrolix f"http://{env("CLICKHOUSE_HOST")}",
+              token="test-token",
+              port=int(env("CLICKHOUSE_PORT")),
+              table="default.fh_events"
+where id > 0
+summarize name, n=count(), top=max(score)
+where n >= 1
+sort -top
+head 2

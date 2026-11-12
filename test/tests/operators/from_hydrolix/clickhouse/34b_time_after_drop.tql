@@ -1,0 +1,8 @@
+// The optimizer moves a filter ahead of a `drop`, too.
+from_hydrolix f"http://{env("CLICKHOUSE_HOST")}",
+              token="test-token",
+              port=int(env("CLICKHOUSE_PORT")),
+              table="default.fh_events"
+drop score
+where time > 2026-01-01T00:00:01
+sort id

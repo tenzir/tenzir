@@ -1,0 +1,11 @@
+created: 2026-11-12
+title: OCSF compaction and native source semantics
+intro: >-
+  This release adds lossless OCSF compaction with ocsf_compact, computes category_uid
+  and type_uid in ocsf_derive, and updates the bundled OCSF schemas. Operators that
+  follow Splunk, ClickHouse, MySQL, SQL Server, KQL, and SentinelOne sources now use
+  the native semantics of those systems. The release also adds Redis source and sink
+  operators and lowers the memory and CPU usage of nodes.
+source:
+  mode: sync-stable-queue
+  previous_stable: v6.21.0

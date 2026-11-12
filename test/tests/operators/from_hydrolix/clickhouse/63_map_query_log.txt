@@ -1,0 +1,12 @@
+{
+  query: "SELECT `id` AS `__tenzir_column_0` FROM (SELECT `id`, `catchall` FROM default.fh_catchall WHERE (`catchall`['class_uid'] = '1001')) AS `__tenzir_table`",
+}
+{
+  query: "SELECT `id` AS `__tenzir_column_0` FROM (SELECT `id`, `catchall` FROM default.fh_catchall WHERE (`catchall`['raw_data'] IS NULL)) AS `__tenzir_table` ORDER BY `id` ASC",
+}
+{
+  query: "SELECT * FROM (SELECT `id` AS `__tenzir_column_0`, `catchall`['class_uid'] AS `__tenzir_column_1` FROM (SELECT `id`, `catchall` FROM default.fh_catchall) AS `__tenzir_table`) AS `__tenzir_level_2` ORDER BY `__tenzir_column_0` ASC",
+}
+{
+  query: "SELECT * FROM (SELECT `catchall`['severity'] AS `__tenzir_column_0`, toInt64(count()) AS `__tenzir_column_1` FROM (SELECT `catchall` FROM default.fh_catchall) AS `__tenzir_table` GROUP BY `catchall`['severity']) AS `__tenzir_level_2` ORDER BY `__tenzir_column_0` ASC",
+}

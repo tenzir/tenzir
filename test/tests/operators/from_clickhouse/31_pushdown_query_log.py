@@ -133,15 +133,17 @@ INSERT INTO {TABLE} (id, x, y, n, meta, half) VALUES (1, 1, 'foo', NULL, ('a', 1
     )
     source = f'from_clickhouse table="{TABLE}",\n  {CONNECTION}\n'
     # The filter, the projection, and the limit go into the query. The inner
-    # selection covers the filter's references, in table order.
+    # selection covers the filter's references, in table order, and the
+    # filter that directly follows the source reads the table itself.
     _run_pipeline(
         tenzir,
         source + 'where x > 0 or y == "foo" and n in [1, 2, 3]\nselect x, y\nhead 42',
     )
     assert _last_select() == (
         "SELECT `x` AS `__tenzir_column_0`, `y` AS `__tenzir_column_1`"
-        f" FROM (SELECT `x`, `y`, `n` FROM {TABLE}) AS `__tenzir_table`"
-        " WHERE ((`x` > 0) OR ((`y` = 'foo') AND (`n` IN (1, 2, 3)))) LIMIT 42"
+        f" FROM (SELECT `x`, `y`, `n` FROM {TABLE}"
+        " WHERE ((`x` > 0) OR ((`y` = 'foo') AND (`n` IN (1, 2, 3)))))"
+        " AS `__tenzir_table` LIMIT 42"
     ), _last_select()
     # Each conjunct of a filter goes into the query, and so does the limit.
     _run_pipeline(tenzir, source + 'where x > 0 and y.to_upper() == "FOO"\nhead 5')
@@ -200,8 +202,8 @@ INSERT INTO {TABLE} (id, x, y, n, meta, half) VALUES (1, 1, 'foo', NULL, ('a', 1
         tenzir, source + "where d == 10\nselect id\nto_stdout { write_ndjson }"
     )
     assert _last_select() == (
-        f"SELECT `id` AS `__tenzir_column_0` FROM (SELECT `id`, `d` FROM {TABLE})"
-        " AS `__tenzir_table` WHERE (`d` = 10)"
+        f"SELECT `id` AS `__tenzir_column_0` FROM (SELECT `id`, `d` FROM {TABLE}"
+        " WHERE (`d` = 10)) AS `__tenzir_table`"
     ), _last_select()
     assert output.strip() == '{"id":1}', output
     # User-provided SQL is sent verbatim.

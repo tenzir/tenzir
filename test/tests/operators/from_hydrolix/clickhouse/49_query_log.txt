@@ -1,0 +1,98 @@
+{
+  type: "QueryFinish",
+  query: "SELECT * FROM default.fh_events ORDER BY `id` ASC",
+  settings: [],
+}
+{
+  type: "QueryFinish",
+  query: "SELECT name, currentUser() AS user FROM default.fh_events WHERE id = 2",
+  settings: [],
+}
+{
+  type: "QueryFinish",
+  query: "SELECT `name` AS `__tenzir_column_0` FROM (SELECT `id`, `name` FROM default.fh_events WHERE (`id` >= 2) AND (`name` <> 'bob')) AS `__tenzir_table`",
+  settings: [],
+}
+{
+  type: "QueryFinish",
+  query: "SELECT toInt64(count()) AS `__tenzir_column_0`, minOrNull(`id`) AS `__tenzir_column_1`, maxOrNull(`id`) AS `__tenzir_column_2` FROM (SELECT `id` FROM default.fh_events WHERE (`id` > 1)) AS `__tenzir_table`",
+  settings: [],
+}
+{
+  type: "QueryFinish",
+  query: "SELECT * FROM default.fh_events LIMIT 1",
+  settings: [],
+}
+{
+  type: "QueryFinish",
+  query: "SELECT toInt64(count()) AS `__tenzir_column_0` FROM (SELECT `time` FROM default.fh_events WHERE (`time` > <since>)) AS `__tenzir_table`",
+  settings: [],
+}
+{
+  type: "QueryFinish",
+  query: "SELECT * FROM default.fh_events WHERE (`time` > fromUnixTimestamp64Nano(1767225601000000000, 'UTC')) ORDER BY `id` ASC LIMIT 1",
+  settings: [],
+}
+{
+  type: "QueryFinish",
+  query: "SELECT * FROM (SELECT `id` AS `__tenzir_column_0`, `name` AS `__tenzir_column_1` FROM (SELECT `time`, `id`, `name` FROM default.fh_events WHERE (`time` > fromUnixTimestamp64Nano(1767225601000000000, 'UTC'))) AS `__tenzir_table`) AS `__tenzir_level_2` ORDER BY `__tenzir_column_0` ASC",
+  settings: [],
+}
+{
+  type: "QueryFinish",
+  query: "SELECT * FROM (SELECT * EXCEPT (`score`) FROM default.fh_events WHERE (`time` > fromUnixTimestamp64Nano(1767225601000000000, 'UTC'))) AS `__tenzir_level_0` ORDER BY `id` ASC",
+  settings: [],
+}
+{
+  type: "QueryFinish",
+  query: "SELECT toInt64(count()) AS `__tenzir_column_0`, minOrNull(`time`) AS `__tenzir_column_1` FROM (SELECT `time` FROM default.fh_events WHERE (`time` > fromUnixTimestamp64Nano(1767225601000000000, 'UTC'))) AS `__tenzir_table`",
+  settings: [],
+}
+{
+  type: "QueryFinish",
+  query: "SELECT * FROM (SELECT `__tenzir_source_1`.*, `time` AS `__tenzir_order_0` FROM default.fh_events AS `__tenzir_source_1` ORDER BY `time` ASC LIMIT 2) AS `__tenzir_level_2` WHERE (`time` > fromUnixTimestamp64Nano(1767225601000000000, 'UTC')) ORDER BY `__tenzir_order_0` ASC",
+  settings: [],
+}
+{
+  type: "QueryFinish",
+  query: "SELECT * FROM (SELECT `time` AS `__tenzir_column_0`, `id` AS `__tenzir_column_1` FROM (SELECT `time`, `id` FROM default.fh_events WHERE (`time` > fromUnixTimestamp64Nano(1767225601000000000, 'UTC'))) AS `__tenzir_table`) AS `__tenzir_level_2` ORDER BY `__tenzir_column_1` ASC",
+  settings: [],
+}
+{
+  type: "QueryFinish",
+  query: "SELECT * FROM (SELECT * EXCEPT (`score`) FROM default.fh_events WHERE (`time` > fromUnixTimestamp64Nano(1767225601000000000, 'UTC'))) AS `__tenzir_level_0` ORDER BY `id` ASC",
+  settings: [],
+}
+{
+  type: "QueryFinish",
+  query: "SELECT * FROM default.fh_catch_all WHERE (`time` > fromUnixTimestamp64Nano(1767225600000000000, 'UTC')) AND (`event`.`level` = 'high') AND (`src.port` = 443) ORDER BY `event`.`src`.`host` DESC LIMIT 1",
+  settings: [
+    "allow_suspicious_types_in_order_by",
+    "json_type_escape_dots_in_keys",
+  ],
+}
+{
+  type: "QueryFinish",
+  query: "SELECT * FROM (SELECT `name` AS `__tenzir_column_0`, toInt64(count()) AS `__tenzir_column_1`, maxOrNull(`score`) AS `__tenzir_column_2` FROM (SELECT `id`, `name`, `score` FROM default.fh_events WHERE (`id` > 0)) AS `__tenzir_table` GROUP BY `name`) AS `__tenzir_level_3` WHERE (`__tenzir_column_1` >= 1) ORDER BY `__tenzir_column_2` DESC LIMIT 2",
+  settings: [],
+}
+{
+  type: "QueryFinish",
+  query: "SELECT * FROM (SELECT `id` AS `__tenzir_column_0`, `name` AS `__tenzir_column_1` FROM (SELECT `id`, `name` FROM default.fh_events) AS `__tenzir_table`) AS `__tenzir_level_2` ORDER BY `__tenzir_column_0` DESC LIMIT 2",
+  settings: [],
+}
+{
+  type: "QueryFinish",
+  query: "SELECT `id` AS `__tenzir_column_0`, tupleElement(`a`, 'b') AS `__tenzir_column_1`, `a.b` AS `__tenzir_column_2` FROM (SELECT `id`, CAST(tuple(tupleElement(`a`, 'b')), 'Tuple(`b` Int64)') AS `a`, `a.b` FROM default.fh_tuples WHERE (tupleElement(`a`, 'b') > 10)) AS `__tenzir_table`",
+  settings: [],
+}
+{
+  type: "QueryFinish",
+  query: "SELECT `id`, `name` FROM default.fh_events",
+  settings: [],
+}
+{
+  type: "ExceptionBeforeStart",
+  query: "SELECT * FROM default.fh_events WHERE (`name` > 1)",
+  settings: [],
+}

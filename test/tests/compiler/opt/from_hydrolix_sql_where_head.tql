@@ -1,0 +1,4 @@
+// A query of the user is opaque, so `from_hydrolix` takes over no stage.
+from_hydrolix "https://acme.hydrolix.live", token="t", sql="SELECT * FROM db.tbl"
+where time > 2026-01-01
+head 5

@@ -1,0 +1,11 @@
+---
+error: true
+---
+
+// A field that does not bind to the table fails the read before any query
+// reads data.
+from_hydrolix f"http://{env("CLICKHOUSE_HOST")}",
+              token="test-token",
+              port=int(env("CLICKHOUSE_PORT")),
+              table="default.fh_events"
+where name.first == "alice"

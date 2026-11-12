@@ -1,0 +1,8 @@
+// The query reads the element `b` of the tuple `a`, not the column `a.b`, also
+// where it narrows the tuple to the elements that the stages read.
+from_hydrolix f"http://{env("CLICKHOUSE_HOST")}",
+              token="test-token",
+              port=int(env("CLICKHOUSE_PORT")),
+              table="default.fh_tuples"
+where a.b > 10
+select id, a.b, dotted=this["a.b"]

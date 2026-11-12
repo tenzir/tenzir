@@ -1,0 +1,109 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "from_hydrolix",
+       store: {
+         op: {
+           path: [
+             `from_hydrolix` @ [1]:63..76 from 0
+           ],
+           ref: std::from_hydrolix/op
+         },
+         args: [
+           expression constant string "https://acme.hydrolix.live" @ [1]:77..105 from 0
+         ],
+         named_args: [
+           {
+             index: 0,
+             value: expression constant string "t" @ [1]:113..116 from 0
+           },
+           {
+             index: 1,
+             value: located "db.tbl" @ [1]:124..132 from 0
+           },
+           {
+             index: 5,
+             value: located false @ [1]:143..148 from 0
+           }
+         ]
+       },
+       filter: [
+         
+       ],
+-      order: "ordered"
++      order: "ordered",
++      declined: "`pushdown=false`"
+     },
+     where_ir {
+       op: {
+         path: [
+-          `where` @ [1]:149..154 from 0
++          
+         ],
+-        ref: std::where/op
++        ref: unresolved
+       },
+       args: [
+-        expression binary_expr {
++        Incomplete binary_expr {
+           left: root_field {
+             id: `time` @ [1]:155..159 from 0,
+             has_question_mark: false
+           },
+           op: "gt",
+           right: constant time 2026-01-01T00:00:00Z @ [1]:162..172 from 0,
+           location: [1]:155..172 from 0
+         }
+       ],
+       named_args: [
+         
+       ]
+     },
+     GenericIr {
+       desc: "head",
+       store: {
+         op: {
+           path: [
+             `head` @ [1]:173..177 from 0
+           ],
+           ref: std::head/op
+         },
+         args: [
+           located 5 @ [1]:178..179 from 0
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:179..179 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ],
+   definition_location: [1]:63..179 from 0
+ }

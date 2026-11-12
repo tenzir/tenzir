@@ -24,17 +24,13 @@
 #include "tenzir/detail/string.hpp"
 #include "tenzir/http.hpp"
 #include "tenzir/logger.hpp"
-#include "tenzir/nova/eval.hpp"
 #include "tenzir/nova/events.hpp"
 #include "tenzir/nova_flag.hpp"
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/pipeline_metrics.hpp"
 #include "tenzir/plugin/register.hpp"
-#include "tenzir/pushdown/aggregation.hpp"
 #include "tenzir/pushdown/layout.hpp"
 #include "tenzir/pushdown/plan.hpp"
-#include "tenzir/pushdown/read.hpp"
-#include "tenzir/pushdown/translate.hpp"
 #include "tenzir/tql2/filter.hpp"
 #include "tenzir/tql2/plugin.hpp"
 
@@ -68,7 +64,7 @@ struct HydrolixConnectionArgs {
 };
 
 /// What a read connects to and what it queries, which `from_clickhouse` and
-/// `from_hydrolix` share. The optimizer's hints differ between them.
+/// `from_hydrolix` share.
 struct ReadSource {
   Option<StartupArgument<nova::Secret>> uri;
   Option<located<std::string>> table;
@@ -87,8 +83,9 @@ struct ReadSource {
   Option<HydrolixConnectionArgs> hydrolix = None{};
 };
 
-/// The hints of a read that applies every accepted predicate, in SQL where
-/// exact and locally otherwise, and that counts the limit after them.
+/// The hints of the legacy reader that runs without Nova, which applies every
+/// accepted predicate, in SQL where exact and locally otherwise, and counts
+/// the limit after them. It receives only the projection.
 using LocalOptimization
   = OptimizationArgs<opt::Filter, opt::Limit, opt::Projection, opt::Aggregation>;
 
@@ -134,7 +131,10 @@ struct FromHydrolixArgs {
   Option<located<uint64_t>> port = None{};
   Option<located<data>> tls;
   location operator_location;
-  LocalOptimization optimization;
+  Option<located<bool>> pushdown;
+  /// The stages that the operator takes over, which it computes in its query
+  /// with the semantics of Hydrolix's ClickHouse engine.
+  OptimizationArgs<opt::Projection, opt::Plan> optimization;
 
   /// Runs `from_hydrolix` like `from_clickhouse` against the cluster's native
   /// ClickHouse interface.
@@ -173,11 +173,6 @@ auto with_read_compression(::clickhouse::ClientOptions options)
   -> ::clickhouse::ClientOptions {
   options.SetCompressionMethod(::clickhouse::CompressionMethod::LZ4);
   return options;
-}
-
-auto sql_target(ReadSource const& source) -> SqlTarget {
-  return source.hydrolix.has_value() ? SqlTarget::hydrolix
-                                     : SqlTarget::clickhouse;
 }
 
 /// Fails a checkpoint. A query has no cursor to resume from, so a restored
@@ -284,6 +279,13 @@ auto resolve_hydrolix_endpoint(HydrolixConnectionArgs const& hydrolix,
   };
 }
 
+/// Whether Hydrolix rejected a query for the time range that it reads, which
+/// is missing or too long.
+auto is_time_range_error(std::string_view message) -> bool {
+  return message.contains("hdx_query_timerange_required")
+         or message.contains("Maximum time range exceeded");
+}
+
 /// Explains the errors of a Hydrolix cluster that stem from its access
 /// control and query guards.
 auto add_hydrolix_hints(diagnostic_builder diag, int code,
@@ -312,14 +314,17 @@ auto add_hydrolix_hints(diagnostic_builder diag, int code,
       .hint("check that the account of `token` has the `select_sql` "
             "permission on the table");
   }
-  if (message.contains("hdx_query_timerange_required")
-      or message.contains("Maximum time range exceeded")) {
-    // A `where` pushes only constant bounds into the query, so `now()` needs
-    // a `let` that evaluates it once.
-    return std::move(diag).hint(
-      "restrict the query to a time range on the table's primary timestamp, "
-      "e.g., with `let $since = now() - 1h` before `from_hydrolix` and "
-      "`where time > $since` after it");
+  if (is_time_range_error(message)) {
+    // A `where` reaches the query only with constant bounds, so `now()` needs
+    // a `let` that evaluates it once. The optimizer moves a `where` ahead of a
+    // `select`, `drop`, or `sort`, but not ahead of a `head` or a `summarize`,
+    // whose result it reads, so it would not constrain the table.
+    return std::move(diag)
+      .hint("restrict the query to a time range on the table's primary "
+            "timestamp, e.g., with `let $since = now() - 1h` before "
+            "`from_hydrolix` and `where time > $since` directly after it")
+      .hint("place the `where` before any `head` or `summarize`, whose result "
+            "it would read instead of the table");
   }
   return diag;
 }
@@ -371,9 +376,6 @@ auto query_error(bool hydrolix, std::string_view token, bool tls_enabled,
 
 namespace {
 
-/// The key of the subpipeline that aggregates locally.
-constexpr auto aggregation_sub_key = int64_t{0};
-
 struct QueryPlan {
   /// The table to read from; `None` when the user provided `sql`.
   Option<std::string> table;
@@ -381,8 +383,6 @@ struct QueryPlan {
   std::string sql;
   std::string schema_name;
   LocalOptimization optimization;
-  /// The server whose dialect the pushed predicates use.
-  SqlTarget target;
 };
 
 /// Announces the predicates that the operator evaluates itself. Sent before
@@ -557,8 +557,8 @@ struct PreparedQuery {
 auto prepare_table_query(QueryPlan& plan, SqlSchema const& schema,
                          Option<ir::OptimizeProjection> const& projection,
                          registry const& reg) -> PreparedQuery {
-  auto table_plan = make_table_plan(
-    schema, plan.target, std::move(plan.optimization.filter), projection, reg);
+  auto table_plan = make_table_plan(schema, std::move(plan.optimization.filter),
+                                    projection, reg);
   auto text
     = make_table_query(table_plan, *plan.table, plan.optimization.limit);
   return {
@@ -590,75 +590,20 @@ auto prepare_query(::clickhouse::Client& client, QueryPlan& plan,
   return prepare_table_query(plan, schema, plan.optimization.projection, reg);
 }
 
-/// Like `prepare_query`, but always describes a table to find out whether it
-/// has a catch-all column, whose events need reconstruction.
-auto prepare_events_query(::clickhouse::Client& client, QueryPlan& plan,
-                          diagnostic_handler& dh, registry const& reg)
-  -> failure_or<PreparedQuery> {
-  if (not plan.table) {
-    return prepare_query(client, plan, reg);
-  }
-  TRY(auto description, describe_table(client, *plan.table, dh));
-  TRY(auto catch_all, make_catch_all_layout(description, dh));
-  // Reconstruction moves the fields of the catch-all column to the top level
-  // and places dotted columns at nested paths, so predicates address a field
-  // through the column that holds it. Fields below `JSON` columns stay
-  // local, since Hydrolix's engine may treat `JSON` differently.
-  auto schema = SqlSchema{};
-  if (catch_all) {
-    schema = make_catch_all_schema(description, *catch_all);
-  } else {
-    for (auto const& column : description) {
-      schema.add_column(column.name, column.type,
-                        is_generated_kind(column.default_kind));
-    }
-  }
-  // ClickHouse computes a summary only if it also evaluates every predicate,
-  // which apply to the rows before the summary. A field of a catch-all table
-  // may live partly in the catch-all column, so its summary always runs
-  // locally, on the reconstructed events.
-  auto const& aggregation = plan.optimization.aggregation;
-  if (aggregation and not catch_all) {
-    auto split
-      = pushdown::split_filter(plan.optimization.filter, schema.model(),
-                               ClickHouseRenderer{plan.target, &schema}, reg);
-    if (split.remaining.empty()) {
-      if (auto query = make_aggregate_query(*aggregation, schema, *plan.table,
-                                            split.pushed, plan.target)) {
-        return PreparedQuery{
-          .text = std::move(*query),
-          .local_filter = {},
-          .catch_all = None{},
-          .aggregated = true,
-        };
-      }
-    }
-  }
-  // A projection could leave out the part of a field that is in the
-  // catch-all, so the query of a catch-all table selects every column.
-  auto projection = catch_all ? Option<ir::OptimizeProjection>{}
-                              : plan.optimization.projection;
-  auto prepared = prepare_table_query(plan, schema, projection, reg);
-  prepared.catch_all = std::move(catch_all);
-  return prepared;
-}
-
 /// Plans the query of `source` with the optimizer's hints of a read that
 /// applies what SQL cannot locally.
 auto make_query_plan(ReadSource const& source, LocalOptimization optimization)
   -> QueryPlan {
-  auto const names = backend_names(source.hydrolix.has_value());
   auto plan = QueryPlan{
     .table = None{},
     .sql = {},
-    .schema_name = fmt::format("{}.query", names.schema_prefix),
+    .schema_name = "clickhouse.query",
     .optimization = std::move(optimization),
-    .target = sql_target(source),
   };
   if (source.table) {
     plan.table = source.table->inner;
     plan.schema_name
-      = make_schema_name_from_table(names.schema_prefix, source.table->inner);
+      = make_schema_name_from_table("clickhouse", source.table->inner);
   } else {
     plan.sql = source.sql->inner;
   }
@@ -771,12 +716,8 @@ public:
     optimization_.projection = std::move(args.optimization.projection);
   }
 
-  explicit FromClickhouse(FromHydrolixArgs args)
-    : source_{args.source()}, optimization_{std::move(args.optimization)} {
-  }
-
   auto start(OpCtx& ctx) -> Task<void> override {
-    events_counter_ = make_events_counter(source_.hydrolix.has_value(), ctx);
+    events_counter_ = make_events_counter(false, ctx);
     auto options = co_await make_client_options(ctx);
     if (not options) {
       // No query task runs that could end the operator, so it ends here, as
@@ -877,27 +818,6 @@ private:
   /// Resolves the connection arguments, which may be secrets.
   auto make_client_options(OpCtx& ctx)
     -> Task<Option<::clickhouse::ClientOptions>> {
-    if (source_.hydrolix) {
-      auto endpoint = co_await resolve_hydrolix_endpoint(
-        *source_.hydrolix, source_.port, source_.tls, ctx);
-      if (not endpoint) {
-        co_return None{};
-      }
-      tls_enabled_ = endpoint->tls.tls.inner;
-      auto client_args = easy_client::arguments{
-        .host = std::move(endpoint->host),
-        .port = located<uint64_t>{endpoint->port, location::unknown},
-        .user = std::string{hydrolix_token_user},
-        .password = std::move(endpoint->token),
-        .default_database = None{},
-        .ssl = std::move(endpoint->tls),
-        .table = {},
-        .mode = {mode::append, location::unknown},
-        .primary = None{},
-        .operator_location = source_.operator_location,
-      };
-      co_return with_read_compression(client_args.make_options());
-    }
     auto ssl_opts = source_.tls ? tls_options{*source_.tls} : tls_options{};
     auto ssl = ssl_opts.resolve(ctx.actor_system().config(), ctx.dh());
     if (not ssl) {
@@ -958,12 +878,12 @@ private:
                  diagnostic_handler& dh, registry const& reg) -> Task<void> {
     try {
       auto first_schema = Option<type>{};
-      auto const service = backend_names(source_.hydrolix.has_value()).service;
       auto on_data = [&](::clickhouse::Block const& block) {
         if (runtime_->should_cancel()) {
           return false;
         }
-        auto slice = block_to_table_slice(block, plan.schema_name, service, dh);
+        auto slice
+          = block_to_table_slice(block, plan.schema_name, "ClickHouse", dh);
         if (not slice) {
           return not runtime_->should_cancel();
         }
@@ -971,8 +891,7 @@ private:
           first_schema = slice->schema();
         } else if (slice->schema() != *first_schema) {
           diagnostic::warning(
-            "{} query schema changed during execution",
-            backend_names(source_.hydrolix.has_value()).service)
+            "ClickHouse query schema changed during execution")
             .hint("continuing to emit data with the new schema")
             .emit(dh);
         }
@@ -982,9 +901,7 @@ private:
       co_await spawn_blocking([&]() {
         auto client = ::clickhouse::Client{options};
         auto prepared = prepare_query(client, plan, reg);
-        TENZIR_DEBUG("{} runs `{}`",
-                     backend_names(source_.hydrolix.has_value()).operator_name,
-                     prepared.text);
+        TENZIR_DEBUG("from_clickhouse runs `{}`", prepared.text);
         runtime_->produce_plan(std::move(prepared.local_filter));
         auto query = ::clickhouse::Query{std::move(prepared.text)};
         apply_read_settings(query);
@@ -997,14 +914,13 @@ private:
       throw;
     } catch (const ::clickhouse::ServerError& e) {
       if (not runtime_->stop_requested.load(std::memory_order_acquire)) {
-        query_error(source_.hydrolix.has_value(), options.password,
-                    tls_enabled_, e.GetCode(), e.what())
+        query_error(false, options.password, tls_enabled_, e.GetCode(),
+                    e.what())
           .emit(dh);
       }
     } catch (const std::exception& e) {
       if (not runtime_->stop_requested.load(std::memory_order_acquire)) {
-        query_error(source_.hydrolix.has_value(), options.password,
-                    tls_enabled_, None{}, e.what())
+        query_error(false, options.password, tls_enabled_, None{}, e.what())
           .emit(dh);
       }
     }
@@ -1021,9 +937,9 @@ private:
   uint64_t emitted_ = 0;
 };
 
-/// Reads a ClickHouse table, or the result of a query of the user, and in
-/// `table` mode computes the stages that it took over in its query, with
-/// ClickHouse's semantics.
+/// Reads a ClickHouse or Hydrolix table, or the result of a query of the user,
+/// and in `table` mode computes the stages that it took over in its query,
+/// with the semantics of the server's ClickHouse engine.
 class FromClickhouseEvents final : public Operator<void, nova::Events> {
 public:
   FromClickhouseEvents() = default;
@@ -1034,9 +950,17 @@ public:
       projection_{std::move(args.optimization.projection)} {
   }
 
+  explicit FromClickhouseEvents(FromHydrolixArgs args)
+    : source_{args.source()},
+      plan_{std::move(args.optimization.plan).value_or(ir::QueryPlan{})},
+      projection_{std::move(args.optimization.projection)} {
+  }
+
   auto start(OpCtx& ctx) -> Task<void> override {
     auto& dh = ctx.dh();
-    events_counter_ = make_events_counter(false, ctx);
+    auto const hydrolix = source_.hydrolix.has_value();
+    auto const names = backend_names(hydrolix);
+    events_counter_ = make_events_counter(hydrolix, ctx);
     auto connection = co_await resolve_connection(source_, ctx);
     if (not connection) {
       done_ = true;
@@ -1045,14 +969,15 @@ public:
     auto read = Read{
       .table = None{},
       .sql = {},
-      .schema_name = "clickhouse.query",
+      .schema_name = fmt::format("{}.query", names.schema_prefix),
       .plan = plan_,
       .projection = projection_,
+      .hydrolix = hydrolix,
     };
     if (source_.table) {
       read.table = source_.table->inner;
-      read.schema_name
-        = make_schema_name_from_table("clickhouse", source_.table->inner);
+      read.schema_name = make_schema_name_from_table(names.schema_prefix,
+                                                     source_.table->inner);
     } else {
       read.sql = source_.sql->inner;
     }
@@ -1130,6 +1055,8 @@ private:
     ir::QueryPlan plan;
     /// The fields that the stages and the operators after them need.
     Option<ir::OptimizeProjection> projection;
+    /// Whether the read runs as `from_hydrolix`.
+    bool hydrolix = false;
   };
 
   struct EventsMessage {
@@ -1166,6 +1093,7 @@ private:
       };
     }
     auto const& table = *read.table;
+    auto const names = backend_names(read.hydrolix);
     TRY(auto description, describe_table(client, table, dh));
     TRY(auto catch_all, make_catch_all_layout(description, dh));
     auto columns = std::vector<std::string>{};
@@ -1182,25 +1110,23 @@ private:
       auto diag = [&] {
         switch (error.kind) {
           case BindError::Kind::field:
-            return diagnostic::error("cannot bind `{}` in ClickHouse table "
-                                     "`{}`",
-                                     error.subject, table);
+            return diagnostic::error("cannot bind `{}` in {} table `{}`",
+                                     error.subject, names.service, table);
           case BindError::Kind::stage:
-            return diagnostic::error("cannot compute `{}` in ClickHouse "
-                                     "table `{}`",
-                                     error.subject, table);
+            return diagnostic::error("cannot compute `{}` in {} table `{}`",
+                                     error.subject, names.service, table);
           case BindError::Kind::sort:
             return diagnostic::error("cannot sort by the JSON field `{}` "
-                                     "before further stages in ClickHouse "
-                                     "table `{}`",
-                                     error.subject, table);
+                                     "before further stages in {} table `{}`",
+                                     error.subject, names.service, table);
         }
         TENZIR_UNREACHABLE();
       }();
       std::move(diag)
         .note("{}", error.reason)
-        .hint("use `pushdown=false` to run the operators after "
-              "`from_clickhouse` in Tenzir instead")
+        .hint("use `pushdown=false` to run the operators after `{}` in "
+              "Tenzir instead",
+              names.operator_name)
         .emit(dh);
       return failure::promise();
     }
@@ -1209,10 +1135,9 @@ private:
     auto const drops = std::ranges::any_of(read.plan, [](auto const& stage) {
       return is<ir::QueryStage::Drop>(stage.kind);
     });
-    auto const selection
-      = catch_all or drops
-          ? std::string{"*"}
-          : select_columns(&schema, read.projection, TupleAccess::element);
+    auto const selection = catch_all or drops
+                             ? std::string{"*"}
+                             : select_columns(&schema, read.projection);
     auto rendered
       = make_table_read(table, selection, read.plan, columns, bound.unwrap());
     if (rendered.is_err()) {
@@ -1230,6 +1155,7 @@ private:
   static auto run_query(Arc<Shared> shared, ConnectionArgs connection,
                         Read read, diagnostic_handler& dh) -> Task<void> {
     auto const tls_enabled = connection.tls and connection.tls->tls.inner;
+    auto const names = backend_names(read.hydrolix);
     // Whether the failing query computes stages, rather than describing the
     // table.
     auto computes = false;
@@ -1246,13 +1172,13 @@ private:
         // header arrives even if a filter removed every row, so validate it
         // before decoding discards zero-row blocks.
         if (catch_all and not read.plan.empty()
-            and not validate_catch_all_block(block, *catch_all, "ClickHouse",
+            and not validate_catch_all_block(block, *catch_all, names.service,
                                              dh, prepared.layout.hidden)) {
           invalid_layout = true;
           return false;
         }
         auto events
-          = block_to_events(block, read.schema_name, "ClickHouse", dh);
+          = block_to_events(block, read.schema_name, names.service, dh);
         if (not events) {
           return not shared->should_cancel();
         }
@@ -1269,7 +1195,7 @@ private:
             }
           }
           events = reconstruct_catch_all(std::move(*events), columns,
-                                         *catch_all, "ClickHouse", dh);
+                                         *catch_all, names.service, dh);
         }
         shared->produce(EventsMessage{std::move(*events)});
         return not shared->should_cancel();
@@ -1288,43 +1214,20 @@ private:
         }
         prepared = std::move(*planned);
         if (read.table) {
-          TENZIR_DEBUG("from_clickhouse runs `{}`",
+          TENZIR_DEBUG("{} runs `{}`", names.operator_name,
                        pushdown::redact_query(prepared.sql,
                                               clickhouse_lexicon));
         }
         auto query = ::clickhouse::Query{prepared.sql};
-        if (prepared.bound.summarizes) {
-          // A summary without group keys must count `0` for empty input,
-          // whatever the session's settings say.
-          query.SetSetting("aggregate_functions_null_for_empty",
-                           {"0", ::clickhouse::QuerySettingsField::IMPORTANT});
-        }
         if (read.table) {
-          // A table read that exceeds a limit of the session must fail
-          // rather than return a partial result, which would pass for the
-          // complete table or, with stages, for their complete result. A
-          // query of the user keeps the session's settings.
-          for (auto const* setting :
-               {"read_overflow_mode", "read_overflow_mode_leaf",
-                "group_by_overflow_mode", "sort_overflow_mode",
-                "result_overflow_mode", "timeout_overflow_mode",
-                "timeout_overflow_mode_leaf"}) {
-            query.SetSetting(
-              setting, {"throw", ::clickhouse::QuerySettingsField::IMPORTANT});
+          // A query of the user keeps the session's settings.
+          for (auto const& setting : table_read_settings(
+                 prepared.bound, prepared.catch_all.has_value(),
+                 read.hydrolix)) {
+            query.SetSetting(std::string{setting.name},
+                             {std::string{setting.value},
+                              ::clickhouse::QuerySettingsField::IMPORTANT});
           }
-        }
-        if (prepared.catch_all or prepared.bound.reads_dynamic) {
-          // Keeps literal dotted keys apart from nested paths, as the
-          // inserts of `to_clickhouse` do, both in the paths that the query
-          // reads and in the values that the reconstruction parses.
-          query.SetSetting("json_type_escape_dots_in_keys",
-                           {"1", ::clickhouse::QuerySettingsField::IMPORTANT});
-        }
-        if (prepared.bound.sorts_dynamic) {
-          // ClickHouse orders values of different types by the name of
-          // their type first, but only on request.
-          query.SetSetting("allow_suspicious_types_in_order_by",
-                           {"1", ::clickhouse::QuerySettingsField::IMPORTANT});
         }
         apply_read_settings(query);
         query.OnDataCancelable(on_data);
@@ -1337,14 +1240,17 @@ private:
       throw;
     } catch (const ::clickhouse::ServerError& e) {
       if (not shared->should_cancel()) {
-        auto diag = query_error(false, connection.password, tls_enabled,
+        auto diag = query_error(read.hydrolix, connection.password, tls_enabled,
                                 e.GetCode(), e.what());
-        if (computes) {
-          // ClickHouse may reject a stage that it computes with its own
+        // Running the operators in Tenzir would not give the query of a
+        // Hydrolix cluster the time range that it lacks.
+        if (computes and not(read.hydrolix and is_time_range_error(e.what()))) {
+          // The server may reject a stage that it computes with its own
           // semantics, such as a comparison of values of different types.
           diag = std::move(diag)
-                   .note("the query computes the operators after "
-                         "`from_clickhouse` with ClickHouse's semantics")
+                   .note("the query computes the operators after `{}` with "
+                         "{}'s semantics",
+                         names.operator_name, names.service)
                    .hint("use `pushdown=false` to run them in Tenzir "
                          "instead");
         }
@@ -1352,7 +1258,8 @@ private:
       }
     } catch (const std::exception& e) {
       if (not shared->should_cancel()) {
-        query_error(false, connection.password, tls_enabled, None{}, e.what())
+        query_error(read.hydrolix, connection.password, tls_enabled, None{},
+                    e.what())
           .emit(dh);
       }
     }
@@ -1365,292 +1272,6 @@ private:
   Option<ir::OptimizeProjection> projection_;
   mutable Arc<Shared> shared_ = Arc<Shared>{std::in_place};
   bool done_ = false;
-  MetricsCounter events_counter_;
-};
-
-/// Reads from Hydrolix, applying the predicates that its query cannot locally
-/// and aggregating locally if its query cannot.
-class FromHydrolixEvents final : public Operator<void, nova::Events> {
-public:
-  FromHydrolixEvents() = default;
-
-  explicit FromHydrolixEvents(FromHydrolixArgs args)
-    : source_{args.source()}, optimization_{std::move(args.optimization)} {
-  }
-
-  auto start(OpCtx& ctx) -> Task<void> override {
-    auto& dh = ctx.dh();
-    remaining_ = optimization_.limit;
-    events_counter_ = make_events_counter(source_.hydrolix.has_value(), ctx);
-    auto connection = co_await resolve_connection(source_, ctx);
-    if (not connection) {
-      done_ = true;
-      co_return;
-    }
-    auto const tls_enabled = connection->tls and connection->tls->tls.inner;
-    auto const hydrolix = source_.hydrolix.has_value();
-    // The query text is only decided on the query thread: with optimizer hints
-    // in table mode, it depends on the table's schema.
-    auto plan = make_query_plan(source_, optimization_);
-    // Helper task to shut down our query on cancellation.
-    ctx.spawn_task([shared = shared_]() mutable -> Task<void> {
-      if (not co_await catch_cancellation(wait_forever())) {
-        shared->request_cancellation();
-      }
-    });
-    // The actual query task.
-    ctx.spawn_task([shared = shared_, connection = std::move(*connection),
-                    plan = std::move(plan), tls_enabled, hydrolix, &dh,
-                    &reg = ctx.reg(),
-                    loc = source_.operator_location]() mutable -> Task<void> {
-      auto transformed_dh = transforming_diagnostic_handler{
-        dh, [loc](diagnostic diag) {
-          if (not has_primary_annotation(diag)) {
-            diag.annotations.emplace_back(true, std::string{}, loc);
-          }
-          return diag;
-        }};
-      co_await run_query(std::move(shared), std::move(connection),
-                         std::move(plan), tls_enabled, hydrolix, transformed_dh,
-                         reg);
-    });
-  }
-
-  auto await_task(diagnostic_handler&) const -> Task<Any> override {
-    co_return co_await shared_->queue.dequeue();
-  }
-
-  auto process_task(Any result, Push<nova::Events>& push, OpCtx& ctx)
-    -> Task<void> override {
-    auto message = std::move(result).as<Message>();
-    co_await co_match(
-      std::move(message),
-      [&](PlanMessage x) -> Task<void> {
-        for (auto& expr : x.local_filter) {
-          auto filter = co_await nova::Evaluator::make(std::move(expr), ctx);
-          if (not filter) {
-            shared_->request_cancellation();
-            done_ = true;
-            co_return;
-          }
-          filters_.push_back(std::move(*filter));
-        }
-      },
-      [&](AggregateLocallyMessage) -> Task<void> {
-        TENZIR_ASSERT(optimization_.aggregation);
-        auto const& aggregation = *optimization_.aggregation;
-        if (not pushdown::can_aggregate_locally(aggregation, ctx)) {
-          shared_->request_cancellation();
-          done_ = true;
-          co_return;
-        }
-        auto sub = co_await ctx.plan_and_spawn_sub<nova::Events>(
-          aggregation_sub_key, aggregation.fallback);
-        if (not sub) {
-          shared_->request_cancellation();
-          done_ = true;
-          co_return;
-        }
-        aggregating_locally_ = true;
-      },
-      [&](EventsMessage x) -> Task<void> {
-        if (done_ or shared_->should_cancel()) {
-          co_return;
-        }
-        // Predicates without an exact SQL translation run here, with the same
-        // semantics as the `where` they came from. The limit counts events
-        // after them; when it went into the SQL query this is a no-op.
-        auto events = pushdown::apply_read(std::move(x.events), filters_,
-                                           remaining_, ctx.dh());
-        if (events.active_count() > 0) {
-          // The rows enter the pipeline here, even if a local aggregation
-          // consumes them.
-          events_counter_.add(events.active_count());
-        }
-        if (events.active_count() > 0 and aggregating_locally_) {
-          if (auto sub = ctx.get_sub(aggregation_sub_key)) {
-            // The subpipeline closes its input only when it fails, which it
-            // reports itself.
-            std::ignore = co_await as<SubHandle<nova::Events>>(*sub).push(
-              std::move(events));
-          }
-        } else if (events.active_count() > 0) {
-          co_await push(std::move(events));
-        }
-        if (remaining_ == uint64_t{0}) {
-          shared_->request_cancellation();
-          done_ = true;
-        }
-      },
-      [&](DoneMessage) -> Task<void> {
-        done_ = true;
-        if (aggregating_locally_) {
-          // The operator ends once the subpipeline emitted the aggregation.
-          if (auto sub = ctx.get_sub(aggregation_sub_key)) {
-            co_await as<SubHandle<nova::Events>>(*sub).close();
-          }
-        }
-      });
-  }
-
-  auto finish_sub(SubKeyView, Push<nova::Events>&, OpCtx&)
-    -> Task<void> override {
-    aggregating_locally_ = false;
-    co_return;
-  }
-
-  auto finish_sub(SubKeyView, failure, Push<nova::Events>&, OpCtx&)
-    -> Task<void> override {
-    // The subpipeline reported its error, so the read cannot complete.
-    aggregating_locally_ = false;
-    shared_->request_cancellation();
-    done_ = true;
-    co_return;
-  }
-
-  auto stop(OpCtx& ctx) -> Task<void> override {
-    TENZIR_UNUSED(ctx);
-    shared_->request_cancellation();
-    co_return;
-  }
-
-  auto state() -> OperatorState override {
-    if (aggregating_locally_) {
-      return OperatorState::normal;
-    }
-    return done_ ? OperatorState::done : OperatorState::normal;
-  }
-
-  auto snapshot(Serde&) -> void override {
-    reject_checkpoint(source_);
-  }
-
-private:
-  struct EventsMessage {
-    nova::Events events;
-  };
-
-  /// Sent before the events of a table read whose aggregation ClickHouse
-  /// cannot compute, which the operator then passes to the aggregation's
-  /// fallback.
-  struct AggregateLocallyMessage {};
-
-  using Message
-    = variant<PlanMessage, AggregateLocallyMessage, EventsMessage, DoneMessage>;
-
-  /// The state shared with the query thread.
-  using Shared = QueryChannel<Message>;
-
-  static auto run_query(Arc<Shared> shared, ConnectionArgs connection,
-                        QueryPlan plan, bool tls_enabled, bool hydrolix,
-                        diagnostic_handler& dh, registry const& reg)
-    -> Task<void> {
-    // Whether the query computes the aggregation, decided before it runs.
-    auto aggregated = false;
-    try {
-      auto catch_all = Option<CatchAllLayout>{};
-      auto validate_layout = false;
-      auto invalid_layout = false;
-      auto const service = backend_names(hydrolix).service;
-      auto on_data = [&](::clickhouse::Block const& block) {
-        if (invalid_layout or shared->should_cancel()) {
-          return false;
-        }
-        // The header arrives even if the pushed filter removed every row.
-        // Validate it before decoding discards zero-row blocks, and stay
-        // failed if cancellation still delivers further blocks.
-        if (validate_layout
-            and not validate_catch_all_block(block, *catch_all, service, dh)) {
-          invalid_layout = true;
-          return false;
-        }
-        auto events = block_to_events(block, plan.schema_name, service, dh);
-        if (not events) {
-          return not shared->should_cancel();
-        }
-        if (aggregated) {
-          events = pushdown::nest_aggregation(
-            std::move(*events), *plan.optimization.aggregation, dh);
-        } else if (catch_all) {
-          auto columns = std::vector<std::string_view>{};
-          columns.reserve(block.GetColumnCount());
-          for (auto i = size_t{0}; i < block.GetColumnCount(); ++i) {
-            columns.push_back(block.GetColumnName(i));
-          }
-          events = reconstruct_catch_all(std::move(*events), columns,
-                                         *catch_all, service, dh);
-        }
-        shared->produce(EventsMessage{std::move(*events)});
-        return not shared->should_cancel();
-      };
-      co_await spawn_blocking([&]() {
-        // Tables without a database, in `table` and in `sql`, refer to the
-        // database of the URI.
-        auto options = with_read_compression(connection.to_client_options());
-        if (connection.default_database) {
-          options.SetDefaultDatabase(*connection.default_database);
-        }
-        auto client = ::clickhouse::Client{options};
-        auto prepared = prepare_events_query(client, plan, dh, reg);
-        if (not prepared) {
-          return;
-        }
-        TENZIR_DEBUG("{} runs `{}`", backend_names(hydrolix).operator_name,
-                     prepared->text);
-        aggregated = prepared->aggregated;
-        if (plan.optimization.aggregation and not aggregated) {
-          shared->produce(AggregateLocallyMessage{});
-        }
-        shared->produce(PlanMessage{std::move(prepared->local_filter)});
-        catch_all = std::move(prepared->catch_all);
-        validate_layout = catch_all and prepared->has_pushed_filter;
-        auto query = ::clickhouse::Query{std::move(prepared->text)};
-        if (aggregated) {
-          // An aggregation without group keys must count `0` for empty
-          // input, whatever the session's settings say.
-          query.SetSetting("aggregate_functions_null_for_empty",
-                           {"0", ::clickhouse::QuerySettingsField::IMPORTANT});
-          // Hydrolix manages the limits of the session itself.
-        }
-        if (catch_all) {
-          // Keeps literal dotted keys apart from nested paths, as the
-          // inserts of `to_clickhouse` do.
-          query.SetSetting("json_type_escape_dots_in_keys",
-                           {"1", ::clickhouse::QuerySettingsField::IMPORTANT});
-        }
-        apply_read_settings(query);
-        query.OnDataCancelable(on_data);
-        select_cancelable(client, query, [&] {
-          return shared->should_cancel();
-        });
-      });
-    } catch (const panic_exception&) {
-      throw;
-    } catch (const ::clickhouse::ServerError& e) {
-      if (not shared->should_cancel()) {
-        query_error(hydrolix, connection.password, tls_enabled, e.GetCode(),
-                    e.what())
-          .emit(dh);
-      }
-    } catch (const std::exception& e) {
-      if (not shared->should_cancel()) {
-        query_error(hydrolix, connection.password, tls_enabled, None{},
-                    e.what())
-          .emit(dh);
-      }
-    }
-    co_await shared->queue.enqueue(DoneMessage{});
-  }
-
-  ReadSource source_;
-  LocalOptimization optimization_;
-  mutable Arc<Shared> shared_ = Arc<Shared>{std::in_place};
-  bool done_ = false;
-  std::vector<nova::Evaluator> filters_;
-  Option<uint64_t> remaining_;
-  /// Whether the read passes its events to the subpipeline that aggregates
-  /// them, until that subpipeline ends.
-  bool aggregating_locally_ = false;
   MetricsCounter events_counter_;
 };
 
@@ -1730,7 +1351,7 @@ public:
       if (not nova_enabled()) {
         return {.prefix = 0, .declined = "the operator runs without Nova"};
       }
-      return absorb_stages(chain);
+      return absorb_stages(chain, "ClickHouse");
     });
     return d.without_optimize();
   }
@@ -1745,7 +1366,8 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<FromHydrolixArgs, FromClickhouse, FromHydrolixEvents>{};
+    // Only the Nova operator reads from Hydrolix.
+    auto d = Describer<FromHydrolixArgs, FromClickhouseEvents>{};
     d.positional("url", &FromHydrolixArgs::url);
     d.named("token", &FromHydrolixArgs::token);
     auto table_arg = d.named("table", &FromHydrolixArgs::table);
@@ -1785,15 +1407,19 @@ public:
         }
         return {};
       });
+    pushdown::add_pushdown_argument(d, &FromHydrolixArgs::pushdown);
     d.optimization(&FromHydrolixArgs::optimization);
-    // Hydrolix restricts the queries that it answers, which has not been
-    // verified for the derived table that computes the stages after an
-    // aggregation, so they stay in the pipeline.
-    d.aggregation([](FromHydrolixArgs const& args,
-                     ir::OptimizeAggregation const& aggregation) -> bool {
-      return nova_enabled() and args.table and not args.sql
-             and aggregation.stages.empty()
-             and supports_aggregate_functions(aggregation);
+    // A table read takes over the stages that Hydrolix's ClickHouse engine
+    // spells, as `from_clickhouse` does. A query of the user is opaque.
+    d.query_plan([](FromHydrolixArgs const& args,
+                    ir::QueryChain const& chain) -> ir::Absorption {
+      if (not pushdown::pushdown_enabled(args.pushdown)) {
+        return {.prefix = 0, .declined = "`pushdown=false`"};
+      }
+      if (not args.table or args.sql) {
+        return {.prefix = 0, .declined = "the query of the user is opaque"};
+      }
+      return absorb_stages(chain, "Hydrolix");
     });
     return d.without_optimize();
   }

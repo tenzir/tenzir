@@ -1,4 +1,11 @@
-// The guards exclude rows 7 and 8, whose `t` is `null` in TQL.
+---
+error: true
+---
+
+// The comparison runs in Hydrolix with ClickHouse's semantics: it reads the
+// `DateTime64(3)` column at the nanosecond precision of the literal, which
+// overflows for the rows beyond the instants that nanoseconds can represent.
+// The read fails rather than falling back to Tenzir.
 from_hydrolix f"http://{env("CLICKHOUSE_HOST")}",
               token="test-token",
               port=int(env("CLICKHOUSE_PORT")),

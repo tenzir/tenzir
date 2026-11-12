@@ -1,6 +1,9 @@
-// The guards of the pushed queries compare tick counts, which Hydrolix's time
-// range analysis ignores, while the user's comparisons stay on the column.
-from_clickhouse sql="SELECT query FROM system.query_log WHERE type = 'QueryFinish' AND query_kind = 'Select' AND user = '__api_token__' AND has(tables, 'default.fh_times') AND query LIKE '%WHERE%' ORDER BY event_time_microseconds",
+// The queries of the time tests, in order: the read of the user's query, the
+// comparison that the server rejected and did not run again, the plain read of
+// `pushdown=false`, and the time filters, which constrain the table itself
+// unless they follow a `head`, also where the optimizer moves them ahead of a
+// `select` or a `drop`.
+from_clickhouse sql="SELECT toString(type) AS type, query FROM system.query_log WHERE type != 'QueryStart' AND query_kind = 'Select' AND user = '__api_token__' AND (query LIKE '%fh_times%' OR query LIKE '%1767225601000000000%') ORDER BY event_time_microseconds",
                 host=env("CLICKHOUSE_HOST"),
                 port=int(env("CLICKHOUSE_PORT")),
                 password=env("CLICKHOUSE_PASSWORD"),

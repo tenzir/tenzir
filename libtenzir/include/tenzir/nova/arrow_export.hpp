@@ -17,7 +17,8 @@ namespace tenzir::nova {
 
 /// Converts selected rows column by column using an already discovered schema.
 /// Nulls may inhabit any target type; concrete types and record shapes must
-/// match. The schema supplies the output name and attributes.
+/// match. Enumerations take strings that name one of their values. The schema
+/// supplies the output name and attributes.
 auto to_arrow_record_batch(Array<Record> const& records, type const& schema,
                            std::span<storage::Index const> rows)
   -> Result<std::shared_ptr<arrow::RecordBatch>, std::string>;

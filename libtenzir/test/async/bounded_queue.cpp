@@ -56,6 +56,26 @@ TEST("bounded_queue dequeues regular enqueues in FIFO order") {
   }());
 }
 
+TEST("bounded_queue preserves FIFO order of mixed enqueues across many "
+     "items") {
+  constexpr auto count = 200;
+  folly::coro::blockingWait([&]() -> Task<void> {
+    auto queue = BoundedQueue<int>{count};
+    for (auto i = 0; i < count; ++i) {
+      if (i % 3 == 0) {
+        queue.force_enqueue(i);
+      } else {
+        co_await queue.enqueue(i);
+      }
+    }
+    check_eq(queue.size(), size_t{count});
+    for (auto i = 0; i < count; ++i) {
+      check_eq(co_await queue.dequeue(), i);
+    }
+    check(queue.empty());
+  }());
+}
+
 TEST("bounded_queue force_enqueue exceeds capacity without blocking") {
   folly::coro::blockingWait([&]() -> Task<void> {
     auto queue = BoundedQueue<int>{1};

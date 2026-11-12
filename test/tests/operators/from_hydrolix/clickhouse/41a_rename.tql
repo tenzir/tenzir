@@ -1,0 +1,8 @@
+// A `select` renames fields.
+from_hydrolix f"http://{env("CLICKHOUSE_HOST")}",
+              token="test-token",
+              port=int(env("CLICKHOUSE_PORT")),
+              table="default.fh_events"
+select key=id, who=name
+sort -key
+head 2

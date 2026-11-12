@@ -1,0 +1,7 @@
+// Hydrolix groups by the value of a key.
+from_hydrolix f"http://{env("CLICKHOUSE_HOST")}",
+              token="test-token",
+              port=int(env("CLICKHOUSE_PORT")),
+              table="default.fh_catchall"
+summarize catchall.severity, n=count()
+sort catchall.severity

@@ -4221,6 +4221,139 @@ TEST("import conversion types remaining nulls from the registered schema") {
               }}));
 }
 
+TEST("import conversion keeps the exact type of the registered schema") {
+  auto ja3 = tenzir::type{
+    "suricata.component.ja3",
+    tenzir::record_type{
+      {"hash", tenzir::type{tenzir::string_type{}, {{"index", "hash"}}}},
+      {"string", tenzir::string_type{}},
+    }};
+  auto action = tenzir::type{"action", tenzir::enumeration_type{{"allowed"},
+                                                                {"blocked"}}};
+  auto reference = tenzir::type{
+    "suricata.tls",
+    tenzir::record_type{
+      {"flow_id", tenzir::type{tenzir::uint64_type{}, {{"index", "hash"}}}},
+      {"port", tenzir::type{"port", tenzir::uint64_type{}}},
+      {"action", action},
+      {"actions", tenzir::list_type{action}},
+      {"ja3", ja3},
+      {"ja3s", ja3},
+    }};
+  auto convert = [&](Record row) {
+    auto conversion
+      = tenzir::ImportConversionBuffer{"suricata.tls", false, reference};
+    auto events = export_events(std::move(row));
+    events.meta = Events::Meta::make_empty(1, "suricata.tls");
+    REQUIRE(conversion.add(events, events.mask));
+    auto output = conversion.snapshot();
+    REQUIRE(output);
+    REQUIRE_EQUAL(output.unwrap().size(), 1u);
+    auto selected = conversion.selected_events();
+    REQUIRE_EQUAL(selected.size(), 1u);
+    CHECK_EQUAL(selected[0].first, output.unwrap()[0].schema());
+    return std::move(output).unwrap();
+  };
+  auto output = convert(Record{
+    {"flow_id", UInt{1}},
+    {"port", UInt{443}},
+    {"action", String{"blocked"}},
+    {"actions", List{String{"allowed"}, Null{}}},
+    {"ja3", Record{{"hash", String{"x"}}, {"string", Null{}}}},
+    {"ja3s", Null{}},
+  });
+  CHECK_EQUAL(output[0].schema(), reference);
+  CHECK_EQUAL(export_values(output),
+              (std::vector<tenzir::data>{tenzir::record{
+                {"flow_id", uint64_t{1}},
+                {"port", uint64_t{443}},
+                {"action", tenzir::enumeration{1}},
+                {"actions", tenzir::list{tenzir::enumeration{0}, caf::none}},
+                {"ja3", tenzir::record{{"hash", "x"}, {"string", caf::none}}},
+                {"ja3s", caf::none},
+              }}));
+  // Strings that name no value of the enumeration stay strings, while the rest
+  // of the schema keeps its names and attributes.
+  auto unknown = convert(Record{
+    {"flow_id", UInt{1}},
+    {"port", UInt{443}},
+    {"action", String{"dropped"}},
+    {"actions", Null{}},
+    {"ja3", Null{}},
+    {"ja3s", Null{}},
+  });
+  auto const& schema = as<tenzir::record_type>(unknown[0].schema());
+  CHECK_EQUAL(unknown[0].schema().name(), "suricata.tls");
+  CHECK_EQUAL(schema.field(0).type,
+              (tenzir::type{tenzir::uint64_type{}, {{"index", "hash"}}}));
+  CHECK_EQUAL(schema.field(2).type, tenzir::type{tenzir::string_type{}});
+  CHECK_EQUAL(schema.field(4).type, ja3);
+  CHECK_EQUAL(export_values(unknown)[0], (tenzir::data{tenzir::record{
+                                           {"flow_id", uint64_t{1}},
+                                           {"port", uint64_t{443}},
+                                           {"action", "dropped"},
+                                           {"actions", caf::none},
+                                           {"ja3", caf::none},
+                                           {"ja3s", caf::none},
+                                         }}));
+}
+
+TEST("import conversion checks enumerations across buffered batches") {
+  auto action = tenzir::enumeration_type{{"allowed"}, {"blocked"}};
+  auto reference
+    = tenzir::type{"suricata.alert", tenzir::record_type{
+                                       {"action", action},
+                                       {"actions", tenzir::list_type{action}},
+                                     }};
+  auto conversion
+    = tenzir::ImportConversionBuffer{"suricata.alert", false, reference};
+  auto add = [&](Record row, storage::Index count) {
+    // Constant columns, including the constant list, hold one value for all
+    // rows.
+    auto events = export_events(std::move(row), count);
+    events.meta = Events::Meta::make_empty(count, "suricata.alert");
+    REQUIRE(conversion.add(events, events.mask));
+  };
+  add(Record{{"action", String{"allowed"}},
+             {"actions", List{String{"allowed"}, String{"blocked"}}}},
+      3);
+  auto before = conversion.snapshot();
+  REQUIRE(before);
+  REQUIRE_EQUAL(before.unwrap().size(), 1u);
+  CHECK_EQUAL(before.unwrap()[0].schema(), reference);
+  // A later batch with a string that names no value turns that enumeration
+  // into a string for all rows of the partition, while the other stays.
+  add(Record{{"action", String{"dropped"}},
+             {"actions", List{String{"blocked"}}}},
+      2);
+  auto expected
+    = tenzir::type{"suricata.alert", tenzir::record_type{
+                                       {"action", tenzir::string_type{}},
+                                       {"actions", tenzir::list_type{action}},
+                                     }};
+  auto after = conversion.snapshot();
+  REQUIRE(after);
+  REQUIRE_EQUAL(after.unwrap().size(), 2u);
+  for (auto const& slice : after.unwrap()) {
+    CHECK_EQUAL(slice.schema(), expected);
+  }
+  for (auto const& [schema, events] : conversion.selected_events()) {
+    CHECK_EQUAL(schema, expected);
+  }
+  auto values = export_values(after.unwrap());
+  REQUIRE_EQUAL(values.size(), 5u);
+  CHECK_EQUAL(
+    values[0],
+    (tenzir::data{tenzir::record{
+      {"action", "allowed"},
+      {"actions", tenzir::list{tenzir::enumeration{0}, tenzir::enumeration{1}}},
+    }}));
+  CHECK_EQUAL(values[4], (tenzir::data{tenzir::record{
+                           {"action", "dropped"},
+                           {"actions", tenzir::list{tenzir::enumeration{1}}},
+                         }}));
+}
+
 TEST("import conversion snapshots do not freeze inference") {
   auto conversion = tenzir::ImportConversionBuffer{"events", false};
   auto unknown = export_events(Record{{"value", Null{}}});

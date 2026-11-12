@@ -27,7 +27,9 @@ auto redact_import_secrets(nova::Events events)
 /// schema and keeps the import times of its selected rows. Fields that remain
 /// `null` in every row take their type from `schema`, the registered schema of
 /// the events, if any, so that sparse events do not each produce a distinct
-/// output schema.
+/// output schema. Where the output schema agrees with `schema`, it also takes
+/// its names, attributes, and enumerations, so that events stored under a
+/// registered schema keep that schema's exact type.
 class ImportConversionBuffer {
 public:
   ImportConversionBuffer(std::string name, bool internal,
@@ -48,14 +50,19 @@ private:
   struct Candidate {
     record_type schema;
     std::vector<Selection> selections;
+    /// Whether a selected row holds a string that names none of the values of
+    /// the registered schema's enumeration, in depth-first order.
+    std::vector<bool> invalid_enumerations;
   };
 
   /// Returns the schema under which the rows of `candidate` are output.
-  auto output_schema(Candidate const& candidate) const -> record_type;
+  auto output_schema(Candidate const& candidate) const -> type;
 
   std::string name_;
   bool internal_;
   Option<type> schema_;
+  /// The number of enumerations in `schema_`.
+  size_t enumerations_ = 0;
   size_t rows_ = 0;
   std::vector<nova::Events> batches_;
   std::vector<Candidate> candidates_;

@@ -1,0 +1,9 @@
+// The optimizer moves a filter ahead of a `select`, so it still constrains the
+// table in the innermost `WHERE`.
+from_hydrolix f"http://{env("CLICKHOUSE_HOST")}",
+              token="test-token",
+              port=int(env("CLICKHOUSE_PORT")),
+              table="default.fh_events"
+select time, id
+where time > 2026-01-01T00:00:01
+sort id

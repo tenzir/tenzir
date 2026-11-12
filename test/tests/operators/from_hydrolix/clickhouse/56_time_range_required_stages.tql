@@ -1,0 +1,12 @@
+---
+error: true
+---
+
+// A query that lacks a time range fails with the hints for the time range,
+// but without the hint to run the operators in Tenzir, which would not help.
+from_hydrolix f"http://{env("CLICKHOUSE_HOST")}",
+              token="test-token",
+              port=int(env("CLICKHOUSE_PORT")),
+              table="default.fh_guarded"
+where id > 1
+head 1

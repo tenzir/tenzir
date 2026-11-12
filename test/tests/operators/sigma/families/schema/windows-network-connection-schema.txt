@@ -1,3 +1,13 @@
+warning: the `ocsf_cast` operator is deprecated
+  --> tests/operators/sigma/families/schema/windows-network-connection-schema.tql:11:1
+   |
+11 | ocsf_cast
+   | ~~~~~~~~~
+   |
+   = note: the function returns `null` for unresolved events instead of dropping them
+   = note: the function does not assign `@name` and also validates required fields and constraints
+   = hint: use the `ocsf_cast` function instead, preserving any named options
+   = docs: https://tenzir.com/docs/reference/functions/ocsf_cast
 {
   events: 5,
 }
