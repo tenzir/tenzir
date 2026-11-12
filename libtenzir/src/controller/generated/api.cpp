@@ -2038,6 +2038,13 @@ auto parse_execution_channel_metrics(simdjson::dom::element value)
   TRY(auto bytes_raw, api::field(object, "bytes", "ExecutionChannelMetrics"));
   TRY(auto bytes, api::int64_of(bytes_raw, "ExecutionChannelMetrics.bytes"));
 
+  auto batches = Option<std::int64_t>{None{}};
+  if (auto batches_raw = api::optional_field(object, "batches")) {
+    TRY(auto batches_present,
+        api::int64_of(*batches_raw, "ExecutionChannelMetrics.batches"));
+    batches = std::move(batches_present);
+  }
+
   TRY(auto queued_bytes_raw,
       api::field(object, "queuedBytes", "ExecutionChannelMetrics"));
   TRY(auto queued_bytes,
@@ -2050,8 +2057,9 @@ auto parse_execution_channel_metrics(simdjson::dom::element value)
                     "ExecutionChannelMetrics.capacityBytes"));
 
   return ExecutionChannelMetrics{
-    std::move(path),  std::move(channel_index), std::move(events),
-    std::move(bytes), std::move(queued_bytes),  std::move(capacity_bytes)};
+    std::move(path),          std::move(channel_index), std::move(events),
+    std::move(bytes),         std::move(batches),       std::move(queued_bytes),
+    std::move(capacity_bytes)};
 }
 
 auto parse_execution_metrics_snapshot(simdjson::dom::element value)
@@ -3138,6 +3146,9 @@ auto write_json(ExecutionOperatorMetrics const& value, std::string& out)
 auto write_json(ExecutionChannelMetrics const& value, std::string& out)
   -> void {
   out += '{';
+  auto field_separator = "";
+  out += field_separator;
+  field_separator = ",";
   out += "\"path\":";
   {
     out += '[';
@@ -3149,15 +3160,35 @@ auto write_json(ExecutionChannelMetrics const& value, std::string& out)
     }
     out += ']';
   }
-  out += ",\"channelIndex\":";
+  out += field_separator;
+  field_separator = ",";
+  out += "\"channelIndex\":";
   fmt::format_to(std::back_inserter(out), "{}", value.channel_index);
-  out += ",\"events\":";
+  out += field_separator;
+  field_separator = ",";
+  out += "\"events\":";
   fmt::format_to(std::back_inserter(out), "{}", value.events);
-  out += ",\"bytes\":";
+  out += field_separator;
+  field_separator = ",";
+  out += "\"bytes\":";
   fmt::format_to(std::back_inserter(out), "{}", value.bytes);
-  out += ",\"queuedBytes\":";
+  if (value.batches) {
+    out += field_separator;
+    field_separator = ",";
+    out += "\"batches\":";
+    if (value.batches) {
+      fmt::format_to(std::back_inserter(out), "{}", *value.batches);
+    } else {
+      out += "null";
+    }
+  }
+  out += field_separator;
+  field_separator = ",";
+  out += "\"queuedBytes\":";
   fmt::format_to(std::back_inserter(out), "{}", value.queued_bytes);
-  out += ",\"capacityBytes\":";
+  out += field_separator;
+  field_separator = ",";
+  out += "\"capacityBytes\":";
   fmt::format_to(std::back_inserter(out), "{}", value.capacity_bytes);
   out += '}';
 }

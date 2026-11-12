@@ -2080,12 +2080,14 @@ class ExecutionChannelMetrics {
 public:
   ExecutionChannelMetrics(std::vector<std::int64_t> path,
                           std::int64_t channel_index, std::int64_t events,
-                          std::int64_t bytes, std::int64_t queued_bytes,
+                          std::int64_t bytes, Option<std::int64_t> batches,
+                          std::int64_t queued_bytes,
                           std::int64_t capacity_bytes)
     : path{std::move(path)},
       channel_index{std::move(channel_index)},
       events{std::move(events)},
       bytes{std::move(bytes)},
+      batches{std::move(batches)},
       queued_bytes{std::move(queued_bytes)},
       capacity_bytes{std::move(capacity_bytes)} {
   }
@@ -2094,6 +2096,8 @@ public:
   std::int64_t channel_index;
   std::int64_t events;
   std::int64_t bytes;
+  /// `batches`, may be absent.
+  Option<std::int64_t> batches;
   std::int64_t queued_bytes;
   std::int64_t capacity_bytes;
 
@@ -2106,7 +2110,7 @@ public:
   friend auto
   hash_append(HashAlgorithm& h, ExecutionChannelMetrics const& value) -> void {
     hash_append(h, value.path, value.channel_index, value.events, value.bytes,
-                value.queued_bytes, value.capacity_bytes);
+                value.batches, value.queued_bytes, value.capacity_bytes);
   }
 };
 
