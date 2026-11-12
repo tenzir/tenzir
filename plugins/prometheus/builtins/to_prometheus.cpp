@@ -1212,6 +1212,8 @@ private:
       }
       co_return co_await send_series(std::move(second_half), ctx);
     }
+    // The bytes written are the payload before compression.
+    auto const payload_size = uncompressed.size();
     auto compressed = snappy_compress(std::move(uncompressed), ctx.dh(),
                                       args_.operator_location);
     if (not compressed) {
@@ -1226,7 +1228,6 @@ private:
               fmt::format("Tenzir/{}", version::version));
     http::set(headers, "X-Prometheus-Remote-Write-Version",
               protocol_ == Protocol::v1 ? "0.1.0" : "2.0.0");
-    auto compressed_size = compressed->size();
     auto result
       = co_await (*pool_)->post(std::move(*compressed), std::move(headers));
     if (result.is_err()) {
@@ -1249,7 +1250,7 @@ private:
                                          args_.operator_location)) {
       co_return false;
     }
-    bytes_write_counter_.add(compressed_size);
+    bytes_write_counter_.add(payload_size);
     events_write_counter_.add(sample_count);
     co_return true;
   }

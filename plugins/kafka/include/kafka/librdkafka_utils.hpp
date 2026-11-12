@@ -15,6 +15,7 @@
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/location.hpp>
 #include <tenzir/nova/type_system.hpp>
+#include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/plugin.hpp>
 
 #include <caf/expected.hpp>
@@ -103,7 +104,17 @@ struct producer_configuration {
   std::shared_ptr<RdKafka::Conf> conf;
   std::shared_ptr<RdKafka::OAuthBearerTokenRefreshCb> oauth_callback;
   std::shared_ptr<RdKafka::EventCb> event_callback;
+  std::shared_ptr<RdKafka::DeliveryReportCb> delivery_callback;
 };
+
+/// Counts the messages that the brokers acknowledged into `bytes` and
+/// `events`, so that a message counts as written once it is delivered, not
+/// when it is queued. A message counts with its payload as produced, before
+/// the compression librdkafka may apply (`compression.type`). It turns
+/// `delivery.report.only.error` off, which only this callback observes. Call
+/// it after applying user options and before creating the producer.
+auto count_deliveries(producer_configuration& cfg, MetricsCounter bytes,
+                      MetricsCounter events) -> caf::expected<void>;
 
 /// Returns one librdkafka config value or a diagnostic placeholder.
 auto kafka_conf_value(RdKafka::Conf const* conf, std::string_view key)

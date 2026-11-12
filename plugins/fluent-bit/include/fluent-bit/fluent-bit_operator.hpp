@@ -1609,6 +1609,8 @@ public:
       diagnostic::warning("failed to push data into Fluent Bit Engine")
         .emit(ctx.dh());
     }
+    // The payload as it goes into the embedded engine, before its output
+    // plugin delivers and possibly compresses it.
     write_bytes_counter_.add(bytes);
     write_events_counter_.add(events);
   }

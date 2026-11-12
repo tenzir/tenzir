@@ -175,9 +175,15 @@ public:
     return event_count_;
   }
 
+  /// The size of the last yielded body before compression.
+  auto payload_size() const -> uint64_t {
+    return payload_size_;
+  }
+
   auto yield(diagnostic_handler& dh) -> std::string_view {
     TENZIR_ASSERT(not body_.empty());
     auto const pending_event = not element_text_.empty();
+    payload_size_ = body_.size();
     if (not codec_) {
       std::swap(body_, result_);
     } else {
@@ -212,6 +218,7 @@ private:
   std::unique_ptr<arrow::util::Codec> codec_;
   uint64_t last_element_size_{};
   uint64_t event_count_{};
+  uint64_t payload_size_{};
 };
 
 auto to_option_string_view(auto value) -> Option<Option<std::string_view>> {
@@ -594,6 +601,8 @@ private:
     if (body.empty()) {
       co_return;
     }
+    // The bytes written are the payload before compression.
+    auto const bytes = builder_.payload_size();
     auto headers = headers_;
     http::set(headers, "Content-Length", fmt::to_string(body.size()));
     co_await window_.acquire([&](Completion completion) {
@@ -602,8 +611,7 @@ private:
     window_.spawn(
       ctx,
       [pool = &**pool_, body = std::move(body), headers = std::move(headers),
-       events]() mutable -> Task<Completion> {
-        auto const bytes = body.size();
+       bytes, events]() mutable -> Task<Completion> {
         auto result = co_await pool->post(std::move(body), std::move(headers));
         co_return Completion{
           .result = std::move(result),
@@ -635,6 +643,9 @@ private:
         .emit(ctx);
       return;
     }
+    // The bulk request went out and was accepted, whatever its reply says.
+    bytes_write_counter_.add(completion.bytes);
+    events_write_counter_.add(completion.events);
     auto json = from_json(response.body);
     if (not json.has_value()) {
       return;
@@ -653,8 +664,6 @@ private:
         .primary(args_.operator_location)
         .emit(ctx);
     }
-    bytes_write_counter_.add(completion.bytes);
-    events_write_counter_.add(completion.events);
   }
 
   ToOpenSearchArgs args_;

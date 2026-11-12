@@ -582,6 +582,52 @@ auto make_consumer_configuration(record const& options,
   return cfg;
 }
 
+namespace {
+
+/// Counts each message the brokers acknowledged.
+class delivery_counter final : public RdKafka::DeliveryReportCb {
+public:
+  delivery_counter(MetricsCounter bytes, MetricsCounter events)
+    : bytes_{std::move(bytes)}, events_{std::move(events)} {
+  }
+
+  auto dr_cb(RdKafka::Message& message) -> void override {
+    if (message.err() != RdKafka::ERR_NO_ERROR) {
+      return;
+    }
+    bytes_.add(message.len());
+    events_.add(1);
+  }
+
+private:
+  MetricsCounter bytes_;
+  MetricsCounter events_;
+};
+
+} // namespace
+
+auto count_deliveries(producer_configuration& cfg, MetricsCounter bytes,
+                      MetricsCounter events) -> caf::expected<void> {
+  TENZIR_ASSERT(cfg.conf);
+  // Successful deliveries are what counts, so librdkafka has to report them
+  // even if the user asked for error reports only. Nothing else listens.
+  auto errstr = std::string{};
+  if (cfg.conf->set("delivery.report.only.error", "false", errstr)
+      != RdKafka::Conf::CONF_OK) {
+    return caf::make_error(
+      ec::unspecified,
+      fmt::format("failed to set delivery.report.only.error: {}", errstr));
+  }
+  cfg.delivery_callback
+    = std::make_shared<delivery_counter>(std::move(bytes), std::move(events));
+  if (auto err
+      = set_conf_callback(*cfg.conf, "dr_cb", cfg.delivery_callback.get());
+      err) {
+    return err;
+  }
+  return {};
+}
+
 auto make_producer_configuration(record const& options,
                                  Option<aws_iam_options> aws,
                                  Option<resolved_aws_credentials> creds,
