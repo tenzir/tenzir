@@ -1,0 +1,10 @@
+// A missing key yields the default value of the map's values, which is `NULL`
+// for the `Nullable(String)` values of `catchall`, as for the explicit `NULL`
+// of the first row.
+from_hydrolix f"http://{env("CLICKHOUSE_HOST")}",
+              token="test-token",
+              port=int(env("CLICKHOUSE_PORT")),
+              table="default.fh_catchall"
+where catchall.raw_data == null
+sort id
+select id

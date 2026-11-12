@@ -759,9 +759,9 @@ TEST("select query rendering") {
   // Columns come out in table order; a nested path narrows its top-level
   // column to the requested tuple elements; unknown fields are skipped.
   CHECK_EQUAL(make_select_query("tbl", &schema, projection, where, 5),
-              std::string{"SELECT `x`, `y`, CAST(tuple(`meta`.`level`), "
-                          "'Tuple(`level` Nullable(Int64))') AS `meta` FROM "
-                          "tbl WHERE `x` > 0 AND `flag` LIMIT 5"});
+              std::string{"SELECT `x`, `y`, CAST(tuple(tupleElement(`meta`, "
+                          "'level')), 'Tuple(`level` Nullable(Int64))') AS "
+                          "`meta` FROM tbl WHERE `x` > 0 AND `flag` LIMIT 5"});
   // A projection without a schema or without surviving columns selects all.
   CHECK_EQUAL(make_select_query("tbl", nullptr, projection, {}, None{}),
               std::string{"SELECT * FROM tbl"});
@@ -784,8 +784,8 @@ TEST("table plans push the limit only without local predicates") {
   projection.push_back(*ast::field_path::try_from(parse("y")));
   auto filter = ir::OptimizeFilter{};
   filter.push_back(parse("x > 0"));
-  auto plan = make_table_plan(schema, SqlTarget::clickhouse, filter, projection,
-                              test::builtin_registry());
+  auto plan
+    = make_table_plan(schema, filter, projection, test::builtin_registry());
   CHECK_EQUAL(plan.selection, std::string{"`y`"});
   CHECK(plan.local.empty());
   CHECK_EQUAL(make_table_query(plan, "tbl", 0),
@@ -794,8 +794,7 @@ TEST("table plans push the limit only without local predicates") {
               std::string{"SELECT `y` FROM tbl WHERE `x` > 0 LIMIT "
                           "18446744073709551615"});
   filter.push_back(parse("y.to_upper() == \"F\""));
-  plan = make_table_plan(schema, SqlTarget::clickhouse, filter, projection,
-                         test::builtin_registry());
+  plan = make_table_plan(schema, filter, projection, test::builtin_registry());
   CHECK_EQUAL(plan.local.size(), size_t{1});
   CHECK_EQUAL(make_table_query(plan, "tbl", 5),
               std::string{"SELECT `y` FROM tbl WHERE `x` > 0"});
@@ -817,24 +816,28 @@ TEST("nested projections") {
   // Elements come out in declaration order, nested tuples are rebuilt
   // recursively, and names are quoted.
   CHECK_EQUAL(select({"m.c.e", "m.b", "id"}),
-              std::string{"SELECT `id`, CAST(tuple(`m`.`b`, "
-                          "CAST(tuple(`m`.`c`.`e`), 'Tuple(`e` "
-                          "LowCardinality(String))')), 'Tuple(`b` "
+              std::string{"SELECT `id`, CAST(tuple(tupleElement(`m`, 'b'), "
+                          "CAST(tuple(tupleElement(tupleElement(`m`, 'c'), "
+                          "'e')), 'Tuple(`e` LowCardinality(String))')), "
+                          "'Tuple(`b` "
                           "Nullable(Int64), `c` Tuple(`e` "
                           "LowCardinality(String)))') AS `m` FROM t"});
   CHECK_EQUAL(select({"m.c", "m.a"}),
-              std::string{"SELECT CAST(tuple(`m`.`a`, `m`.`c`), 'Tuple(`a` "
+              std::string{"SELECT CAST(tuple(tupleElement(`m`, 'a'), "
+                          "tupleElement(`m`, 'c')), 'Tuple(`a` "
                           "String, `c` Tuple(d IPv4,e "
                           "LowCardinality(String)))') AS `m` FROM t"});
   CHECK_EQUAL(select({"m[\"f g\"]"}),
-              std::string{"SELECT CAST(tuple(`m`.`f g`), 'Tuple(`f g` "
+              std::string{"SELECT CAST(tuple(tupleElement(`m`, 'f g')), "
+                          "'Tuple(`f g` "
                           "Bool)') AS `m` FROM t"});
   // The whole column, a path below it, or a path outside the schema select
   // the column as is.
   CHECK_EQUAL(select({"m", "m.a"}), std::string{"SELECT `m` FROM t"});
   CHECK_EQUAL(select({"m.a", "m.nope"}), std::string{"SELECT `m` FROM t"});
   CHECK_EQUAL(select({"m.h"}),
-              std::string{"SELECT CAST(tuple(`m`.`h`), 'Tuple(`h` "
+              std::string{"SELECT CAST(tuple(tupleElement(`m`, 'h')), "
+                          "'Tuple(`h` "
                           "Tuple(Int64))') AS `m` FROM t"});
   CHECK_EQUAL(select({"id.nope"}), std::string{"SELECT `id` FROM t"});
   // A map and a tuple that contains one stay whole: the fields of a map depend
@@ -844,8 +847,8 @@ TEST("nested projections") {
   schema.add_column("half", "Tuple(ok String, bad Map(String, Int64))");
   CHECK_EQUAL(select({"half.ok"}), std::string{"SELECT `half` FROM t"});
   CHECK_EQUAL(select({"m.a", "half.ok"}),
-              std::string{"SELECT CAST(tuple(`m`.`a`), 'Tuple(`a` String)') AS "
-                          "`m`, `half` FROM t"});
+              std::string{"SELECT CAST(tuple(tupleElement(`m`, 'a')), "
+                          "'Tuple(`a` String)') AS `m`, `half` FROM t"});
 }
 
 TEST("decodable types") {
@@ -876,204 +879,6 @@ TEST("quoting") {
   CHECK_EQUAL(quote_sql_string(std::string_view{"nul\0byte", 8}),
               std::string{"'nul\\x00byte'"});
   CHECK_EQUAL(quote_sql_string("ünïcödé"), std::string{"'ünïcödé'"});
-}
-
-namespace {
-
-auto key(std::vector<std::string> output, std::vector<std::string> input)
-  -> ir::OptimizeAggregation::Column {
-  return {
-    .output = std::move(output), .function = None{}, .input = std::move(input)};
-}
-
-auto call(std::vector<std::string> output, std::string function,
-          Option<std::vector<std::string>> input = None{})
-  -> ir::OptimizeAggregation::Column {
-  return {.output = std::move(output),
-          .function = std::move(function),
-          .input = std::move(input)};
-}
-
-auto aggregate(std::vector<ir::OptimizeAggregation::Column> columns,
-               std::vector<std::string> where = {},
-               SqlTarget target = SqlTarget::clickhouse,
-               std::vector<ir::QueryStage> stages = {}) -> Option<std::string> {
-  auto aggregation = ir::OptimizeAggregation{
-    .columns = std::move(columns),
-    .schema_name = "tenzir.summarize",
-    .fallback = {},
-    .stages = std::move(stages),
-  };
-  return make_aggregate_query(aggregation, make_schema(), "tbl", where, target);
-}
-
-/// A `where` after an aggregation.
-auto filter_stage(std::string_view predicate) -> ir::QueryStage {
-  return {ir::QueryStage::Filter{parse(predicate)}};
-}
-
-/// A `sort` after an aggregation, with `-` before a descending key.
-auto sort_stage(std::vector<std::string_view> keys) -> ir::QueryStage {
-  auto result = ir::QueryStage::Sort{.keys = {}, .bound = None{}};
-  for (auto key : keys) {
-    auto descending = key.starts_with('-');
-    if (descending) {
-      key.remove_prefix(1);
-    }
-    result.keys.push_back({
-      .field = {std::string{key}},
-      .descending = descending,
-    });
-  }
-  return {std::move(result)};
-}
-
-/// A `head` after an aggregation.
-auto limit_stage(uint64_t count) -> ir::QueryStage {
-  return {ir::QueryStage::Limit{count}};
-}
-
-} // namespace
-
-TEST("aggregate query rendering") {
-  // Output columns become flat result columns, and counts become `Int64`.
-  CHECK_EQUAL(aggregate({key({"a", "b"}, {"y"}), call({"n"}, "count"),
-                         call({"c"}, "count", std::vector<std::string>{"n"})},
-                        {"`x` > 0"}),
-              std::string{
-                "SELECT `y` AS `__tenzir_aggregate_0`, toInt64(count()) AS "
-                "`__tenzir_aggregate_1`, toInt64(count(`n`)) AS "
-                "`__tenzir_aggregate_2` FROM tbl WHERE `x` > 0 GROUP BY `y`"});
-  // Without group keys, an extreme over no rows is `NULL`, as in TQL.
-  CHECK_EQUAL(aggregate({call({"lo"}, "min", std::vector<std::string>{"x"}),
-                         call({"hi"}, "max", std::vector<std::string>{"u32"})}),
-              std::string{
-                "SELECT minOrNull(`x`) AS `__tenzir_aggregate_0`, "
-                "maxOrNull(`u32`) AS `__tenzir_aggregate_1` FROM tbl"});
-  // Tuple elements, enums, addresses, UUIDs, and fixed strings group exactly.
-  CHECK_EQUAL(aggregate({key({"meta", "source"}, {"meta", "source"}),
-                         key({"status"}, {"status"}), key({"ip6"}, {"ip6"}),
-                         key({"uid"}, {"uid"}), key({"fs"}, {"fs"})}),
-              std::string{
-                "SELECT `meta`.`source` AS `__tenzir_aggregate_0`, `status` "
-                "AS `__tenzir_aggregate_1`, `ip6` AS `__tenzir_aggregate_2`, "
-                "`uid` AS `__tenzir_aggregate_3`, `fs` AS "
-                "`__tenzir_aggregate_4` FROM tbl GROUP BY `meta`.`source`, "
-                "`status`, `ip6`, `uid`, `fs`"});
-  // A temporal value that TQL decodes to `null` groups and compares as one.
-  CHECK_EQUAL(
-    aggregate({key({"d32"}, {"d32"}),
-               call({"t"}, "max", std::vector<std::string>{"stamp"})}),
-    std::string{"SELECT if(`d32` <= toDate32('2262-04-11'), `d32`, NULL) AS "
-                "`__tenzir_aggregate_0`, maxOrNull(if(`stamp` >= "
-                "fromUnixTimestamp64Milli(-9223372036854) AND `stamp` <= "
-                "fromUnixTimestamp64Milli(9223372036854), `stamp`, NULL)) AS "
-                "`__tenzir_aggregate_1` FROM tbl GROUP BY if(`d32` <= "
-                "toDate32('2262-04-11'), `d32`, NULL)"});
-}
-
-TEST("aggregate queries for hydrolix spell time guards on tick counts") {
-  CHECK_EQUAL(aggregate({key({"d32"}, {"d32"}),
-                         call({"t"}, "max", std::vector<std::string>{"stamp"})},
-                        {}, SqlTarget::hydrolix),
-              std::string{
-                "SELECT if(`d32` <= toDate32('2262-04-11'), `d32`, NULL) AS "
-                "`__tenzir_aggregate_0`, maxOrNull(if(toUnixTimestamp64Milli("
-                "`stamp`) >= -9223372036854 AND "
-                "toUnixTimestamp64Milli(`stamp`) "
-                "<= 9223372036854, `stamp`, NULL)) AS `__tenzir_aggregate_1` "
-                "FROM tbl GROUP BY if(`d32` <= toDate32('2262-04-11'), `d32`, "
-                "NULL)"});
-  CHECK_EQUAL(aggregate({key({"stamp"}, {"stamp"}), call({"n"}, "count")}, {},
-                        SqlTarget::hydrolix),
-              std::string{
-                "SELECT if(toUnixTimestamp64Milli(`stamp`) >= -9223372036854 "
-                "AND toUnixTimestamp64Milli(`stamp`) <= 9223372036854, "
-                "`stamp`, NULL) AS `__tenzir_aggregate_0`, toInt64(count()) AS "
-                "`__tenzir_aggregate_1` FROM tbl GROUP BY "
-                "if(toUnixTimestamp64Milli(`stamp`) >= -9223372036854 AND "
-                "toUnixTimestamp64Milli(`stamp`) <= 9223372036854, `stamp`, "
-                "NULL)"});
-}
-
-TEST("aggregate queries filter, sort, and limit results") {
-  auto columns = std::vector{key({"src"}, {"y"}), call({"events"}, "count")};
-  auto const base = std::string{
-    "SELECT `y` AS `__tenzir_aggregate_0`, toInt64(count()) AS "
-    "`__tenzir_aggregate_1` FROM tbl WHERE `x` >= 3 GROUP BY `y`"};
-  // The example of the issue, with ClickHouse's semantics.
-  CHECK_EQUAL(aggregate(columns, {"`x` >= 3"}, SqlTarget::clickhouse,
-                        {filter_stage("events >= 10"),
-                         sort_stage({"-events", "src"}), limit_stage(20)}),
-              fmt::format("SELECT * FROM ({}) AS `__tenzir_aggregate` WHERE "
-                          "(`__tenzir_aggregate_1` >= 10) ORDER BY "
-                          "`__tenzir_aggregate_1` DESC, `__tenzir_aggregate_0` "
-                          "ASC LIMIT 20",
-                          base));
-  // Strings escape backslashes and quotes.
-  CHECK_EQUAL(aggregate(columns, {"`x` >= 3"}, SqlTarget::clickhouse,
-                        {filter_stage(R"(src != "it's \\ a")")}),
-              fmt::format("SELECT * FROM ({}) AS `__tenzir_aggregate` WHERE "
-                          R"((`__tenzir_aggregate_0` <> 'it\'s \\ a'))",
-                          base));
-  // Enums sort by their values in ClickHouse.
-  CHECK_EQUAL(aggregate({key({"status"}, {"status"}), call({"n"}, "count")}, {},
-                        SqlTarget::clickhouse,
-                        {sort_stage({"status"}), limit_stage(1)}),
-              std::string{"SELECT * FROM (SELECT `status` AS "
-                          "`__tenzir_aggregate_0`, toInt64(count()) AS "
-                          "`__tenzir_aggregate_1` FROM tbl GROUP BY `status`) "
-                          "AS `__tenzir_aggregate` ORDER BY "
-                          "`__tenzir_aggregate_0` ASC LIMIT 1"});
-  // A stage that ClickHouse cannot spell keeps the aggregation local, which
-  // the plan already rules out.
-  CHECK(not aggregate(columns, {"`x` >= 3"}, SqlTarget::clickhouse,
-                      {filter_stage("src.ip() in 10.0.0.0/8")}));
-  CHECK(not supports_aggregate_functions(ir::OptimizeAggregation{
-    .columns = columns,
-    .schema_name = "tenzir.summarize",
-    .fallback = {},
-    .stages = {filter_stage("src.ip() in 10.0.0.0/8")},
-  }));
-  CHECK(supports_aggregate_functions(ir::OptimizeAggregation{
-    .columns = columns,
-    .schema_name = "tenzir.summarize",
-    .fallback = {},
-    .stages = {filter_stage("events >= 10"), limit_stage(20)},
-  }));
-}
-
-TEST("aggregations that stay local") {
-  auto count = call({"n"}, "count");
-  // `GROUP BY` equates `NaN` with itself and `-0.0` with `0.0`.
-  CHECK(not aggregate({key({"f"}, {"f"}), count}));
-  // TQL's extremes reject strings and depend on the order of `NaN`s.
-  CHECK(not aggregate({call({"m"}, "min", std::vector<std::string>{"y"})}));
-  CHECK(not aggregate({call({"m"}, "max", std::vector<std::string>{"f64"})}));
-  CHECK(not aggregate({call({"m"}, "min", std::vector<std::string>{"ip4"})}));
-  // Columns without an exact TQL counterpart, generated columns, and unknown
-  // fields have no value in the model.
-  CHECK(not aggregate({key({"dec"}, {"dec"}), count}));
-  CHECK(not aggregate({key({"gen"}, {"gen"}), count}));
-  CHECK(not aggregate({key({"half", "ok"}, {"half", "ok"}), count}));
-  CHECK(not aggregate({key({"nope"}, {"nope"}), count}));
-  CHECK(not aggregate({call({"s"}, "sum", std::vector<std::string>{"x"})}));
-  CHECK(not aggregate({}));
-  // ClickHouse would resolve the column below to the alias of the result.
-  auto schema = make_schema();
-  schema.add_column("__tenzir_aggregate_0", "Int64");
-  auto aggregation = ir::OptimizeAggregation{
-    .columns = {count},
-    .schema_name = "tenzir.summarize",
-    .fallback = {},
-    .stages = {},
-  };
-  CHECK(not make_aggregate_query(aggregation, schema, "tbl", {},
-                                 SqlTarget::clickhouse));
-  CHECK(supports_aggregate_functions(aggregation));
-  aggregation.columns.push_back(
-    call({"s"}, "sum", std::vector<std::string>{"x"}));
-  CHECK(not supports_aggregate_functions(aggregation));
 }
 
 } // namespace tenzir::plugins::clickhouse

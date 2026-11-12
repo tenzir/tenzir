@@ -15,12 +15,9 @@
 #include "tenzir/detail/escapers.hpp"
 #include "tenzir/detail/flat_map.hpp"
 #include "tenzir/detail/string.hpp"
-#include "tenzir/pushdown/aggregation.hpp"
 #include "tenzir/pushdown/sql.hpp"
 #include "tenzir/pushdown/translate.hpp"
-#include "tenzir/ref.hpp"
 #include "tenzir/tql2/ast.hpp"
-#include "tenzir/try.hpp"
 
 #include <clickhouse/columns/factory.h>
 #include <clickhouse/types/types.h>
@@ -228,32 +225,6 @@ auto format_date(int64_t days) -> std::string {
                      unsigned{ymd.month()}, unsigned{ymd.day()});
 }
 
-/// The function that yields the stored tick count of a column of `type`, or
-/// `None` if there is none. The tick count is a plain `Int64` with which a
-/// guard can compare, and it is `NULL` for a `NULL` value.
-///
-/// The `toUnixTimestamp64*` functions convert to their own unit, so only the
-/// one at the column's precision returns the tick count unchanged. Another one
-/// either throws when the conversion overflows or truncates, which ruins the
-/// guard's exactness at the edge of the range. `reinterpretAsInt64` returns
-/// the tick count at every precision.
-auto tick_count_function(pushdown::TimeType const& type)
-  -> Option<std::string_view> {
-  if (not type.native_type.starts_with("DateTime64(")) {
-    return None{};
-  }
-  switch (type.unit) {
-    case 1'000'000:
-      return "toUnixTimestamp64Milli";
-    case 1'000:
-      return "toUnixTimestamp64Micro";
-    case 1:
-      return "toUnixTimestamp64Nano";
-    default:
-      return "reinterpretAsInt64";
-  }
-}
-
 } // namespace
 
 // -- ClickHouseRenderer -------------------------------------------------------
@@ -398,35 +369,6 @@ auto ClickHouseRenderer::render_call(pushdown::Call const& x,
   TENZIR_UNREACHABLE();
 }
 
-auto ClickHouseRenderer::render_comparison(pushdown::Binary const& x,
-                                           Fragment const& left,
-                                           Fragment const& right) const
-  -> Option<Fragment> {
-  if (target_ != SqlTarget::hydrolix
-      or x.origin != pushdown::ComparisonOrigin::time_guard) {
-    return SqlRenderer::render_comparison(x, left, right);
-  }
-  // Hydrolix reads a time range from a guard on its bare primary column,
-  // which then spans past 2262 or before 1677. A query option such as
-  // `hdx_query_max_timerange_sec` rejects the upper bound, and the lower one
-  // overflows Hydrolix's partition catalog, which then finds no rows. A guard
-  // on the column's tick count means the same, but Hydrolix's range analysis
-  // skips it. Other temporal types cannot be Hydrolix's primary timestamp,
-  // so their guards stay bare.
-  auto const& literal = as<pushdown::Literal>(*x.right);
-  auto const& value = as<pushdown::TimeValue>(literal.value);
-  TENZIR_ASSERT(x.op == pushdown::BinaryOp::geq
-                or x.op == pushdown::BinaryOp::leq);
-  auto ticks = tick_count_function(value.type);
-  if (not ticks) {
-    return SqlRenderer::render_comparison(x, left, right);
-  }
-  return sql_binary(x.op == pushdown::BinaryOp::geq ? ">=" : "<=",
-                    sql_call(*ticks, std::array{left}),
-                    sql_atom(fmt::to_string(value.ticks)),
-                    Fragment::Kind::predicate);
-}
-
 auto ClickHouseRenderer::render_conditional(Fragment const& condition,
                                             Fragment const& then,
                                             Fragment const& otherwise) const
@@ -508,34 +450,6 @@ auto SqlSchema::placed_column(std::span<const std::string> path) const
   return it->second;
 }
 
-auto make_catch_all_schema(std::span<ColumnDescription const> description,
-                           CatchAllLayout const& layout) -> SqlSchema {
-  auto result = SqlSchema{};
-  for (auto const& column : description) {
-    auto const* placed = layout.find(column.name);
-    if (not placed or placed->json) {
-      continue;
-    }
-    auto path = std::vector<std::string>{};
-    for (auto const& segment : placed->path) {
-      path.push_back(segment.id.name);
-    }
-    // A column that shares its field with another one, or that `SELECT *`
-    // may leave out, does not hold the field in every row.
-    auto origin = layout.origin(path);
-    if (not origin or origin->column != column.name
-        or not origin->path.empty()) {
-      continue;
-    }
-    if (path.size() == 1 and path.front() == column.name) {
-      result.add_column(column.name, column.type);
-    } else {
-      result.add_placed_column(column.name, column.type, std::move(path));
-    }
-  }
-  return result;
-}
-
 auto SqlSchema::is_generated(std::string_view name) const -> bool {
   return generated_.contains(std::string{name});
 }
@@ -580,8 +494,8 @@ struct Requested {
 } // namespace
 
 auto SqlSchema::render_projection(
-  std::string_view name, std::span<const std::vector<std::string>> paths,
-  TupleAccess access) const -> Option<std::string> {
+  std::string_view name, std::span<const std::vector<std::string>> paths) const
+  -> Option<std::string> {
   auto const* root = find_node(std::array{std::string{name}});
   if (not root or root->children.empty()) {
     return None{};
@@ -613,9 +527,9 @@ auto SqlSchema::render_projection(
   // Rebuilds the tuple below `node` with the requested elements only, in
   // declaration order, and casts it back to a named tuple so that it decodes
   // to a record.
-  auto render =
-    [access](this auto const& self, Node const& node, Requested const& request,
-             std::string const& sql) -> std::pair<std::string, std::string> {
+  auto render
+    = [](this auto const& self, Node const& node, Requested const& request,
+         std::string const& sql) -> std::pair<std::string, std::string> {
     if (request.whole or node.children.empty()) {
       return {sql, node.type};
     }
@@ -628,10 +542,8 @@ auto SqlSchema::render_projection(
       }
       auto quoted = quote_sql_identifier(child_name);
       // `t`.`a` would read a column named `t.a` instead, if there is one.
-      auto element = access == TupleAccess::element
-                       ? fmt::format("tupleElement({}, {})", sql,
-                                     quote_sql_string(child_name))
-                       : fmt::format("{}.{}", sql, quoted);
+      auto element = fmt::format("tupleElement({}, {})", sql,
+                                 quote_sql_string(child_name));
       auto [value, type] = self(*child, *it->second, element);
       values.push_back(std::move(value));
       elements.push_back(fmt::format("{} {}", quoted, type));
@@ -662,83 +574,11 @@ public:
   }
 };
 
-/// Spells aggregations over a table in ClickHouse SQL.
-class ClickHouseAggregateDialect final : public pushdown::SqlAggregateDialect {
-public:
-  ClickHouseAggregateDialect(SqlSchema const& schema, SqlTarget target)
-    : schema_{schema}, renderer_{target} {
-  }
-
-private:
-  auto alias_collides(std::string_view alias) const -> bool override {
-    // ClickHouse resolves a name to an alias before a column.
-    return std::ranges::contains(schema_->columns(), alias);
-  }
-
-  auto render_value(pushdown::Expr const& expr) const
-    -> Option<std::string> override {
-    return renderer_.render(expr);
-  }
-
-  auto
-  render_key(std::span<std::string const> path,
-             pushdown::FieldValue const& field, std::string const& value) const
-    -> Option<std::string> override {
-    TENZIR_UNUSED(path);
-    if (is<pushdown::FloatType>(field.column.type)) {
-      return None{};
-    }
-    return value;
-  }
-
-  auto render_count(Option<std::string> const& value) const
-    -> std::string override {
-    return fmt::format("toInt64(count({}))", value ? *value : std::string{});
-  }
-
-  auto render_extremum(pushdown::Extremum extremum,
-                       pushdown::FieldValue const& field,
-                       std::string const& value) const
-    -> Option<std::string> override {
-    auto const& type = field.column.type;
-    if (not(is<pushdown::IntType>(type) or is<pushdown::TimeType>(type))) {
-      return None{};
-    }
-    return fmt::format("{}OrNull({})",
-                       extremum == pushdown::Extremum::min ? "min" : "max",
-                       value);
-  }
-
-  Ref<SqlSchema const> schema_;
-  ClickHouseRenderer renderer_;
-};
-
 } // namespace
 
-auto make_aggregate_query(ir::OptimizeAggregation const& aggregation,
-                          SqlSchema const& schema, std::string_view table,
-                          std::span<const std::string> where, SqlTarget target)
-  -> Option<std::string> {
-  TRY(auto plan, pushdown::classify(aggregation));
-  TRY(auto select,
-      pushdown::make_aggregate_select(
-        plan, schema.model(), ClickHouseQueryDialect{},
-        ClickHouseAggregateDialect{schema, target}, std::string{table}, where));
-  TRY(select, pushdown::make_post_aggregate_select(
-                std::move(select), aggregation, ClickHouseQueryDialect{}));
-  return pushdown::render_select(select, ClickHouseQueryDialect{});
-}
-
-auto supports_aggregate_functions(ir::OptimizeAggregation const& aggregation)
-  -> bool {
-  return pushdown::supports_count_min_max(aggregation)
-         and pushdown::supports_post_aggregate_stages(aggregation,
-                                                      ClickHouseQueryDialect{});
-}
-
 auto select_columns(SqlSchema const* schema,
-                    Option<ir::OptimizeProjection> const& projection,
-                    TupleAccess access) -> std::string {
+                    Option<ir::OptimizeProjection> const& projection)
+  -> std::string {
   auto result = std::string{"*"};
   if (schema and projection) {
     // The nested paths requested below each top-level column, relative to it.
@@ -766,8 +606,7 @@ auto select_columns(SqlSchema const* schema,
       if (it == wanted.end()) {
         continue;
       }
-      if (auto narrowed
-          = schema->render_projection(column, it->second, access)) {
+      if (auto narrowed = schema->render_projection(column, it->second)) {
         selected.push_back(std::move(*narrowed));
       } else {
         selected.push_back(quote_sql_identifier(column));
@@ -786,7 +625,7 @@ auto make_select_query(std::string_view table, SqlSchema const* schema,
                        Option<uint64_t> limit) -> std::string {
   return pushdown::render_select(
     pushdown::SqlSelect{
-      .selection = select_columns(schema, projection, TupleAccess::dotted),
+      .selection = select_columns(schema, projection),
       .from = std::string{table},
       .where = {where.begin(), where.end()},
       .group_by = {},
@@ -796,17 +635,13 @@ auto make_select_query(std::string_view table, SqlSchema const* schema,
     ClickHouseQueryDialect{});
 }
 
-auto make_table_plan(SqlSchema const& schema, SqlTarget target,
-                     ir::OptimizeFilter filter,
+auto make_table_plan(SqlSchema const& schema, ir::OptimizeFilter filter,
                      Option<ir::OptimizeProjection> const& projection,
                      registry const& reg) -> pushdown::TablePlan {
   auto split = pushdown::split_filter(std::move(filter), schema.model(),
-                                      ClickHouseRenderer{target, &schema}, reg);
+                                      ClickHouseRenderer{&schema}, reg);
   return pushdown::TablePlan{
-    .selection
-    = select_columns(&schema, projection,
-                     target == SqlTarget::clickhouse ? TupleAccess::element
-                                                     : TupleAccess::dotted),
+    .selection = select_columns(&schema, projection),
     .pushed = std::move(split.pushed),
     .local = std::move(split.remaining),
   };

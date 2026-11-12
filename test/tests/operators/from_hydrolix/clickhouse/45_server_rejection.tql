@@ -1,0 +1,11 @@
+---
+error: true
+---
+
+// Hydrolix rejects a comparison of a string with a number, which the read
+// reports with a hint instead of running the operators in Tenzir.
+from_hydrolix f"http://{env("CLICKHOUSE_HOST")}",
+              token="test-token",
+              port=int(env("CLICKHOUSE_PORT")),
+              table="default.fh_events"
+where name > 1

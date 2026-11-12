@@ -117,6 +117,10 @@ struct TableRead {
 /// `table`, keeping the rows where all of the rendered predicates in `where`
 /// hold, and computes `plan` on top of that. Fails if a name that the query
 /// introduces may collide with one of the table's `columns`.
+///
+/// If `dialect.filters_in_projection()` holds and `selection` is not `*`, the
+/// filters at the start of `plan` join `where`, so that they constrain the
+/// table itself rather than the projection of it.
 auto make_table_read(std::string_view table, std::string_view selection,
                      std::span<std::string const> where,
                      std::span<ir::QueryStage const> plan,

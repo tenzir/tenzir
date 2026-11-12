@@ -1,9 +1,8 @@
-{
-  id: 5,
-}
-{
-  id: 6,
-}
-{
-  id: 9,
-}
+error: Hydrolix error 407: DB::Exception: Can't compare decimal number due to overflow: while executing 'FUNCTION greater(t :: 0, _CAST('1704067200'_DateTime64(9, 'UTC'), 'DateTime64(9, 'UTC')'_String) :: 1) -> greater(__table2.t, _CAST('1704067200'_DateTime64(9, 'UTC'), 'DateTime64(9, 'UTC')'_String)) UInt8 : 2': While executing MergeTreeSelect(pool: ReadPoolInOrder, algorithm: InOrder)
+ --> tests/operators/from_hydrolix/clickhouse/27_time_after.tql:9:1
+  |
+9 | from_hydrolix f"http://{env("CLICKHOUSE_HOST")}",
+  | ^^^^^^^^^^^^^
+  |
+  = note: the query computes the operators after `from_hydrolix` with Hydrolix's semantics
+  = hint: use `pushdown=false` to run them in Tenzir instead

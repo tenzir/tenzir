@@ -1,0 +1,7 @@
+// A second row for `fh_catchall`, whose `catchall` map lacks the key
+// `raw_data`.
+from_clickhouse sql="INSERT INTO fh_catchall SELECT toInt64(2), map('class_uid', '2002', 'severity', 'high'), CAST((0., 0.), 'Point')",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false

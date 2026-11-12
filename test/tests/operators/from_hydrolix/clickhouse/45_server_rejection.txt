@@ -1,0 +1,8 @@
+error: Hydrolix error 386: DB::Exception: There is no supertype for types String, UInt8 because some of them are String/FixedString/Enum and some of them are not: while executing function greater on arguments __table1.name String String(size = 0), 1_UInt8 UInt8 Const(size = 0, UInt8(size = 1))
+ --> tests/operators/from_hydrolix/clickhouse/45_server_rejection.tql:7:1
+  |
+7 | from_hydrolix f"http://{env("CLICKHOUSE_HOST")}",
+  | ^^^^^^^^^^^^^
+  |
+  = note: the query computes the operators after `from_hydrolix` with Hydrolix's semantics
+  = hint: use `pushdown=false` to run them in Tenzir instead

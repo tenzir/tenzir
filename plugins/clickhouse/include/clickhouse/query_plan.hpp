@@ -24,12 +24,14 @@
 #include <string_view>
 #include <vector>
 
-/// The stages that `from_clickhouse` takes over from the pipeline.
+/// The stages that `from_clickhouse` and `from_hydrolix` take over from the
+/// pipeline.
 ///
 /// In `table` mode, `from_clickhouse` takes over the stages after it that
 /// ClickHouse spells, such as filters, projections, a summary, sorts, and
 /// limits, and computes them in its query with ClickHouse's semantics (see
 /// `pushdown::render_plan`). The operators of the stages leave the pipeline.
+/// `from_hydrolix` does the same against the ClickHouse engine of Hydrolix.
 ///
 /// It decides what to take over from the syntax of the stages alone. When it
 /// runs, it reads the table's columns and binds every field that the stages
@@ -56,10 +58,21 @@ struct BoundField {
 ///
 /// In a table without a catch-all column, a top-level field is the column of
 /// the same name, which must match exactly, as ClickHouse resolves names, a
-/// field below a named `Tuple`
-/// is its element, and a field below a `JSON` column without typed paths is
-/// the value at its path. A name that the table lacks spells as a column, so
-/// that ClickHouse rejects it.
+/// field below a named `Tuple` is its element, a field below a
+/// `Map(String, V)` is the value of its key, as in `m['k']`, and a field below
+/// a `JSON` column without typed paths is the value at its path. A name that
+/// the table lacks spells as a column, so that ClickHouse rejects it.
+///
+/// The operator reads a map as a record whose fields are the keys of the map,
+/// so a missing key is a missing field. ClickHouse instead yields the default
+/// value of `V` for a missing key: `NULL` for a `Nullable` type, which matches
+/// `== null`, but `''` for a `String` and `0` for a number. Elements and keys
+/// nest, as in a tuple of maps or a map of maps, and the field has the type
+/// `V` for the stages that read it.
+///
+/// Hydrolix keeps the fields that its transform does not map in a column of
+/// the type `Map(String, Nullable(String))`, typically named `catchall`, which
+/// this binds as `catchall['class_uid']`.
 ///
 /// In a table with a catch-all column, a field is the value of the column that
 /// `CatchAllLayout::origin` names for it: a column, a value below a `JSON`
@@ -69,8 +82,9 @@ struct BoundField {
 /// Neither binds a generated column, which `SELECT *` leaves out depending on
 /// the session's settings, a column whose type the operator cannot read, a
 /// whole `JSON` column below which the operator reconstructs a record, a path
-/// below a `JSON` column with typed or skipped paths, or a path below a
-/// `JSON` column that a column of the same dotted name shadows.
+/// below a `JSON` column with typed or skipped paths, a path below a `JSON`
+/// column that a column of the same dotted name shadows, or a path below a
+/// map whose keys are no strings.
 class TableBinding {
 public:
   TableBinding(std::vector<ColumnDescription> description,
@@ -197,6 +211,11 @@ public:
   auto render_exclude(std::span<std::string const> columns) const
     -> Option<std::string> override;
 
+  /// Returns `true`: Hydrolix derives the time range that a query reads from
+  /// the `WHERE` that reads the table, so the filters that directly follow
+  /// the source belong there, also when the query projects the table.
+  auto filters_in_projection() const -> bool override;
+
 private:
   BoundPlan const* bound_ = nullptr;
 };
@@ -214,9 +233,36 @@ inline constexpr auto clickhouse_lexicon = pushdown::SqlLexicon{
   .triple_backtick_comments = false,
 };
 
-/// Returns the stages of `chain` that `from_clickhouse` takes over: the
-/// longest prefix that `ClickHouseDialect` spells.
-auto absorb_stages(ir::QueryChain const& chain) -> ir::Absorption;
+/// A setting of a query, as ClickHouse names it.
+struct QuerySetting {
+  std::string_view name;
+  std::string_view value;
+
+  auto operator==(QuerySetting const&) const -> bool = default;
+};
+
+/// Returns the settings of a query that reads a table and computes the stages
+/// that `bound` bound, beyond those that every read needs, for a table with a
+/// catch-all column if `catch_all`. They make the query compute the stages
+/// as the operator expects:
+///
+/// - A summary counts `0` for no rows, whatever the session says.
+/// - A table read that exceeds a limit of the session fails rather than
+///   returning a partial result. Hydrolix enforces its own limits with
+///   circuit breakers that fail the query, so its reads get none of these
+///   `*_overflow_mode` settings.
+/// - Literal dotted keys stay apart from nested paths below `JSON` columns,
+///   as the inserts of `to_clickhouse` keep them.
+/// - Sorts by values below `JSON` columns order values of different types.
+auto table_read_settings(BoundPlan const& bound, bool catch_all, bool hydrolix)
+  -> std::vector<QuerySetting>;
+
+/// Returns the stages of `chain` that `from_clickhouse` or `from_hydrolix`
+/// takes over: the longest prefix that `ClickHouseDialect` spells. `target`
+/// names the server in the reason for declining the rest, such as
+/// `Hydrolix`.
+auto absorb_stages(ir::QueryChain const& chain, std::string_view target)
+  -> ir::Absorption;
 
 /// Builds the query that reads `selection`, as it appears after `SELECT`,
 /// from `table` and computes `plan` on top of that, with the fields that

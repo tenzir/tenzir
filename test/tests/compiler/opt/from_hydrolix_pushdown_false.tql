@@ -1,0 +1,4 @@
+// With `pushdown=false`, `from_hydrolix` takes over no stage.
+from_hydrolix "https://acme.hydrolix.live", token="t", table="db.tbl", pushdown=false
+where time > 2026-01-01
+head 5

@@ -1,5 +1,6 @@
-// Hydrolix reads only the partitions of the time range, which a `where` can
-// push into the query only as a constant: `let` evaluates `now()` once.
+// Hydrolix reads only the partitions of the time range, which a `where` directly
+// after `from_hydrolix` constrains, but only with constant bounds: `let`
+// evaluates `now()` once.
 let $since = now() - 36500d
 from_hydrolix f"http://{env("CLICKHOUSE_HOST")}",
               token="test-token",

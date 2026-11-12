@@ -1,0 +1,9 @@
+// The filter also constrains the table when the query projects the table
+// for a `select`.
+from_hydrolix f"http://{env("CLICKHOUSE_HOST")}",
+              token="test-token",
+              port=int(env("CLICKHOUSE_PORT")),
+              table="default.fh_events"
+where time > 2026-01-01T00:00:01
+select id, name
+sort id

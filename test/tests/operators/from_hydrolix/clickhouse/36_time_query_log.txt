@@ -1,24 +1,44 @@
 {
-  query: "SELECT `id`, `t` FROM default.fh_times WHERE (toUnixTimestamp64Milli(`t`) >= -9223372036854 AND toUnixTimestamp64Milli(`t`) <= 9223372036854 AND `t` > fromUnixTimestamp64Milli(1704067200000))",
+  type: "QueryFinish",
+  query: "SELECT * FROM default.fh_times",
 }
 {
-  query: "SELECT `id`, `t` FROM default.fh_times WHERE (toUnixTimestamp64Milli(`t`) >= -9223372036854 AND toUnixTimestamp64Milli(`t`) <= 9223372036854 AND `t` < fromUnixTimestamp64Milli(946684800000))",
+  type: "ExceptionWhileProcessing",
+  query: "SELECT `id` AS `__tenzir_column_0` FROM (SELECT `id`, `t` FROM default.fh_times WHERE (`t` > fromUnixTimestamp64Nano(1704067200000000000, 'UTC'))) AS `__tenzir_table` ORDER BY `id` ASC",
 }
 {
-  query: "SELECT `id`, `t` FROM default.fh_times WHERE if(toUnixTimestamp64Milli(`t`) >= -9223372036854 AND toUnixTimestamp64Milli(`t`) <= 9223372036854, `t`, NULL) IS NULL",
+  type: "QueryFinish",
+  query: "SELECT `id`, `t` FROM default.fh_times",
 }
 {
-  query: "SELECT `id`, `t` FROM default.fh_times WHERE NOT if(toUnixTimestamp64Milli(`t`) >= -9223372036854 AND toUnixTimestamp64Milli(`t`) <= 9223372036854, `t` >= fromUnixTimestamp64Milli(946684800000), NULL)",
+  type: "QueryFinish",
+  query: "SELECT `id` AS `__tenzir_column_0` FROM (SELECT `id`, `t` FROM default.fh_times WHERE (`t` IS NULL)) AS `__tenzir_table` ORDER BY `id` ASC",
 }
 {
-  query: "SELECT `id`, `c` FROM default.fh_times WHERE ((reinterpretAsInt64(`c`) >= -922337203685 AND reinterpretAsInt64(`c`) <= 922337203685 AND `c` > CAST(fromUnixTimestamp64Nano(1704067200000000000), 'DateTime64(2)')) OR if(reinterpretAsInt64(`c`) >= -922337203685 AND reinterpretAsInt64(`c`) <= 922337203685, `c`, NULL) IS NULL)",
+  type: "QueryFinish",
+  query: "SELECT * FROM default.fh_events WHERE (`time` > fromUnixTimestamp64Nano(1767225601000000000, 'UTC')) ORDER BY `id` ASC LIMIT 1",
 }
 {
-  query: "SELECT `id`, `t`, `c` FROM default.fh_times WHERE (toUnixTimestamp64Milli(`t`) >= -9223372036854 AND toUnixTimestamp64Milli(`t`) <= 9223372036854 AND `t` <= fromUnixTimestamp64Milli(9223372036854)) AND if(reinterpretAsInt64(`c`) >= -922337203685 AND reinterpretAsInt64(`c`) <= 922337203685, `c`, NULL) IS NOT NULL",
+  type: "QueryFinish",
+  query: "SELECT * FROM (SELECT `id` AS `__tenzir_column_0`, `name` AS `__tenzir_column_1` FROM (SELECT `time`, `id`, `name` FROM default.fh_events WHERE (`time` > fromUnixTimestamp64Nano(1767225601000000000, 'UTC'))) AS `__tenzir_table`) AS `__tenzir_level_2` ORDER BY `__tenzir_column_0` ASC",
 }
 {
-  query: "SELECT toInt64(count()) AS `__tenzir_aggregate_0`, minOrNull(if(reinterpretAsInt64(`c`) >= -922337203685 AND reinterpretAsInt64(`c`) <= 922337203685, `c`, NULL)) AS `__tenzir_aggregate_1`, maxOrNull(if(toUnixTimestamp64Milli(`t`) >= -9223372036854 AND toUnixTimestamp64Milli(`t`) <= 9223372036854, `t`, NULL)) AS `__tenzir_aggregate_2` FROM default.fh_times WHERE (toUnixTimestamp64Milli(`t`) >= -9223372036854 AND toUnixTimestamp64Milli(`t`) <= 9223372036854 AND `t` > fromUnixTimestamp64Milli(946684800000))",
+  type: "QueryFinish",
+  query: "SELECT * FROM (SELECT * EXCEPT (`score`) FROM default.fh_events WHERE (`time` > fromUnixTimestamp64Nano(1767225601000000000, 'UTC'))) AS `__tenzir_level_0` ORDER BY `id` ASC",
 }
 {
-  query: "SELECT `id`, `t` FROM default.fh_times WHERE (toUnixTimestamp64Milli(`t`) >= -9223372036854 AND toUnixTimestamp64Milli(`t`) <= 9223372036854 AND `t` > fromUnixTimestamp64Milli(1717243200000)) LIMIT 5",
+  type: "QueryFinish",
+  query: "SELECT toInt64(count()) AS `__tenzir_column_0`, minOrNull(`time`) AS `__tenzir_column_1` FROM (SELECT `time` FROM default.fh_events WHERE (`time` > fromUnixTimestamp64Nano(1767225601000000000, 'UTC'))) AS `__tenzir_table`",
+}
+{
+  type: "QueryFinish",
+  query: "SELECT * FROM (SELECT `__tenzir_source_1`.*, `time` AS `__tenzir_order_0` FROM default.fh_events AS `__tenzir_source_1` ORDER BY `time` ASC LIMIT 2) AS `__tenzir_level_2` WHERE (`time` > fromUnixTimestamp64Nano(1767225601000000000, 'UTC')) ORDER BY `__tenzir_order_0` ASC",
+}
+{
+  type: "QueryFinish",
+  query: "SELECT * FROM (SELECT `time` AS `__tenzir_column_0`, `id` AS `__tenzir_column_1` FROM (SELECT `time`, `id` FROM default.fh_events WHERE (`time` > fromUnixTimestamp64Nano(1767225601000000000, 'UTC'))) AS `__tenzir_table`) AS `__tenzir_level_2` ORDER BY `__tenzir_column_1` ASC",
+}
+{
+  type: "QueryFinish",
+  query: "SELECT * FROM (SELECT * EXCEPT (`score`) FROM default.fh_events WHERE (`time` > fromUnixTimestamp64Nano(1767225601000000000, 'UTC'))) AS `__tenzir_level_0` ORDER BY `id` ASC",
 }

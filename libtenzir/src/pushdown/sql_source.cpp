@@ -250,6 +250,27 @@ auto make_table_read(std::string_view table, std::string_view selection,
     .order_by = {},
     .limit = None{},
   };
+  if (dialect.filters_in_projection() and selection != "*") {
+    // The filters that directly follow the source read the table, so they
+    // may join the projection of it, which then constrains the table itself.
+    auto const leading = std::ranges::find_if(plan, [](auto const& stage) {
+      return not is<ir::QueryStage::Filter>(stage.kind);
+    });
+    auto const count = static_cast<size_t>(leading - plan.begin());
+    if (count > 0) {
+      auto rendered = render_plan(SqlRelation{.from = std::string{table},
+                                              .fields = None{},
+                                              .alias = None{}},
+                                  plan.first(count), dialect);
+      if (not rendered or rendered->select.from != table
+          or rendered->select.selection != "*") {
+        return Err{std::string{"failed to spell the stages that the "
+                               "operator took over"}};
+      }
+      base.where.append_range(std::move(rendered->select.where));
+      plan = plan.subspan(count);
+    }
+  }
   if (plan.empty()) {
     return TableRead{
       .sql = render_select(base, dialect),

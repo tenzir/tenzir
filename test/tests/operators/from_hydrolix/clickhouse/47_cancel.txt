@@ -1,0 +1,7 @@
+error: failed to meet minimum throughput requirement
+  --> tests/operators/from_hydrolix/clickhouse/47_cancel.tql:14:19
+   |
+14 | assert_throughput 1, within=1s, retries=0
+   |                   ^
+   |
+   = note: observed 0 events, expected at least 1

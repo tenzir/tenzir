@@ -1,0 +1,12 @@
+{
+  catchall: {
+    severity: "high",
+  },
+  n: 1,
+}
+{
+  catchall: {
+    severity: null,
+  },
+  n: 1,
+}

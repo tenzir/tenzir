@@ -1,0 +1,238 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "from_hydrolix",
+       store: {
+         op: {
+           path: [
+             `from_hydrolix` @ [1]:133..146 from 0
+           ],
+           ref: std::from_hydrolix/op
+         },
+         args: [
+           expression constant string "https://acme.hydrolix.live" @ [1]:147..175 from 0
+         ],
+         named_args: [
+           {
+             index: 0,
+             value: expression constant string "t" @ [1]:183..186 from 0
+           },
+           {
+             index: 1,
+             value: located "db.tbl" @ [1]:194..202 from 0
+           }
+         ]
+       },
+       filter: [
+         
+       ],
+-      order: "ordered"
++      order: "ordered",
++      projection: [
++        {
++          expr: root_field {
++            id: `src` @ [1]:237..240 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `src` @ [1]:237..240 from 0,
++              has_question_mark: false
++            }
++          ]
++        },
++        {
++          expr: root_field {
++            id: `time` @ [1]:209..213 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `time` @ [1]:209..213 from 0,
++              has_question_mark: false
++            }
++          ]
++        }
++      ],
++      plan: [
++        Filter {
++          predicate: binary_expr {
++            left: root_field {
++              id: `time` @ [1]:209..213 from 0,
++              has_question_mark: false
++            },
++            op: "gt",
++            right: constant time 2026-01-01T00:00:00Z @ [1]:216..226 from 0,
++            location: [1]:209..226 from 0
++          }
++        },
++        Aggregate {
++          columns: [
++            {
++              output: [
++                "src"
++              ],
++              input: [
++                "src"
++              ]
++            },
++            {
++              output: [
++                "n"
++              ],
++              function: "count"
++            }
++          ],
++          schema_name: "tenzir.summarize"
++        }
++      ],
++      declined: "Hydrolix cannot spell the stage"
+     },
+     where_ir {
+       op: {
+         path: [
+-          `where` @ [1]:203..208 from 0
++          
+         ],
+-        ref: std::where/op
++        ref: unresolved
+       },
+       args: [
+-        expression binary_expr {
+-          left: root_field {
+-            id: `time` @ [1]:209..213 from 0,
+-            has_question_mark: false
+-          },
+-          op: "gt",
+-          right: constant time 2026-01-01T00:00:00Z @ [1]:216..226 from 0,
+-          location: [1]:209..226 from 0
+-        }
+-      ],
+-      named_args: [
+-        
+-      ]
+-    },
+-    summarize {
+-      self: [1]:227..236 from 0,
+-      cfg: {
+-        aggregates: [
+-          {
+-            dest: {
+-              expr: root_field {
+-                id: `n` @ [1]:242..243 from 0,
+-                has_question_mark: false
+-              },
+-              has_this: false,
+-              path: [
+-                {
+-                  id: `n` @ [1]:242..243 from 0,
+-                  has_question_mark: false
+-                }
+-              ]
+-            },
+-            call: {
+-              fn: {
+-                path: [
+-                  `count` @ [1]:244..249 from 0
+-                ],
+-                ref: std::count/fn
+-              },
+-              args: [
+-                
+-              ],
+-              method: false,
+-              location: [1]:244..251 from 0
+-            }
+-          }
+-        ],
+-        groups: [
+-          {
+-            expr: {
+-              expr: root_field {
+-                id: `src` @ [1]:237..240 from 0,
+-                has_question_mark: false
+-              },
+-              has_this: false,
+-              path: [
+-                {
+-                  id: `src` @ [1]:237..240 from 0,
+-                  has_question_mark: false
+-                }
+-              ]
+-            }
+-          }
+-        ],
+-        indices: [
+-          -1,
+-          0
+-        ],
+-        emission: "final",
+-        mode: "reset",
+-        output: "summary",
+-        emit_every: 1
+-      }
+-    },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:252..257 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
++        Incomplete binary_expr {
+           left: function_call {
+             fn: {
+               path: [
+                 `capitalize` @ [1]:262..272 from 0
+               ],
+               ref: std::capitalize/fn
+             },
+             args: [
+               root_field {
+                 id: `src` @ [1]:258..261 from 0,
+                 has_question_mark: false
+               }
+             ],
+             method: true,
+             location: [1]:258..274 from 0
+           },
+           op: "eq",
+           right: constant string "A" @ [1]:278..281 from 0,
+           location: [1]:258..281 from 0
+         }
+       ],
+       named_args: [
+         
+       ]
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:281..281 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ],
+   definition_location: [1]:133..281 from 0
+ }

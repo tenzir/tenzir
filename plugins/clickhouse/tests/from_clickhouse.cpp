@@ -72,7 +72,15 @@ TEST("from_clickhouse rejects saving and restoring checkpoints") {
 
 TEST("from_hydrolix rejects saving and restoring checkpoints") {
   check_rejects_checkpoints<nova::Events>("from_hydrolix");
-  check_rejects_checkpoints<table_slice>("from_hydrolix");
+}
+
+TEST("from_hydrolix runs only with Nova") {
+  auto const* plugin = plugins::find<OperatorPlugin>("from_hydrolix");
+  REQUIRE(plugin);
+  auto desc = plugin->describe();
+  REQUIRE_EQUAL(desc.spawns.size(), size_t{1});
+  auto const nova = is<Spawn<void, nova::Events>>(desc.spawns.front());
+  CHECK(nova);
 }
 
 TEST("from_hydrolix authentication diagnostics omit ClickHouse advice") {

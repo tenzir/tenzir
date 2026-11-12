@@ -1,0 +1,11 @@
+---
+error: true
+---
+
+// A field of a catch-all table may live in any of its columns, so a `select`
+// fails before any query reads data.
+from_hydrolix f"http://{env("CLICKHOUSE_HOST")}",
+              token="test-token",
+              port=int(env("CLICKHOUSE_PORT")),
+              table="default.fh_catch_all"
+select id, level

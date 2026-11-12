@@ -76,6 +76,10 @@ auto SqlQueryDialect::max_limit() const -> uint64_t {
   return std::numeric_limits<uint64_t>::max();
 }
 
+auto SqlQueryDialect::filters_in_projection() const -> bool {
+  return false;
+}
+
 auto SqlQueryDialect::quote_string(std::string_view text) const
   -> Option<std::string> {
   auto result = std::string{"'"};

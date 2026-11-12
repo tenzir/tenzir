@@ -1,0 +1,9 @@
+// With `pushdown=false`, the operators run in Tenzir, and the query reads the
+// columns that they need.
+from_hydrolix f"http://{env("CLICKHOUSE_HOST")}",
+              token="test-token",
+              port=int(env("CLICKHOUSE_PORT")),
+              table="default.fh_events",
+              pushdown=false
+where name != "bob"
+select id

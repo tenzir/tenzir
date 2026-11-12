@@ -317,8 +317,9 @@ namespace {
 /// Spells plans in a minimal dialect with exclusions, one function, and times.
 class PlanDialect final : public SqlQueryDialect {
 public:
-  explicit PlanDialect(LimitClause clause = LimitClause::limit)
-    : clause_{clause} {
+  explicit PlanDialect(LimitClause clause = LimitClause::limit,
+                       bool filters_in_projection = false)
+    : clause_{clause}, filters_in_projection_{filters_in_projection} {
   }
 
   auto quote_identifier(std::string_view name) const -> std::string override {
@@ -327,6 +328,10 @@ public:
 
   auto limit_clause() const -> LimitClause override {
     return clause_;
+  }
+
+  auto filters_in_projection() const -> bool override {
+    return filters_in_projection_;
   }
 
   auto bind_field(std::span<std::string const> path) const
@@ -362,6 +367,7 @@ public:
 
 private:
   LimitClause clause_;
+  bool filters_in_projection_;
 };
 
 using Path = std::vector<std::string>;
@@ -883,6 +889,44 @@ TEST("sources read tables through plans") {
                       PlanDialect{});
   REQUIRE(not clash);
   CHECK(clash.unwrap_err().contains("__tenzir_column_0"));
+}
+
+TEST("sources may filter the projection of a table") {
+  auto const columns = std::vector<std::string>{"x", "y"};
+  auto const read = [&](std::string_view selection,
+                        std::vector<ir::QueryStage> plan, bool opt_in) {
+    auto const where = std::vector<std::string>{"\"y\" < 9"};
+    auto result = make_table_read("\"t\"", selection, where, plan, columns,
+                                  PlanDialect{LimitClause::limit, opt_in});
+    REQUIRE(result);
+    return std::move(result).unwrap().sql;
+  };
+  auto const stages = std::vector{filter("x > 1"), filter("y > 2"),
+                                  select({{{"a"}, {"x"}}}), filter("a > 3")};
+  // By default, the filters read the projection.
+  CHECK_EQUAL(read("\"x\", \"y\"", stages, false),
+              std::string{
+                "SELECT * FROM (SELECT \"x\" AS \"__tenzir_column_0\" "
+                "FROM (SELECT \"x\", \"y\" FROM \"t\" WHERE \"y\" < "
+                "9) AS \"__tenzir_table\" WHERE (\"x\" > 1) AND "
+                "(\"y\" > 2)) AS \"__tenzir_level_1\" WHERE "
+                "(\"__tenzir_column_0\" > 3)"});
+  // A dialect that opts in moves the leading filters into the projection, but
+  // not the filters after other stages.
+  CHECK_EQUAL(read("\"x\", \"y\"", stages, true),
+              std::string{
+                "SELECT * FROM (SELECT \"x\" AS \"__tenzir_column_0\" "
+                "FROM (SELECT \"x\", \"y\" FROM \"t\" WHERE \"y\" < "
+                "9 AND (\"x\" > 1) AND (\"y\" > 2)) AS "
+                "\"__tenzir_table\") AS \"__tenzir_level_1\" WHERE "
+                "(\"__tenzir_column_0\" > 3)"});
+  // Without other stages, no derived table remains.
+  CHECK_EQUAL(read("\"x\"", {filter("x > 1")}, true),
+              std::string{"SELECT \"x\" FROM \"t\" WHERE \"y\" < 9 AND "
+                          "(\"x\" > 1)"});
+  // Without a projection, the filters read the table anyway.
+  CHECK_EQUAL(read("*", {filter("x > 1"), limit(2)}, true),
+              read("*", {filter("x > 1"), limit(2)}, false));
 }
 
 TEST("sources read windows of live reads with filters") {

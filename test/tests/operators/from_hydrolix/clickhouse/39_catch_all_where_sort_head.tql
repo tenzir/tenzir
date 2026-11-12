@@ -1,0 +1,10 @@
+// Hydrolix filters and sorts the fields of the reconstructed events, below the
+// catch-all column and in the dotted column, and limits the result.
+from_hydrolix f"http://{env("CLICKHOUSE_HOST")}",
+              token="test-token",
+              port=int(env("CLICKHOUSE_PORT")),
+              table="default.fh_catch_all"
+where time > 2026-01-01T00:00:00
+where level == "high" and src.port == 443
+sort -src.host
+head 1

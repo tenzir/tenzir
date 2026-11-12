@@ -4,11 +4,11 @@
 }
 {
   type: "QueryFinish",
-  query: "SELECT `id` AS `__tenzir_column_2`, `time` AS `__tenzir_column_3` FROM (SELECT `__tenzir_table`.*, `time` AS `__tenzir_order_0` FROM (SELECT `id`, `time`, `message` FROM fc_ordering) AS `__tenzir_table` WHERE (upperUTF8(`message`) = 'KEEP') ORDER BY `time` DESC LIMIT 2) AS `__tenzir_level_1` ORDER BY `__tenzir_order_0` DESC",
+  query: "SELECT `id` AS `__tenzir_column_2`, `time` AS `__tenzir_column_3` FROM (SELECT `__tenzir_table`.*, `time` AS `__tenzir_order_0` FROM (SELECT `id`, `time`, `message` FROM fc_ordering WHERE (upperUTF8(`message`) = 'KEEP')) AS `__tenzir_table` ORDER BY `time` DESC LIMIT 2) AS `__tenzir_level_1` ORDER BY `__tenzir_order_0` DESC",
 }
 {
   type: "QueryFinish",
-  query: "SELECT `id` AS `__tenzir_column_2`, `time` AS `__tenzir_column_3` FROM (SELECT `__tenzir_table`.*, `time` AS `__tenzir_order_0` FROM (SELECT `id`, `time` FROM fc_ordering) AS `__tenzir_table` WHERE (`id` <> 2) ORDER BY `time` DESC LIMIT 2) AS `__tenzir_level_1` ORDER BY `__tenzir_order_0` DESC",
+  query: "SELECT `id` AS `__tenzir_column_2`, `time` AS `__tenzir_column_3` FROM (SELECT `__tenzir_table`.*, `time` AS `__tenzir_order_0` FROM (SELECT `id`, `time` FROM fc_ordering WHERE (`id` <> 2)) AS `__tenzir_table` ORDER BY `time` DESC LIMIT 2) AS `__tenzir_level_1` ORDER BY `__tenzir_order_0` DESC",
 }
 {
   type: "QueryFinish",

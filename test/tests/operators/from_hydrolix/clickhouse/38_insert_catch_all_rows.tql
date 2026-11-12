@@ -1,0 +1,22 @@
+from {
+  time: 2026-01-01T00:00:01Z,
+  id: 1,
+  src: {port: uint(443), host: "a.example"},
+  level: "high",
+}, {
+  time: 2026-01-01T00:00:02Z,
+  id: 2,
+  src: {port: uint(80)},
+  level: "low",
+}, {
+  time: 2026-01-01T00:00:03Z,
+  id: 3,
+  src: {port: uint(443), host: "c.example"},
+  level: "high",
+}
+to_clickhouse table="fh_catch_all",
+              host=env("CLICKHOUSE_HOST"),
+              port=int(env("CLICKHOUSE_PORT")),
+              password=env("CLICKHOUSE_PASSWORD"),
+              tls=false,
+              mode="append"

@@ -1,0 +1,7 @@
+// The value of a key is a result column like any other.
+from_hydrolix f"http://{env("CLICKHOUSE_HOST")}",
+              token="test-token",
+              port=int(env("CLICKHOUSE_PORT")),
+              table="default.fh_catchall"
+select id, v=catchall.class_uid
+sort id

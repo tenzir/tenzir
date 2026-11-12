@@ -4,5 +4,5 @@ error: required argument `token` was not provided
 4 | from_hydrolix "https://example.invalid", table="a.b"
   | ^^^^^^^^^^^^^
   |
-  = usage: from_hydrolix url:string, token=string, [table=string, sql=string, port=int, tls=record]
+  = usage: from_hydrolix url:string, token=string, [table=string, sql=string, port=int, tls=record, pushdown=bool]
   = docs: https://tenzir.com/docs/reference/operators/from_hydrolix

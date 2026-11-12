@@ -8,8 +8,6 @@
 
 #pragma once
 
-#include "clickhouse/catch_all_reader.hpp"
-#include "clickhouse/table_description.hpp"
 #include "tenzir/box.hpp"
 #include "tenzir/detail/flat_map.hpp"
 #include "tenzir/detail/flat_set.hpp"
@@ -25,31 +23,17 @@
 #include <string_view>
 #include <vector>
 
-/// Pushdown of optimizer hints into the `SELECT` of `from_hydrolix`.
+/// The projection of `from_clickhouse` and `from_hydrolix` (see
+/// `select_columns`), which take over the stages after them (see
+/// `clickhouse/query_plan.hpp`), and the query of the legacy reader that runs
+/// without Nova, which receives only a projection.
 ///
-/// The optimizer hands `from_hydrolix` the entire filter chain that follows
-/// it, plus an optional limit, projection, and aggregation. This module
-/// rewrites the `SELECT` that the operator sends so that the server does as
-/// much of that work as TQL would, and the operator applies the rest. The
-/// translation of filters is shared with other sources (see
-/// `tenzir/pushdown/translate.hpp`). This module describes a ClickHouse table
-/// to it, spells the result in ClickHouse SQL, and assembles the query. It
-/// also provides the projection of `from_clickhouse` (see `select_columns`),
-/// which takes over the stages after it instead (see
-/// `clickhouse/query_plan.hpp`).
-///
-/// TODO: Pushdown into a user-provided `sql` query, which requires parsing
-/// SQL.
+/// The legacy reader once also applied a filter chain, in SQL where exact and
+/// locally otherwise. The translation of filters is shared with other sources
+/// (see `tenzir/pushdown/translate.hpp`); this module describes a ClickHouse
+/// table to it, spells the result in ClickHouse SQL, and assembles the query.
+/// It goes away with the legacy reader.
 namespace tenzir::plugins::clickhouse {
-
-/// How a query reads an element of a tuple.
-enum class TupleAccess {
-  /// As `t`.`a`, which ClickHouse resolves to a column named `t.a` if the
-  /// table has one. Hydrolix gets this spelling.
-  dotted,
-  /// As `tupleElement(t, 'a')`, which always reads the element.
-  element,
-};
 
 /// The columns of a ClickHouse table.
 class SqlSchema {
@@ -92,10 +76,11 @@ public:
   /// be selected whole. Each path is relative to the column. The expression
   /// rebuilds the tuple structure with `CAST(tuple(...))`, so that the result
   /// decodes to the same nested record with the other elements left out. It
-  /// reads the elements with `access`.
+  /// reads the elements with `tupleElement`, which, unlike `t`.`a`, cannot
+  /// resolve to a column whose name contains a dot.
   auto render_projection(std::string_view name,
-                         std::span<const std::vector<std::string>> paths,
-                         TupleAccess access) const -> Option<std::string>;
+                         std::span<const std::vector<std::string>> paths) const
+    -> Option<std::string>;
 
   /// Returns the column that `add_placed_column` placed at `path`.
   auto placed_column(std::span<const std::string> path) const
@@ -125,25 +110,7 @@ private:
   pushdown::ColumnModel model_;
 };
 
-/// Describes a catch-all table to filter pushdown, as far as the fields of the
-/// reconstructed events have a single origin (see `CatchAllLayout::origin`):
-/// plain and dotted scalar columns are addressable at their paths, while the
-/// fields of `JSON` columns stay unaddressable.
-auto make_catch_all_schema(std::span<ColumnDescription const> description,
-                           CatchAllLayout const& layout) -> SqlSchema;
-
-/// The server that answers a rendered query.
-enum class SqlTarget {
-  /// ClickHouse.
-  clickhouse,
-  /// Hydrolix, which answers ClickHouse SQL through a ClickHouse query engine.
-  /// It derives the time range of a query from the comparisons of the bare
-  /// primary timestamp column and rejects or misreads the range that a time
-  /// guard spans, but it ignores comparisons of a function of the column.
-  hydrolix,
-};
-
-/// Spells the pushdown IR in ClickHouse SQL, for `from_hydrolix`, which
+/// Spells the pushdown IR in ClickHouse SQL, for the legacy reader, which
 /// applies the predicates that it cannot spell exactly in Tenzir.
 ///
 /// ClickHouse computes integer arithmetic in a type that holds the exact
@@ -152,9 +119,8 @@ enum class SqlTarget {
 /// placed at nested paths render as their columns.
 class ClickHouseRenderer final : public pushdown::SqlRenderer {
 public:
-  explicit ClickHouseRenderer(SqlTarget target = SqlTarget::clickhouse,
-                              SqlSchema const* schema = nullptr)
-    : target_{target}, schema_{schema} {
+  explicit ClickHouseRenderer(SqlSchema const* schema = nullptr)
+    : schema_{schema} {
   }
 
 private:
@@ -179,15 +145,10 @@ private:
   render_call(pushdown::Call const& x, std::span<Fragment const> args) const
     -> Option<Fragment> override;
 
-  auto render_comparison(pushdown::Binary const& x, Fragment const& left,
-                         Fragment const& right) const
-    -> Option<Fragment> override;
-
   auto render_conditional(Fragment const& condition, Fragment const& then,
                           Fragment const& otherwise) const
     -> Option<Fragment> override;
 
-  SqlTarget target_;
   SqlSchema const* schema_;
 };
 
@@ -195,28 +156,24 @@ private:
 /// to the requested tuple elements, or `*`. Without a schema or a projection,
 /// if no column survives, or if a path names a generated column, the
 /// selection is `*`, which reproduces `SELECT *` under any session settings.
-/// The narrowed tuples read their elements with `access`.
 auto select_columns(SqlSchema const* schema,
-                    Option<ir::OptimizeProjection> const& projection,
-                    TupleAccess access) -> std::string;
+                    Option<ir::OptimizeProjection> const& projection)
+  -> std::string;
 
 /// Renders the `SELECT` for `table`. `schema` is required when `projection`
 /// is set; without a schema, the projection is ignored. Each path in the
 /// projection selects its top-level column, narrowed to the requested tuple
 /// elements when the path is nested; if no column survives, or a path names a
-/// generated column, every column is selected. Tuples narrow with dotted
-/// access.
+/// generated column, every column is selected.
 auto make_select_query(std::string_view table, SqlSchema const* schema,
                        Option<ir::OptimizeProjection> const& projection,
                        std::span<const std::string> where,
                        Option<uint64_t> limit) -> std::string;
 
 /// Plans a read of a table with `schema`: pushes the predicates of `filter`
-/// that ClickHouse evaluates exactly like TQL, rendered for `target`, and
-/// selects the columns that `projection` names, as `make_select_query` does,
-/// but with element access to tuples for ClickHouse.
-auto make_table_plan(SqlSchema const& schema, SqlTarget target,
-                     ir::OptimizeFilter filter,
+/// that ClickHouse evaluates exactly like TQL, and selects the columns that
+/// `projection` names, as `make_select_query` does.
+auto make_table_plan(SqlSchema const& schema, ir::OptimizeFilter filter,
                      Option<ir::OptimizeProjection> const& projection,
                      registry const& reg) -> pushdown::TablePlan;
 
@@ -224,43 +181,6 @@ auto make_table_plan(SqlSchema const& schema, SqlTarget target,
 /// limit` if every predicate was pushed.
 auto make_table_query(pushdown::TablePlan const& plan, std::string_view table,
                       Option<uint64_t> limit) -> std::string;
-
-/// Whether `make_aggregate_query` supports every function of `aggregation`,
-/// and every stage after it, as `pushdown::supports_post_aggregate_stages`
-/// decides. Whether it supports the inputs of the functions depends on the
-/// table's schema.
-auto supports_aggregate_functions(ir::OptimizeAggregation const& aggregation)
-  -> bool;
-
-/// Renders a query that computes `aggregation` over `table`, keeping the rows
-/// where all of the rendered predicates in `where` hold. Returns `None` if
-/// ClickHouse cannot compute some output column exactly as TQL does, in which
-/// case the operator aggregates locally.
-///
-/// The query selects output column `i` as the flat result column
-/// `pushdown::aggregation_column(i)`, which `pushdown::nest_aggregation`
-/// arranges into the output fields. ClickHouse resolves a name to an alias
-/// before a column, so the query is `None` if the table has a column of that
-/// name. Each column is computed from the value that TQL sees for its input
-/// field (see `pushdown::translate_field`). It supports:
-///
-/// - Group keys on booleans, integers, strings, enums, UUIDs, IP addresses,
-///   and temporal values. TQL compares each of them like `GROUP BY` does.
-///   Floating-point keys stay local, because `GROUP BY` equates `NaN` with
-///   itself and `-0.0` with `0.0`.
-/// - `count()`, and `count(x)` on any column of the model, cast to `Int64`,
-///   which TQL reads as `int`.
-/// - `min(x)` and `max(x)` on integers and temporal values, with the `OrNull`
-///   combinator so that an aggregation without group keys over no rows yields
-///   `NULL` instead of the type's default value.
-///
-/// The query renders the group keys and inputs for `target`, and computes the
-/// stages of `aggregation` with ClickHouse's semantics (see
-/// `pushdown::make_post_aggregate_select`).
-auto make_aggregate_query(ir::OptimizeAggregation const& aggregation,
-                          SqlSchema const& schema, std::string_view table,
-                          std::span<const std::string> where, SqlTarget target)
-  -> Option<std::string>;
 
 /// Quotes `name` as a ClickHouse identifier using backticks.
 auto quote_sql_identifier(std::string_view name) -> std::string;

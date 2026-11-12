@@ -1,0 +1,10 @@
+// A time filter directly after `from_hydrolix` constrains the table in the
+// innermost `WHERE`, where Hydrolix finds the time range of the query.
+// `36_time_query_log.tql` checks the queries of these tests.
+from_hydrolix f"http://{env("CLICKHOUSE_HOST")}",
+              token="test-token",
+              port=int(env("CLICKHOUSE_PORT")),
+              table="default.fh_events"
+where time > 2026-01-01T00:00:01
+sort id
+head 1

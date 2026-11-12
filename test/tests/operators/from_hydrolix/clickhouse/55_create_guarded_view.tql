@@ -1,0 +1,7 @@
+// A view that fails every read of a row like a Hydrolix cluster that requires
+// a time range.
+from_clickhouse sql="CREATE VIEW fh_guarded AS SELECT id, throwIf(id > 0, 'hdx_query_timerange_required is set to true. Your query needs a time range filter in a WHERE clause') AS guard FROM default.fh_events",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false

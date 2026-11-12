@@ -88,6 +88,20 @@ auto tuple_element(std::string_view bare, std::string_view name)
   return None{};
 }
 
+/// Returns the value type of the map type `bare`, or `None` if `bare` is no
+/// map, or a `None` inside if its keys are no strings.
+auto map_value(std::string_view bare) -> Option<Option<std::string_view>> {
+  auto arguments = unwrap_clickhouse_type_call(bare, "Map");
+  if (not arguments) {
+    return None{};
+  }
+  auto types = split_top_level_clickhouse_type_arguments(*arguments);
+  if (types.size() != 2 or unwrap(types[0]) != "String") {
+    return Option<Option<std::string_view>>{Option<std::string_view>{}};
+  }
+  return Option<Option<std::string_view>>{Option<std::string_view>{types[1]}};
+}
+
 /// Spells the element `name` of the tuple `value`. Unlike `value`.`name`, it
 /// cannot resolve to a column whose name contains a dot.
 auto spell_element(std::string const& value, std::string_view name)
@@ -237,6 +251,20 @@ auto TableBinding::bind_column(ColumnDescription const& column,
   auto parent = column.name;
   auto selected = std::string_view{type};
   for (auto const& segment : path) {
+    if (auto value = map_value(bare)) {
+      if (not *value) {
+        return Err{fmt::format("the map `{}` has the type `{}`, whose keys are "
+                               "no strings that a field name could address",
+                               parent, bare)};
+      }
+      // The value of a missing key is the default value of the map's value
+      // type, which is `NULL` only for a `Nullable` one.
+      result = fmt::format("{}[{}]", result, quote_sql_string(segment));
+      parent = fmt::format("{}.{}", parent, segment);
+      selected = **value;
+      bare = unwrap(**value);
+      continue;
+    }
     auto element = tuple_element(bare, segment);
     if (not element) {
       if (not unwrap_clickhouse_type_call(bare, "Tuple")) {
@@ -643,10 +671,42 @@ auto ClickHouseDialect::render_exclude(
   return fmt::format("* EXCEPT ({})", fmt::join(quoted, ", "));
 }
 
-auto absorb_stages(ir::QueryChain const& chain) -> ir::Absorption {
+auto ClickHouseDialect::filters_in_projection() const -> bool {
+  return true;
+}
+
+auto table_read_settings(BoundPlan const& bound, bool catch_all, bool hydrolix)
+  -> std::vector<QuerySetting> {
+  auto result = std::vector<QuerySetting>{};
+  if (bound.summarizes) {
+    result.push_back({"aggregate_functions_null_for_empty", "0"});
+  }
+  if (not hydrolix) {
+    for (auto name : {"read_overflow_mode", "read_overflow_mode_leaf",
+                      "group_by_overflow_mode", "sort_overflow_mode",
+                      "result_overflow_mode", "timeout_overflow_mode",
+                      "timeout_overflow_mode_leaf"}) {
+      result.push_back({name, "throw"});
+    }
+  }
+  if (catch_all or bound.reads_dynamic) {
+    // Applies both to the paths that the query reads and to the values that
+    // the reconstruction parses.
+    result.push_back({"json_type_escape_dots_in_keys", "1"});
+  }
+  if (bound.sorts_dynamic) {
+    // ClickHouse orders values of different types by the name of their type
+    // first, but only on request. Hydrolix documents the setting, too.
+    result.push_back({"allow_suspicious_types_in_order_by", "1"});
+  }
+  return result;
+}
+
+auto absorb_stages(ir::QueryChain const& chain, std::string_view target)
+  -> ir::Absorption {
   return pushdown::absorb_prefix(chain, ClickHouseDialect{},
                                  {
-                                   .target = "ClickHouse",
+                                   .target = target,
                                    .filters_only = false,
                                    .veto = {},
                                  });
