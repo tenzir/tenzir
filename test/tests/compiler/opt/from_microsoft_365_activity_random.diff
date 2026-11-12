@@ -1,0 +1,131 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "from_microsoft_365_activity",
+       store: {
+         op: {
+           path: [
+             `from_microsoft_365_activity` @ [1]:151..178 from 0
+           ],
+           ref: std::from_microsoft_365_activity/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           {
+             index: 0,
+             value: expression record {
+               begin: [1]:184..185 from 0,
+               items: [
+                 field {
+                   name: `tenant_id` @ [1]:185..194 from 0,
+                   expr: constant string "t" @ [1]:196..199 from 0
+                 },
+                 field {
+                   name: `client_id` @ [1]:201..210 from 0,
+                   expr: constant string "c" @ [1]:212..215 from 0
+                 },
+                 field {
+                   name: `client_secret` @ [1]:217..230 from 0,
+                   expr: constant string "s" @ [1]:232..235 from 0
+                 }
+               ],
+               end: [1]:235..236 from 0
+             }
+           },
+           {
+             index: 1,
+             value: located [
+               string "Audit.General",
+               string "Audit.Exchange"
+             ] @ [1]:254..289 from 0
+           }
+         ]
+       },
+       filter: [
+         
+       ],
+-      order: "ordered"
++      order: "ordered",
++      declined: "the API lists whole content blobs and filters no events, so only deterministic filters on `microsoft_365_activity` metadata skip content"
+     },
+     where_ir {
+       op: {
+         path: [
+-          `where` @ [1]:290..295 from 0
++          
+         ],
+-        ref: std::where/op
++        ref: unresolved
+       },
+       args: [
+-        expression binary_expr {
++        Incomplete binary_expr {
+           left: binary_expr {
+             left: field_access {
+               left: root_field {
+                 id: `microsoft_365_activity` @ [1]:296..318 from 0,
+                 has_question_mark: false
+               },
+               has_question_mark: false,
+               name: `content_type` @ [1]:319..331 from 0,
+               location: [1]:296..331 from 0
+             },
+             op: "eq",
+             right: constant string "Audit.Exchange" @ [1]:335..351 from 0,
+             location: [1]:296..351 from 0
+           },
+           op: "or_",
+           right: binary_expr {
+             left: function_call {
+               fn: {
+                 path: [
+                   `random` @ [1]:355..361 from 0
+                 ],
+                 ref: std::random/fn
+               },
+               args: [
+                 
+               ],
+               method: false,
+               location: [1]:355..363 from 0
+             },
+             op: "lt",
+             right: constant double 0.5 @ [1]:366..369 from 0,
+             location: [1]:355..369 from 0
+           },
+           location: [1]:296..369 from 0
+         }
+       ],
+       named_args: [
+         
+       ]
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:369..369 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ],
+   definition_location: [1]:151..369 from 0
+ }

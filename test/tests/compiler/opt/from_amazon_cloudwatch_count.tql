@@ -1,0 +1,3 @@
+// `count` limits the events before the filter, which stays in Tenzir.
+from_amazon_cloudwatch "/tenzir/app", mode="search", count=100
+where "ERROR" in message

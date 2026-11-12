@@ -26,8 +26,8 @@ from_microsoft_graph "users",
     authority: env("MS_GRAPH_FIXTURE_AUTHORITY"),
   },
   _base_url=env("MS_GRAPH_FIXTURE_BASE_URL_V1"),
-  tls=false
-optimize_barrier
+  tls=false,
+  pushdown=false
 head 4
 where jobTitle == "Engineer"
 select id

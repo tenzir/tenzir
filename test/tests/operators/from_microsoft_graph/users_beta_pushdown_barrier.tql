@@ -13,7 +13,7 @@ skip:
 ---
 
 // The beta API gets no translation.
-// With the optimization barrier; both share one baseline.
+// With `pushdown=false`; both share one baseline.
 from_microsoft_graph "users",
   auth={
     tenant_id: env("MS_GRAPH_FIXTURE_TENANT_ID"),
@@ -23,7 +23,7 @@ from_microsoft_graph "users",
   },
   _base_url=env("MS_GRAPH_FIXTURE_BASE_URL_BETA"),
   version="beta",
-  tls=false
-optimize_barrier
+  tls=false,
+  pushdown=false
 head 1
 select id

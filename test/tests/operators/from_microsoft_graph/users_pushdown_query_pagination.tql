@@ -6,18 +6,18 @@ fixtures:
 assertions:
   fixtures:
     microsoft_graph:
-      requests:
+      request_prefix:
         - /v1.0/users?$select=id,displayName&$top=2
         - /v1.0/users?$select=id,displayName&$top=2&$skiptoken=offset-2
         - /v1.0/users?$select=id,displayName&$top=2&$skiptoken=offset-4
-      served_values: 12
+      max_requests: 6
 timeout: 60
 skip:
   on: fixture-unavailable
 ---
 
-// Query-string options and the next links they produce remain untouched.
-// No derived select or page size is allowed for this resource string.
+// Query-string options and the next links they produce remain untouched,
+// and the operator takes over no stage for this resource string.
 from_microsoft_graph "users?$select=id,displayName&$top=2",
   auth={
     tenant_id: env("MS_GRAPH_FIXTURE_TENANT_ID"),

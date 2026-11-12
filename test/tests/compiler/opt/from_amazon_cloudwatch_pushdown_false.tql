@@ -1,0 +1,4 @@
+// With `pushdown=false`, the stages stay in Tenzir.
+from_amazon_cloudwatch "/tenzir/app", mode="search", pushdown=false
+where "ERROR" in message
+head 10

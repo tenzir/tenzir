@@ -1,0 +1,22 @@
+---
+fixtures: [cloudwatch_fake]
+assertions:
+  fixtures:
+    cloudwatch_fake:
+      requests:
+        - operation: FilterLogEvents
+          filterPattern: null
+          limit: 3
+---
+
+// `count` limits the events before the filter, which stays in Tenzir.
+from_amazon_cloudwatch "/tenzir/app",
+  mode="search",
+  count=3,
+  aws_iam={
+    access_key_id: "test",
+    secret_access_key: "test",
+    region: "us-east-1",
+  }
+where "ERROR" in message
+select message

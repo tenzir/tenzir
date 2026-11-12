@@ -1,0 +1,8 @@
+{
+  log_stream: "app-2",
+  message: "ERROR disk full",
+}
+{
+  log_stream: "app-1",
+  message: "ERROR connection refused",
+}

@@ -1,0 +1,5 @@
+// A polling read takes over filters on the metadata, but no limit.
+from_microsoft_365_activity auth={tenant_id: "t", client_id: "c", client_secret: "s"},
+  content_types=["Audit.General"]
+where microsoft_365_activity.content_type == "Audit.General"
+head 10

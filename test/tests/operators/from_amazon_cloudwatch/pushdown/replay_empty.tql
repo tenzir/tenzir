@@ -1,0 +1,25 @@
+---
+fixtures: [cloudwatch_fake]
+assertions:
+  fixtures:
+    cloudwatch_fake:
+      requests:
+        - operation: GetLogEvents
+          logStreamName: app-9
+          nextToken: null
+        - operation: GetLogEvents
+          logStreamName: app-9
+          nextToken: token-0
+---
+
+// An empty stream ends once `GetLogEvents` repeats the token that the read
+// passed.
+from_amazon_cloudwatch "/tenzir/app",
+  mode="replay",
+  stream="app-9",
+  from_start=true,
+  aws_iam={
+    access_key_id: "test",
+    secret_access_key: "test",
+    region: "us-east-1",
+  }

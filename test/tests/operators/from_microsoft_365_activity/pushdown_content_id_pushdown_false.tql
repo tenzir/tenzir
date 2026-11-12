@@ -1,0 +1,29 @@
+---
+fixtures: [microsoft_365_activity]
+assertions:
+  fixtures:
+    microsoft_365_activity:
+      listed_content_types: [Audit.General, Audit.General]
+      downloads: [blob-1, blob-2]
+timeout: 60
+skip:
+  on: fixture-unavailable
+---
+
+// With `pushdown=false`, the read downloads every blob and the filter runs
+// in Tenzir.
+from_microsoft_365_activity auth={
+    tenant_id: env("MS_ACTIVITY_FIXTURE_TENANT_ID"),
+    client_id: env("MS_ACTIVITY_FIXTURE_CLIENT_ID"),
+    client_secret: env("MS_ACTIVITY_FIXTURE_CLIENT_SECRET"),
+    authority: env("MS_ACTIVITY_FIXTURE_AUTHORITY"),
+  },
+  content_types=["Audit.General"],
+  start_time=now() - 2h,
+  end_time=now() - 1h,
+  publisher_identifier=env("MS_ACTIVITY_FIXTURE_PUBLISHER_ID"),
+  pushdown=false,
+  _base_url=env("MS_ACTIVITY_FIXTURE_BASE_URL"),
+  tls=false
+where microsoft_365_activity.content_id != "blob-1"
+select Id

@@ -7,16 +7,15 @@ assertions:
   fixtures:
     microsoft_graph:
       requests:
-        - /v1.0/users
-        - /v1.0/users?$skiptoken=offset-3
-      served_values: 66
+        - /v1.0/users?$filter=startswith(displayName,+'User+')+and+(jobTitle+eq+'Engineer')&$top=2
+      served_values: 22
 timeout: 60
 skip:
   on: fixture-unavailable
 ---
 
-// A function predicate prevents derived $select, and every filter stays
-// local. Keep the computed projection's dependencies until after filtering.
+// `starts_with` and `==` on documented properties become `$filter`, and
+// the limit `$top`; the selection after the limit stays in Tenzir.
 from_microsoft_graph "users",
   auth={
     tenant_id: env("MS_GRAPH_FIXTURE_TENANT_ID"),

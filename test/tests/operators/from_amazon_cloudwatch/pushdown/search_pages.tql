@@ -1,0 +1,27 @@
+---
+fixtures:
+  - cloudwatch_fake:
+      page_size: 2
+assertions:
+  fixtures:
+    cloudwatch_fake:
+      requests:
+        - operation: FilterLogEvents
+          limit: 3
+          nextToken: null
+        - operation: FilterLogEvents
+          limit: 1
+          nextToken: token-2
+---
+
+// The limit counts events across pages, passes the opaque token on, and asks
+// only for the rest.
+from_amazon_cloudwatch "/tenzir/app",
+  mode="search",
+  aws_iam={
+    access_key_id: "test",
+    secret_access_key: "test",
+    region: "us-east-1",
+  }
+head 3
+select message

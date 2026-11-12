@@ -17,15 +17,14 @@ assertions:
     microsoft_graph:
       request_prefix:
         - /v1.0/users
-        - /v1.0/users?$skiptoken=offset-3
-      max_requests: 6
+      max_requests: 4
 timeout: 60
 skip:
   on: fixture-unavailable
 ---
 
-// String, Unicode, case, punctuation, and null predicates stay local.
-// Both predicates run before counting matches and dropping displayName.
+// With `pushdown=false`, TQL compares the strings, so `ALICE` does not match
+// `alice`.
 from_microsoft_graph "users",
   auth={
     tenant_id: env("MS_GRAPH_FIXTURE_TENANT_ID"),
@@ -34,9 +33,8 @@ from_microsoft_graph "users",
     authority: env("MS_GRAPH_FIXTURE_AUTHORITY"),
   },
   _base_url=env("MS_GRAPH_FIXTURE_BASE_URL_V1"),
-  tls=false
-optimize_barrier
-where displayName != null
-where displayName in ["O'Brien & Co+/?#", "alice", "Å", "東京", "Straße"]
+  tls=false,
+  pushdown=false
+where displayName in ["O'Brien & Co+/?#", "ALICE", "Å", "東京", "Straße"]
 head 3
 select id

@@ -6,14 +6,15 @@ assertions:
   fixtures:
     microsoft_graph:
       requests:
-        - /v1.0/groups
+        - /v1.0/groups?$top=1
 timeout: 60
 skip:
   on: fixture-unavailable
 ---
 
-// Only `List users` translates; groups keep every input local.
-// Without the optimization barrier; both share one baseline.
+// `head` sizes the page of groups with `$top`; the selection after it stays
+// in Tenzir.
+// Without `pushdown=false`; both share one baseline.
 from_microsoft_graph "groups",
   auth={
     tenant_id: env("MS_GRAPH_FIXTURE_TENANT_ID"),

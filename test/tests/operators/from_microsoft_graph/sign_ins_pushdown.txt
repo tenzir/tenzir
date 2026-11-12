@@ -1,0 +1,36 @@
+{
+  id: "sign-in-2",
+  createdDateTime: 2024-07-02T12:00:00Z,
+  userPrincipalName: "user2@example.com",
+  appDisplayName: "Office",
+  location: {
+    city: "Berlin",
+  },
+  status: {
+    errorCode: 0,
+  },
+}
+{
+  id: "sign-in-4",
+  createdDateTime: 2024-07-04T12:00:00Z,
+  userPrincipalName: "user4@example.com",
+  appDisplayName: "Office",
+  location: {
+    city: "Berlin",
+  },
+  status: {
+    errorCode: 50126,
+  },
+}
+{
+  id: "sign-in-5",
+  createdDateTime: 2024-07-05T12:00:00Z,
+  userPrincipalName: "user5@example.com",
+  appDisplayName: "Graph Explorer",
+  location: {
+    city: "Berlin",
+  },
+  status: {
+    errorCode: 0,
+  },
+}

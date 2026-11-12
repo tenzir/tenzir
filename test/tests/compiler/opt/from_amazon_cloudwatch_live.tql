@@ -1,0 +1,4 @@
+// A live read takes over filters only.
+from_amazon_cloudwatch "arn:aws:logs:us-east-1:123456789012:log-group:/tenzir/app"
+where "ERROR" in message
+head 10

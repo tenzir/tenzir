@@ -8,6 +8,9 @@
 
 #include "cloudwatch/operators.hpp"
 
+#include "cloudwatch/detail/request_payload.hpp"
+#include "cloudwatch/request_plan.hpp"
+
 #include <tenzir/as_bytes.hpp>
 #include <tenzir/async/task.hpp>
 #include <tenzir/aws_iam.hpp>
@@ -20,6 +23,7 @@
 #include <tenzir/nova/eval_kernel.hpp>
 #include <tenzir/tql2/entity_path.hpp>
 #include <tenzir/tql2/eval.hpp>
+#include <tenzir/try.hpp>
 
 #include <aws/core/utils/Outcome.h>
 #include <aws/logs/model/FilterLogEventsRequest.h>
@@ -61,12 +65,6 @@ constexpr auto max_future_skew = std::chrono::hours{2};
 constexpr auto max_past_skew = std::chrono::hours{24 * 14};
 constexpr auto max_send_queue_capacity
   = uint64_t{std::numeric_limits<uint32_t>::max()};
-
-auto epoch_ms(time value) -> int64_t {
-  return std::chrono::duration_cast<std::chrono::milliseconds>(
-           value.time_since_epoch())
-    .count();
-}
 
 auto epoch_seconds(time value) -> std::string {
   auto const ms = epoch_ms(value);
@@ -281,21 +279,23 @@ auto build_slice(std::vector<CloudWatchEvent> const& events,
   return msb.finalize_as_table_slice();
 }
 
-auto read_request_limit(FromCloudWatchArgs const& args, uint64_t emitted)
+/// The `limit` of a request, which caps the events of a page at 10,000.
+auto read_request_limit(CloudWatchRequest const& request, uint64_t emitted)
   -> Option<int> {
-  if (not args.count) {
+  if (not request.limit) {
     return None{};
   }
-  if (emitted >= args.count->inner) {
+  if (emitted >= *request.limit) {
     return 1;
   }
-  auto remaining = args.count->inner - emitted;
+  auto remaining = *request.limit - emitted;
   return detail::narrow<int>(std::min(remaining, max_read_events));
 }
 
 auto append_filter_options(
   Aws::CloudWatchLogs::Model::FilterLogEventsRequest& request,
-  FromCloudWatchArgs const& args, uint64_t emitted) -> void {
+  FromCloudWatchArgs const& args, CloudWatchRequest const& planned,
+  uint64_t emitted) -> void {
   auto group = selected_log_group(args);
   if (is_log_group_identifier(group)) {
     request.SetLogGroupIdentifier(std::move(group));
@@ -304,17 +304,22 @@ auto append_filter_options(
   }
   if (args.filter) {
     request.SetFilterPattern(args.filter->inner);
+  } else if (planned.pattern) {
+    request.SetFilterPattern(*planned.pattern);
   }
-  if (args.start) {
-    request.SetStartTime(epoch_ms(args.start->inner));
+  if (planned.start_time) {
+    request.SetStartTime(*planned.start_time);
   }
-  if (args.end) {
-    request.SetEndTime(epoch_ms(args.end->inner));
+  if (planned.end_time) {
+    request.SetEndTime(*planned.end_time);
   }
-  if (auto limit = read_request_limit(args, emitted)) {
+  if (auto limit = read_request_limit(planned, emitted)) {
     request.SetLimit(*limit);
   }
   auto log_streams = selected_log_streams(args);
+  if (planned.streams) {
+    log_streams = *planned.streams;
+  }
   if (not log_streams.empty()) {
     request.SetLogStreamNames(make_aws_vector(log_streams));
   }
@@ -331,7 +336,8 @@ auto reads_from_start(FromCloudWatchArgs const& args) -> bool {
 }
 
 auto append_get_options(Aws::CloudWatchLogs::Model::GetLogEventsRequest& request,
-                        FromCloudWatchArgs const& args, uint64_t emitted,
+                        FromCloudWatchArgs const& args,
+                        CloudWatchRequest const& planned, uint64_t emitted,
                         std::string_view next_token) -> void {
   auto group = selected_log_group(args);
   if (is_log_group_identifier(group)) {
@@ -340,13 +346,13 @@ auto append_get_options(Aws::CloudWatchLogs::Model::GetLogEventsRequest& request
     request.SetLogGroupName(group);
   }
   request.SetLogStreamName(selected_log_streams(args).front());
-  if (args.start) {
-    request.SetStartTime(epoch_ms(args.start->inner));
+  if (planned.start_time) {
+    request.SetStartTime(*planned.start_time);
   }
-  if (args.end) {
-    request.SetEndTime(epoch_ms(args.end->inner));
+  if (planned.end_time) {
+    request.SetEndTime(*planned.end_time);
   }
-  if (auto limit = read_request_limit(args, emitted)) {
+  if (auto limit = read_request_limit(planned, emitted)) {
     request.SetLimit(*limit);
   }
   if (not next_token.empty()) {
@@ -359,13 +365,16 @@ auto append_get_options(Aws::CloudWatchLogs::Model::GetLogEventsRequest& request
   }
 }
 
-auto live_tail_request(FromCloudWatchArgs const& args)
+auto live_tail_request(FromCloudWatchArgs const& args,
+                       CloudWatchRequest const& planned)
   -> Aws::CloudWatchLogs::Model::StartLiveTailRequest {
   auto request = Aws::CloudWatchLogs::Model::StartLiveTailRequest{};
   auto groups = selected_log_groups(args);
   request.SetLogGroupIdentifiers(make_aws_vector(groups));
   if (args.filter) {
     request.SetLogEventFilterPattern(args.filter->inner);
+  } else if (planned.pattern) {
+    request.SetLogEventFilterPattern(*planned.pattern);
   }
   auto log_streams = selected_log_streams(args);
   if (not log_streams.empty()) {
@@ -382,6 +391,7 @@ auto live_tail_page(
   Aws::CloudWatchLogs::Model::LiveTailSessionUpdate const& update)
   -> SourcePage {
   auto page = SourcePage{};
+  page.sampled = update.GetSessionMetadata().GetSampled();
   for (auto const& event : update.GetSessionResults()) {
     page.events.push_back(CloudWatchEvent{
       .timestamp = time{std::chrono::milliseconds{event.GetTimestamp()}},
@@ -880,6 +890,37 @@ auto send_http_batch(amazon::SignedHttpClient& client,
 
 } // namespace
 
+auto filter_log_events_payload(FromCloudWatchArgs const& args,
+                               CloudWatchRequest const& request,
+                               uint64_t emitted, std::string_view token)
+  -> std::string {
+  auto aws = Aws::CloudWatchLogs::Model::FilterLogEventsRequest{};
+  append_filter_options(aws, args, request, emitted);
+  if (not token.empty()) {
+    aws.SetNextToken(std::string{token});
+  }
+  auto payload = aws.SerializePayload();
+  return std::string{payload.c_str(), payload.size()};
+}
+
+auto get_log_events_payload(FromCloudWatchArgs const& args,
+                            CloudWatchRequest const& request, uint64_t emitted,
+                            std::string_view token) -> std::string {
+  auto aws = Aws::CloudWatchLogs::Model::GetLogEventsRequest{};
+  append_get_options(aws, args, request, emitted, token);
+  if (not token.empty()) {
+    aws.SetNextToken(std::string{token});
+  }
+  auto payload = aws.SerializePayload();
+  return std::string{payload.c_str(), payload.size()};
+}
+
+auto live_tail_payload(FromCloudWatchArgs const& args,
+                       CloudWatchRequest const& request) -> std::string {
+  auto payload = live_tail_request(args, request).SerializePayload();
+  return std::string{payload.c_str(), payload.size()};
+}
+
 auto default_to_amazon_cloudwatch_message_expression() -> ast::expression {
   auto function
     = ast::entity{{ast::identifier{"print_ndjson", location::unknown}}};
@@ -906,12 +947,27 @@ auto CloudWatchReader::snapshot(Serde& serde) -> void {
 }
 
 auto CloudWatchReader::start(OpCtx& ctx) -> Task<void> {
-  if (args_.mode.inner == "search") {
-    mode_ = FromMode::search;
-  } else if (args_.mode.inner == "replay") {
-    mode_ = FromMode::replay;
-  } else {
-    mode_ = FromMode::live;
+  mode_ = from_mode(args_);
+  auto stages = std::span<ir::QueryStage const>{};
+  if (args_.optimization.plan) {
+    stages = *args_.optimization.plan;
+  }
+  auto planned = plan_cloudwatch_request(args_, stages);
+  if (not planned) {
+    diagnostic::error("failed to spell the stages that the operator took "
+                      "over as a CloudWatch Logs request")
+      .primary(args_.operator_location)
+      .hint("use `pushdown=false` to run them in Tenzir")
+      .emit(ctx);
+    done_ = true;
+    co_return;
+  }
+  request_ = std::move(*planned);
+  // No event can pass, or a restored read emitted all that its limit
+  // admits, so do not even create a client.
+  if (request_.empty or (request_.limit and emitted_ >= *request_.limit)) {
+    done_ = true;
+    co_return;
   }
   auto endpoint = amazon::endpoint_override("LOGS");
   try {
@@ -939,19 +995,22 @@ auto CloudWatchReader::start(OpCtx& ctx) -> Task<void> {
     };
     live_queue_ = queue;
     auto args = args_;
+    auto planned = request_;
     auto client = client_;
     auto cancel = live_cancel_.getToken();
     ctx.spawn_task([client = std::move(client), args = std::move(args),
-                    queue = std::move(queue), cancel]() mutable -> Task<void> {
+                    planned = std::move(planned), queue = std::move(queue),
+                    cancel]() mutable -> Task<void> {
       auto token = folly::cancellation_token_merge(
         co_await folly::coro::co_current_cancellation_token, cancel);
       co_await folly::coro::co_withCancellation(
         token,
         folly::coro::co_invoke(
           [client = std::move(client), args = std::move(args),
+           planned = std::move(planned),
            queue = std::move(queue)]() mutable -> Task<void> {
             while (true) {
-              auto request = live_tail_request(args);
+              auto request = live_tail_request(args, planned);
               auto pending_pages = std::vector<SourcePage>{};
               auto pending_error = std::string{};
               auto session_expired = false;
@@ -1053,12 +1112,13 @@ auto CloudWatchReader::next() const -> Task<Any> {
     co_return Any{co_await (*live_queue_)->dequeue()};
   }
   auto args = args_;
+  auto planned = request_;
   auto token = next_token_;
   auto mode = mode_;
   auto emitted = emitted_;
   if (mode == FromMode::search) {
     auto request = Aws::CloudWatchLogs::Model::FilterLogEventsRequest{};
-    append_filter_options(request, args, emitted);
+    append_filter_options(request, args, planned, emitted);
     if (not token.empty()) {
       request.SetNextToken(token);
     }
@@ -1071,7 +1131,7 @@ auto CloudWatchReader::next() const -> Task<Any> {
       http_response.body, selected_log_group(args_), token);
   }
   auto request = Aws::CloudWatchLogs::Model::GetLogEventsRequest{};
-  append_get_options(request, args, emitted, token);
+  append_get_options(request, args, planned, emitted, token);
   if (not token.empty()) {
     request.SetNextToken(token);
   }
@@ -1090,17 +1150,31 @@ auto CloudWatchReader::handle(Any result, OpCtx& ctx)
   -> std::vector<CloudWatchEvent> {
   auto outcome = std::move(result).as<SourceResult>();
   if (outcome.is_err()) {
-    diagnostic::error("{}", outcome.unwrap_err())
-      .primary(args_.operator_location)
-      .emit(ctx);
+    auto d = diagnostic::error("{}", outcome.unwrap_err())
+               .primary(args_.operator_location);
+    // CloudWatch Logs rejects a request that it cannot compute.
+    if (args_.optimization.plan and not args_.optimization.plan->empty()) {
+      d = std::move(d)
+            .note("the request carries the stages that the operator took over")
+            .hint("use `pushdown=false` to run them in Tenzir");
+    }
+    std::move(d).emit(ctx);
     done_ = true;
     return {};
   }
   auto page = std::move(outcome).unwrap();
+  if (page.sampled and not warned_sampled_) {
+    warned_sampled_ = true;
+    diagnostic::warning("Live Tail returned a sample of the matching events")
+      .primary(args_.operator_location)
+      .note("Live Tail samples down to 500 events per second when more match")
+      .note("this warning appears once per read")
+      .emit(ctx);
+  }
   next_token_ = std::move(page.next_token);
   done_ = page.done;
-  if (args_.count) {
-    auto remaining = args_.count->inner - emitted_;
+  if (request_.limit) {
+    auto remaining = *request_.limit - emitted_;
     if (remaining == 0) {
       done_ = true;
       return {};
@@ -1114,7 +1188,7 @@ auto CloudWatchReader::handle(Any result, OpCtx& ctx)
     bytes_read_counter_.add(event.message.size());
   }
   emitted_ += page.events.size();
-  if (args_.count and emitted_ >= args_.count->inner) {
+  if (request_.limit and emitted_ >= *request_.limit) {
     done_ = true;
   }
   return std::move(page.events);

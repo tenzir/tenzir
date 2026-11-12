@@ -1,0 +1,27 @@
+---
+fixtures: [cloudwatch_fake]
+assertions:
+  fixtures:
+    cloudwatch_fake:
+      requests:
+        - operation: GetLogEvents
+          logStreamName: app-1
+          startTime: 1700000002000
+          endTime: 1700000006001
+          limit: 2
+---
+
+// `GetLogEvents` ends its window exclusively, so an inclusive bound moves
+// by one millisecond.
+from_amazon_cloudwatch "/tenzir/app",
+  mode="replay",
+  stream="app-1",
+  from_start=true,
+  aws_iam={
+    access_key_id: "test",
+    secret_access_key: "test",
+    region: "us-east-1",
+  }
+where timestamp >= 2023-11-14T22:13:22Z and timestamp <= 2023-11-14T22:13:26Z
+head 2
+select timestamp, message

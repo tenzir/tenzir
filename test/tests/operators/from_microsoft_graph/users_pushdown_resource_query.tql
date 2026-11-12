@@ -6,15 +6,17 @@ fixtures:
 assertions:
   fixtures:
     microsoft_graph:
-      requests:
+      request_prefix:
         - /v1.0/users?$select=id,displayName
+      max_requests: 4
 timeout: 60
 skip:
   on: fixture-unavailable
 ---
 
-// A resource path with its own query string gets no translation.
-// Without the optimization barrier; both share one baseline.
+// A resource path with its own query string owns every query parameter, so
+// the operator takes over no stage.
+// Without `pushdown=false`; both share one baseline.
 from_microsoft_graph "users?$select=id,displayName",
   auth={
     tenant_id: env("MS_GRAPH_FIXTURE_TENANT_ID"),

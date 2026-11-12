@@ -7,16 +7,16 @@ assertions:
   fixtures:
     microsoft_graph:
       requests:
-        - /v1.0/users?$select=mail,displayName&$top=2
-      served_values: 4
+        - /v1.0/users?$top=2
+      served_values: 22
 timeout: 60
 skip:
   on: fixture-unavailable
 ---
 
-// A projection within the default properties becomes `$select`, and
-// `head` without filters becomes `$top`.
-// Without the optimization barrier; both share one baseline.
+// `head` becomes `$top`. No selection moves across a limit, so the
+// selection stays in Tenzir.
+// Without `pushdown=false`; both share one baseline.
 from_microsoft_graph "users",
   auth={
     tenant_id: env("MS_GRAPH_FIXTURE_TENANT_ID"),

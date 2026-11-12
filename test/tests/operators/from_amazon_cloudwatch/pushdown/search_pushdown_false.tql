@@ -1,0 +1,29 @@
+---
+fixtures: [cloudwatch_fake]
+assertions:
+  fixtures:
+    cloudwatch_fake:
+      requests:
+        - operation: FilterLogEvents
+          logGroupName: /tenzir/app
+          filterPattern: null
+          startTime: null
+          endTime: null
+          logStreamNames: null
+          limit: null
+---
+
+// With `pushdown=false`, the stages stay in Tenzir; both share one result.
+from_amazon_cloudwatch "/tenzir/app",
+  mode="search",
+  aws_iam={
+    access_key_id: "test",
+    secret_access_key: "test",
+    region: "us-east-1",
+  },
+  pushdown=false
+where "ERROR" in message and not ("timeout" in message)
+where timestamp >= 2023-11-14T22:13:21Z and timestamp < 2023-11-14T22:13:26Z
+where log_stream in ["app-1", "app-2"]
+head 2
+select log_stream, message

@@ -1,0 +1,16 @@
+warning: Live Tail returned a sample of the matching events
+  --> tests/operators/from_amazon_cloudwatch/pushdown/live.tql:15:1
+   |
+15 | from_amazon_cloudwatch env("CLOUDWATCH_FAKE_GROUP_ARN"),
+   | ~~~~~~~~~~~~~~~~~~~~~~
+   |
+   = note: Live Tail samples down to 500 events per second when more match
+   = note: this warning appears once per read
+{
+  log_stream: "app-2",
+  message: "ERROR disk full",
+}
+{
+  log_stream: "app-2",
+  message: "ERROR request timeout",
+}

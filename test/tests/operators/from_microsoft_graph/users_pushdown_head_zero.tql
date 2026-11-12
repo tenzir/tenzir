@@ -14,7 +14,7 @@ skip:
 ---
 
 // `head 0` sends no request at all, not even for a token.
-// Without the optimization barrier; both share one baseline.
+// Without `pushdown=false`; both share one baseline.
 from_microsoft_graph "users",
   auth={
     tenant_id: env("MS_GRAPH_FIXTURE_TENANT_ID"),

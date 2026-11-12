@@ -1,0 +1,17 @@
+---
+fixtures: [cloudwatch_fake]
+assertions:
+  fixtures:
+    cloudwatch_fake:
+      requests: []
+---
+
+// No event lies in an empty window, so the read completes without a request.
+from_amazon_cloudwatch "/tenzir/app",
+  mode="search",
+  aws_iam={
+    access_key_id: "test",
+    secret_access_key: "test",
+    region: "us-east-1",
+  }
+where timestamp > 2023-11-14T22:13:25Z and timestamp < 2023-11-14T22:13:25.001Z

@@ -18,7 +18,7 @@ skip:
 
 // `head` sizes the only page with `$top` and stops pagination; 12 users
 // take 4 pages of 3 without it.
-// With the optimization barrier; both share one baseline.
+// With `pushdown=false`; both share one baseline.
 from_microsoft_graph "users",
   auth={
     tenant_id: env("MS_GRAPH_FIXTURE_TENANT_ID"),
@@ -27,6 +27,6 @@ from_microsoft_graph "users",
     authority: env("MS_GRAPH_FIXTURE_AUTHORITY"),
   },
   _base_url=env("MS_GRAPH_FIXTURE_BASE_URL_V1"),
-  tls=false
-optimize_barrier
+  tls=false,
+  pushdown=false
 head 4

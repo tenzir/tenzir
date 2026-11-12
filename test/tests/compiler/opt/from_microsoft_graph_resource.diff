@@ -1,0 +1,122 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "from_microsoft_graph",
+       store: {
+         op: {
+           path: [
+             `from_microsoft_graph` @ [1]:111..131 from 0
+           ],
+           ref: std::from_microsoft_graph/op
+         },
+         args: [
+           located "devices" @ [1]:132..141 from 0
+         ],
+         named_args: [
+           {
+             index: 0,
+             value: expression record {
+               begin: [1]:148..149 from 0,
+               items: [
+                 field {
+                   name: `tenant_id` @ [1]:149..158 from 0,
+                   expr: constant string "t" @ [1]:160..163 from 0
+                 },
+                 field {
+                   name: `client_id` @ [1]:165..174 from 0,
+                   expr: constant string "c" @ [1]:176..179 from 0
+                 },
+                 field {
+                   name: `client_secret` @ [1]:181..194 from 0,
+                   expr: constant string "s" @ [1]:196..199 from 0
+                 }
+               ],
+               end: [1]:199..200 from 0
+             }
+           }
+         ]
+       },
+       filter: [
+         
+       ],
+-      order: "ordered"
+-    },
+-    GenericIr {
+-      desc: "head",
+-      store: {
+-        op: {
+-          path: [
+-            `head` @ [1]:201..205 from 0
+-          ],
+-          ref: std::head/op
+-        },
+-        args: [
+-          located 10 @ [1]:206..208 from 0
+-        ],
+-        named_args: [
+-          
+-        ]
+-      },
+-      filter: [
+-        
++      order: "ordered",
++      plan: [
++        Limit {
++          count: 10
++        }
+       ],
+-      order: "ordered"
++      declined: "Microsoft Graph documents no `$filter` support for `devices` in `v1.0` that works without advanced queries"
+     },
+     where_ir {
+       op: {
+         path: [
+-          `where` @ [1]:209..214 from 0
++          
+         ],
+-        ref: std::where/op
++        ref: unresolved
+       },
+       args: [
+-        expression binary_expr {
++        Incomplete binary_expr {
+           left: root_field {
+             id: `displayName` @ [1]:215..226 from 0,
+             has_question_mark: false
+           },
+           op: "eq",
+           right: constant string "Laptop" @ [1]:230..238 from 0,
+           location: [1]:215..238 from 0
+         }
+       ],
+       named_args: [
+         
+       ]
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:238..238 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ],
+   definition_location: [1]:111..238 from 0
+ }

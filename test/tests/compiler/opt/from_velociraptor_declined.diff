@@ -1,0 +1,119 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "from_velociraptor",
+       store: {
+         op: {
+           path: [
+             `from_velociraptor` @ [1]:72..89 from 0
+           ],
+           ref: std::from_velociraptor/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           {
+             index: 2,
+             value: located "SELECT * FROM info()" @ [1]:96..118 from 0
+           },
+           {
+             index: 7,
+             value: located [
+               [
+                 "ca_certificate",
+                 string "ca"
+               ][
+                 "client_private_key",
+                 string "key"
+               ][
+                 "client_cert",
+                 string "cert"
+               ][
+                 "api_connection_string",
+                 string "localhost:8001"
+               ]
+             ] @ [1]:130..262 from 0
+           }
+         ]
+       },
+       filter: [
+         
+       ],
+-      order: "ordered"
++      order: "ordered",
++      declined: "a VQL query may have effects that a filter or limit would change; `max_rows` only sizes response batches"
+     },
+     where_ir {
+       op: {
+         path: [
+-          `where` @ [1]:263..268 from 0
++          
+         ],
+-        ref: std::where/op
++        ref: unresolved
+       },
+       args: [
+-        expression binary_expr {
++        Incomplete binary_expr {
+           left: root_field {
+             id: `Hostname` @ [1]:269..277 from 0,
+             has_question_mark: false
+           },
+           op: "eq",
+           right: constant string "host" @ [1]:281..287 from 0,
+           location: [1]:269..287 from 0
+         }
+       ],
+       named_args: [
+         
+       ]
+     },
+     GenericIr {
+       desc: "head",
+       store: {
+         op: {
+           path: [
+             `head` @ [1]:288..292 from 0
+           ],
+           ref: std::head/op
+         },
+         args: [
+           located 1 @ [1]:293..294 from 0
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:294..294 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ],
+   definition_location: [1]:72..294 from 0
+ }

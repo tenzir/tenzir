@@ -1,0 +1,28 @@
+---
+fixtures: [microsoft_365_activity]
+assertions:
+  fixtures:
+    microsoft_365_activity:
+      downloads: [blob-2]
+timeout: 60
+skip:
+  on: fixture-unavailable
+---
+
+// A polling read takes over filters on the metadata, too, and skips the
+// downloads that they rule out in every cycle.
+from_microsoft_365_activity auth={
+    tenant_id: env("MS_ACTIVITY_FIXTURE_TENANT_ID"),
+    client_id: env("MS_ACTIVITY_FIXTURE_CLIENT_ID"),
+    client_secret: env("MS_ACTIVITY_FIXTURE_CLIENT_SECRET"),
+    authority: env("MS_ACTIVITY_FIXTURE_AUTHORITY"),
+  },
+  content_types=["Audit.General"],
+  start_time=now() - 2h,
+  poll_interval=1ms,
+  publisher_identifier="continuous",
+  _base_url=env("MS_ACTIVITY_FIXTURE_BASE_URL"),
+  tls=false
+where microsoft_365_activity.content_id == "blob-2"
+head 1
+select Id

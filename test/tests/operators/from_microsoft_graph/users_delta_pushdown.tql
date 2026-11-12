@@ -16,7 +16,7 @@ skip:
 
 // Delta queries get no translation. The limit stops the source after the
 // third match, which arrives with the first poll of `@odata.deltaLink`.
-// Without the optimization barrier; both share one baseline.
+// Without `pushdown=false`; both share one baseline.
 from_microsoft_graph "users",
   auth={
     tenant_id: env("MS_GRAPH_FIXTURE_TENANT_ID"),

@@ -1,0 +1,26 @@
+---
+fixtures: [microsoft_365_activity]
+assertions:
+  fixtures:
+    microsoft_365_activity:
+      downloads: [blob-1]
+timeout: 60
+skip:
+  on: fixture-unavailable
+---
+
+// The limit clips the batch of the blob that reaches it.
+from_microsoft_365_activity auth={
+    tenant_id: env("MS_ACTIVITY_FIXTURE_TENANT_ID"),
+    client_id: env("MS_ACTIVITY_FIXTURE_CLIENT_ID"),
+    client_secret: env("MS_ACTIVITY_FIXTURE_CLIENT_SECRET"),
+    authority: env("MS_ACTIVITY_FIXTURE_AUTHORITY"),
+  },
+  content_types=["Audit.General"],
+  start_time=now() - 2h,
+  end_time=now() - 1h,
+  publisher_identifier="many-events",
+  _base_url=env("MS_ACTIVITY_FIXTURE_BASE_URL"),
+  tls=false
+head 5
+summarize events=count(), last=max(Value)

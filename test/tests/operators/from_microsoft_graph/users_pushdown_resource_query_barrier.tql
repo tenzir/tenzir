@@ -15,7 +15,7 @@ skip:
 ---
 
 // A resource path with its own query string gets no translation.
-// With the optimization barrier; both share one baseline.
+// With `pushdown=false`; both share one baseline.
 from_microsoft_graph "users?$select=id,displayName",
   auth={
     tenant_id: env("MS_GRAPH_FIXTURE_TENANT_ID"),
@@ -24,7 +24,7 @@ from_microsoft_graph "users?$select=id,displayName",
     authority: env("MS_GRAPH_FIXTURE_AUTHORITY"),
   },
   _base_url=env("MS_GRAPH_FIXTURE_BASE_URL_V1"),
-  tls=false
-optimize_barrier
+  tls=false,
+  pushdown=false
 head 2
 select id

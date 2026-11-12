@@ -1,0 +1,4 @@
+// The API filters no events, so a filter on the payload stays in Tenzir.
+from_microsoft_365_activity auth={tenant_id: "t", client_id: "c", client_secret: "s"},
+  content_types=["Audit.Exchange"]
+where Workload == "Exchange"

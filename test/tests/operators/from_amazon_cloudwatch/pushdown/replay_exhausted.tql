@@ -1,0 +1,29 @@
+---
+fixtures: [cloudwatch_fake]
+assertions:
+  fixtures:
+    cloudwatch_fake:
+      requests:
+        - operation: GetLogEvents
+          logStreamName: app-3
+          limit: 5
+          nextToken: null
+        - operation: GetLogEvents
+          logStreamName: app-3
+          limit: 4
+          nextToken: token-1
+---
+
+// The stream has fewer events than the limit admits, so the read follows the
+// new token once and ends when `GetLogEvents` repeats it.
+from_amazon_cloudwatch "/tenzir/app",
+  mode="replay",
+  stream="app-3",
+  from_start=true,
+  aws_iam={
+    access_key_id: "test",
+    secret_access_key: "test",
+    region: "us-east-1",
+  }
+head 5
+select message

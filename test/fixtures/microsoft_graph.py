@@ -17,10 +17,13 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import shlex
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, cast
@@ -84,6 +87,14 @@ class GraphOptions:
     # The lifetime of access tokens in seconds. The token provider refreshes
     # after half of a short lifetime.
     token_lifetime: int = 4
+    # The number of groups in a paged `/v1.0/groups` dataset. Zero keeps the
+    # legacy single group.
+    groups: int = 0
+    # The number of sign-ins in a paged `/v1.0/auditLogs/signIns` dataset.
+    sign_ins: int = 0
+    # The number of entries in a paged `/v1.0/auditLogs/directoryAudits`
+    # dataset.
+    directory_audits: int = 0
 
 
 # The properties that `List users` returns without `$select`, per the
@@ -125,7 +136,200 @@ def _paged_user(index: int) -> dict[str, object]:
         # Returned only with `$select`.
         "accountEnabled": index % 2 == 1,
         "department": "Security" if index % 3 == 0 else "Operations",
+        "createdDateTime": f"2024-01-{index:02}T00:00:00Z",
     }
+
+
+def _paged_group(index: int) -> dict[str, object]:
+    """Returns group `index` of the paged `/v1.0/groups` dataset."""
+    return {
+        "id": f"group-{index}",
+        "displayName": f"Group {index}",
+        "mail": f"group{index}@example.com",
+        "securityEnabled": index % 2 == 1,
+        "renewedDateTime": f"2024-02-{index:02}T00:00:00Z",
+    }
+
+
+def _sign_in(index: int) -> dict[str, object]:
+    """Returns sign-in `index` of the paged `/v1.0/auditLogs/signIns`
+    dataset."""
+    return {
+        "id": f"sign-in-{index}",
+        "createdDateTime": f"2024-07-{index:02}T12:00:00Z",
+        "userPrincipalName": f"user{index}@example.com",
+        "appDisplayName": "Graph Explorer" if index % 2 else "Office",
+        "location": {"city": "Berlin" if index % 3 else "Paris"},
+        "status": {"errorCode": 0 if index % 4 else 50126},
+    }
+
+
+def _directory_audit(index: int) -> dict[str, object]:
+    """Returns entry `index` of the paged `/v1.0/auditLogs/directoryAudits`
+    dataset."""
+    return {
+        "id": f"audit-{index}",
+        "activityDateTime": f"2024-08-{index:02}T08:00:00Z",
+        "activityDisplayName": "Add user" if index % 2 else "Update user",
+        "loggedByService": "Core Directory",
+        "initiatedBy": {"user": {"userPrincipalName": f"admin{index}@example.com"}},
+    }
+
+
+class _FilterError(ValueError):
+    pass
+
+
+_FILTER_TOKEN = re.compile(
+    r"\s*(?:(?P<string>'(?:[^']|'')*')"
+    r"|(?P<datetime>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z)"
+    r"|(?P<number>-?\d+)"
+    r"|(?P<punct>[(),])"
+    r"|(?P<word>[A-Za-z_][A-Za-z0-9_/]*))"
+)
+
+
+def _parse_filter(
+    text: str, schema: dict[str, object]
+) -> Callable[[dict[str, object]], bool]:
+    """Parses the subset of OData `$filter` that the operator spells.
+
+    Strings compare without regard to case, as Microsoft Graph compares the
+    string properties of directory objects. Properties that `schema`, a
+    representative item, lacks, unknown operators, and invalid syntax raise
+    `_FilterError`, which the fixture answers with HTTP 400.
+    """
+    tokens: list[tuple[str, object]] = []
+    position = 0
+    text = text.strip()
+    while position < len(text):
+        match = _FILTER_TOKEN.match(text, position)
+        if not match or match.end() == position:
+            raise _FilterError(f"invalid filter at {position}")
+        position = match.end()
+        kind = match.lastgroup
+        value = match.group(kind)
+        if kind == "string":
+            tokens.append(("literal", value[1:-1].replace("''", "'")))
+        elif kind == "datetime":
+            tokens.append(("literal", _parse_datetime(value)))
+        elif kind == "number":
+            tokens.append(("literal", int(value)))
+        elif kind == "word" and value in ("true", "false"):
+            tokens.append(("literal", value == "true"))
+        else:
+            tokens.append((kind, value))
+    index = 0
+
+    def peek() -> tuple[str, object] | None:
+        return tokens[index] if index < len(tokens) else None
+
+    def take(kind: str, value: object = None) -> object:
+        nonlocal index
+        token = peek()
+        if (
+            token is None
+            or token[0] != kind
+            or (value is not None and token[1] != value)
+        ):
+            raise _FilterError(f"expected {value or kind}")
+        index += 1
+        return token[1]
+
+    def literal() -> object:
+        return take("literal")
+
+    def disjunction() -> Callable[[dict[str, object]], bool]:
+        operands = [conjunction()]
+        while peek() == ("word", "or"):
+            take("word", "or")
+            operands.append(conjunction())
+        return lambda item: any(f(item) for f in operands)
+
+    def conjunction() -> Callable[[dict[str, object]], bool]:
+        operands = [atom()]
+        while peek() == ("word", "and"):
+            take("word", "and")
+            operands.append(atom())
+        return lambda item: all(f(item) for f in operands)
+
+    def atom() -> Callable[[dict[str, object]], bool]:
+        if peek() == ("punct", "("):
+            take("punct", "(")
+            result = disjunction()
+            take("punct", ")")
+            return result
+        path = cast(str, take("word"))
+        if path.lower() == "startswith" and peek() == ("punct", "("):
+            take("punct", "(")
+            field = cast(str, take("word"))
+            _lookup(schema, field)
+            take("punct", ",")
+            prefix = literal()
+            take("punct", ")")
+            if not isinstance(prefix, str):
+                raise _FilterError("startswith takes a string")
+            return lambda item: _starts_with(_lookup(item, field), prefix)
+        _lookup(schema, path)
+        operator = take("word")
+        if operator == "in":
+            take("punct", "(")
+            values = [literal()]
+            while peek() == ("punct", ","):
+                take("punct", ",")
+                values.append(literal())
+            take("punct", ")")
+            return lambda item: any(
+                _compare(_lookup(item, path), "eq", v) for v in values
+            )
+        if operator not in ("eq", "ge", "le"):
+            raise _FilterError(f"unsupported operator {operator}")
+        value = literal()
+        return lambda item: _compare(_lookup(item, path), cast(str, operator), value)
+
+    result = disjunction()
+    if index != len(tokens):
+        raise _FilterError("trailing tokens")
+    return result
+
+
+def _parse_datetime(value: str) -> datetime:
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+def _lookup(item: dict[str, object], path: str) -> object:
+    value: object = item
+    for segment in path.split("/"):
+        if not isinstance(value, dict) or segment not in value:
+            raise _FilterError(
+                "Unsupported or invalid query filter clause specified for "
+                f"property '{path}'"
+            )
+        value = value[segment]
+    return value
+
+
+def _starts_with(value: object, prefix: str) -> bool:
+    return isinstance(value, str) and value.lower().startswith(prefix.lower())
+
+
+def _compare(value: object, operator: str, literal: object) -> bool:
+    if isinstance(literal, datetime):
+        if not isinstance(value, str):
+            return False
+        lhs: object = _parse_datetime(value)
+        rhs: object = literal
+    elif isinstance(literal, str):
+        if not isinstance(value, str):
+            return False
+        lhs, rhs = value.lower(), literal.lower()
+    else:
+        lhs, rhs = value, literal
+    if operator == "eq":
+        return lhs == rhs
+    if operator == "ge":
+        return lhs >= rhs  # type: ignore[operator]
+    return lhs <= rhs  # type: ignore[operator]
 
 
 class _GraphServer(ThreadingHTTPServer):
@@ -515,6 +719,41 @@ class _GraphHandler(BaseHTTPRequestHandler):
                 },
             )
             return
+        if parts.path == "/v1.0/groups" and server.options.groups > 0:
+            groups = [_paged_group(i) for i in range(1, server.options.groups + 1)]
+            self._paged_collection(
+                "groups", groups, _paged_group(1), None, 999, 3, query, base_url
+            )
+            return
+        if parts.path == "/v1.0/auditLogs/signIns":
+            sign_ins = [_sign_in(i) for i in range(1, server.options.sign_ins + 1)]
+            self._paged_collection(
+                "auditLogs/signIns",
+                sign_ins,
+                _sign_in(1),
+                None,
+                1000,
+                3,
+                query,
+                base_url,
+            )
+            return
+        if parts.path == "/v1.0/auditLogs/directoryAudits":
+            audits = [
+                _directory_audit(i)
+                for i in range(1, server.options.directory_audits + 1)
+            ]
+            self._paged_collection(
+                "auditLogs/directoryAudits",
+                audits,
+                _directory_audit(1),
+                None,
+                1000,
+                3,
+                query,
+                base_url,
+            )
+            return
         if parts.path == "/v1.0/groups":
             if parts.query:
                 body = {
@@ -574,13 +813,43 @@ class _GraphHandler(BaseHTTPRequestHandler):
         query: dict[str, list[str]],
         base_url: str,
     ) -> None:
-        """Serves `List users` over a deterministic dataset.
+        users = [_paged_user(i) for i in range(1, options.users + 1)]
+        for user, name in zip(users, options.display_names or []):
+            user["displayName"] = name
+        self._paged_collection(
+            "users",
+            users,
+            _paged_user(1),
+            _USERS_DEFAULT_PROPERTIES,
+            _USERS_MAX_PAGE_SIZE,
+            options.page_size,
+            query,
+            base_url,
+            count_values=True,
+        )
+
+    def _paged_collection(
+        self,
+        path: str,
+        items: list[dict[str, object]],
+        schema: dict[str, object],
+        default_properties: tuple[str, ...] | None,
+        max_page_size: int,
+        page_size: int,
+        query: dict[str, list[str]],
+        base_url: str,
+        count_values: bool = False,
+    ) -> None:
+        """Serves a collection over a deterministic dataset.
 
         This models the request contract, not proof of backend equivalence:
-        `$top` sets the page size up to 999, `$select` returns the requested
-        properties, unknown properties fail the request, and `@odata.nextLink`
-        carries the query options with an opaque `$skiptoken`. The only
-        supported explicit `$filter` is `accountEnabled eq true|false`.
+        `$top` sets the page size up to `max_page_size`, `$select` returns the
+        requested properties, properties that `schema`, a representative
+        item, lacks fail the request whether or not any item matches,
+        `$filter` evaluates the subset of OData that `from_microsoft_graph`
+        spells, comparing strings without regard to case, and
+        `@odata.nextLink` carries the query options with an opaque
+        `$skiptoken`.
         """
         for key in query:
             if key not in ("$select", "$top", "$filter", "$skiptoken"):
@@ -590,27 +859,33 @@ class _GraphHandler(BaseHTTPRequestHandler):
                     {"error": f"unsupported query option {key}"},
                 )
                 return
-        users = [_paged_user(i) for i in range(1, options.users + 1)]
-        for user, name in zip(users, options.display_names or []):
-            user["displayName"] = name
         if filters := query.get("$filter"):
-            values = {
-                "accountEnabled eq true": True,
-                "accountEnabled eq false": False,
-            }
-            if len(filters) != 1 or filters[0] not in values:
+            try:
+                if len(filters) != 1:
+                    raise _FilterError("repeated $filter")
+                predicate = _parse_filter(filters[0], schema)
+                items = [item for item in items if predicate(item)]
+            except _FilterError as error:
                 _json_response(
-                    self, HTTPStatus.BAD_REQUEST, {"error": "unsupported filter"}
+                    self,
+                    HTTPStatus.BAD_REQUEST,
+                    {
+                        "error": {
+                            "code": "Request_UnsupportedQuery",
+                            "message": str(error),
+                        }
+                    },
                 )
                 return
-            users = [u for u in users if u["accountEnabled"] == values[filters[0]]]
-        page_size = options.page_size
         if top := query.get("$top"):
-            page_size = min(int(top[0]), _USERS_MAX_PAGE_SIZE)
-        properties: list[str] = list(_USERS_DEFAULT_PROPERTIES)
+            page_size = min(int(top[0]), max_page_size)
+        if default_properties is not None:
+            properties: list[str] = list(default_properties)
+        else:
+            properties = list(schema)
         if select := query.get("$select"):
             properties = select[0].split(",")
-            unknown = [p for p in properties if p not in _paged_user(1)]
+            unknown = [p for p in properties if p not in schema]
             if unknown:
                 _json_response(
                     self,
@@ -621,22 +896,23 @@ class _GraphHandler(BaseHTTPRequestHandler):
         offset = 0
         if skiptoken := query.get("$skiptoken"):
             offset = int(skiptoken[0].removeprefix("offset-"))
-        page = users[offset : offset + page_size]
+        page = items[offset : offset + page_size]
         server = cast(_GraphServer, self.server)
-        with server.lock:
-            server.served_values += len(page) * len(properties)
+        if count_values:
+            with server.lock:
+                server.served_values += len(page) * len(properties)
         body: dict[str, object] = {
-            "@odata.context": f"{base_url}/v1.0/$metadata#users",
-            "value": [{p: user[p] for p in properties} for user in page],
+            "@odata.context": f"{base_url}/v1.0/$metadata#{path}",
+            "value": [{p: item[p] for p in properties} for item in page],
         }
-        if offset + page_size < len(users):
+        if offset + page_size < len(items):
             params = [
                 f"{key}={quote(values[0], safe=',')}"
                 for key, values in query.items()
                 if key != "$skiptoken"
             ]
             params.append(f"$skiptoken=offset-{offset + page_size}")
-            body["@odata.nextLink"] = f"{base_url}/v1.0/users?{'&'.join(params)}"
+            body["@odata.nextLink"] = f"{base_url}/v1.0/{path}?{'&'.join(params)}"
         _json_response(self, HTTPStatus.OK, body)
 
     def log_message(self, *_: object) -> None:

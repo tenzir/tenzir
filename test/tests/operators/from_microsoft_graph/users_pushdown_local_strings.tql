@@ -16,16 +16,15 @@ assertions:
   fixtures:
     microsoft_graph:
       requests:
-        - /v1.0/users?$select=id,displayName
-        - /v1.0/users?$select=id,displayName&$skiptoken=offset-3
-      served_values: 12
+        - /v1.0/users?$filter=displayName+in+('O''Brien+%26+Co%2B/?%23',+'ALICE',+'%C3%85',+'%E6%9D%B1%E4%BA%AC',+'Stra%C3%9Fe')&$top=3
 timeout: 60
 skip:
   on: fixture-unavailable
 ---
 
-// String, Unicode, case, punctuation, and null predicates stay local.
-// Both predicates run before counting matches and dropping displayName.
+// Quotes, punctuation, and Unicode reach `$filter` intact, and Graph
+// compares the strings without regard to case, so `ALICE` matches `alice`.
+// The limit counts the users that Graph returns.
 from_microsoft_graph "users",
   auth={
     tenant_id: env("MS_GRAPH_FIXTURE_TENANT_ID"),
@@ -35,7 +34,6 @@ from_microsoft_graph "users",
   },
   _base_url=env("MS_GRAPH_FIXTURE_BASE_URL_V1"),
   tls=false
-where displayName != null
-where displayName in ["O'Brien & Co+/?#", "alice", "Å", "東京", "Straße"]
+where displayName in ["O'Brien & Co+/?#", "ALICE", "Å", "東京", "Straße"]
 head 3
 select id

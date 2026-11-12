@@ -7,15 +7,15 @@ assertions:
   fixtures:
     microsoft_graph:
       requests:
-        - /v1.0/users?$select=id,jobTitle&$top=4
-      served_values: 8
+        - /v1.0/users?$top=4
+      served_values: 44
 timeout: 60
 skip:
   on: fixture-unavailable
 ---
 
-// The filter after head must not change which rows head counts.
-// Retain jobTitle for that downstream filter even though select drops it.
+// The filter after head must not change which rows head counts, so it stays
+// in Tenzir, and so does the selection after it.
 from_microsoft_graph "users",
   auth={
     tenant_id: env("MS_GRAPH_FIXTURE_TENANT_ID"),

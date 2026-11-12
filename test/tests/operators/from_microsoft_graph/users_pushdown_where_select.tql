@@ -7,19 +7,17 @@ assertions:
   fixtures:
     microsoft_graph:
       requests:
-        - /v1.0/users?$select=displayName,jobTitle
-        - /v1.0/users?$select=displayName,jobTitle&$skiptoken=offset-3
-        - /v1.0/users?$select=displayName,jobTitle&$skiptoken=offset-6
-        - /v1.0/users?$select=displayName,jobTitle&$skiptoken=offset-9
-      served_values: 24
+        - /v1.0/users?$filter=(jobTitle+eq+'Engineer')&$select=displayName
+        - /v1.0/users?$filter=%28jobTitle%20eq%20%27Engineer%27%29&$select=displayName&$skiptoken=offset-3
+      served_values: 4
 timeout: 60
 skip:
   on: fixture-unavailable
 ---
 
-// `$select` covers the projection and the filtered default properties;
-// every `@odata.nextLink` keeps it.
-// Without the optimization barrier; both share one baseline.
+// The filter becomes `$filter` and the selection `$select`; every
+// `@odata.nextLink` keeps both.
+// Without `pushdown=false`; both share one baseline.
 from_microsoft_graph "users",
   auth={
     tenant_id: env("MS_GRAPH_FIXTURE_TENANT_ID"),
