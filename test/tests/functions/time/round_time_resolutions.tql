@@ -1,0 +1,12 @@
+// Times round on calendar-aligned grids for any resolution, including negative
+// ones, and `ceil` keeps a time that is already on a boundary.
+from {t: 2024-08-27T16:42:43.5},
+  {t: 2024-02-01T00:00:00},
+  {t: 2020-01-01T00:00:00},
+  {t: 1969-12-31T12:00:00}
+seconds = round(t, 30s)
+negative = round(t, -30s)
+day = floor(t, 3d)
+weeks = floor(t, 2w)
+month = ceil(t, 1mo)
+decade = ceil(t, 10y)

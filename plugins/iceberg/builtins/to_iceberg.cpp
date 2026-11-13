@@ -39,6 +39,7 @@
 #include <arrow/compute/api_vector.h>
 #include <arrow/compute/cast.h>
 #include <arrow/compute/exec.h>
+#include <arrow/util/bitmap_ops.h>
 #include <arrow/util/byte_size.h>
 #include <folly/coro/UnboundedQueue.h>
 #include <iceberg/data/data_writer.h>
@@ -47,6 +48,7 @@
 #include <iceberg/table.h>
 
 #include <algorithm>
+#include <cmath>
 #include <limits>
 #include <ranges>
 #include <span>
@@ -219,63 +221,92 @@ auto classify_conversion(arrow::DataType const& source,
 auto convertible_mask(std::shared_ptr<arrow::Array> const& source,
                       arrow::DataType const& target)
   -> std::shared_ptr<arrow::BooleanArray> {
-  auto const call
-    = [](char const* function, std::vector<arrow::Datum> const& args) {
-        return check(arrow::compute::CallFunction(function, args));
-      };
   auto const to_int32 = target.id() == arrow::Type::INT32;
-  auto fits = arrow::Datum{};
+  auto builder = arrow::BooleanBuilder{};
+  check(builder.Reserve(source->length()));
+  auto const fill = [&]<class Array>(Array const& array, auto fits) {
+    for (auto i = int64_t{0}; i < array.length(); ++i) {
+      if (array.IsNull(i)) {
+        builder.UnsafeAppendNull();
+      } else {
+        builder.UnsafeAppend(fits(array.Value(i)));
+      }
+    }
+  };
   switch (source->type()->id()) {
     case arrow::Type::INT64: {
-      fits = call("and",
-                  {call("greater_equal",
-                        {source, arrow::Datum{static_cast<int64_t>(
-                                   std::numeric_limits<int32_t>::min())}}),
-                   call("less_equal",
-                        {source, arrow::Datum{static_cast<int64_t>(
-                                   std::numeric_limits<int32_t>::max())}})});
+      fill(as<arrow::Int64Array>(*source), [](int64_t value) {
+        return value >= std::numeric_limits<int32_t>::min()
+               and value <= std::numeric_limits<int32_t>::max();
+      });
       break;
     }
     case arrow::Type::UINT64: {
       auto const max
         = to_int32 ? static_cast<uint64_t>(std::numeric_limits<int32_t>::max())
                    : static_cast<uint64_t>(std::numeric_limits<int64_t>::max());
-      fits = call("less_equal", {source, arrow::Datum{max}});
+      fill(as<arrow::UInt64Array>(*source), [&](uint64_t value) {
+        return value <= max;
+      });
       break;
     }
     case arrow::Type::DOUBLE: {
       auto const lo
         = to_int32 ? static_cast<double>(std::numeric_limits<int32_t>::min())
                    : static_cast<double>(std::numeric_limits<int64_t>::min());
-      auto const in_range
-        = call("and", {call("greater_equal", {source, arrow::Datum{lo}}),
-                       call("less", {source, arrow::Datum{-lo}})});
-      fits = call("and",
-                  {call("equal", {call("floor", {source}), source}), in_range});
+      // NaN fails every comparison, so it never fits.
+      fill(as<arrow::DoubleArray>(*source), [&](double value) {
+        return value >= lo and value < -lo and std::floor(value) == value;
+      });
       break;
     }
     default:
       TENZIR_UNREACHABLE();
   }
-  return std::static_pointer_cast<arrow::BooleanArray>(fits.make_array());
+  return std::static_pointer_cast<arrow::BooleanArray>(finish(builder));
 }
 
-/// Counts nulls in `array` at rows where `parent` is valid. Nulls under a
-/// null parent row are legal even for a required child field: the row's
-/// struct is null as a whole, so the child carries no value of its own.
-auto nulls_under_valid_parent(std::shared_ptr<arrow::Array> const& array,
-                              std::shared_ptr<arrow::Array> const& parent)
-  -> int64_t {
+/// Returns `source` with nulls wherever `fits` is not true. `fits` is null
+/// only where `source` is, so its values suffice beside the source validity.
+auto null_unless(std::shared_ptr<arrow::Array> const& source,
+                 arrow::BooleanArray const& fits)
+  -> std::shared_ptr<arrow::Array> {
+  auto const& data = *source->data();
+  auto bitmap = check(arrow::internal::OptionalBitmapAnd(
+    arrow::default_memory_pool(), data.buffers[0], data.offset, fits.values(),
+    fits.offset(), data.length, data.offset));
+  return arrow::MakeArray(arrow::ArrayData::Make(
+    data.type, data.length, {std::move(bitmap), data.buffers[1]},
+    arrow::kUnknownNullCount, data.offset));
+}
+
+/// Copies the validity bitmap of `array`, which must have nulls, so that it
+/// starts at offset zero.
+auto copy_validity(arrow::Array const& array)
+  -> std::shared_ptr<arrow::Buffer> {
+  return check(arrow::internal::CopyBitmap(arrow::default_memory_pool(),
+                                           array.null_bitmap_data(),
+                                           array.offset(), array.length()));
+}
+
+/// Returns whether `array` has a null at a row where `parent` is valid. Nulls
+/// under a null parent row are legal even for a required child field: the
+/// row's struct is null as a whole, so the child carries no value of its own.
+auto has_null_under_valid_parent(std::shared_ptr<arrow::Array> const& array,
+                                 std::shared_ptr<arrow::Array> const& parent)
+  -> bool {
   if (array->null_count() == 0) {
-    return 0;
+    return false;
   }
   if (not parent or parent->null_count() == 0) {
-    return array->null_count();
+    return true;
   }
-  auto nulls = check(arrow::compute::IsNull(array));
-  auto valid = check(arrow::compute::IsValid(parent));
-  auto conflict = check(arrow::compute::And(nulls, valid));
-  return as<arrow::BooleanArray>(*conflict.make_array()).true_count();
+  for (auto i = int64_t{0}; i < array->length(); ++i) {
+    if (array->IsNull(i) and parent->IsValid(i)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /// Extracts the dotted path of a field expression, e.g. `metadata.version`.
@@ -1430,12 +1461,11 @@ private:
         auto bitmap = std::shared_ptr<arrow::Buffer>{};
         auto null_count = struct_source->null_count();
         if (null_count > 0) {
-          auto valid = check(arrow::compute::IsValid(source)).array();
-          bitmap = valid->buffers[1];
+          bitmap = copy_validity(*source);
         }
         auto result = check(arrow::StructArray::Make(
           children, target_fields, std::move(bitmap), null_count));
-        if (required and nulls_under_valid_parent(result, parent) > 0) {
+        if (required and has_null_under_valid_parent(result, parent)) {
           return fail_required("the input holds null records for it");
         }
         return result;
@@ -1496,21 +1526,21 @@ private:
           auto offsets_array = check(offsets.Finish());
           auto bitmap = std::shared_ptr<arrow::Buffer>{};
           if (list_source->null_count() > 0) {
-            bitmap = check(arrow::compute::IsValid(source)).array()->buffers[1];
+            bitmap = copy_validity(*source);
           }
           result = std::make_shared<arrow::ListArray>(
             arrow::list(element), list_source->length(),
             offsets_array->data()->buffers[1], std::move(values),
             std::move(bitmap), list_source->null_count(), 0);
         }
-        if (required and nulls_under_valid_parent(result, parent) > 0) {
+        if (required and has_null_under_valid_parent(result, parent)) {
           return fail_required("the input holds null lists for it");
         }
         return result;
       }
       default: {
         if (source->type()->Equals(target->type())) {
-          if (required and nulls_under_valid_parent(source, parent) > 0) {
+          if (required and has_null_under_valid_parent(source, parent)) {
             return fail_required("the input holds null values for it");
           }
           return source;
@@ -1544,10 +1574,7 @@ private:
                                     target->type()->ToString()),
                         ctx);
             }
-            source
-              = check(arrow::compute::IfElse(
-                        fits, source, arrow::MakeNullScalar(source->type())))
-                  .make_array();
+            source = null_unless(source, *fits);
           }
         }
         auto cast = arrow::compute::Cast(source, options);
@@ -1558,7 +1585,7 @@ private:
           return type_mismatch();
         }
         auto result = cast->make_array();
-        if (required and nulls_under_valid_parent(result, parent) > 0) {
+        if (required and has_null_under_valid_parent(result, parent)) {
           return fail_required("the input holds null values for it");
         }
         return result;

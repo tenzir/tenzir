@@ -36,12 +36,18 @@
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/registry.hpp"
 
+#include <arrow/api.h>
+#include <arrow/compute/api.h>
 #include <arrow/compute/initialize.h>
+#include <fmt/format.h>
 
+#include <chrono>
 #include <cstdint>
 #include <limits>
+#include <random>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 using namespace tenzir;
@@ -934,9 +940,6 @@ TEST("join concatenates strings and nulls rows with null elements") {
 }
 
 TEST("time components and format_time read a time column") {
-  // `format_time` goes through Arrow's `strftime`, which only the `tenzir`
-  // binary registers at startup.
-  REQUIRE(arrow::compute::Initialize().ok());
   auto builder = ArrayBuilder<Record>{};
   builder.record().field("t").data(
     tenzir::time{std::chrono::sys_days{std::chrono::year{2024} / 6 / 15}
@@ -966,6 +969,158 @@ TEST("time components and format_time read a time column") {
   CHECK_EQUAL(string_at(formatted, 0), Option<std::string>{"2024-06-15 24"});
   CHECK(is_null_at(formatted, 1));
   CHECK(std::move(dh).collect().empty());
+}
+
+TEST("round, ceil, and floor of durations cover the full range") {
+  using std::chrono::nanoseconds;
+  auto const max = std::numeric_limits<std::int64_t>::max();
+  auto const min = std::numeric_limits<std::int64_t>::min();
+  auto builder = ArrayBuilder<Record>{};
+  for (auto value : {max, min, std::int64_t{-7}, std::int64_t{7},
+                     std::int64_t{-5}, std::int64_t{5}}) {
+    builder.record().field("d").data(tenzir::duration{value});
+  }
+  auto events = make_events(builder.finish());
+  auto run = [&](std::string name, std::int64_t resolution) {
+    auto dh = collecting_diagnostic_handler{};
+    auto unit = ast::expression{ast::constant::make(
+      located<data>{data{tenzir::duration{resolution}}, location::unknown})};
+    auto result = eval(call(std::move(name), {root_field("d"), unit}), events,
+                       storage::BitMap{6, true}, dh);
+    auto values = std::vector<Option<std::int64_t>>{};
+    auto durations = result.get_alternative<Duration>();
+    for (auto i = storage::Index{0}; i < 6; ++i) {
+      if (durations and durations->present.get(i)) {
+        values.emplace_back((*durations->data.get(i)).count());
+      } else {
+        values.emplace_back(None{});
+      }
+    }
+    return std::pair{values, std::move(dh).collect().size()};
+  };
+  using Values = std::vector<Option<std::int64_t>>;
+  auto const none = Option<std::int64_t>{None{}};
+  // A resolution of the minimum duration has no positive counterpart.
+  CHECK_EQUAL(run("floor", min),
+              (std::pair{Values{0, min, min, 0, min, 0}, size_t{0}}));
+  CHECK_EQUAL(run("ceil", min),
+              (std::pair{Values{none, min, 0, none, 0, none}, size_t{1}}));
+  CHECK_EQUAL(run("round", min),
+              (std::pair{Values{none, min, 0, 0, 0, 0}, size_t{1}}));
+  // Results beyond the range of `duration` overflow.
+  CHECK_EQUAL(run("ceil", 10),
+              (std::pair{Values{none, min + 8, 0, 10, 0, 10}, size_t{1}}));
+  CHECK_EQUAL(run("floor", -10),
+              (std::pair{Values{max - 7, none, -10, 0, -10, 0}, size_t{1}}));
+  // Ties round up, for negative values too.
+  CHECK_EQUAL(run("round", 10),
+              (std::pair{Values{none, none, -10, 10, 0, 10}, size_t{1}}));
+}
+
+TEST("format_time matches Arrow's strftime") {
+  REQUIRE(arrow::compute::Initialize().ok());
+  auto values = std::vector<tenzir::time>{
+    tenzir::time{},
+    tenzir::time{std::chrono::nanoseconds{-1}},
+    tenzir::time{std::chrono::sys_days{std::chrono::year{1969} / 12 / 31}
+                 + std::chrono::hours{23} + std::chrono::nanoseconds{1}},
+    tenzir::time{std::chrono::sys_days{std::chrono::year{2024} / 2 / 29}
+                 + std::chrono::hours{12} + std::chrono::microseconds{7}},
+  };
+  auto engine = std::mt19937_64{42};
+  auto distribution = std::uniform_int_distribution<std::int64_t>{
+    std::numeric_limits<std::int64_t>::min(),
+    std::numeric_limits<std::int64_t>::max()};
+  for (auto i = 0; i < 200; ++i) {
+    values.emplace_back(tenzir::duration{distribution(engine)});
+  }
+  auto builder = ArrayBuilder<Record>{};
+  auto input = arrow::TimestampBuilder{arrow::timestamp(arrow::TimeUnit::NANO),
+                                       arrow::default_memory_pool()};
+  for (auto value : values) {
+    builder.record().field("t").data(value);
+    REQUIRE(input.Append(value.time_since_epoch().count()).ok());
+  }
+  auto events = make_events(builder.finish());
+  auto timestamps = input.Finish().ValueOrDie();
+  auto const formats = std::vector<std::string>{
+    "%Y-%m-%d %H:%M:%S",
+    "%F %T",
+    "%a %A %b %B %h",
+    "%c",
+    "%C %y %G %g %V %U %W %u %w %j",
+    "%D %e %I %p %r %R %x %X",
+    "%n%t%%",
+    "The date is %A, %B %d, %Y",
+    "%Ey %EY %Od %OH %OM %OS",
+    "The date is %A, %B %d, %Y",
+    "literal {braces} and %Q",
+    "",
+  };
+  for (auto const& format : formats) {
+    auto dh = collecting_diagnostic_handler{};
+    auto actual
+      = eval(call("format_time", {root_field("t"), str_const(format)}), events,
+             storage::BitMap{events.data.length(), true}, dh);
+    CHECK(std::move(dh).collect().empty());
+    auto options = arrow::compute::StrftimeOptions{format, "C"};
+    auto expected
+      = arrow::compute::CallFunction("strftime", {timestamps}, &options)
+          .ValueOrDie()
+          .make_array();
+    auto const& strings = static_cast<arrow::StringArray const&>(*expected);
+    for (auto i = size_t{0}; i < values.size(); ++i) {
+      CHECK_EQUAL(
+        fmt::format("{} @ {}: {}", format, values[i].time_since_epoch().count(),
+                    string_at(actual, i).value_or("<null>")),
+        fmt::format("{} @ {}: {}", format, values[i].time_since_epoch().count(),
+                    std::string{strings.GetView(i)}));
+    }
+  }
+}
+
+TEST("format_time handles braces, zones, and invalid arguments") {
+  auto builder = ArrayBuilder<Record>{};
+  builder.record().field("t").data(tenzir::time{});
+  auto events = make_events(builder.finish());
+  auto run = [&](std::vector<ast::expression> args) {
+    auto dh = collecting_diagnostic_handler{};
+    auto result = eval(call("format_time", std::move(args)), events,
+                       storage::BitMap{1, true}, dh);
+    return std::pair{std::move(result), std::move(dh).collect()};
+  };
+  // Times are in UTC, so zones format as UTC.
+  auto [zoned, zoned_diagnostics]
+    = run({root_field("t"), str_const("%F %T %z %Z")});
+  CHECK_EQUAL(string_at(zoned, 0),
+              Option<std::string>{"1970-01-01 00:00:00.000000000 +0000 UTC"});
+  CHECK(zoned_diagnostics.empty());
+  auto locale = [](std::string name) {
+    return ast::expression{ast::assignment{
+      root_field("locale"), location::unknown, str_const(std::move(name))}};
+  };
+  auto [unknown, unknown_diagnostics]
+    = run({root_field("t"), str_const("%F"), locale("xx_INVALID")});
+  CHECK(is_null_at(unknown, 0));
+  REQUIRE_EQUAL(unknown_diagnostics.size(), size_t{1});
+  CHECK_EQUAL(unknown_diagnostics[0].message, "unknown locale `xx_INVALID`");
+  auto [braces, braces_diagnostics]
+    = run({root_field("t"), str_const("{%Y}{}} %%{")});
+  CHECK_EQUAL(string_at(braces, 0), Option<std::string>{"{1970}{}} %{"});
+  CHECK(braces_diagnostics.empty());
+  for (auto format : {"%c", "%Ec", "%F %c"}) {
+    auto [c, c_diagnostics]
+      = run({root_field("t"), str_const(format), locale("POSIX")});
+    CHECK(is_null_at(c, 0));
+    REQUIRE_EQUAL(c_diagnostics.size(), size_t{1});
+    CHECK_EQUAL(c_diagnostics[0].message, "`%c` and `%Ec` are not supported "
+                                          "with a locale other than `C`");
+  }
+  // Escaped and `O`-modified forms are not the locale's date and time.
+  auto [escaped, escaped_diagnostics]
+    = run({root_field("t"), str_const("%%c %Oc %E%c"), locale("POSIX")});
+  CHECK_EQUAL(string_at(escaped, 0), Option<std::string>{"%c %Oc %E%c"});
+  CHECK(escaped_diagnostics.empty());
 }
 
 TEST("secret rejects data-dependent names") {

@@ -24,11 +24,16 @@
 #include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/compute/api.h>
+#include <arrow/vendored/datetime/date.h>
 
 #include <cerrno>
 #include <chrono>
 #include <ctime>
+#include <locale>
 #include <map>
+#include <ostream>
+#include <stdexcept>
+#include <streambuf>
 #include <string>
 #include <string_view>
 
@@ -912,42 +917,78 @@ public:
     if (not time_rows.any()) {
       return frame.null();
     }
-    // Formatting goes through Arrow's `strftime`, like the legacy
-    // implementation, so both agree on every format specifier and locale.
-    auto input = arrow::TimestampBuilder{
-      arrow::timestamp(arrow::TimeUnit::NANO), arrow_memory_pool()};
-    check(input.Reserve(time_rows.true_count()));
-    for (auto row : storage::true_bits(time_rows)) {
-      check(input.Append((*times->data.get(row)).time_since_epoch().count()));
-    }
-    auto options = arrow::compute::StrftimeOptions(
-      args.format.inner, args.locale ? args.locale->inner : "C");
-    auto result
-      = arrow::compute::CallFunction("strftime", {finish(input)}, &options);
-    if (not result.ok()) {
-      diagnostic::warning("{}", result.status().ToString())
-        .primary(args.call)
+    auto const locale_name = args.locale ? args.locale->inner : "C";
+    // Like Arrow's `strftime`, which the legacy implementation uses: the
+    // `date` library mishandles `%c` outside of the C locale, see
+    // https://github.com/HowardHinnant/date/issues/704.
+    if (locale_name != "C" and has_locale_date_time(args.format.inner)) {
+      diagnostic::warning("`%c` and `%Ec` are not supported with a locale "
+                          "other than `C`")
+        .primary(args.format)
         .emit(frame);
       return frame.null();
     }
-    auto const formatted = result.MoveValueUnsafe().make_array();
-    auto const& strings = as<arrow::StringArray>(*formatted);
-    auto builder = ArrayBuilder<Data>{};
-    auto index = int64_t{0};
+    auto buffer = AppendBuffer{};
+    auto stream = std::ostream{&buffer};
+    try {
+      stream.imbue(std::locale{locale_name});
+    } catch (std::runtime_error const&) {
+      diagnostic::warning("unknown locale `{}`", locale_name)
+        .primary(*args.locale)
+        .emit(frame);
+      return frame.null();
+    }
+    auto ranges
+      = storage::DataOwner<storage::Span[]>::make_uninitialized(length);
     for (auto row = storage::Index{0}; row < length; ++row) {
-      if (not time_rows.get(row)) {
-        builder.null();
+      auto const begin = buffer.data.size();
+      if (time_rows.get(row)) {
+        // The same formatting as Arrow's `strftime` for a time in UTC.
+        arrow_vendored::date::to_stream(stream, args.format.inner.c_str(),
+                                        *times->data.get(row));
+      }
+      ranges.emplace_back(begin, buffer.data.size());
+    }
+    auto result = Array<String>{
+      storage::DenseStringOffsetStorage{buffer.data.finish(), ranges.finish()}};
+    return Array<Data>{std::move(result)}.null_where(mask.and_not(time_rows));
+  }
+
+private:
+  /// Returns whether `format` holds a `%c` or `%Ec` conversion, skipping
+  /// `%%` escapes like the `date` library does.
+  static auto has_locale_date_time(std::string_view format) -> bool {
+    for (auto i = size_t{0}; i + 1 < format.size(); ++i) {
+      if (format[i] != '%') {
         continue;
       }
-      if (strings.IsNull(index)) {
-        builder.null();
-      } else {
-        builder.data(std::string_view{strings.GetView(index)});
+      auto const modifier = format[++i];
+      if ((modifier == 'E' or modifier == 'O') and i + 1 < format.size()) {
+        ++i;
       }
-      ++index;
+      if (format[i] == 'c' and modifier != 'O') {
+        return true;
+      }
     }
-    return builder.finish();
+    return false;
   }
+
+  /// A stream buffer that appends to a Nova string buffer.
+  struct AppendBuffer final : std::streambuf {
+    nova::storage::DataOwner<char[]>::Builder data;
+
+    auto overflow(int_type c) -> int_type override {
+      if (not traits_type::eq_int_type(c, traits_type::eof())) {
+        data.emplace_back(traits_type::to_char_type(c));
+      }
+      return traits_type::not_eof(c);
+    }
+
+    auto xsputn(char const* s, std::streamsize n) -> std::streamsize override {
+      data.move_append(s, s + n);
+      return n;
+    }
+  };
 };
 
 class format_time : public virtual nova::FunctionPlugin {
