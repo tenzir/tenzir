@@ -4,6 +4,7 @@
 #pragma once
 
 #include <tenzir/arc.hpp>
+#include <tenzir/async/stop_flag.hpp>
 #include <tenzir/async/task.hpp>
 #include <tenzir/box.hpp>
 #include <tenzir/controller/transport.hpp>
@@ -29,6 +30,9 @@ struct PipelineResources {
   uint64_t queued_bytes = 0;
 };
 
+// From the generated API, which is too large to include for one name.
+class ServedRequest;
+
 /// Per-run state; copies share counters, diagnostics and the bounded sender.
 class PlatformProfiler {
 public:
@@ -51,6 +55,42 @@ public:
   auto flush() const -> Task<void>;
 
 private:
+  class State;
+  Arc<State> state_;
+};
+
+/// What a deployment reports of itself rather than of one pipeline run: for
+/// now, the requests it answers.
+///
+/// Its batches share the process's boot and sequence with those of the
+/// pipeline runs, and are bounded and best effort in the same way. Copies
+/// share the pending samples and the sender.
+class PlatformReporter {
+public:
+  /// The most served requests one batch carries. One takes at most about
+  /// 1.1 KiB on the wire, so a full batch stays well under the 256 KiB limit
+  /// of a batch.
+  static constexpr auto max_batch_requests = std::size_t{200};
+
+  explicit PlatformReporter(PlatformConnection connection);
+  /// Uses the same transport seam as generated clients, including fixtures.
+  PlatformReporter(PlatformConnection connection, Box<Transport> transport);
+
+  /// Keeps `sample` for the next batch. Never waits: with too many pending,
+  /// the sample is dropped and the next batch counts it in `dropped`.
+  auto request(ServedRequest served) const -> void;
+
+  /// Batches what is pending once a second and sends it. Once `stop` is
+  /// requested, it sends what is still pending, for at most a few seconds,
+  /// and returns. Cancelled, it returns at once and what is pending is lost.
+  ///
+  /// One `run` at a time: its batches have one sender.
+  auto run(StopFlag stop) const -> Task<void>;
+
+private:
+  /// The last part of `run`, once its sender has let go of the queue.
+  auto flush() const -> Task<void>;
+
   class State;
   Arc<State> state_;
 };

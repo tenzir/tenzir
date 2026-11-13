@@ -10,6 +10,7 @@
 #include <folly/coro/Sleep.h>
 
 #include <array>
+#include <limits>
 
 namespace tenzir {
 namespace {
@@ -117,15 +118,46 @@ TEST("platform wire counters retain safe numeric bounds") {
   CHECK(TelemetryCount::make(-1).is_err());
   CHECK(TelemetryCount::make(9'007'199'254'740'991).is_ok());
   CHECK(TelemetryCount::make(9'007'199'254'740'992).is_err());
-  CHECK(SmallCount::make(-1).is_err());
-  CHECK(SmallCount::make(4'294'967'295).is_ok());
-  CHECK(SmallCount::make(4'294'967'296).is_err());
+  CHECK(TelemetrySmallCount::make(-1).is_err());
+  CHECK(TelemetrySmallCount::make(4'294'967'295).is_ok());
+  CHECK(TelemetrySmallCount::make(4'294'967'296).is_err());
   auto numeric = api::Document::parse("7", "count").expect("valid JSON");
   auto parsed = parse_telemetry_count(numeric.root());
   REQUIRE(parsed.is_ok());
   CHECK_EQUAL(parsed.unwrap().value(), 7);
   auto text = api::Document::parse(R"("7")", "count").expect("valid JSON");
   CHECK(parse_telemetry_count(text.root()).is_err());
+}
+
+TEST("a full batch of the widest served requests fits the uplink") {
+  // JSON escapes a control character as `\u00XX`, six bytes for one.
+  auto escaped = [](std::size_t size) {
+    return std::string(size, '\x01');
+  };
+  auto widest = TelemetryCount::make(9'007'199'254'740'991).unwrap();
+  auto sample = ServedRequest{
+    time::clock::now(),
+    // The longest a double gets, `2.2250738585072014e-308`.
+    TelemetrySeconds::make(std::numeric_limits<double>::min()).unwrap(),
+    HttpMethod::make(escaped(16)).unwrap(),
+    EndpointName::make(escaped(128)).unwrap(),
+    TelemetrySmallCount::make(4'294'967'295).unwrap(),
+    widest,
+    Traceparent::make("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01")
+      .unwrap(),
+  };
+  auto batch = Batch{"00000000-0000-4000-8000-000000000000",
+                     widest,
+                     widest,
+                     {},
+                     {},
+                     {},
+                     {},
+                     {},
+                     std::vector(PlatformReporter::max_batch_requests, sample)};
+  auto body = std::string{};
+  write_json(batch, body);
+  CHECK_LESS_EQUAL(body.size(), std::size_t{256} << 10);
 }
 
 TEST("platform telemetry goes to the deployment's nested route") {
@@ -263,8 +295,8 @@ TEST("platform profiler keeps rapid samples distinct at millisecond "
   }
 }
 
-TEST("platform profiler bounds pending batches and reports drops in final "
-     "flush") {
+TEST("platform profiler bounds pending batches and holds back what does not "
+     "fit until the final flush") {
   auto batches = std::make_shared<std::vector<Batch>>();
   auto profiler
     = PlatformProfiler{known(), "pipeline", 1, RecordingTransport{batches}};
@@ -274,7 +306,10 @@ TEST("platform profiler bounds pending batches and reports drops in final "
   }
   folly::coro::blockingWait(profiler.flush());
   REQUIRE_EQUAL(batches->size(), 17u);
-  CHECK((*batches)[16].dropped.value() >= 24);
+  // The 24 samples past the full queue arrive as one, and none is lost.
+  REQUIRE_EQUAL((*batches)[16].pipelines.size(), 1u);
+  CHECK_EQUAL((*batches)[16].pipelines[0].sources[0].events.value(), 24);
+  CHECK_EQUAL((*batches)[16].dropped.value(), 0);
   auto other
     = PlatformProfiler{known(), "other", 2, RecordingTransport{batches}};
   other.transition("failed");

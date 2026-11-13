@@ -706,25 +706,6 @@ auto parse_telemetry_count(simdjson::dom::element value)
   return TelemetryCount::make(std::move(raw));
 }
 
-auto TenzirTelemetryTelemetryCount::make(std::int64_t value)
-  -> Result<TenzirTelemetryTelemetryCount, ParseError> {
-  if (value < -9'007'199'254'740'991 or value > 9'007'199'254'740'991) {
-    return Err{ParseError{"TenzirTelemetryTelemetryCount",
-                          "integer exceeds the wire safe-integer range"}};
-  }
-  if (value < 0) {
-    return Err{ParseError{"TenzirTelemetryTelemetryCount",
-                          "integer is below the minimum"}};
-  }
-  return TenzirTelemetryTelemetryCount{std::move(value)};
-}
-
-auto parse_tenzir_telemetry_telemetry_count(simdjson::dom::element value)
-  -> Result<TenzirTelemetryTelemetryCount, ParseError> {
-  TRY(auto raw, api::int64_of(value, "TenzirTelemetryTelemetryCount"));
-  return TenzirTelemetryTelemetryCount::make(std::move(raw));
-}
-
 auto PipelineId::make(std::string value) -> Result<PipelineId, ParseError> {
   static auto const pattern = std::regex{
     R"(^[A-Za-z0-9_-][A-Za-z0-9._-]*(\/[A-Za-z0-9_-][A-Za-z0-9._-]*)*$)"};
@@ -741,24 +722,6 @@ auto parse_pipeline_id(simdjson::dom::element value)
   return PipelineId::make(std::move(raw));
 }
 
-auto TelemetryCount2::make(std::int64_t value)
-  -> Result<TelemetryCount2, ParseError> {
-  if (value < -9'007'199'254'740'991 or value > 9'007'199'254'740'991) {
-    return Err{ParseError{"TelemetryCount2",
-                          "integer exceeds the wire safe-integer range"}};
-  }
-  if (value < 0) {
-    return Err{ParseError{"TelemetryCount2", "integer is below the minimum"}};
-  }
-  return TelemetryCount2{std::move(value)};
-}
-
-auto parse_telemetry_count2(simdjson::dom::element value)
-  -> Result<TelemetryCount2, ParseError> {
-  TRY(auto raw, api::int64_of(value, "TelemetryCount2"));
-  return TelemetryCount2::make(std::move(raw));
-}
-
 auto parse_connector_flow(simdjson::dom::element value)
   -> Result<ConnectorFlow, ParseError> {
   TRY(auto object, api::object_of(value, "ConnectorFlow"));
@@ -767,10 +730,10 @@ auto parse_connector_flow(simdjson::dom::element value)
   TRY(auto connector, api::string_of(connector_raw, "ConnectorFlow.connector"));
 
   TRY(auto events_raw, api::field(object, "events", "ConnectorFlow"));
-  TRY(auto events, parse_telemetry_count2(events_raw));
+  TRY(auto events, parse_telemetry_count(events_raw));
 
   TRY(auto bytes_raw, api::field(object, "bytes", "ConnectorFlow"));
-  TRY(auto bytes, parse_telemetry_count2(bytes_raw));
+  TRY(auto bytes, parse_telemetry_count(bytes_raw));
 
   return ConnectorFlow{std::move(connector), std::move(events),
                        std::move(bytes)};
@@ -787,53 +750,6 @@ auto parse_telemetry_seconds(simdjson::dom::element value)
   return TelemetrySeconds::make(std::move(raw));
 }
 
-auto TenzirTelemetryTelemetrySeconds::make(double value)
-  -> Result<TenzirTelemetryTelemetrySeconds, ParseError> {
-  return TenzirTelemetryTelemetrySeconds{std::move(value)};
-}
-
-auto parse_tenzir_telemetry_telemetry_seconds(simdjson::dom::element value)
-  -> Result<TenzirTelemetryTelemetrySeconds, ParseError> {
-  TRY(auto raw, api::double_of(value, "TenzirTelemetryTelemetrySeconds"));
-  return TenzirTelemetryTelemetrySeconds::make(std::move(raw));
-}
-
-auto TelemetryCount3::make(std::int64_t value)
-  -> Result<TelemetryCount3, ParseError> {
-  if (value < -9'007'199'254'740'991 or value > 9'007'199'254'740'991) {
-    return Err{ParseError{"TelemetryCount3",
-                          "integer exceeds the wire safe-integer range"}};
-  }
-  if (value < 0) {
-    return Err{ParseError{"TelemetryCount3", "integer is below the minimum"}};
-  }
-  return TelemetryCount3{std::move(value)};
-}
-
-auto parse_telemetry_count3(simdjson::dom::element value)
-  -> Result<TelemetryCount3, ParseError> {
-  TRY(auto raw, api::int64_of(value, "TelemetryCount3"));
-  return TelemetryCount3::make(std::move(raw));
-}
-
-auto TelemetryCount4::make(std::int64_t value)
-  -> Result<TelemetryCount4, ParseError> {
-  if (value < -9'007'199'254'740'991 or value > 9'007'199'254'740'991) {
-    return Err{ParseError{"TelemetryCount4",
-                          "integer exceeds the wire safe-integer range"}};
-  }
-  if (value < 0) {
-    return Err{ParseError{"TelemetryCount4", "integer is below the minimum"}};
-  }
-  return TelemetryCount4{std::move(value)};
-}
-
-auto parse_telemetry_count4(simdjson::dom::element value)
-  -> Result<TelemetryCount4, ParseError> {
-  TRY(auto raw, api::int64_of(value, "TelemetryCount4"));
-  return TelemetryCount4::make(std::move(raw));
-}
-
 auto parse_pipeline_sample(simdjson::dom::element value)
   -> Result<PipelineSample, ParseError> {
   TRY(auto object, api::object_of(value, "PipelineSample"));
@@ -842,7 +758,7 @@ auto parse_pipeline_sample(simdjson::dom::element value)
   TRY(auto pipeline_id, parse_pipeline_id(pipeline_id_raw));
 
   TRY(auto run_raw, api::field(object, "run", "PipelineSample"));
-  TRY(auto run, parse_telemetry_count2(run_raw));
+  TRY(auto run, parse_telemetry_count(run_raw));
 
   TRY(auto window_raw, api::field(object, "window", "PipelineSample"));
   TRY(auto window, api::time_of(window_raw, "PipelineSample.window"));
@@ -875,23 +791,23 @@ auto parse_pipeline_sample(simdjson::dom::element value)
     cpu_seconds = std::move(cpu_seconds_present);
   }
 
-  auto interval_seconds = Option<TenzirTelemetryTelemetrySeconds>{None{}};
+  auto interval_seconds = Option<TelemetrySeconds>{None{}};
   if (auto interval_seconds_raw
       = api::optional_field(object, "intervalSeconds")) {
     TRY(auto interval_seconds_present,
-        parse_tenzir_telemetry_telemetry_seconds(*interval_seconds_raw));
+        parse_telemetry_seconds(*interval_seconds_raw));
     interval_seconds = std::move(interval_seconds_present);
   }
 
-  auto queued_bytes = Option<TelemetryCount3>{None{}};
+  auto queued_bytes = Option<TelemetryCount>{None{}};
   if (auto queued_bytes_raw = api::optional_field(object, "queuedBytes")) {
-    TRY(auto queued_bytes_present, parse_telemetry_count3(*queued_bytes_raw));
+    TRY(auto queued_bytes_present, parse_telemetry_count(*queued_bytes_raw));
     queued_bytes = std::move(queued_bytes_present);
   }
 
-  auto activity = Option<TelemetryCount4>{None{}};
+  auto activity = Option<TelemetryCount>{None{}};
   if (auto activity_raw = api::optional_field(object, "activity")) {
-    TRY(auto activity_present, parse_telemetry_count4(*activity_raw));
+    TRY(auto activity_present, parse_telemetry_count(*activity_raw));
     activity = std::move(activity_present);
   }
 
@@ -913,24 +829,27 @@ auto parse_retired_operator_sample(simdjson::dom::element value)
   return RetiredOperatorSample{};
 }
 
-auto SmallCount::make(std::int64_t value) -> Result<SmallCount, ParseError> {
+auto TelemetrySmallCount::make(std::int64_t value)
+  -> Result<TelemetrySmallCount, ParseError> {
   if (value < -9'007'199'254'740'991 or value > 9'007'199'254'740'991) {
-    return Err{
-      ParseError{"SmallCount", "integer exceeds the wire safe-integer range"}};
+    return Err{ParseError{"TelemetrySmallCount",
+                          "integer exceeds the wire safe-integer range"}};
   }
   if (value < 0) {
-    return Err{ParseError{"SmallCount", "integer is below the minimum"}};
+    return Err{
+      ParseError{"TelemetrySmallCount", "integer is below the minimum"}};
   }
   if (value > 4294967295) {
-    return Err{ParseError{"SmallCount", "integer exceeds the maximum"}};
+    return Err{
+      ParseError{"TelemetrySmallCount", "integer exceeds the maximum"}};
   }
-  return SmallCount{std::move(value)};
+  return TelemetrySmallCount{std::move(value)};
 }
 
-auto parse_small_count(simdjson::dom::element value)
-  -> Result<SmallCount, ParseError> {
-  TRY(auto raw, api::int64_of(value, "SmallCount"));
-  return SmallCount::make(std::move(raw));
+auto parse_telemetry_small_count(simdjson::dom::element value)
+  -> Result<TelemetrySmallCount, ParseError> {
+  TRY(auto raw, api::int64_of(value, "TelemetrySmallCount"));
+  return TelemetrySmallCount::make(std::move(raw));
 }
 
 auto to_string(Severity value) -> std::string_view {
@@ -999,11 +918,11 @@ auto parse_push_telemetry_payload_diagnostics_annotations(
 
   TRY(auto begin_raw, api::field(object, "begin",
                                  "PushTelemetryPayloadDiagnosticsAnnotations"));
-  TRY(auto begin, parse_telemetry_count2(begin_raw));
+  TRY(auto begin, parse_telemetry_count(begin_raw));
 
   TRY(auto end_raw,
       api::field(object, "end", "PushTelemetryPayloadDiagnosticsAnnotations"));
-  TRY(auto end, parse_telemetry_count2(end_raw));
+  TRY(auto end, parse_telemetry_count(end_raw));
 
   return PushTelemetryPayloadDiagnosticsAnnotations{
     primary, std::move(text), std::move(begin), std::move(end)};
@@ -1018,7 +937,7 @@ auto parse_diagnostic_sample(simdjson::dom::element value)
   TRY(auto pipeline_id, parse_pipeline_id(pipeline_id_raw));
 
   TRY(auto run_raw, api::field(object, "run", "DiagnosticSample"));
-  TRY(auto run, parse_telemetry_count2(run_raw));
+  TRY(auto run, parse_telemetry_count(run_raw));
 
   TRY(auto first_seen_raw, api::field(object, "firstSeen", "DiagnosticSample"));
   TRY(auto first_seen,
@@ -1029,7 +948,7 @@ auto parse_diagnostic_sample(simdjson::dom::element value)
 
   TRY(auto occurrences_raw,
       api::field(object, "occurrences", "DiagnosticSample"));
-  TRY(auto occurrences, parse_small_count(occurrences_raw));
+  TRY(auto occurrences, parse_telemetry_small_count(occurrences_raw));
 
   TRY(auto fingerprint_raw,
       api::field(object, "fingerprint", "DiagnosticSample"));
@@ -1125,7 +1044,7 @@ auto parse_run_transition(simdjson::dom::element value)
   TRY(auto pipeline_id, parse_pipeline_id(pipeline_id_raw));
 
   TRY(auto run_raw, api::field(object, "run", "RunTransition"));
-  TRY(auto run, parse_telemetry_count2(run_raw));
+  TRY(auto run, parse_telemetry_count(run_raw));
 
   TRY(auto at_raw, api::field(object, "at", "RunTransition"));
   TRY(auto at, api::time_of(at_raw, "RunTransition.at"));
@@ -1144,17 +1063,6 @@ auto parse_run_transition(simdjson::dom::element value)
                        std::move(state), std::move(error)};
 }
 
-auto TelemetrySeconds2::make(double value)
-  -> Result<TelemetrySeconds2, ParseError> {
-  return TelemetrySeconds2{std::move(value)};
-}
-
-auto parse_telemetry_seconds2(simdjson::dom::element value)
-  -> Result<TelemetrySeconds2, ParseError> {
-  TRY(auto raw, api::double_of(value, "TelemetrySeconds2"));
-  return TelemetrySeconds2::make(std::move(raw));
-}
-
 auto parse_deployment_sample(simdjson::dom::element value)
   -> Result<DeploymentSample, ParseError> {
   TRY(auto object, api::object_of(value, "DeploymentSample"));
@@ -1164,17 +1072,101 @@ auto parse_deployment_sample(simdjson::dom::element value)
 
   TRY(auto cpu_seconds_raw,
       api::field(object, "cpuSeconds", "DeploymentSample"));
-  TRY(auto cpu_seconds, parse_telemetry_seconds2(cpu_seconds_raw));
+  TRY(auto cpu_seconds, parse_telemetry_seconds(cpu_seconds_raw));
 
   TRY(auto memory_bytes_raw,
       api::field(object, "memoryBytes", "DeploymentSample"));
-  TRY(auto memory_bytes, parse_telemetry_count2(memory_bytes_raw));
+  TRY(auto memory_bytes, parse_telemetry_count(memory_bytes_raw));
 
   TRY(auto uptime_ms_raw, api::field(object, "uptimeMs", "DeploymentSample"));
-  TRY(auto uptime_ms, parse_telemetry_count2(uptime_ms_raw));
+  TRY(auto uptime_ms, parse_telemetry_count(uptime_ms_raw));
 
   return DeploymentSample{window, std::move(cpu_seconds),
                           std::move(memory_bytes), std::move(uptime_ms)};
+}
+
+auto HttpMethod::make(std::string value) -> Result<HttpMethod, ParseError> {
+  if (value.size() > 16) {
+    return Err{ParseError{"HttpMethod", "must be at most 16 characters long"}};
+  }
+  return HttpMethod{std::move(value)};
+}
+
+auto parse_http_method(simdjson::dom::element value)
+  -> Result<HttpMethod, ParseError> {
+  TRY(auto raw, api::string_of(value, "HttpMethod"));
+  return HttpMethod::make(std::move(raw));
+}
+
+auto EndpointName::make(std::string value) -> Result<EndpointName, ParseError> {
+  if (value.size() > 128) {
+    return Err{
+      ParseError{"EndpointName", "must be at most 128 characters long"}};
+  }
+  return EndpointName{std::move(value)};
+}
+
+auto parse_endpoint_name(simdjson::dom::element value)
+  -> Result<EndpointName, ParseError> {
+  TRY(auto raw, api::string_of(value, "EndpointName"));
+  return EndpointName::make(std::move(raw));
+}
+
+auto Traceparent::make(std::string value) -> Result<Traceparent, ParseError> {
+  if (value.size() > 55) {
+    return Err{ParseError{"Traceparent", "must be at most 55 characters long"}};
+  }
+  static auto const pattern
+    = std::regex{R"(^[0-9a-f]{2}-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$)"};
+  if (not std::regex_match(value, pattern)) {
+    return Err{ParseError{
+      "Traceparent", fmt::format("`{}` does not match the pattern", value)}};
+  }
+  return Traceparent{std::move(value)};
+}
+
+auto parse_traceparent(simdjson::dom::element value)
+  -> Result<Traceparent, ParseError> {
+  TRY(auto raw, api::string_of(value, "Traceparent"));
+  return Traceparent::make(std::move(raw));
+}
+
+auto parse_served_request(simdjson::dom::element value)
+  -> Result<ServedRequest, ParseError> {
+  TRY(auto object, api::object_of(value, "ServedRequest"));
+
+  TRY(auto at_raw, api::field(object, "at", "ServedRequest"));
+  TRY(auto at, api::time_of(at_raw, "ServedRequest.at"));
+
+  TRY(auto seconds_raw, api::field(object, "seconds", "ServedRequest"));
+  TRY(auto seconds, parse_telemetry_seconds(seconds_raw));
+
+  TRY(auto method_raw, api::field(object, "method", "ServedRequest"));
+  TRY(auto method, parse_http_method(method_raw));
+
+  TRY(auto endpoint_raw, api::field(object, "endpoint", "ServedRequest"));
+  TRY(auto endpoint, parse_endpoint_name(endpoint_raw));
+
+  TRY(auto status_raw, api::field(object, "status", "ServedRequest"));
+  TRY(auto status, parse_telemetry_small_count(status_raw));
+
+  TRY(auto request_bytes_raw,
+      api::field(object, "requestBytes", "ServedRequest"));
+  TRY(auto request_bytes, parse_telemetry_count(request_bytes_raw));
+
+  auto traceparent = Option<Traceparent>{None{}};
+  if (auto traceparent_raw = api::optional_field(object, "traceparent")) {
+    TRY(auto traceparent_present, parse_traceparent(*traceparent_raw));
+    traceparent = std::move(traceparent_present);
+  }
+
+  return ServedRequest{at,
+                       std::move(seconds),
+                       std::move(method),
+                       std::move(endpoint),
+                       std::move(status),
+                       std::move(request_bytes),
+                       std::move(traceparent)};
 }
 
 auto parse_batch(simdjson::dom::element value) -> Result<Batch, ParseError> {
@@ -1187,7 +1179,7 @@ auto parse_batch(simdjson::dom::element value) -> Result<Batch, ParseError> {
   TRY(auto seq, parse_telemetry_count(seq_raw));
 
   TRY(auto dropped_raw, api::field(object, "dropped", "Batch"));
-  TRY(auto dropped, parse_tenzir_telemetry_telemetry_count(dropped_raw));
+  TRY(auto dropped, parse_telemetry_count(dropped_raw));
 
   TRY(auto pipelines_raw, api::field(object, "pipelines", "Batch"));
   auto pipelines = std::vector<PipelineSample>{};
@@ -1249,10 +1241,27 @@ auto parse_batch(simdjson::dom::element value) -> Result<Batch, ParseError> {
     deployment.push_back(std::move(deployment_decoded));
   }
 
+  auto requests = Option<std::vector<ServedRequest>>{None{}};
+  if (auto requests_raw = api::optional_field(object, "requests")) {
+    auto requests_present = std::vector<ServedRequest>{};
+    auto requests_present_array = simdjson::dom::array{};
+    if ((*requests_raw).get_array().get(requests_present_array)
+        != simdjson::SUCCESS) {
+      return Err{ParseError{"Batch.requests", "expected an array"}};
+    }
+    for (auto requests_present_item : requests_present_array) {
+      TRY(auto requests_present_decoded,
+          parse_served_request(requests_present_item));
+      requests_present.push_back(std::move(requests_present_decoded));
+    }
+    requests = std::move(requests_present);
+  }
+
   return Batch{std::move(boot),      std::move(seq),
                std::move(dropped),   std::move(pipelines),
                std::move(operators), std::move(diagnostics),
-               std::move(runs),      std::move(deployment)};
+               std::move(runs),      std::move(deployment),
+               std::move(requests)};
 }
 
 auto IngestEndpointName::make(std::string value)
@@ -2341,17 +2350,8 @@ auto write_json(TelemetryCount const& value, std::string& out) -> void {
   fmt::format_to(std::back_inserter(out), "{}", value.value());
 }
 
-auto write_json(TenzirTelemetryTelemetryCount const& value, std::string& out)
-  -> void {
-  fmt::format_to(std::back_inserter(out), "{}", value.value());
-}
-
 auto write_json(PipelineId const& value, std::string& out) -> void {
   api::write_string(value.to_string(), out);
-}
-
-auto write_json(TelemetryCount2 const& value, std::string& out) -> void {
-  fmt::format_to(std::back_inserter(out), "{}", value.value());
 }
 
 auto write_json(ConnectorFlow const& value, std::string& out) -> void {
@@ -2366,19 +2366,6 @@ auto write_json(ConnectorFlow const& value, std::string& out) -> void {
 }
 
 auto write_json(TelemetrySeconds const& value, std::string& out) -> void {
-  fmt::format_to(std::back_inserter(out), "{}", value.value());
-}
-
-auto write_json(TenzirTelemetryTelemetrySeconds const& value, std::string& out)
-  -> void {
-  fmt::format_to(std::back_inserter(out), "{}", value.value());
-}
-
-auto write_json(TelemetryCount3 const& value, std::string& out) -> void {
-  fmt::format_to(std::back_inserter(out), "{}", value.value());
-}
-
-auto write_json(TelemetryCount4 const& value, std::string& out) -> void {
   fmt::format_to(std::back_inserter(out), "{}", value.value());
 }
 
@@ -2471,7 +2458,7 @@ auto write_json(RetiredOperatorSample const&, std::string& out) -> void {
   out += '}';
 }
 
-auto write_json(SmallCount const& value, std::string& out) -> void {
+auto write_json(TelemetrySmallCount const& value, std::string& out) -> void {
   fmt::format_to(std::back_inserter(out), "{}", value.value());
 }
 
@@ -2571,10 +2558,6 @@ auto write_json(RunTransition const& value, std::string& out) -> void {
   out += '}';
 }
 
-auto write_json(TelemetrySeconds2 const& value, std::string& out) -> void {
-  fmt::format_to(std::back_inserter(out), "{}", value.value());
-}
-
 auto write_json(DeploymentSample const& value, std::string& out) -> void {
   out += '{';
   out += "\"window\":";
@@ -2585,6 +2568,58 @@ auto write_json(DeploymentSample const& value, std::string& out) -> void {
   write_json(value.memory_bytes, out);
   out += ",\"uptimeMs\":";
   write_json(value.uptime_ms, out);
+  out += '}';
+}
+
+auto write_json(HttpMethod const& value, std::string& out) -> void {
+  api::write_string(value.to_string(), out);
+}
+
+auto write_json(EndpointName const& value, std::string& out) -> void {
+  api::write_string(value.to_string(), out);
+}
+
+auto write_json(Traceparent const& value, std::string& out) -> void {
+  api::write_string(value.to_string(), out);
+}
+
+auto write_json(ServedRequest const& value, std::string& out) -> void {
+  out += '{';
+  auto field_separator = "";
+  out += field_separator;
+  field_separator = ",";
+  out += "\"at\":";
+  api::write_time(value.at, out);
+  out += field_separator;
+  field_separator = ",";
+  out += "\"seconds\":";
+  write_json(value.seconds, out);
+  out += field_separator;
+  field_separator = ",";
+  out += "\"method\":";
+  write_json(value.method, out);
+  out += field_separator;
+  field_separator = ",";
+  out += "\"endpoint\":";
+  write_json(value.endpoint, out);
+  out += field_separator;
+  field_separator = ",";
+  out += "\"status\":";
+  write_json(value.status, out);
+  out += field_separator;
+  field_separator = ",";
+  out += "\"requestBytes\":";
+  write_json(value.request_bytes, out);
+  if (value.traceparent) {
+    out += field_separator;
+    field_separator = ",";
+    out += "\"traceparent\":";
+    if (value.traceparent) {
+      write_json(*value.traceparent, out);
+    } else {
+      out += "null";
+    }
+  }
   out += '}';
 }
 
@@ -2673,6 +2708,25 @@ auto write_json(Batch const& value, std::string& out) -> void {
       write_json(element0, out);
     }
     out += ']';
+  }
+  if (value.requests) {
+    out += field_separator;
+    field_separator = ",";
+    out += "\"requests\":";
+    if (value.requests) {
+      {
+        out += '[';
+        auto separator0 = "";
+        for (auto const& element0 : *value.requests) {
+          out += separator0;
+          separator0 = ",";
+          write_json(element0, out);
+        }
+        out += ']';
+      }
+    } else {
+      out += "null";
+    }
   }
   out += '}';
 }
@@ -4002,6 +4056,100 @@ auto dispatch(DeploymentApi& handler, HttpRequest request)
       405, R"({"error":"method not allowed","allow":["POST"]})"};
   }
   co_return HttpResponse{404, R"({"error":"no such route"})"};
+}
+
+auto DeploymentApi::endpoint_name(std::string_view method,
+                                  std::string_view path) -> std::string_view {
+  auto parameters = std::vector<std::string>{};
+  if (api::match_path("/health", path, parameters)) {
+    if (method == "GET") {
+      return "readHealth";
+    }
+    return {};
+  }
+  if (api::match_path("/configuration/replace", path, parameters)) {
+    if (method == "POST") {
+      return "updateConfiguration";
+    }
+    return {};
+  }
+  if (api::match_path("/pipelines", path, parameters)) {
+    if (method == "POST") {
+      return "createPipeline";
+    }
+    if (method == "GET") {
+      return "listPipelines";
+    }
+    return {};
+  }
+  if (api::match_path("/pipelines/inventory/live", path, parameters)) {
+    if (method == "GET") {
+      return "streamPipelines";
+    }
+    return {};
+  }
+  if (api::match_path("/pipelines/:pipelineId/graph", path, parameters)) {
+    if (method == "GET") {
+      return "streamPipelineGraph";
+    }
+    return {};
+  }
+  if (api::match_path("/pipelines/:pipelineId/metrics/execution/live", path,
+                      parameters)) {
+    if (method == "GET") {
+      return "streamPipelineMetrics";
+    }
+    return {};
+  }
+  if (api::match_path("/pipelines/:pipelineId/events", path, parameters)) {
+    if (method == "POST") {
+      return "streamPipelineEvents";
+    }
+    return {};
+  }
+  if (api::match_path("/contexts", path, parameters)) {
+    if (method == "GET") {
+      return "inspectContexts";
+    }
+    return {};
+  }
+  if (api::match_path("/pipelines/:pipelineId/start", path, parameters)) {
+    if (method == "POST") {
+      return "startPipeline";
+    }
+    return {};
+  }
+  if (api::match_path("/pipelines/:pipelineId/stop", path, parameters)) {
+    if (method == "POST") {
+      return "stopPipeline";
+    }
+    return {};
+  }
+  if (api::match_path("/pipelines/:pipelineId", path, parameters)) {
+    if (method == "DELETE") {
+      return "deletePipeline";
+    }
+    return {};
+  }
+  if (api::match_path("/adhoc-pipelines", path, parameters)) {
+    if (method == "POST") {
+      return "startAdhocPipeline";
+    }
+    return {};
+  }
+  if (api::match_path("/suspend", path, parameters)) {
+    if (method == "POST") {
+      return "suspend";
+    }
+    return {};
+  }
+  if (api::match_path("/resume", path, parameters)) {
+    if (method == "POST") {
+      return "resume";
+    }
+    return {};
+  }
+  return {};
 }
 
 } // namespace tenzir
