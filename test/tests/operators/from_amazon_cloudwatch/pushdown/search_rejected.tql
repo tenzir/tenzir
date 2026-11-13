@@ -1,0 +1,23 @@
+---
+error: true
+fixtures:
+  - cloudwatch_fake:
+      reject_phrases: [refused]
+assertions:
+  fixtures:
+    cloudwatch_fake:
+      requests:
+        - operation: FilterLogEvents
+          filterPattern: '"refused"'
+---
+
+// CloudWatch rejects the pattern. The request carries the stages that the
+// operator took over, so the error suggests `pushdown=false`.
+from_amazon_cloudwatch "/tenzir/app",
+  mode="search",
+  aws_iam={
+    access_key_id: "test",
+    secret_access_key: "test",
+    region: "us-east-1",
+  }
+where "refused" in message

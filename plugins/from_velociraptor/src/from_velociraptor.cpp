@@ -13,7 +13,9 @@
 #include <tenzir/box.hpp>
 #include <tenzir/co_match.hpp>
 #include <tenzir/diagnostics.hpp>
+#include <tenzir/ir.hpp>
 #include <tenzir/nova/json_parser.hpp>
+#include <tenzir/operator/optimization.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/plugin/register.hpp>
@@ -95,6 +97,9 @@ struct FromVelociraptorArgs {
   Option<located<std::string>> query;
   Option<located<std::string>> profile;
   location operator_location;
+  // Bound only so that the operator declines the stages after it with a
+  // reason; it never takes any over.
+  OptimizationArgs<opt::Plan> optimization;
 };
 
 struct Response {
@@ -550,6 +555,17 @@ public:
     auto config
       = d.named_optional("_config", &FromVelociraptorArgs::plugin_config);
     d.operator_location(&FromVelociraptorArgs::operator_location);
+    d.optimization(&FromVelociraptorArgs::optimization);
+    // Wrapping the user's VQL in a query that filters or limits its rows would
+    // change when it stops, and with it the effects of a query that collects
+    // artifacts or subscribes to events.
+    d.query_plan(
+      [](FromVelociraptorArgs const&, ir::QueryChain const&) -> ir::Absorption {
+        return {.prefix = 0,
+                .declined = "a VQL query may have effects that a filter or "
+                            "limit would change; `max_rows` only sizes "
+                            "response batches"};
+      });
     d.validate([request_name, org_id, query, max_rows, subscribe, max_wait,
                 profile, config, this](DescribeCtx& ctx) -> Empty {
       TENZIR_UNUSED(request_name, org_id, max_rows, profile);

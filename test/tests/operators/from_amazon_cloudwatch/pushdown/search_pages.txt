@@ -1,0 +1,9 @@
+{
+  message: "INFO service started",
+}
+{
+  message: "ERROR disk full",
+}
+{
+  message: "WARN disk at 90%",
+}

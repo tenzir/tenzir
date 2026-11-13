@@ -6,18 +6,17 @@ fixtures:
 assertions:
   fixtures:
     microsoft_graph:
-      requests:
+      request_prefix:
         - /v1.0/users?$filter=accountEnabled+eq+true&$select=id,department,displayName&$top=5
-      served_values: 15
+      max_requests: 2
 timeout: 60
 skip:
   on: fixture-unavailable
 ---
 
-// The user's `odata` options stay verbatim and suppress `$select` and
-// `$top`, even where the projection needs fewer properties; the `where` adds
-// no `$filter`.
-// Without the optimization barrier; both share one baseline.
+// The user's `odata` options stay verbatim and own `$filter`, `$select`,
+// and `$top`, so the operator takes over no stage after them.
+// Without `pushdown=false`; both share one baseline.
 from_microsoft_graph "users",
   auth={
     tenant_id: env("MS_GRAPH_FIXTURE_TENANT_ID"),

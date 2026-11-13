@@ -1,0 +1,8 @@
+{
+  timestamp: 2023-11-14T22:13:22Z,
+  message: "WARN disk at 90%",
+}
+{
+  timestamp: 2023-11-14T22:13:24Z,
+  message: "ERROR connection refused",
+}

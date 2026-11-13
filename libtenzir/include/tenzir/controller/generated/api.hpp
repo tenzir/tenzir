@@ -525,77 +525,8 @@ struct std::hash<tenzir::ConnectorFlow> {
 
 namespace tenzir {
 
-class PipelineSample {
-public:
-  PipelineSample(PipelineId pipeline_id, TelemetryCount2 run, time window,
-                 std::vector<ConnectorFlow> sources,
-                 std::vector<ConnectorFlow> sinks)
-    : pipeline_id{std::move(pipeline_id)},
-      run{std::move(run)},
-      window{window},
-      sources{std::move(sources)},
-      sinks{std::move(sinks)} {
-  }
-
-  PipelineId pipeline_id;
-  TelemetryCount2 run;
-  time window;
-  std::vector<ConnectorFlow> sources;
-  std::vector<ConnectorFlow> sinks;
-
-  friend auto operator==(PipelineSample const&, PipelineSample const&) -> bool
-    = default;
-
-  template <class HashAlgorithm>
-  friend auto hash_append(HashAlgorithm& h, PipelineSample const& value)
-    -> void {
-    hash_append(h, value.pipeline_id, value.run, value.window, value.sources,
-                value.sinks);
-  }
-};
-
-} // namespace tenzir
-
-template <>
-struct std::hash<tenzir::PipelineSample> {
-  auto operator()(tenzir::PipelineSample const& value) const -> std::size_t {
-    return tenzir::hash(value);
-  }
-};
-
-namespace tenzir {
-
-/// What passed one point of a pipeline in a window. Counters cover that window
-/// alone and are never running totals
-class Flow {
-public:
-  Flow(TelemetryCount2 events, TelemetryCount2 bytes)
-    : events{std::move(events)}, bytes{std::move(bytes)} {
-  }
-
-  TelemetryCount2 events;
-  TelemetryCount2 bytes;
-
-  friend auto operator==(Flow const&, Flow const&) -> bool = default;
-
-  template <class HashAlgorithm>
-  friend auto hash_append(HashAlgorithm& h, Flow const& value) -> void {
-    hash_append(h, value.events, value.bytes);
-  }
-};
-
-} // namespace tenzir
-
-template <>
-struct std::hash<tenzir::Flow> {
-  auto operator()(tenzir::Flow const& value) const -> std::size_t {
-    return tenzir::hash(value);
-  }
-};
-
-namespace tenzir {
-
-/// Summed over the window
+/// CPU time all operators of the run used since its previous sample. Absent
+/// when the deployment does not measure it
 class TelemetrySeconds {
 public:
   static auto make(double value) -> Result<TelemetrySeconds, ParseError>;
@@ -635,7 +566,54 @@ struct std::hash<tenzir::TelemetrySeconds> {
 
 namespace tenzir {
 
-/// The largest seen in the window
+/// The time since the previous sample of the run, which `cpuSeconds` covers.
+/// About a second when absent
+class TenzirTelemetryTelemetrySeconds {
+public:
+  static auto make(double value)
+    -> Result<TenzirTelemetryTelemetrySeconds, ParseError>;
+
+  auto value() const -> double {
+    return value_;
+  }
+
+  friend auto operator==(TenzirTelemetryTelemetrySeconds const&,
+                         TenzirTelemetryTelemetrySeconds const&) -> bool
+    = default;
+
+  template <class HashAlgorithm>
+  friend auto
+  hash_append(HashAlgorithm& h, TenzirTelemetryTelemetrySeconds const& value)
+    -> void {
+    hash_append(h, value.value());
+  }
+
+private:
+  explicit TenzirTelemetryTelemetrySeconds(double value)
+    : value_{std::move(value)} {
+  }
+
+  double value_;
+};
+
+template <>
+inline constexpr auto enable_default_formatter<TenzirTelemetryTelemetrySeconds>
+  = true;
+
+} // namespace tenzir
+
+template <>
+struct std::hash<tenzir::TenzirTelemetryTelemetrySeconds> {
+  auto operator()(tenzir::TenzirTelemetryTelemetrySeconds const& value) const
+    -> std::size_t {
+    return tenzir::hash(value);
+  }
+};
+
+namespace tenzir {
+
+/// Bytes waiting in the channels between its operators at `window`. Absent when
+/// the deployment does not measure it
 class TelemetryCount3 {
 public:
   static auto make(std::int64_t value) -> Result<TelemetryCount3, ParseError>;
@@ -674,96 +652,128 @@ struct std::hash<tenzir::TelemetryCount3> {
 
 namespace tenzir {
 
-class TelemetrySmallCount {
+/// Events all its sources read and all its sinks wrote since its previous
+/// sample, external connectors such as `from_kafka` and internal ones such as
+/// `subscribe` or `discard` alike. Absent when the deployment does not measure
+/// it
+class TelemetryCount4 {
 public:
-  static auto make(std::int64_t value)
-    -> Result<TelemetrySmallCount, ParseError>;
+  static auto make(std::int64_t value) -> Result<TelemetryCount4, ParseError>;
 
   auto value() const -> std::int64_t {
     return value_;
   }
 
-  friend auto operator==(TelemetrySmallCount const&, TelemetrySmallCount const&)
-    -> bool
+  friend auto operator==(TelemetryCount4 const&, TelemetryCount4 const&) -> bool
     = default;
 
   template <class HashAlgorithm>
-  friend auto hash_append(HashAlgorithm& h, TelemetrySmallCount const& value)
+  friend auto hash_append(HashAlgorithm& h, TelemetryCount4 const& value)
     -> void {
     hash_append(h, value.value());
   }
 
 private:
-  explicit TelemetrySmallCount(std::int64_t value) : value_{std::move(value)} {
+  explicit TelemetryCount4(std::int64_t value) : value_{std::move(value)} {
   }
 
   std::int64_t value_;
 };
 
 template <>
-inline constexpr auto enable_default_formatter<TelemetrySmallCount> = true;
+inline constexpr auto enable_default_formatter<TelemetryCount4> = true;
 
 } // namespace tenzir
 
 template <>
-struct std::hash<tenzir::TelemetrySmallCount> {
-  auto operator()(tenzir::TelemetrySmallCount const& value) const
-    -> std::size_t {
+struct std::hash<tenzir::TelemetryCount4> {
+  auto operator()(tenzir::TelemetryCount4 const& value) const -> std::size_t {
     return tenzir::hash(value);
   }
 };
 
 namespace tenzir {
 
-class OperatorSample {
+/// What one run of a pipeline did since its previous sample. A running pipeline
+/// reports one about every second
+class PipelineSample {
 public:
-  OperatorSample(PipelineId pipeline_id, TelemetryCount2 run,
-                 std::string operator_id, std::string name, time window,
-                 Flow input, Flow output, TelemetrySeconds cpu_seconds,
-                 TelemetryCount3 input_bytes, TelemetryCount2 input_capacity,
-                 TelemetrySmallCount tasks)
+  PipelineSample(PipelineId pipeline_id, TelemetryCount2 run, time window,
+                 std::vector<ConnectorFlow> sources,
+                 std::vector<ConnectorFlow> sinks,
+                 Option<TelemetrySeconds> cpu_seconds,
+                 Option<TenzirTelemetryTelemetrySeconds> interval_seconds,
+                 Option<TelemetryCount3> queued_bytes,
+                 Option<TelemetryCount4> activity)
     : pipeline_id{std::move(pipeline_id)},
       run{std::move(run)},
-      operator_id{std::move(operator_id)},
-      name{std::move(name)},
       window{window},
-      input{std::move(input)},
-      output{std::move(output)},
+      sources{std::move(sources)},
+      sinks{std::move(sinks)},
       cpu_seconds{std::move(cpu_seconds)},
-      input_bytes{std::move(input_bytes)},
-      input_capacity{std::move(input_capacity)},
-      tasks{std::move(tasks)} {
+      interval_seconds{std::move(interval_seconds)},
+      queued_bytes{std::move(queued_bytes)},
+      activity{std::move(activity)} {
   }
 
   PipelineId pipeline_id;
   TelemetryCount2 run;
-  std::string operator_id;
-  std::string name;
   time window;
-  Flow input;
-  Flow output;
-  TelemetrySeconds cpu_seconds;
-  TelemetryCount3 input_bytes;
-  TelemetryCount2 input_capacity;
-  TelemetrySmallCount tasks;
+  std::vector<ConnectorFlow> sources;
+  std::vector<ConnectorFlow> sinks;
+  /// `cpuSeconds`, may be absent.
+  Option<TelemetrySeconds> cpu_seconds;
+  /// `intervalSeconds`, may be absent.
+  Option<TenzirTelemetryTelemetrySeconds> interval_seconds;
+  /// `queuedBytes`, may be absent.
+  Option<TelemetryCount3> queued_bytes;
+  /// `activity`, may be absent.
+  Option<TelemetryCount4> activity;
 
-  friend auto operator==(OperatorSample const&, OperatorSample const&) -> bool
+  friend auto operator==(PipelineSample const&, PipelineSample const&) -> bool
     = default;
 
   template <class HashAlgorithm>
-  friend auto hash_append(HashAlgorithm& h, OperatorSample const& value)
+  friend auto hash_append(HashAlgorithm& h, PipelineSample const& value)
     -> void {
-    hash_append(h, value.pipeline_id, value.run, value.operator_id, value.name,
-                value.window, value.input, value.output, value.cpu_seconds,
-                value.input_bytes, value.input_capacity, value.tasks);
+    hash_append(h, value.pipeline_id, value.run, value.window, value.sources,
+                value.sinks, value.cpu_seconds, value.interval_seconds,
+                value.queued_bytes, value.activity);
   }
 };
 
 } // namespace tenzir
 
 template <>
-struct std::hash<tenzir::OperatorSample> {
-  auto operator()(tenzir::OperatorSample const& value) const -> std::size_t {
+struct std::hash<tenzir::PipelineSample> {
+  auto operator()(tenzir::PipelineSample const& value) const -> std::size_t {
+    return tenzir::hash(value);
+  }
+};
+
+namespace tenzir {
+
+class RetiredOperatorSample {
+public:
+  RetiredOperatorSample() = default;
+
+  friend auto
+  operator==(RetiredOperatorSample const&, RetiredOperatorSample const&) -> bool
+    = default;
+
+  template <class HashAlgorithm>
+  friend auto hash_append(HashAlgorithm& h, RetiredOperatorSample const&)
+    -> void {
+    hash_append(h, std::string_view{"RetiredOperatorSample"});
+  }
+};
+
+} // namespace tenzir
+
+template <>
+struct std::hash<tenzir::RetiredOperatorSample> {
+  auto operator()(tenzir::RetiredOperatorSample const& value) const
+    -> std::size_t {
     return tenzir::hash(value);
   }
 };
@@ -771,45 +781,37 @@ struct std::hash<tenzir::OperatorSample> {
 namespace tenzir {
 
 /// How many the deployment folded into this sample
-class TenzirTelemetryTelemetrySmallCount {
+class SmallCount {
 public:
-  static auto make(std::int64_t value)
-    -> Result<TenzirTelemetryTelemetrySmallCount, ParseError>;
+  static auto make(std::int64_t value) -> Result<SmallCount, ParseError>;
 
   auto value() const -> std::int64_t {
     return value_;
   }
 
-  friend auto operator==(TenzirTelemetryTelemetrySmallCount const&,
-                         TenzirTelemetryTelemetrySmallCount const&) -> bool
+  friend auto operator==(SmallCount const&, SmallCount const&) -> bool
     = default;
 
   template <class HashAlgorithm>
-  friend auto
-  hash_append(HashAlgorithm& h, TenzirTelemetryTelemetrySmallCount const& value)
-    -> void {
+  friend auto hash_append(HashAlgorithm& h, SmallCount const& value) -> void {
     hash_append(h, value.value());
   }
 
 private:
-  explicit TenzirTelemetryTelemetrySmallCount(std::int64_t value)
-    : value_{std::move(value)} {
+  explicit SmallCount(std::int64_t value) : value_{std::move(value)} {
   }
 
   std::int64_t value_;
 };
 
 template <>
-inline constexpr auto
-  enable_default_formatter<TenzirTelemetryTelemetrySmallCount>
-  = true;
+inline constexpr auto enable_default_formatter<SmallCount> = true;
 
 } // namespace tenzir
 
 template <>
-struct std::hash<tenzir::TenzirTelemetryTelemetrySmallCount> {
-  auto operator()(tenzir::TenzirTelemetryTelemetrySmallCount const& value) const
-    -> std::size_t {
+struct std::hash<tenzir::SmallCount> {
+  auto operator()(tenzir::SmallCount const& value) const -> std::size_t {
     return tenzir::hash(value);
   }
 };
@@ -904,9 +906,8 @@ class DiagnosticSample {
 public:
   DiagnosticSample(
     PipelineId pipeline_id, TelemetryCount2 run, time first_seen,
-    time last_seen, TenzirTelemetryTelemetrySmallCount occurrences,
-    std::string fingerprint, Severity severity, std::string message,
-    std::string rendered,
+    time last_seen, SmallCount occurrences, std::string fingerprint,
+    Severity severity, std::string message, std::string rendered,
     std::vector<PushTelemetryPayloadDiagnosticsNotes> notes,
     std::vector<PushTelemetryPayloadDiagnosticsAnnotations> annotations)
     : pipeline_id{std::move(pipeline_id)},
@@ -926,7 +927,7 @@ public:
   TelemetryCount2 run;
   time first_seen;
   time last_seen;
-  TenzirTelemetryTelemetrySmallCount occurrences;
+  SmallCount occurrences;
   std::string fingerprint;
   Severity severity;
   std::string message;
@@ -1008,44 +1009,39 @@ struct std::hash<tenzir::RunTransition> {
 
 namespace tenzir {
 
-class TenzirTelemetryTelemetrySeconds {
+class TelemetrySeconds2 {
 public:
-  static auto make(double value)
-    -> Result<TenzirTelemetryTelemetrySeconds, ParseError>;
+  static auto make(double value) -> Result<TelemetrySeconds2, ParseError>;
 
   auto value() const -> double {
     return value_;
   }
 
-  friend auto operator==(TenzirTelemetryTelemetrySeconds const&,
-                         TenzirTelemetryTelemetrySeconds const&) -> bool
+  friend auto operator==(TelemetrySeconds2 const&, TelemetrySeconds2 const&)
+    -> bool
     = default;
 
   template <class HashAlgorithm>
-  friend auto
-  hash_append(HashAlgorithm& h, TenzirTelemetryTelemetrySeconds const& value)
+  friend auto hash_append(HashAlgorithm& h, TelemetrySeconds2 const& value)
     -> void {
     hash_append(h, value.value());
   }
 
 private:
-  explicit TenzirTelemetryTelemetrySeconds(double value)
-    : value_{std::move(value)} {
+  explicit TelemetrySeconds2(double value) : value_{std::move(value)} {
   }
 
   double value_;
 };
 
 template <>
-inline constexpr auto enable_default_formatter<TenzirTelemetryTelemetrySeconds>
-  = true;
+inline constexpr auto enable_default_formatter<TelemetrySeconds2> = true;
 
 } // namespace tenzir
 
 template <>
-struct std::hash<tenzir::TenzirTelemetryTelemetrySeconds> {
-  auto operator()(tenzir::TenzirTelemetryTelemetrySeconds const& value) const
-    -> std::size_t {
+struct std::hash<tenzir::TelemetrySeconds2> {
+  auto operator()(tenzir::TelemetrySeconds2 const& value) const -> std::size_t {
     return tenzir::hash(value);
   }
 };
@@ -1054,7 +1050,7 @@ namespace tenzir {
 
 class DeploymentSample {
 public:
-  DeploymentSample(time window, TenzirTelemetryTelemetrySeconds cpu_seconds,
+  DeploymentSample(time window, TelemetrySeconds2 cpu_seconds,
                    TelemetryCount2 memory_bytes, TelemetryCount2 uptime_ms)
     : window{window},
       cpu_seconds{std::move(cpu_seconds)},
@@ -1063,7 +1059,7 @@ public:
   }
 
   time window;
-  TenzirTelemetryTelemetrySeconds cpu_seconds;
+  TelemetrySeconds2 cpu_seconds;
   TelemetryCount2 memory_bytes;
   TelemetryCount2 uptime_ms;
 
@@ -1090,14 +1086,14 @@ struct std::hash<tenzir::DeploymentSample> {
 
 namespace tenzir {
 
-/// Everything a deployment reports in one second. Pipeline samples come when
-/// traffic changes; operator samples are opt-in and initially absent
+/// Everything a deployment reports in one second. Pipeline samples come about
+/// every second while a pipeline runs
 class Batch {
 public:
   Batch(std::string boot, TelemetryCount seq,
         TenzirTelemetryTelemetryCount dropped,
         std::vector<PipelineSample> pipelines,
-        std::vector<OperatorSample> operators,
+        Option<std::vector<RetiredOperatorSample>> operators,
         std::vector<DiagnosticSample> diagnostics,
         std::vector<RunTransition> runs,
         std::vector<DeploymentSample> deployment)
@@ -1115,7 +1111,8 @@ public:
   TelemetryCount seq;
   TenzirTelemetryTelemetryCount dropped;
   std::vector<PipelineSample> pipelines;
-  std::vector<OperatorSample> operators;
+  /// `operators`, may be absent.
+  Option<std::vector<RetiredOperatorSample>> operators;
   std::vector<DiagnosticSample> diagnostics;
   std::vector<RunTransition> runs;
   std::vector<DeploymentSample> deployment;
@@ -2001,12 +1998,14 @@ class ExecutionChannelMetrics {
 public:
   ExecutionChannelMetrics(std::vector<std::int64_t> path,
                           std::int64_t channel_index, std::int64_t events,
-                          std::int64_t bytes, std::int64_t queued_bytes,
+                          std::int64_t bytes, Option<std::int64_t> batches,
+                          std::int64_t queued_bytes,
                           std::int64_t capacity_bytes)
     : path{std::move(path)},
       channel_index{std::move(channel_index)},
       events{std::move(events)},
       bytes{std::move(bytes)},
+      batches{std::move(batches)},
       queued_bytes{std::move(queued_bytes)},
       capacity_bytes{std::move(capacity_bytes)} {
   }
@@ -2015,6 +2014,8 @@ public:
   std::int64_t channel_index;
   std::int64_t events;
   std::int64_t bytes;
+  /// `batches`, may be absent.
+  Option<std::int64_t> batches;
   std::int64_t queued_bytes;
   std::int64_t capacity_bytes;
 
@@ -2027,7 +2028,7 @@ public:
   friend auto
   hash_append(HashAlgorithm& h, ExecutionChannelMetrics const& value) -> void {
     hash_append(h, value.path, value.channel_index, value.events, value.bytes,
-                value.queued_bytes, value.capacity_bytes);
+                value.batches, value.queued_bytes, value.capacity_bytes);
   }
 };
 
@@ -2227,6 +2228,37 @@ public:
 template <>
 struct std::hash<tenzir::ContextStatus> {
   auto operator()(tenzir::ContextStatus const& value) const -> std::size_t {
+    return tenzir::hash(value);
+  }
+};
+
+namespace tenzir {
+
+class StopPipelineOptions {
+public:
+  explicit StopPipelineOptions(Option<bool> force) : force{std::move(force)} {
+  }
+
+  /// `force`, may be absent.
+  Option<bool> force;
+
+  friend auto operator==(StopPipelineOptions const&, StopPipelineOptions const&)
+    -> bool
+    = default;
+
+  template <class HashAlgorithm>
+  friend auto hash_append(HashAlgorithm& h, StopPipelineOptions const& value)
+    -> void {
+    hash_append(h, value.force);
+  }
+};
+
+} // namespace tenzir
+
+template <>
+struct std::hash<tenzir::StopPipelineOptions> {
+  auto operator()(tenzir::StopPipelineOptions const& value) const
+    -> std::size_t {
     return tenzir::hash(value);
   }
 };
@@ -2533,12 +2565,12 @@ auto call(Transport& transport, ReadDeployment request)
 
 /// `POST
 /// /api/organizations/:org/workspaces/:workspace/deployments/:deploymentId/telemetry`
-/// Stores one batch of pipeline metrics, operator metrics, diagnostics and run
-/// transitions from the deployment that sends it, and passes it on to anyone
-/// watching live. An error may follow partial table writes. Retry the identical
-/// batch promptly with the same boot and seq: each table and rollup retains up
-/// to 100,000 block IDs for deduplication. Live publication is best effort and
-/// may repeat after a backend restart.
+/// Stores one batch of pipeline metrics, diagnostics and run transitions from
+/// the deployment that sends it, and passes it on to anyone watching live. An
+/// error may follow partial table writes. Retry the identical batch promptly
+/// with the same boot and seq: each table and rollup retains up to 100,000
+/// block IDs for deduplication. Live publication is best effort and may repeat
+/// after a backend restart.
 class PushTelemetry {
 public:
   PushTelemetry(DeploymentPath path, Batch payload)
@@ -2761,13 +2793,17 @@ using StartPipelineFailure = variant<InvalidPipeline, PipelineNotFound>;
 /// Gracefully stops a running pipeline and remembers the stopped state, without
 /// waiting for its run to drain: until it has, `listPipelines` shows the
 /// pipeline as `stopping`. A pipeline that is not running keeps its outcome, so
-/// a stop after a failure does not erase the reason. Safe to retry either way.
+/// a stop after a failure does not erase the reason. With `force`, the run ends
+/// at once instead, including one that is already `stopping`. Safe to retry
+/// either way.
 class StopPipeline {
 public:
-  explicit StopPipeline(PipelinePath path) : path{std::move(path)} {
+  StopPipeline(PipelinePath path, StopPipelineOptions payload)
+    : path{std::move(path)}, payload{std::move(payload)} {
   }
 
   PipelinePath path;
+  StopPipelineOptions payload;
 };
 
 /// `DELETE /pipelines/:pipelineId`
@@ -2918,19 +2954,20 @@ auto parse_telemetry_count2(simdjson::dom::element value)
   -> Result<TelemetryCount2, ParseError>;
 auto parse_connector_flow(simdjson::dom::element value)
   -> Result<ConnectorFlow, ParseError>;
-auto parse_pipeline_sample(simdjson::dom::element value)
-  -> Result<PipelineSample, ParseError>;
-auto parse_flow(simdjson::dom::element value) -> Result<Flow, ParseError>;
 auto parse_telemetry_seconds(simdjson::dom::element value)
   -> Result<TelemetrySeconds, ParseError>;
+auto parse_tenzir_telemetry_telemetry_seconds(simdjson::dom::element value)
+  -> Result<TenzirTelemetryTelemetrySeconds, ParseError>;
 auto parse_telemetry_count3(simdjson::dom::element value)
   -> Result<TelemetryCount3, ParseError>;
-auto parse_telemetry_small_count(simdjson::dom::element value)
-  -> Result<TelemetrySmallCount, ParseError>;
-auto parse_operator_sample(simdjson::dom::element value)
-  -> Result<OperatorSample, ParseError>;
-auto parse_tenzir_telemetry_telemetry_small_count(simdjson::dom::element value)
-  -> Result<TenzirTelemetryTelemetrySmallCount, ParseError>;
+auto parse_telemetry_count4(simdjson::dom::element value)
+  -> Result<TelemetryCount4, ParseError>;
+auto parse_pipeline_sample(simdjson::dom::element value)
+  -> Result<PipelineSample, ParseError>;
+auto parse_retired_operator_sample(simdjson::dom::element value)
+  -> Result<RetiredOperatorSample, ParseError>;
+auto parse_small_count(simdjson::dom::element value)
+  -> Result<SmallCount, ParseError>;
 auto parse_severity(simdjson::dom::element value)
   -> Result<Severity, ParseError>;
 auto parse_push_telemetry_payload_diagnostics_notes(simdjson::dom::element value)
@@ -2944,8 +2981,8 @@ auto parse_run_state(simdjson::dom::element value)
   -> Result<RunState, ParseError>;
 auto parse_run_transition(simdjson::dom::element value)
   -> Result<RunTransition, ParseError>;
-auto parse_tenzir_telemetry_telemetry_seconds(simdjson::dom::element value)
-  -> Result<TenzirTelemetryTelemetrySeconds, ParseError>;
+auto parse_telemetry_seconds2(simdjson::dom::element value)
+  -> Result<TelemetrySeconds2, ParseError>;
 auto parse_deployment_sample(simdjson::dom::element value)
   -> Result<DeploymentSample, ParseError>;
 auto parse_batch(simdjson::dom::element value) -> Result<Batch, ParseError>;
@@ -3010,6 +3047,8 @@ auto parse_channel_tap_request(simdjson::dom::element value)
   -> Result<ChannelTapRequest, ParseError>;
 auto parse_context_status(simdjson::dom::element value)
   -> Result<ContextStatus, ParseError>;
+auto parse_stop_pipeline_options(simdjson::dom::element value)
+  -> Result<StopPipelineOptions, ParseError>;
 auto parse_adhoc_pipeline_id(simdjson::dom::element value)
   -> Result<AdhocPipelineId, ParseError>;
 auto parse_adhoc_pipeline_definition(simdjson::dom::element value)
@@ -3032,14 +3071,14 @@ auto write_json(TenzirTelemetryTelemetryCount const& value, std::string& out)
 auto write_json(PipelineId const& value, std::string& out) -> void;
 auto write_json(TelemetryCount2 const& value, std::string& out) -> void;
 auto write_json(ConnectorFlow const& value, std::string& out) -> void;
-auto write_json(PipelineSample const& value, std::string& out) -> void;
-auto write_json(Flow const& value, std::string& out) -> void;
 auto write_json(TelemetrySeconds const& value, std::string& out) -> void;
+auto write_json(TenzirTelemetryTelemetrySeconds const& value, std::string& out)
+  -> void;
 auto write_json(TelemetryCount3 const& value, std::string& out) -> void;
-auto write_json(TelemetrySmallCount const& value, std::string& out) -> void;
-auto write_json(OperatorSample const& value, std::string& out) -> void;
-auto write_json(TenzirTelemetryTelemetrySmallCount const& value,
-                std::string& out) -> void;
+auto write_json(TelemetryCount4 const& value, std::string& out) -> void;
+auto write_json(PipelineSample const& value, std::string& out) -> void;
+auto write_json(RetiredOperatorSample const& value, std::string& out) -> void;
+auto write_json(SmallCount const& value, std::string& out) -> void;
 auto write_json(Severity const& value, std::string& out) -> void;
 auto write_json(PushTelemetryPayloadDiagnosticsNotes const& value,
                 std::string& out) -> void;
@@ -3048,8 +3087,7 @@ auto write_json(PushTelemetryPayloadDiagnosticsAnnotations const& value,
 auto write_json(DiagnosticSample const& value, std::string& out) -> void;
 auto write_json(RunState const& value, std::string& out) -> void;
 auto write_json(RunTransition const& value, std::string& out) -> void;
-auto write_json(TenzirTelemetryTelemetrySeconds const& value, std::string& out)
-  -> void;
+auto write_json(TelemetrySeconds2 const& value, std::string& out) -> void;
 auto write_json(DeploymentSample const& value, std::string& out) -> void;
 auto write_json(Batch const& value, std::string& out) -> void;
 auto write_json(IngestEndpointName const& value, std::string& out) -> void;
@@ -3088,6 +3126,7 @@ auto write_json(ApiChannelTarget const& value, std::string& out) -> void;
 auto write_json(Encoding const& value, std::string& out) -> void;
 auto write_json(ChannelTapRequest const& value, std::string& out) -> void;
 auto write_json(ContextStatus const& value, std::string& out) -> void;
+auto write_json(StopPipelineOptions const& value, std::string& out) -> void;
 auto write_json(AdhocPipelineId const& value, std::string& out) -> void;
 auto write_json(AdhocPipelineDefinition const& value, std::string& out) -> void;
 

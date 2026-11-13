@@ -1,0 +1,182 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "from_microsoft_graph",
+       store: {
+         op: {
+           path: [
+             `from_microsoft_graph` @ [1]:115..135 from 0
+           ],
+           ref: std::from_microsoft_graph/op
+         },
+         args: [
+           located "users" @ [1]:136..143 from 0
+         ],
+         named_args: [
+           {
+             index: 0,
+             value: expression record {
+               begin: [1]:150..151 from 0,
+               items: [
+                 field {
+                   name: `tenant_id` @ [1]:151..160 from 0,
+                   expr: constant string "t" @ [1]:162..165 from 0
+                 },
+                 field {
+                   name: `client_id` @ [1]:167..176 from 0,
+                   expr: constant string "c" @ [1]:178..181 from 0
+                 },
+                 field {
+                   name: `client_secret` @ [1]:183..196 from 0,
+                   expr: constant string "s" @ [1]:198..201 from 0
+                 }
+               ],
+               end: [1]:201..202 from 0
+             }
+           }
+         ]
+       },
+       filter: [
+         
+       ],
+-      order: "ordered"
+-    },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:203..208 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
+-          left: root_field {
+-            id: `displayName` @ [1]:209..220 from 0,
+-            has_question_mark: false
+-          },
+-          op: "eq",
+-          right: constant string "Ada" @ [1]:224..229 from 0,
+-          location: [1]:209..229 from 0
++      order: "unordered",
++      plan: [
++        Filter {
++          predicate: binary_expr {
++            left: root_field {
++              id: `displayName` @ [1]:209..220 from 0,
++              has_question_mark: false
++            },
++            op: "eq",
++            right: constant string "Ada" @ [1]:224..229 from 0,
++            location: [1]:209..229 from 0
++          }
++        },
++        Select {
++          fields: [
++            {
++              output: [
++                "id"
++              ],
++              input: [
++                "id"
++              ]
++            },
++            {
++              output: [
++                "name"
++              ],
++              input: [
++                "displayName"
++              ]
++            }
++          ]
+         }
+       ],
+-      named_args: [
+-        
+-      ]
+-    },
+-    SetIr {
+-      assignments: [
+-        {
+-          left: this_ [0]:0..0 from 0,
+-          right: record {
+-            begin: [0]:0..0 from 0,
+-            items: [
+-              
+-            ],
+-            end: [0]:0..0 from 0
+-          },
+-          location: [0]:0..0 from 0
+-        },
+-        {
+-          left: root_field {
+-            id: `id` @ [1]:237..239 from 0,
+-            has_question_mark: false
+-          },
+-          right: root_field {
+-            id: `id` @ [1]:237..239 from 0,
+-            has_question_mark: false
+-          },
+-          location: [1]:237..239 from 0
+-        },
+-        {
+-          left: root_field {
+-            id: `name` @ [1]:241..245 from 0,
+-            has_question_mark: false
+-          },
+-          right: root_field {
+-            id: `displayName` @ [1]:246..257 from 0,
+-            has_question_mark: false
+-          },
+-          location: [1]:241..257 from 0
+-        }
+-      ],
+-      order: "ordered"
++      declined: "Microsoft Graph may ignore `$orderby` without an error"
+     },
+     sort {
+       args: {
+         op: {
+           path: [
+             `sort` @ [1]:258..262 from 0
+           ],
+           ref: std::sort/op
+         },
+         args: [
+           expression root_field {
+             id: `id` @ [1]:263..265 from 0,
+             has_question_mark: false
+           }
+         ],
+         named_args: [
+           
+         ]
+       }
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:265..265 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ],
+   definition_location: [1]:115..265 from 0
+ }

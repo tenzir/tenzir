@@ -1,0 +1,29 @@
+---
+fixtures:
+  - microsoft_graph:
+      sign_ins: 9
+      token_lifetime: 3600
+assertions:
+  fixtures:
+    microsoft_graph:
+      requests:
+        - /v1.0/auditLogs/signIns?$filter=(createdDateTime+ge+2024-07-02T00:00:00Z)+and+(createdDateTime+le+2024-07-08T12:00:00Z)+and+(location/city+eq+'Berlin')&$top=3
+timeout: 60
+skip:
+  on: fixture-unavailable
+---
+
+// A time range and a nested property of sign-ins become `$filter`, and the
+// limit `$top`.
+from_microsoft_graph "auditLogs/signIns",
+  auth={
+    tenant_id: env("MS_GRAPH_FIXTURE_TENANT_ID"),
+    client_id: env("MS_GRAPH_FIXTURE_CLIENT_ID"),
+    client_secret: env("MS_GRAPH_FIXTURE_CLIENT_SECRET"),
+    authority: env("MS_GRAPH_FIXTURE_AUTHORITY"),
+  },
+  _base_url=env("MS_GRAPH_FIXTURE_BASE_URL_V1"),
+  tls=false
+where createdDateTime >= 2024-07-02 and createdDateTime <= 2024-07-08T12:00:00Z
+where location.city == "Berlin"
+head 3

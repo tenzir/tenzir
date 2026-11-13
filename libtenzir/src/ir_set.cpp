@@ -1464,9 +1464,9 @@ auto ir::SetIr::optimize(ir::OptimizeRequest req,
   };
 }
 
-auto ir::SetIr::rewrite_aggregation(OptimizeAggregation aggregation,
-                                    OptimizeCtx const& octx) const
-  -> Option<OptimizeAggregation> {
+auto ir::SetIr::rewrite_aggregate(QueryStage::Aggregate aggregate,
+                                  OptimizeCtx const& octx) const
+  -> Option<QueryStage::Aggregate> {
   for (auto const& assignment : assignments_) {
     // The source skips the assignments, so none may fail the pipeline, also
     // not one whose value the summary does not read. This includes targets
@@ -1493,10 +1493,10 @@ auto ir::SetIr::rewrite_aggregation(OptimizeAggregation aggregation,
     }
   }
   auto rewrite = SetRewrite{assignments_, octx.reg};
-  return ir::rewrite_aggregation(std::move(aggregation),
-                                 [&](ast::field_path const& field) {
-                                   return rewrite.resolve(field);
-                                 });
+  return ir::rewrite_aggregate(std::move(aggregate),
+                               [&](ast::field_path const& field) {
+                                 return rewrite.resolve(field);
+                               });
 }
 
 namespace {

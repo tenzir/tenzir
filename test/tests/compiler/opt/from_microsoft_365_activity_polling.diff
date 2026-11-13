@@ -1,0 +1,141 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "from_microsoft_365_activity",
+       store: {
+         op: {
+           path: [
+             `from_microsoft_365_activity` @ [1]:68..95 from 0
+           ],
+           ref: std::from_microsoft_365_activity/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           {
+             index: 0,
+             value: expression record {
+               begin: [1]:101..102 from 0,
+               items: [
+                 field {
+                   name: `tenant_id` @ [1]:102..111 from 0,
+                   expr: constant string "t" @ [1]:113..116 from 0
+                 },
+                 field {
+                   name: `client_id` @ [1]:118..127 from 0,
+                   expr: constant string "c" @ [1]:129..132 from 0
+                 },
+                 field {
+                   name: `client_secret` @ [1]:134..147 from 0,
+                   expr: constant string "s" @ [1]:149..152 from 0
+                 }
+               ],
+               end: [1]:152..153 from 0
+             }
+           },
+           {
+             index: 1,
+             value: located [
+               string "Audit.General"
+             ] @ [1]:171..188 from 0
+           }
+         ]
+       },
+       filter: [
+         
+       ],
+-      order: "ordered"
+-    },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:189..194 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
+-          left: field_access {
+-            left: root_field {
+-              id: `microsoft_365_activity` @ [1]:195..217 from 0,
+-              has_question_mark: false
++      order: "ordered",
++      plan: [
++        Filter {
++          predicate: binary_expr {
++            left: field_access {
++              left: root_field {
++                id: `microsoft_365_activity` @ [1]:195..217 from 0,
++                has_question_mark: false
++              },
++              has_question_mark: false,
++              name: `content_type` @ [1]:218..230 from 0,
++              location: [1]:195..230 from 0
+             },
+-            has_question_mark: false,
+-            name: `content_type` @ [1]:218..230 from 0,
+-            location: [1]:195..230 from 0
+-          },
+-          op: "eq",
+-          right: constant string "Audit.General" @ [1]:234..249 from 0,
+-          location: [1]:195..249 from 0
++            op: "eq",
++            right: constant string "Audit.General" @ [1]:234..249 from 0,
++            location: [1]:195..249 from 0
++          }
+         }
+       ],
+-      named_args: [
+-        
+-      ]
++      declined: "a polling read takes over filters only"
+     },
+     GenericIr {
+       desc: "head",
+       store: {
+         op: {
+           path: [
+             `head` @ [1]:250..254 from 0
+           ],
+           ref: std::head/op
+         },
+         args: [
+           located 10 @ [1]:255..257 from 0
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:257..257 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ],
+   definition_location: [1]:68..257 from 0
+ }

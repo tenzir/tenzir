@@ -36,6 +36,11 @@ macro (TenzirNormalizeInstallDirs)
       set(CMAKE_INSTALL_RELATIVE_${_install}DIR
           "${CMAKE_INSTALL_${_install}DIR}")
     endif ()
+    # Use the relative path from here on, so that the build tree mirrors the
+    # install tree: binaries, libraries, and data that the build tree places at
+    # `${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_<dir>DIR}` keep the same positions
+    # relative to each other as when installed.
+    set(CMAKE_INSTALL_${_install}DIR "${CMAKE_INSTALL_RELATIVE_${_install}DIR}")
   endforeach ()
   foreach (_install IN ITEMS "LIBEXEC" "SYSCONF" "LIB" "DATA")
     # If the path is still absolute, e.g., because the full install dirs were

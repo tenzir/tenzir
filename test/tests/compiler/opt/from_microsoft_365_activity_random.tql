@@ -1,0 +1,5 @@
+// The operator evaluates a filter on the metadata once per content blob, so
+// a filter that may differ between the events of a blob stays in Tenzir.
+from_microsoft_365_activity auth={tenant_id: "t", client_id: "c", client_secret: "s"},
+  content_types=["Audit.General", "Audit.Exchange"]
+where microsoft_365_activity.content_type == "Audit.Exchange" or random() < 0.5

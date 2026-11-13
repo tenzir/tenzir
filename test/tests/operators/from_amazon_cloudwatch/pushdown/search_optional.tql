@@ -1,0 +1,23 @@
+---
+fixtures: [cloudwatch_fake]
+assertions:
+  fixtures:
+    cloudwatch_fake:
+      requests:
+        - operation: FilterLogEvents
+          filterPattern: '?"WARN" ?"stopped"'
+---
+
+// Alternatives of terms become optional terms. The filter after them would
+// need a term next to the optional ones, which CloudWatch ignores, so it
+// stays in Tenzir.
+from_amazon_cloudwatch "/tenzir/app",
+  mode="search",
+  aws_iam={
+    access_key_id: "test",
+    secret_access_key: "test",
+    region: "us-east-1",
+  }
+where "WARN" in message or "stopped" in message
+where "disk" in message
+select message

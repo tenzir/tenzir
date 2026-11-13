@@ -941,6 +941,8 @@ private:
   auto buffer(std::string table, nova::Events events, OpCtx& ctx)
     -> Task<void> {
     auto const rows = static_cast<uint64_t>(events.active_count());
+    // The payload, approximated by its in-memory size: clickhouse-cpp reports
+    // nothing about what it encodes and sends.
     auto const bytes = static_cast<uint64_t>(events.approx_active_bytes());
     auto it = buffers_.find(table);
     if (it == buffers_.end()) {

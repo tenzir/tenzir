@@ -14,9 +14,9 @@ skip:
   on: fixture-unavailable
 ---
 
-// `department` is not a default property: `$select` would return it, but
-// the default response omits it. The projection stays local.
-// Without the optimization barrier; both share one baseline.
+// `department` is not a default property, and the selection after the limit
+// stays in Tenzir, so it reads `null`.
+// Without `pushdown=false`; both share one baseline.
 from_microsoft_graph "users",
   auth={
     tenant_id: env("MS_GRAPH_FIXTURE_TENANT_ID"),

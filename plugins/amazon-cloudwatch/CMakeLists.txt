@@ -18,7 +18,8 @@ TenzirRegisterPlugin(
   ENTRYPOINT src/plugin.cpp
   SOURCES GLOB "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
   INCLUDE_DIRECTORIES include
-  BUILTINS GLOB "${CMAKE_CURRENT_SOURCE_DIR}/builtins/*.cpp")
+  BUILTINS GLOB "${CMAKE_CURRENT_SOURCE_DIR}/builtins/*.cpp"
+  TEST_SOURCES GLOB "${CMAKE_CURRENT_SOURCE_DIR}/tests/*.cpp")
 
 find_package(CURL)
 find_package(ZLIB)

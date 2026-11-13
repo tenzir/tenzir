@@ -5,13 +5,14 @@ from __future__ import annotations
 import json
 import shlex
 import threading
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Iterator, cast
+from typing import Any, cast
 from urllib.parse import parse_qs, urlsplit
 
-from tenzir_test import fixture
+from tenzir_test import FixtureHandle, fixture
 
 
 _HOST = "127.0.0.1"
@@ -48,11 +49,34 @@ def _parse_api_time(value: str) -> datetime:
     raise ValueError(f"unsupported Activity API timestamp: {value}")
 
 
+@dataclass(frozen=True)
+class ActivityAssertions:
+    # The exact number of token requests.
+    token_requests: int | None = None
+    # The `contentType` of every content listing request, in order.
+    listed_content_types: list[str] | None = None
+    # The ids of the downloaded content blobs, in order.
+    downloads: list[str] | None = None
+    # The content types of the started subscriptions, in order.
+    started_subscriptions: list[str] | None = None
+
+
+class _TokenServer(ThreadingHTTPServer):
+    token_requests: int = 0
+
+
 class _ActivityServer(ThreadingHTTPServer):
     def __init__(self, *args: object, **kwargs: object) -> None:
         super().__init__(*args, **kwargs)
         self.lock = threading.Lock()
         self.requests: dict[str, int] = {}
+        self.listed_content_types: list[str] = []
+        self.downloads: list[str] = []
+        self.started_subscriptions: list[str] = []
+
+    def log(self, kind: str, value: str) -> None:
+        with self.lock:
+            cast(list[str], getattr(self, kind)).append(value)
 
     def record_request(self, key: str) -> int:
         with self.lock:
@@ -77,6 +101,7 @@ class _TokenHandler(BaseHTTPRequestHandler):
         if any(form.get(key) != value for key, value in expected.items()):
             _json_response(self, HTTPStatus.BAD_REQUEST, {"error": "bad token request"})
             return
+        cast(_TokenServer, self.server).token_requests += 1
         _json_response(
             self,
             HTTPStatus.OK,
@@ -141,7 +166,9 @@ class _ActivityHandler(BaseHTTPRequestHandler):
                 [{"contentType": "Audit.General", "status": "enabled"}],
             )
             return
+        server = cast(_ActivityServer, self.server)
         if path == f"{root}/subscriptions/content":
+            server.log("listed_content_types", query.get("contentType", [""])[0])
             if not query.get("startTime") or not query.get("endTime"):
                 _json_response(self, HTTPStatus.BAD_REQUEST, {"error": "range missing"})
                 return
@@ -277,6 +304,8 @@ class _ActivityHandler(BaseHTTPRequestHandler):
                 [("NextPageUri", next_url)],
             )
             return
+        if path.startswith(f"{root}/audit/"):
+            server.log("downloads", path.removeprefix(f"{root}/audit/"))
         if path == f"{root}/audit/blob-1":
             case = query["PublisherIdentifier"][0]
             if case in {
@@ -345,6 +374,9 @@ class _ActivityHandler(BaseHTTPRequestHandler):
         if query.get("contentType") not in (["Audit.Exchange"], ["Audit.SharePoint"]):
             _json_response(self, HTTPStatus.BAD_REQUEST, {"error": "bad type"})
             return
+        cast(_ActivityServer, self.server).log(
+            "started_subscriptions", query["contentType"][0]
+        )
         _json_response(
             self,
             HTTPStatus.OK,
@@ -377,9 +409,9 @@ def _plugin_env() -> dict[str, str]:
     return env
 
 
-@fixture(name="microsoft_365_activity")
-def run() -> Iterator[dict[str, str]]:
-    token_server = ThreadingHTTPServer((_HOST, 0), _TokenHandler)
+@fixture(name="microsoft_365_activity", assertions=ActivityAssertions)
+def run() -> FixtureHandle:
+    token_server = _TokenServer((_HOST, 0), _TokenHandler)
     activity_server = _ActivityServer((_HOST, 0), _ActivityHandler)
     token_thread = threading.Thread(target=token_server.serve_forever, daemon=True)
     activity_thread = threading.Thread(
@@ -387,23 +419,45 @@ def run() -> Iterator[dict[str, str]]:
     )
     token_thread.start()
     activity_thread.start()
-    try:
-        env = {
-            "MS_ACTIVITY_FIXTURE_BASE_URL": (
-                f"http://{_HOST}:{activity_server.server_port}"
-            ),
-            "MS_ACTIVITY_FIXTURE_AUTHORITY": (
-                f"http://{_HOST}:{token_server.server_port}"
-            ),
-            "MS_ACTIVITY_FIXTURE_TENANT_ID": _TENANT_ID,
-            "MS_ACTIVITY_FIXTURE_CLIENT_ID": _CLIENT_ID,
-            "MS_ACTIVITY_FIXTURE_CLIENT_SECRET": _CLIENT_SECRET,
-            "MS_ACTIVITY_FIXTURE_PUBLISHER_ID": _PUBLISHER_ID,
-        }
-        env.update(_plugin_env())
-        yield env
-    finally:
+    env = {
+        "MS_ACTIVITY_FIXTURE_BASE_URL": (
+            f"http://{_HOST}:{activity_server.server_port}"
+        ),
+        "MS_ACTIVITY_FIXTURE_AUTHORITY": (f"http://{_HOST}:{token_server.server_port}"),
+        "MS_ACTIVITY_FIXTURE_TENANT_ID": _TENANT_ID,
+        "MS_ACTIVITY_FIXTURE_CLIENT_ID": _CLIENT_ID,
+        "MS_ACTIVITY_FIXTURE_CLIENT_SECRET": _CLIENT_SECRET,
+        "MS_ACTIVITY_FIXTURE_PUBLISHER_ID": _PUBLISHER_ID,
+    }
+    env.update(_plugin_env())
+
+    def assert_test(
+        *, assertions: ActivityAssertions | dict[str, Any], **_: Any
+    ) -> None:
+        if not isinstance(assertions, ActivityAssertions):
+            assert not assertions, assertions
+            return
+        with activity_server.lock:
+            listed = list(activity_server.listed_content_types)
+            downloads = list(activity_server.downloads)
+            started = list(activity_server.started_subscriptions)
+        if assertions.token_requests is not None:
+            assert token_server.token_requests == assertions.token_requests, (
+                token_server.token_requests
+            )
+        if assertions.listed_content_types is not None:
+            assert listed == assertions.listed_content_types, listed
+        if assertions.downloads is not None:
+            assert downloads == assertions.downloads, downloads
+        if assertions.started_subscriptions is not None:
+            assert started == assertions.started_subscriptions, started
+
+    def teardown() -> None:
         token_server.shutdown()
         activity_server.shutdown()
         token_thread.join(timeout=2)
         activity_thread.join(timeout=2)
+        token_server.server_close()
+        activity_server.server_close()
+
+    return FixtureHandle(env=env, teardown=teardown, hooks={"assert_test": assert_test})

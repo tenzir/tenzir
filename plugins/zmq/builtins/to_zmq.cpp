@@ -348,6 +348,8 @@ public:
       if (not co_await send(payload, ctx)) {
         co_return;
       }
+      // Once per message, not per peer: a PUB socket only sends to the
+      // subscribers whose filter matches, which it does not tell.
       bytes_write_counter_.add(payload->size());
       events_write_counter_.add(1);
     }

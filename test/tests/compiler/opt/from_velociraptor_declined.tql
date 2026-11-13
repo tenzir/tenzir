@@ -1,0 +1,10 @@
+// A VQL query may have effects, so the stages after it stay in Tenzir.
+from_velociraptor query="SELECT * FROM info()",
+  _config={
+    ca_certificate: "ca",
+    client_private_key: "key",
+    client_cert: "cert",
+    api_connection_string: "localhost:8001",
+  }
+where Hostname == "host"
+head 1

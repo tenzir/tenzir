@@ -2046,14 +2046,14 @@ auto plain_segments(ast::field_path const& path)
 /// Describes the summary of `config` for a source that may compute it, or
 /// returns `None` if it is no plain aggregation of input fields.
 auto describe_aggregation(Config const& config)
-  -> Option<std::vector<ir::OptimizeAggregation::Column>> {
+  -> Option<std::vector<ir::AggregateColumn>> {
   // As for the input projection, only a single summary after the input ends
   // is a plain aggregation.
   if (config.emit_expr or config.mode_expr or config.output_expr
       or config.legacy_frequency_expr) {
     return None{};
   }
-  auto columns = std::vector<ir::OptimizeAggregation::Column>{};
+  auto columns = std::vector<ir::AggregateColumn>{};
   for (auto index : config.indices) {
     if (index < 0) {
       auto const& group = config.groups[static_cast<size_t>(-index - 1)];
@@ -2219,24 +2219,12 @@ public:
     return result;
   }
 
-  auto aggregation() const -> Option<ir::OptimizeAggregation> override {
-    TRY(auto columns, describe_aggregation(config_));
-    auto fallback = std::vector<Box<ir::Operator>>{};
-    fallback.emplace_back(SummarizeIr{*this});
-    return ir::OptimizeAggregation{
-      .columns = std::move(columns),
-      .schema_name = "tenzir.summarize",
-      .fallback = ir::pipeline{{}, std::move(fallback)},
-      .stages = {},
-    };
-  }
-
   auto query_stage(ir::OptimizeCtx const&) const
     -> Option<ir::QueryStage> override {
-    TRY(auto aggregation, this->aggregation());
+    TRY(auto columns, describe_aggregation(config_));
     return ir::QueryStage{ir::QueryStage::Aggregate{
-      .columns = std::move(aggregation.columns),
-      .schema_name = std::move(aggregation.schema_name),
+      .columns = std::move(columns),
+      .schema_name = "tenzir.summarize",
     }};
   }
 

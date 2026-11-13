@@ -1,0 +1,7 @@
+// A search takes over the filter pattern, the time window, and the limit;
+// the selection stays in Tenzir.
+from_amazon_cloudwatch "/tenzir/app", mode="search"
+where "ERROR" in message
+where timestamp >= 2024-01-01
+head 10
+select message

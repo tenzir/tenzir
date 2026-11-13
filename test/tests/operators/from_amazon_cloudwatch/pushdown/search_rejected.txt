@@ -1,0 +1,8 @@
+error: FilterLogEvents returned HTTP 400: Invalid filter pattern
+  --> tests/operators/from_amazon_cloudwatch/pushdown/search_rejected.tql:16:1
+   |
+16 | from_amazon_cloudwatch "/tenzir/app",
+   | ^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: the request carries the stages that the operator took over
+   = hint: use `pushdown=false` to run them in Tenzir

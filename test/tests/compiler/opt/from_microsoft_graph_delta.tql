@@ -1,0 +1,4 @@
+// A delta query takes over no stage.
+from_microsoft_graph "users", auth={tenant_id: "t", client_id: "c", client_secret: "s"},
+  delta=true
+where displayName == "Ada"

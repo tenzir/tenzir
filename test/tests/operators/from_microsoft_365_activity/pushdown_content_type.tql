@@ -1,0 +1,30 @@
+---
+fixtures: [microsoft_365_activity]
+assertions:
+  fixtures:
+    microsoft_365_activity:
+      started_subscriptions: [Audit.Exchange]
+      listed_content_types: [Audit.General, Audit.General]
+      downloads: [blob-1, blob-2]
+timeout: 60
+skip:
+  on: fixture-unavailable
+---
+
+// A filter on the content type narrows the content types to list. The
+// subscriptions of all content types stay checked.
+from_microsoft_365_activity auth={
+    tenant_id: env("MS_ACTIVITY_FIXTURE_TENANT_ID"),
+    client_id: env("MS_ACTIVITY_FIXTURE_CLIENT_ID"),
+    client_secret: env("MS_ACTIVITY_FIXTURE_CLIENT_SECRET"),
+    authority: env("MS_ACTIVITY_FIXTURE_AUTHORITY"),
+  },
+  content_types=["Audit.General", "Audit.Exchange"],
+  start_time=now() - 2h,
+  end_time=now() - 1h,
+  start_missing_subscriptions=true,
+  publisher_identifier=env("MS_ACTIVITY_FIXTURE_PUBLISHER_ID"),
+  _base_url=env("MS_ACTIVITY_FIXTURE_BASE_URL"),
+  tls=false
+where microsoft_365_activity.content_type == "Audit.General"
+select Id

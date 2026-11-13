@@ -8,13 +8,18 @@
 
 #pragma once
 
+#include "cloudwatch/request_plan.hpp"
+
 #include <tenzir/amazon.hpp>
 #include <tenzir/arc.hpp>
 #include <tenzir/async.hpp>
 #include <tenzir/async/semaphore.hpp>
 #include <tenzir/fwd.hpp>
+#include <tenzir/ir.hpp>
 #include <tenzir/nova/eval.hpp>
 #include <tenzir/nova/events.hpp>
+#include <tenzir/operator/optimization.hpp>
+#include <tenzir/option.hpp>
 #include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/result.hpp>
 #include <tenzir/startup_argument.hpp>
@@ -25,8 +30,11 @@
 
 #include <chrono>
 #include <cstddef>
+#include <cstdint>
 #include <memory>
+#include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace tenzir::plugins::cloudwatch {
@@ -58,6 +66,10 @@ struct FromCloudWatchArgs {
   Option<located<std::string>> aws_region;
   Option<StartupArgument<nova::Record>> aws_iam;
   location operator_location;
+  Option<located<bool>> pushdown;
+  // The stages after the operator that it takes over (see
+  // `plan_cloudwatch_request`).
+  OptimizationArgs<opt::Plan> optimization;
 };
 
 struct ToCloudWatchArgs {
@@ -91,6 +103,8 @@ struct SourcePage {
   std::string next_token;
   /// Whether this is the final page; no further reads should follow.
   bool done = false;
+  /// Whether Live Tail returned a sample of the matching events.
+  bool sampled = false;
 };
 
 /// The outcome of a source read: either a page of events or a failure message.
@@ -170,6 +184,8 @@ public:
 private:
   FromCloudWatchArgs args_;
   FromMode mode_ = FromMode::live;
+  CloudWatchRequest request_;
+  bool warned_sampled_ = false;
   std::shared_ptr<amazon::SignedHttpClient> client_;
   folly::CancellationSource live_cancel_;
   mutable Option<Arc<folly::coro::BoundedQueue<SourceResult, false, true>>>

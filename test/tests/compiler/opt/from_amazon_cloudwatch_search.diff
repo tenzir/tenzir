@@ -1,0 +1,172 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "from_amazon_cloudwatch",
+       store: {
+         op: {
+           path: [
+             `from_amazon_cloudwatch` @ [1]:109..131 from 0
+           ],
+           ref: std::from_amazon_cloudwatch/op
+         },
+         args: [
+           located string "/tenzir/app" @ [1]:132..145 from 0
+         ],
+         named_args: [
+           {
+             index: 0,
+             value: located "search" @ [1]:152..160 from 0
+           }
+         ]
+       },
+       filter: [
+         
+       ],
+-      order: "ordered"
+-    },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:161..166 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
+-          left: constant string "ERROR" @ [1]:167..174 from 0,
+-          op: "in",
+-          right: root_field {
+-            id: `message` @ [1]:178..185 from 0,
+-            has_question_mark: false
+-          },
+-          location: [1]:167..185 from 0
++      order: "ordered",
++      plan: [
++        Filter {
++          predicate: binary_expr {
++            left: constant string "ERROR" @ [1]:167..174 from 0,
++            op: "in",
++            right: root_field {
++              id: `message` @ [1]:178..185 from 0,
++              has_question_mark: false
++            },
++            location: [1]:167..185 from 0
++          }
++        },
++        Filter {
++          predicate: binary_expr {
++            left: root_field {
++              id: `timestamp` @ [1]:192..201 from 0,
++              has_question_mark: false
++            },
++            op: "geq",
++            right: constant time 2024-01-01T00:00:00Z @ [1]:205..215 from 0,
++            location: [1]:192..215 from 0
++          }
++        },
++        Limit {
++          count: 10
+         }
+       ],
+-      named_args: [
+-        
+-      ]
+-    },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:186..191 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
+-          left: root_field {
+-            id: `timestamp` @ [1]:192..201 from 0,
+-            has_question_mark: false
+-          },
+-          op: "geq",
+-          right: constant time 2024-01-01T00:00:00Z @ [1]:205..215 from 0,
+-          location: [1]:192..215 from 0
+-        }
+-      ],
+-      named_args: [
+-        
+-      ]
+-    },
+-    GenericIr {
+-      desc: "head",
+-      store: {
+-        op: {
+-          path: [
+-            `head` @ [1]:216..220 from 0
+-          ],
+-          ref: std::head/op
+-        },
+-        args: [
+-          located 10 @ [1]:221..223 from 0
+-        ],
+-        named_args: [
+-          
+-        ]
+-      },
+-      filter: [
+-        
+-      ],
+-      order: "ordered"
++      declined: "CloudWatch Logs returns a fixed set of fields"
+     },
+     SetIr {
+       assignments: [
+         {
+           left: this_ [0]:0..0 from 0,
+           right: record {
+             begin: [0]:0..0 from 0,
+             items: [
+               
+             ],
+             end: [0]:0..0 from 0
+           },
+           location: [0]:0..0 from 0
+         },
+         {
+           left: root_field {
+             id: `message` @ [1]:231..238 from 0,
+             has_question_mark: false
+           },
+           right: root_field {
+             id: `message` @ [1]:231..238 from 0,
+             has_question_mark: false
+           },
+           location: [1]:231..238 from 0
+         }
+       ],
+       order: "ordered"
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:238..238 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ],
+   definition_location: [1]:109..238 from 0
+ }

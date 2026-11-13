@@ -117,11 +117,9 @@ TEST("platform wire counters retain safe numeric bounds") {
   CHECK(TelemetryCount::make(-1).is_err());
   CHECK(TelemetryCount::make(9'007'199'254'740'991).is_ok());
   CHECK(TelemetryCount::make(9'007'199'254'740'992).is_err());
-  CHECK(TelemetrySmallCount::make(-1).is_err());
-  CHECK(TelemetrySmallCount::make(4'294'967'295).is_ok());
-  CHECK(TelemetrySmallCount::make(4'294'967'296).is_err());
-  CHECK(TenzirTelemetryTelemetrySmallCount::make(4'294'967'295).is_ok());
-  CHECK(TenzirTelemetryTelemetrySmallCount::make(4'294'967'296).is_err());
+  CHECK(SmallCount::make(-1).is_err());
+  CHECK(SmallCount::make(4'294'967'295).is_ok());
+  CHECK(SmallCount::make(4'294'967'296).is_err());
   auto numeric = api::Document::parse("7", "count").expect("valid JSON");
   auto parsed = parse_telemetry_count(numeric.root());
   REQUIRE(parsed.is_ok());
@@ -173,7 +171,70 @@ TEST("platform profiler differences connector counters and folds diagnostics") {
         <= (*batches)[1].diagnostics[0].last_seen);
   CHECK_EQUAL((*batches)[2].runs[0].state, RunState::finished);
   CHECK_EQUAL((*batches)[2].runs[0].run.value(), run);
-  CHECK((*batches)[0].operators.empty());
+  // Without resources, a sample carries none.
+  CHECK((*batches)[0].pipelines[0].cpu_seconds.is_none());
+  CHECK((*batches)[0].pipelines[0].queued_bytes.is_none());
+  CHECK((*batches)[0].pipelines[0].activity.is_none());
+}
+
+TEST("platform profiler reports resources even without traffic") {
+  auto batches = std::make_shared<std::vector<Batch>>();
+  auto profiler
+    = PlatformProfiler{known(), "pipeline", 1, RecordingTransport{batches}};
+  // External and internal counters in both directions add up to the activity.
+  auto counters = std::array{external(5), external(2), external(1),
+                             external(4, MetricsDirection::write)};
+  for (auto& counter : std::span{counters}.subspan(1)) {
+    counter.visibility = MetricsVisibility::internal_;
+  }
+  // Bytes are not events.
+  counters[2].type = MetricsUnit::bytes;
+  profiler.sample(counters,
+                  PipelineResources{.cpu = std::chrono::milliseconds{250},
+                                    .interval = std::chrono::seconds{1},
+                                    .queued_bytes = 4096});
+  // An idle pipeline still reports what it costs, here over a late tick.
+  counters[1].value = 9;
+  profiler.sample(counters,
+                  PipelineResources{.cpu = std::chrono::milliseconds{1500},
+                                    .interval = std::chrono::seconds{3},
+                                    .queued_bytes = 0});
+  // A flush has no resources to report, so it adds no sample.
+  folly::coro::blockingWait(profiler.flush());
+  REQUIRE_EQUAL(batches->size(), 2u);
+  REQUIRE_EQUAL((*batches)[0].pipelines.size(), 1u);
+  auto const& busy = (*batches)[0].pipelines[0];
+  CHECK_EQUAL(busy.sources[0].events.value(), 5);
+  REQUIRE(busy.cpu_seconds.is_some());
+  CHECK_EQUAL(busy.cpu_seconds->value(), 0.25);
+  REQUIRE(busy.interval_seconds.is_some());
+  CHECK_EQUAL(busy.interval_seconds->value(), 1.0);
+  REQUIRE(busy.queued_bytes.is_some());
+  CHECK_EQUAL(busy.queued_bytes->value(), 4096);
+  REQUIRE(busy.activity.is_some());
+  CHECK_EQUAL(busy.activity->value(), 11);
+  REQUIRE_EQUAL((*batches)[1].pipelines.size(), 1u);
+  auto const& idle = (*batches)[1].pipelines[0];
+  CHECK(idle.sources.empty());
+  CHECK(idle.sinks.empty());
+  REQUIRE(idle.cpu_seconds.is_some());
+  CHECK_EQUAL(idle.cpu_seconds->value(), 1.5);
+  REQUIRE(idle.interval_seconds.is_some());
+  CHECK_EQUAL(idle.interval_seconds->value(), 3.0);
+  REQUIRE(idle.queued_bytes.is_some());
+  CHECK_EQUAL(idle.queued_bytes->value(), 0);
+  REQUIRE(idle.activity.is_some());
+  CHECK_EQUAL(idle.activity->value(), 7);
+  CHECK(busy.window < idle.window);
+  // The wire carries all of them, so the platform reads them.
+  auto encoded = std::string{};
+  write_json((*batches)[0], encoded);
+  CHECK(encoded.find(R"("cpuSeconds":0.25)") != std::string::npos);
+  CHECK(encoded.find(R"("intervalSeconds":1)") != std::string::npos);
+  CHECK(encoded.find(R"("queuedBytes":4096)") != std::string::npos);
+  CHECK(encoded.find(R"("activity":11)") != std::string::npos);
+  // Older backends require the retired operator samples, empty.
+  CHECK(encoded.find(R"("operators":[])") != std::string::npos);
 }
 
 TEST("platform profiler keeps rapid samples distinct at millisecond "

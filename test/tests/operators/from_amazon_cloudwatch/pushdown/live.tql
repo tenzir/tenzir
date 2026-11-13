@@ -1,0 +1,23 @@
+---
+fixtures:
+  - cloudwatch_fake:
+      sampled: true
+assertions:
+  fixtures:
+    cloudwatch_fake:
+      request_prefix:
+        - operation: StartLiveTail
+          logEventFilterPattern: '"ERROR"'
+---
+
+// A live read takes over the filter pattern, but not the limit. Live Tail
+// marks the update as sampled, which warns.
+from_amazon_cloudwatch env("CLOUDWATCH_FAKE_GROUP_ARN"),
+  aws_iam={
+    access_key_id: "test",
+    secret_access_key: "test",
+    region: "us-east-1",
+  }
+where "ERROR" in message
+head 2
+select log_stream, message

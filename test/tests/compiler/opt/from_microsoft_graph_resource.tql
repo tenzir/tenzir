@@ -1,0 +1,5 @@
+// Microsoft documents no `$filter` support for devices, so only the limit
+// before the filter goes to Graph.
+from_microsoft_graph "devices", auth={tenant_id: "t", client_id: "c", client_secret: "s"}
+head 10
+where displayName == "Laptop"

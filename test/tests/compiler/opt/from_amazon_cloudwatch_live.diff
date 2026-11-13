@@ -1,0 +1,106 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "from_amazon_cloudwatch",
+       store: {
+         op: {
+           path: [
+             `from_amazon_cloudwatch` @ [1]:40..62 from 0
+           ],
+           ref: std::from_amazon_cloudwatch/op
+         },
+         args: [
+           located string "arn:aws:logs:us-east-1:123456789012:log-group:/tenzir/app" @ [1]:63..122 from 0
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+-      order: "ordered"
+-    },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:123..128 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
+-          left: constant string "ERROR" @ [1]:129..136 from 0,
+-          op: "in",
+-          right: root_field {
+-            id: `message` @ [1]:140..147 from 0,
+-            has_question_mark: false
+-          },
+-          location: [1]:129..147 from 0
++      order: "ordered",
++      plan: [
++        Filter {
++          predicate: binary_expr {
++            left: constant string "ERROR" @ [1]:129..136 from 0,
++            op: "in",
++            right: root_field {
++              id: `message` @ [1]:140..147 from 0,
++              has_question_mark: false
++            },
++            location: [1]:129..147 from 0
++          }
+         }
+       ],
+-      named_args: [
+-        
+-      ]
++      declined: "a live read takes over filters only"
+     },
+     GenericIr {
+       desc: "head",
+       store: {
+         op: {
+           path: [
+             `head` @ [1]:148..152 from 0
+           ],
+           ref: std::head/op
+         },
+         args: [
+           located 10 @ [1]:153..155 from 0
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:155..155 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ],
+   definition_location: [1]:40..155 from 0
+ }

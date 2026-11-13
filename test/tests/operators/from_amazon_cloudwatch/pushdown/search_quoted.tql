@@ -1,0 +1,21 @@
+---
+fixtures: [cloudwatch_fake]
+assertions:
+  fixtures:
+    cloudwatch_fake:
+      requests:
+        - operation: FilterLogEvents
+          filterPattern: null
+---
+
+// A phrase with a double quote has no spelling in the conservative pattern
+// grammar, so the filter stays in Tenzir.
+from_amazon_cloudwatch "/tenzir/app",
+  mode="search",
+  aws_iam={
+    access_key_id: "test",
+    secret_access_key: "test",
+    region: "us-east-1",
+  }
+where "\"value\"" in message
+select message

@@ -578,7 +578,6 @@ auto select_spawn(const std::vector<AnySpawn>& spawns, element_type_tag input,
 
 auto ArgumentStore::materialize(const Description& desc,
                                 ir::OptimizeRequest consumed,
-                                Option<ir::OptimizeAggregation> aggregation,
                                 Option<ir::QueryPlan> plan) const -> Any {
   auto args = desc.make_args();
   for (auto [idx, arg] : detail::enumerate(args_)) {
@@ -625,11 +624,6 @@ auto ArgumentStore::materialize(const Description& desc,
   }
   if (desc.set_order) {
     (*desc.set_order)(args, consumed.order);
-  }
-  if (desc.set_aggregation) {
-    (*desc.set_aggregation)(args, std::move(aggregation));
-  } else {
-    TENZIR_ASSERT(not aggregation);
   }
   if (desc.set_plan) {
     (*desc.set_plan)(args, std::move(plan));
@@ -742,7 +736,7 @@ public:
                                 .limit = limit_,
                                 .projection = projection_,
                               },
-                              aggregation_, plan_);
+                              plan_);
   }
 
   auto describe_ctx(diagnostic_handler& dh, registry const& reg) const
@@ -793,11 +787,6 @@ public:
     for (auto& expr : filter_) {
       TRY(expr.substitute(ctx));
     }
-    // The fallback can contain operators that the aggregation skipped, which
-    // may reference bindings of an enclosing subpipeline.
-    if (aggregation_) {
-      TRY(aggregation_->substitute(ctx, instantiate));
-    }
     if (plan_) {
       TRY(ir::substitute(*plan_, ctx));
     }
@@ -807,10 +796,10 @@ public:
   auto optimize(ir::OptimizeRequest req,
                 const ir::OptimizeCtx& octx) && -> ir::OptimizeResult override {
     TENZIR_ASSERT(desc_->optimizer);
-    if (aggregation_ or plan_) {
-      // The operator emits an aggregation, or computes stages that followed
-      // it, to which the filters, limits, and projections that it absorbs
-      // would apply in the wrong order.
+    if (plan_) {
+      // The operator computes stages that followed it, to which the filters,
+      // limits, and projections that it absorbs would apply in the wrong
+      // order.
       return std::move(*this).ir::Operator::optimize(std::move(req), octx);
     }
     auto filter = std::move(req.filter);
@@ -940,42 +929,25 @@ public:
     };
   }
 
-  auto absorb_aggregation(const ir::OptimizeAggregation& aggregation)
-    -> bool override {
-    // A limit counts the events before the aggregation, which the operator
-    // would no longer emit. Unresolved arguments, such as a `let` of an
-    // enclosing subpipeline, do not tell yet whether the operator accepts;
-    // the optimizer asks again once the subpipeline is instantiated.
-    if (not desc_->set_aggregation or not desc_->accepts_aggregation
-        or aggregation_ or plan_ or limit_ or not store_.is_resolved(*desc_)) {
-      return false;
-    }
-    if (not(*desc_->accepts_aggregation)(materialize_args(), aggregation)) {
-      return false;
-    }
-    aggregation_ = aggregation;
-    return true;
-  }
-
-  auto rewrite_aggregation(ir::OptimizeAggregation aggregation,
-                           ir::OptimizeCtx const& octx) const
-    -> Option<ir::OptimizeAggregation> override {
+  auto rewrite_aggregate(ir::QueryStage::Aggregate aggregate,
+                         ir::OptimizeCtx const& octx) const
+    -> Option<ir::QueryStage::Aggregate> override {
     // Filters and limits that the operator absorbed drop events.
-    if (not desc_->rewrite_aggregation or not filter_.empty() or limit_
-        or aggregation_ or plan_ or not store_.is_resolved(*desc_)) {
+    if (not desc_->rewrite_aggregate or not filter_.empty() or limit_ or plan_
+        or not store_.is_resolved(*desc_)) {
       return None{};
     }
     auto noop_dh = null_diagnostic_handler{};
     auto ctx = describe_ctx(noop_dh, octx.reg.get());
-    return (*desc_->rewrite_aggregation)(ctx, std::move(aggregation));
+    return (*desc_->rewrite_aggregate)(ctx, std::move(aggregate));
   }
 
   auto query_stage(ir::OptimizeCtx const& octx) const
     -> Option<ir::QueryStage> override {
-    // An operator that absorbed a filter, a limit, an aggregation, or stages
-    // does more than its arguments show.
-    if (not desc_->query_stage or not filter_.empty() or limit_ or aggregation_
-        or plan_ or not store_.is_resolved(*desc_)) {
+    // An operator that absorbed a filter, a limit, or stages does more than
+    // its arguments show.
+    if (not desc_->query_stage or not filter_.empty() or limit_ or plan_
+        or not store_.is_resolved(*desc_)) {
       return None{};
     }
     auto noop_dh = null_diagnostic_handler{};
@@ -986,8 +958,7 @@ public:
   auto takes_query_stages() const -> bool override {
     // Without a binding for `opt::Plan`, the operator could not receive the
     // stages that it takes over.
-    return desc_->accepts_plan and desc_->set_plan and not plan_
-           and not aggregation_;
+    return desc_->accepts_plan and desc_->set_plan and not plan_;
   }
 
   auto absorb(ir::QueryChain const& chain, ir::OptimizeCtx const& octx)
@@ -1028,8 +999,7 @@ private:
       f.field("desc", x.desc_), f.field("store", x.store_),
       f.field("filter", x.filter_), f.field("order", x.order_),
       f.field("limit", x.limit_), f.field("projection", x.projection_),
-      f.field("aggregation", x.aggregation_), f.field("plan", x.plan_),
-      f.field("declined", x.declined_));
+      f.field("plan", x.plan_), f.field("declined", x.declined_));
   }
 
   /// The parsed arguments of the invocation.
@@ -1049,10 +1019,6 @@ private:
   /// The projection passed to `optimize` (only if the operator wants to consume
   /// it). Repeated passes intersect the hints; `None` is unrestricted.
   Option<ir::OptimizeProjection> projection_;
-
-  /// The aggregation that the operator emits instead of its events, which it
-  /// took over from the operator after it.
-  Option<ir::OptimizeAggregation> aggregation_;
 
   /// The stages that the operator took over from the operators after it.
   Option<ir::QueryPlan> plan_;

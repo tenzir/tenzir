@@ -1,0 +1,6 @@
+// Graph filters and selects the users; it may ignore `$orderby` without an
+// error, so the sort stays in Tenzir.
+from_microsoft_graph "users", auth={tenant_id: "t", client_id: "c", client_secret: "s"}
+where displayName == "Ada"
+select id, name=displayName
+sort id

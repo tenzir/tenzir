@@ -1,0 +1,103 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "from_microsoft_365_activity",
+       store: {
+         op: {
+           path: [
+             `from_microsoft_365_activity` @ [1]:74..101 from 0
+           ],
+           ref: std::from_microsoft_365_activity/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           {
+             index: 0,
+             value: expression record {
+               begin: [1]:107..108 from 0,
+               items: [
+                 field {
+                   name: `tenant_id` @ [1]:108..117 from 0,
+                   expr: constant string "t" @ [1]:119..122 from 0
+                 },
+                 field {
+                   name: `client_id` @ [1]:124..133 from 0,
+                   expr: constant string "c" @ [1]:135..138 from 0
+                 },
+                 field {
+                   name: `client_secret` @ [1]:140..153 from 0,
+                   expr: constant string "s" @ [1]:155..158 from 0
+                 }
+               ],
+               end: [1]:158..159 from 0
+             }
+           },
+           {
+             index: 1,
+             value: located [
+               string "Audit.Exchange"
+             ] @ [1]:177..195 from 0
+           }
+         ]
+       },
+       filter: [
+         
+       ],
+-      order: "ordered"
++      order: "ordered",
++      declined: "the API lists whole content blobs and filters no events, so only deterministic filters on `microsoft_365_activity` metadata skip content"
+     },
+     where_ir {
+       op: {
+         path: [
+-          `where` @ [1]:196..201 from 0
++          
+         ],
+-        ref: std::where/op
++        ref: unresolved
+       },
+       args: [
+-        expression binary_expr {
++        Incomplete binary_expr {
+           left: root_field {
+             id: `Workload` @ [1]:202..210 from 0,
+             has_question_mark: false
+           },
+           op: "eq",
+           right: constant string "Exchange" @ [1]:214..224 from 0,
+           location: [1]:202..224 from 0
+         }
+       ],
+       named_args: [
+         
+       ]
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:224..224 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ],
+   definition_location: [1]:74..224 from 0
+ }

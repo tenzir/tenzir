@@ -50,6 +50,11 @@ auto count(uint64_t value) -> Count {
     .expect("bounded telemetry count");
 }
 
+/// Seconds on the wire, which never go backwards.
+auto seconds_of(duration value) -> double {
+  return std::chrono::duration<double>{std::max(value, duration{})}.count();
+}
+
 auto note_kind(diagnostic_note_kind value) -> std::string {
   switch (value) {
     case diagnostic_note_kind::note:
@@ -83,11 +88,20 @@ public:
       discover_transport{not this->transport} {
   }
 
-  auto prepare(std::span<MetricsSnapshotEntry const> counters) const -> void {
+  auto prepare(std::span<MetricsSnapshotEntry const> counters,
+               Option<PipelineResources> resources = None{}) const -> void {
     auto now = time::clock::now();
     auto totals = std::map<std::pair<MetricsDirection, std::string>,
                            std::pair<uint64_t, uint64_t>>{};
+    // What all sources read and all sinks wrote, external or internal, in both
+    // directions together: the activity of a pipeline, which also shows one
+    // that has no external connectors at work.
+    auto all_events = uint64_t{0};
     for (auto const& entry : counters) {
+      if (entry.instrument == MetricsInstrument::counter
+          and entry.type == MetricsUnit::events) {
+        all_events += entry.value;
+      }
       if (entry.visibility != MetricsVisibility::external_
           or entry.instrument != MetricsInstrument::counter
           or entry.connector.empty()) {
@@ -114,6 +128,11 @@ public:
       flows.emplace_back(key.second, count<TelemetryCount2>(events),
                          count<TelemetryCount2>(bytes));
     }
+    // Counters never go away, so their sum only shrinks if one started over.
+    auto activity = all_events >= activity_baseline
+                      ? all_events - activity_baseline
+                      : all_events;
+    activity_baseline = all_events;
     auto folded = std::map<std::string, DiagnosticSample>{};
     while (auto value = diagnostics.try_dequeue()) {
       auto found = folded.find(value->fingerprint);
@@ -122,9 +141,8 @@ public:
           = std::min(found->second.first_seen, value->first_seen);
         found->second.last_seen
           = std::max(found->second.last_seen, value->last_seen);
-        found->second.occurrences
-          = count<TenzirTelemetryTelemetrySmallCount>(std::min(
-            found->second.occurrences.value() + 1, int64_t{4'294'967'295}));
+        found->second.occurrences = count<SmallCount>(std::min(
+          found->second.occurrences.value() + 1, int64_t{4'294'967'295}));
       } else {
         folded.emplace(value->fingerprint, std::move(*value));
       }
@@ -137,27 +155,43 @@ public:
     while (auto value = transitions.try_dequeue()) {
       runs.push_back(std::move(*value));
     }
-    if (sources.empty() and sinks.empty() and samples.empty() and runs.empty()
-        and dropped.load(std::memory_order_relaxed) == 0) {
+    if (sources.empty() and sinks.empty() and not resources and samples.empty()
+        and runs.empty() and dropped.load(std::memory_order_relaxed) == 0) {
       return;
     }
     auto lost = dropped.exchange(0, std::memory_order_relaxed);
     auto pipeline_samples = std::vector<PipelineSample>{};
-    if (not sources.empty() or not sinks.empty()) {
+    if (not sources.empty() or not sinks.empty() or resources) {
       auto window = floor(now, std::chrono::milliseconds{1});
       // ClickHouse and replay cursors retain milliseconds, not finer precision.
       if (last_sample) {
         window = std::max(window, *last_sample + std::chrono::milliseconds{1});
       }
       last_sample = window;
+      auto cpu = Option<TelemetrySeconds>{};
+      auto interval = Option<TenzirTelemetryTelemetrySeconds>{};
+      auto queued = Option<TelemetryCount3>{};
+      auto moved = Option<TelemetryCount4>{};
+      if (resources) {
+        moved = count<TelemetryCount4>(activity);
+        cpu = TelemetrySeconds::make(seconds_of(resources->cpu))
+                .expect("finite CPU time");
+        interval = TenzirTelemetryTelemetrySeconds::make(
+                     seconds_of(resources->interval))
+                     .expect("finite interval");
+        queued = count<TelemetryCount3>(resources->queued_bytes);
+      }
       pipeline_samples.emplace_back(id, run, window, std::move(sources),
-                                    std::move(sinks));
+                                    std::move(sinks), std::move(cpu),
+                                    std::move(interval), std::move(queued),
+                                    std::move(moved));
     }
     auto batch = Batch{boot(),
                        count<TelemetryCount>(next_sequence()),
                        count<TenzirTelemetryTelemetryCount>(lost),
                        std::move(pipeline_samples),
-                       {},
+                       // Backends before pipeline resources require the array.
+                       std::vector<RetiredOperatorSample>{},
                        std::move(samples),
                        std::move(runs),
                        {}};
@@ -265,6 +299,8 @@ public:
                    std::pair<uint64_t, uint64_t>>
     baseline;
   mutable Option<Box<Transport>> transport;
+  /// The sum of all event counters at the previous sample.
+  mutable uint64_t activity_baseline = 0;
   bool discover_transport;
 };
 
@@ -316,7 +352,7 @@ auto PlatformProfiler::diagnostic(tenzir::diagnostic const& value,
                                  state_->run,
                                  now,
                                  now,
-                                 count<TenzirTelemetryTelemetrySmallCount>(1),
+                                 count<SmallCount>(1),
                                  {},
                                  severity,
                                  value.message,
@@ -332,9 +368,10 @@ auto PlatformProfiler::diagnostic(tenzir::diagnostic const& value,
   }
 }
 
-auto PlatformProfiler::sample(
-  std::span<MetricsSnapshotEntry const> counters) const -> void {
-  state_->prepare(counters);
+auto PlatformProfiler::sample(std::span<MetricsSnapshotEntry const> counters,
+                              Option<PipelineResources> resources) const
+  -> void {
+  state_->prepare(counters, resources);
 }
 
 auto PlatformProfiler::transition(std::string state,

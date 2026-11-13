@@ -9,14 +9,13 @@ assertions:
       request_prefix:
         - /v1.0/users
         - /v1.0/users?$skiptoken=offset-3
-      max_requests: 6
+      max_requests: 4
 timeout: 60
 skip:
   on: fixture-unavailable
 ---
 
-// A function predicate prevents derived $select, and every filter stays
-// local. Keep the computed projection's dependencies until after filtering.
+// With `pushdown=false`, every stage runs in Tenzir.
 from_microsoft_graph "users",
   auth={
     tenant_id: env("MS_GRAPH_FIXTURE_TENANT_ID"),
@@ -25,8 +24,8 @@ from_microsoft_graph "users",
     authority: env("MS_GRAPH_FIXTURE_AUTHORITY"),
   },
   _base_url=env("MS_GRAPH_FIXTURE_BASE_URL_V1"),
-  tls=false
-optimize_barrier
+  tls=false,
+  pushdown=false
 where displayName.starts_with("User ")
 where jobTitle == "Engineer"
 head 2

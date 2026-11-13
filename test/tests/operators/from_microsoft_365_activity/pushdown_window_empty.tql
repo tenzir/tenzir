@@ -1,0 +1,28 @@
+---
+fixtures: [microsoft_365_activity]
+assertions:
+  fixtures:
+    microsoft_365_activity:
+      token_requests: 0
+      listed_content_types: []
+      downloads: []
+timeout: 60
+skip:
+  on: fixture-unavailable
+---
+
+// A filter on the availability time narrows the window of a bounded read.
+// Here nothing remains, so the read completes without a request.
+from_microsoft_365_activity auth={
+    tenant_id: env("MS_ACTIVITY_FIXTURE_TENANT_ID"),
+    client_id: env("MS_ACTIVITY_FIXTURE_CLIENT_ID"),
+    client_secret: env("MS_ACTIVITY_FIXTURE_CLIENT_SECRET"),
+    authority: env("MS_ACTIVITY_FIXTURE_AUTHORITY"),
+  },
+  content_types=["Audit.General"],
+  start_time=now() - 2h,
+  end_time=now() - 1h,
+  publisher_identifier=env("MS_ACTIVITY_FIXTURE_PUBLISHER_ID"),
+  _base_url=env("MS_ACTIVITY_FIXTURE_BASE_URL"),
+  tls=false
+where microsoft_365_activity.content_created < 2000-01-01

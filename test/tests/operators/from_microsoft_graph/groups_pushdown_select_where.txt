@@ -1,0 +1,14 @@
+{
+  name: "Group 1",
+  meta: {
+    security: true,
+  },
+  id: "group-1",
+}
+{
+  name: "Group 3",
+  meta: {
+    security: true,
+  },
+  id: "group-3",
+}

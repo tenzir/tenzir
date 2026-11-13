@@ -196,18 +196,18 @@ public:
     });
     // An aggregation that reads no dropped field computes the same result
     // before the `drop`.
-    d.rewrite_aggregation(
-      [=](DescribeCtx& ctx, ir::OptimizeAggregation aggregation)
-        -> Option<ir::OptimizeAggregation> {
+    d.rewrite_aggregate(
+      [=](DescribeCtx& ctx, ir::QueryStage::Aggregate aggregate)
+        -> Option<ir::QueryStage::Aggregate> {
         auto dropped = std::vector<ast::field_path>{};
         for (auto& field : ctx.get_all(fields)) {
           TENZIR_ASSERT(field);
           dropped.push_back(std::move(*field));
         }
-        return ir::rewrite_aggregation(std::move(aggregation),
-                                       [&](ast::field_path const& field) {
-                                         return resolve_dropped(dropped, field);
-                                       });
+        return ir::rewrite_aggregate(std::move(aggregate),
+                                     [&](ast::field_path const& field) {
+                                       return resolve_dropped(dropped, field);
+                                     });
       });
     return d.optimize(
       [=](DescribeCtx& ctx, ir::OptimizeRequest req) -> Optimization {

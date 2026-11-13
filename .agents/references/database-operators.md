@@ -56,23 +56,6 @@ Database source operators should use this common query surface:
   differences on the operator's reference page. Accept the longest prefix that
   the backend spells, offer `pushdown=false` through `add_pushdown_argument`,
   and leave a user-provided `sql` query untouched.
-- Sources that still use the older filter, limit, and aggregation hints, such
-  as `from_clickhouse`, push only predicates whose backend semantics match
-  TQL, including for nulls, type mismatches, and `NaN`, and evaluate the rest
-  locally, until they move to the stage contract.
-- For the older hints, the shared pushdown translation (`tenzir/pushdown/`)
-  sanctions a few approximations, which are not bugs:
-  - Case-insensitive matching uses the backend's lowercase mapping
-    (`Operation::fold_case`), which differs from TQL's case folding on rare
-    characters such as `ß`.
-  - `match_regex` uses the backend's RE2 (`Operation::match_regex`), which may
-    differ in its release and on invalid UTF-8.
-  - An `ip` literal compared for equality or membership with a string column
-    compares as its canonical text (`adapt_to_columns`), where TQL alone would
-    report a type mismatch.
-
-  A dialect may still veto each of them. Document the ones a backend uses on
-  its reference page and in the changelog.
 - Compare text by the bytes that TQL sees. Default collations often ignore
   case and accents, and some comparisons pad the shorter operand: SQL Server
   treats `N'a' = N'a '` and `0x61 = 0x6100` as true. See the MySQL and SQL

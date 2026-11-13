@@ -847,7 +847,8 @@ public:
       co_return;
     }
     if (is_buffer_all()) {
-      bytes_write_counter_.add(chunk->size());
+      // Counted once the buffered request succeeds, not while buffering.
+      buffered_bytes_ += chunk->size();
       buffered_body_.append(
         folly::IOBuf::copyBuffer(chunk->data(), chunk->size()));
       co_return;
@@ -858,6 +859,8 @@ public:
     if (not request_started_) {
       start_request_task(ctx);
     }
+    // A streamed body goes out as it is sent, so it counts as sent, even if
+    // the request fails later.
     bytes_write_counter_.add(chunk->size());
     co_await body_tx_->send(std::move(chunk));
   }
@@ -872,6 +875,9 @@ public:
       diagnostic::error("HTTP request returned status {}", response.status_code)
         .primary(args_.operator_location)
         .emit(ctx);
+    } else if (response.status_code != 0 and is_buffer_all()) {
+      // The buffered body went out once, however many attempts it took.
+      bytes_write_counter_.add(buffered_bytes_);
     }
     // Close the sub-pipeline to stop process_sub() from blocking on
     // the body queue. Then mark the operator as done.
@@ -1229,6 +1235,7 @@ private:
   Option<Sender<chunk_ptr>> body_tx_;
   Option<Receiver<chunk_ptr>> body_rx_;
   folly::IOBufQueue buffered_body_{folly::IOBufQueue::cacheChainLength()};
+  uint64_t buffered_bytes_ = 0;
   mutable Arc<Oneshot<http::Response>> response_{std::in_place};
   bool request_started_ = false;
   Lifecycle lifecycle_ = Lifecycle::running;

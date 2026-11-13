@@ -153,22 +153,24 @@ struct ToKafkaArgs {
   Option<StartupArgument<nova::Record>> aws_iam;
 };
 
+/// How often an idle sink serves delivery reports.
+constexpr auto delivery_poll_interval = std::chrono::seconds{1};
+
+/// What the idle sink wakes up for.
+struct PollDeliveries {};
+
 class AsyncKafkaProducer {
 public:
   AsyncKafkaProducer(std::string topic, ast::expression message_expr,
                      Option<ResolvedAwsIamAuth> auth,
                      producer_configuration cfg,
-                     Box<RdKafka::Producer> producer,
-                     MetricsCounter write_bytes_counter,
-                     MetricsCounter write_events_counter)
+                     Box<RdKafka::Producer> producer)
     : topic_{std::move(topic)},
       message_expr_{std::move(message_expr)},
       auth_{std::move(auth)},
       cfg_{std::move(cfg)},
       producer_{std::move(producer)},
-      printer_options_{try_make_json_printer(message_expr_)},
-      write_bytes_counter_{std::move(write_bytes_counter)},
-      write_events_counter_{std::move(write_events_counter)} {
+      printer_options_{try_make_json_printer(message_expr_)} {
     if (printer_options_) {
       printer_.emplace(*printer_options_);
     }
@@ -268,6 +270,11 @@ public:
     co_return {};
   }
 
+  /// Serves pending delivery reports without blocking.
+  auto poll() -> void {
+    producer_->poll(0);
+  }
+
   /// Waits for queued messages to drain or for cancellation after an error.
   auto flush(diagnostic_handler& dh) -> Task<void> {
     while (true) {
@@ -304,8 +311,7 @@ private:
         timestamp_ms, nullptr);
       switch (result) {
         case RdKafka::ERR_NO_ERROR: {
-          write_bytes_counter_.add(static_cast<uint64_t>(bytes.size()));
-          write_events_counter_.add(1);
+          // Counted once delivered, by the delivery callback.
           ++produced_since_poll_;
           if (produced_since_poll_ >= producer_poll_interval) {
             producer_->poll(0);
@@ -372,8 +378,6 @@ private:
   Box<RdKafka::Producer> producer_; // destroyed first (declared after cfg_)
   Option<json_printer_options> printer_options_;
   Option<json_printer2> printer_;
-  MetricsCounter write_bytes_counter_;
-  MetricsCounter write_events_counter_;
   size_t produced_since_poll_ = 0;
 };
 
@@ -431,6 +435,15 @@ public:
       done_.store(true, std::memory_order_release);
       co_return;
     }
+    if (auto counted
+        = count_deliveries(*cfg, write_bytes_counter_, write_events_counter_);
+        not counted) {
+      diagnostic::error("failed to create kafka configuration: {}",
+                        counted.error())
+        .emit(ctx);
+      done_.store(true, std::memory_order_release);
+      co_return;
+    }
     auto error = std::string{};
     TENZIR_ASSERT(cfg->conf);
     auto* raw_producer = RdKafka::Producer::create(cfg->conf.get(), error);
@@ -441,8 +454,7 @@ public:
     }
     producer_.emplace(args_.topic, args_.message, auth_, std::move(*cfg),
                       Box<RdKafka::Producer>::from_non_null(
-                        std::unique_ptr<RdKafka::Producer>{raw_producer}),
-                      write_bytes_counter_, write_events_counter_);
+                        std::unique_ptr<RdKafka::Producer>{raw_producer}));
   }
 
   auto process(table_slice input, OpCtx& ctx) -> Task<void> override {
@@ -546,6 +558,15 @@ public:
       done_.store(true, std::memory_order_release);
       co_return;
     }
+    if (auto counted
+        = count_deliveries(*cfg, write_bytes_counter_, write_events_counter_);
+        not counted) {
+      diagnostic::error("failed to create kafka configuration: {}",
+                        counted.error())
+        .emit(ctx);
+      done_.store(true, std::memory_order_release);
+      co_return;
+    }
     auto error = std::string{};
     TENZIR_ASSERT(cfg->conf);
     auto* raw_producer = RdKafka::Producer::create(cfg->conf.get(), error);
@@ -556,8 +577,7 @@ public:
     }
     producer_.emplace(args_.topic, args_.message, *auth, std::move(*cfg),
                       Box<RdKafka::Producer>::from_non_null(
-                        std::unique_ptr<RdKafka::Producer>{raw_producer}),
-                      write_bytes_counter_, write_events_counter_);
+                        std::unique_ptr<RdKafka::Producer>{raw_producer}));
   }
 
   auto process(nova::Events input, OpCtx& ctx) -> Task<void> override {
@@ -570,6 +590,21 @@ public:
           args_.key ? args_.key->inner : "", timestamp_ms(), ctx)) {
       done_.store(true, std::memory_order_release);
     }
+  }
+
+  /// Wakes the operator up periodically while no input arrives, so that
+  /// delivery reports, and with them the bytes and events written, do not
+  /// wait for the next batch.
+  auto await_task(diagnostic_handler&) const -> Task<Any> override {
+    co_await folly::coro::sleep(delivery_poll_interval);
+    co_return Any{PollDeliveries{}};
+  }
+
+  auto process_task(Any, OpCtx&) -> Task<void> override {
+    if (producer_) {
+      producer_->poll();
+    }
+    co_return;
   }
 
   auto prepare_snapshot(OpCtx& ctx) -> Task<void> override {

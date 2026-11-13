@@ -17,7 +17,7 @@ skip:
 // The user's `odata` options stay verbatim and suppress `$select` and
 // `$top`, even where the projection needs fewer properties; the `where` adds
 // no `$filter`.
-// With the optimization barrier; both share one baseline.
+// With `pushdown=false`; both share one baseline.
 from_microsoft_graph "users",
   auth={
     tenant_id: env("MS_GRAPH_FIXTURE_TENANT_ID"),
@@ -31,8 +31,8 @@ from_microsoft_graph "users",
     select: ["id", "department", "displayName"],
     top: 5,
   },
-  tls=false
-optimize_barrier
+  tls=false,
+  pushdown=false
 where department == "Security"
 head 2
 select id

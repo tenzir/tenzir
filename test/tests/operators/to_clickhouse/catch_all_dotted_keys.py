@@ -94,7 +94,7 @@ extra = extra.parse_json(raw=true)
 write_ndjson
 """
     result = subprocess.run(
-        [*shlex.split(os.environ["TENZIR_BINARY"]), "--nova=false", program],
+        [*shlex.split(os.environ["TENZIR_BINARY"]), "--nova=true", program],
         capture_output=True,
         text=True,
         timeout=60,
@@ -102,12 +102,6 @@ write_ndjson
     assert result.returncode == 0, result.stderr
     assert "warning:" not in result.stderr, result.stderr
     rows = [json.loads(line) for line in result.stdout.splitlines()]
-    # Tenzir gives records within a list a common schema, filling missing
-    # fields with null. Their literal dotted names must remain distinct.
-    expected[5]["extra"]["items"] = [
-        {"a.b": 8, "a": None},
-        {"a.b": None, "a": {"b": 9}},
-    ]
     assert rows == expected, rows
     print("ok")
 

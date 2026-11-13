@@ -1,0 +1,9 @@
+error: Microsoft Graph request failed: HTTP code `400`
+  --> tests/operators/from_microsoft_graph/users_pushdown_rejected.tql:20:1
+   |
+20 | from_microsoft_graph "users",
+   | ^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: response body: {"error": "could not find a property named nonexistent"}
+   = note: the request carries the stages that the operator took over
+   = hint: use `pushdown=false` to run them in Tenzir

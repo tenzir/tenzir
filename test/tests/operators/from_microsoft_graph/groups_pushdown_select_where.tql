@@ -1,0 +1,30 @@
+---
+fixtures:
+  - microsoft_graph:
+      groups: 7
+      token_lifetime: 3600
+assertions:
+  fixtures:
+    microsoft_graph:
+      requests:
+        - /v1.0/groups?$filter=(securityEnabled+eq+true)+and+startswith(displayName,+'group')&$select=displayName,securityEnabled,id&$top=2
+timeout: 60
+skip:
+  on: fixture-unavailable
+---
+
+// Graph computes the selection, a filter that reads its renamed fields, and
+// the limit. It compares strings without regard to case, so the lowercase
+// prefix matches `Group`. The layout nests and renames the properties.
+from_microsoft_graph "groups",
+  auth={
+    tenant_id: env("MS_GRAPH_FIXTURE_TENANT_ID"),
+    client_id: env("MS_GRAPH_FIXTURE_CLIENT_ID"),
+    client_secret: env("MS_GRAPH_FIXTURE_CLIENT_SECRET"),
+    authority: env("MS_GRAPH_FIXTURE_AUTHORITY"),
+  },
+  _base_url=env("MS_GRAPH_FIXTURE_BASE_URL_V1"),
+  tls=false
+select name=displayName, meta.security=securityEnabled, id
+where meta.security == true and name.starts_with("group")
+head 2

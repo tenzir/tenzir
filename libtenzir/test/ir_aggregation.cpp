@@ -50,40 +50,39 @@ auto assign(std::string_view left, std::string_view right) -> ast::assignment {
 }
 
 /// A summary `summarize k, n=count(), m=max(v)`.
-auto make_aggregation() -> ir::OptimizeAggregation {
-  return ir::OptimizeAggregation{
+auto make_aggregate() -> ir::QueryStage::Aggregate {
+  return ir::QueryStage::Aggregate{
     .columns = {
       {.output = {"k"}, .function = None{}, .input = Path{"k"}},
       {.output = {"n"}, .function = "count", .input = None{}},
       {.output = {"m"}, .function = "max", .input = Path{"v", "w"}},
     },
     .schema_name = "tenzir.summarize",
-    .fallback = {},
-    .stages = {},
   };
 }
 
-/// Returns the inputs of the columns of `aggregation`, with an empty path for
-/// a column without input.
-auto inputs(ir::OptimizeAggregation const& aggregation) -> std::vector<Path> {
+/// Returns the inputs of the columns of `aggregate`, with an empty path for a
+/// column without input.
+auto inputs(ir::QueryStage::Aggregate const& aggregate) -> std::vector<Path> {
   auto result = std::vector<Path>{};
-  for (auto const& column : aggregation.columns) {
+  for (auto const& column : aggregate.columns) {
     result.push_back(column.input.value_or(Path{}));
   }
   return result;
 }
 
-auto outputs(ir::OptimizeAggregation const& aggregation) -> std::vector<Path> {
+auto outputs(ir::QueryStage::Aggregate const& aggregate) -> std::vector<Path> {
   auto result = std::vector<Path>{};
-  for (auto const& column : aggregation.columns) {
+  for (auto const& column : aggregate.columns) {
     result.push_back(column.output);
   }
   return result;
 }
 
-/// An operator for testing how the optimizer offers aggregations: a source
-/// that may absorb them, an operator that may rewrite them by renaming a field,
-/// or a summary that describes one. Every other operator is a barrier.
+/// An operator for testing how the optimizer folds aggregations: a source
+/// that takes over at most a number of stages behind it, an operator that may
+/// rewrite an aggregation by renaming a field, a summary that describes one,
+/// or another stage. Every other operator is a barrier.
 class Mock final : public ir::Operator {
 public:
   enum class Kind { source, rename, barrier, summary, stage };
@@ -100,7 +99,7 @@ public:
     : tag_{std::move(tag)}, kind_{Kind::stage}, stage_{std::move(stage)} {
   }
 
-  /// A source that accepts at most `max_stages` stages.
+  /// A source that takes over at most `max_stages` stages.
   static auto source(std::string tag, size_t max_stages) -> Mock {
     auto result = Mock{std::move(tag), Kind::source};
     result.max_stages_ = max_stages;
@@ -132,34 +131,15 @@ public:
     TENZIR_UNREACHABLE();
   }
 
-  auto aggregation() const -> Option<ir::OptimizeAggregation> override {
-    if (kind_ != Kind::summary) {
-      return None{};
-    }
-    auto result = make_aggregation();
-    result.fallback.operators.push_back(copy());
-    return result;
-  }
-
-  auto absorb_aggregation(ir::OptimizeAggregation const& aggregation)
-    -> bool override {
-    if (kind_ != Kind::source or absorbed_
-        or aggregation.stages.size() > max_stages_) {
-      return false;
-    }
-    absorbed_ = aggregation;
-    return true;
-  }
-
-  auto rewrite_aggregation(ir::OptimizeAggregation aggregation,
-                           ir::OptimizeCtx const& octx) const
-    -> Option<ir::OptimizeAggregation> override {
+  auto rewrite_aggregate(ir::QueryStage::Aggregate aggregate,
+                         ir::OptimizeCtx const& octx) const
+    -> Option<ir::QueryStage::Aggregate> override {
     TENZIR_UNUSED(octx);
     if (kind_ != Kind::rename) {
       return None{};
     }
-    return ir::rewrite_aggregation(
-      std::move(aggregation), [&](ast::field_path const& field) {
+    return ir::rewrite_aggregate(
+      std::move(aggregate), [&](ast::field_path const& field) {
         if (field.path().size() == 1 and field.path()[0].id.name == to_) {
           return Option<ast::expression>{parse(from_)};
         }
@@ -169,11 +149,26 @@ public:
 
   auto query_stage(ir::OptimizeCtx const&) const
     -> Option<ir::QueryStage> override {
+    if (kind_ == Kind::summary) {
+      return ir::QueryStage{make_aggregate()};
+    }
     return stage_;
   }
 
-  auto absorbed() const -> Option<ir::OptimizeAggregation> const& {
-    return absorbed_;
+  auto takes_query_stages() const -> bool override {
+    return kind_ == Kind::source and plan_.empty();
+  }
+
+  auto absorb(ir::QueryChain const& chain, ir::OptimizeCtx const&)
+    -> ir::Absorption override {
+    auto const prefix = std::min(max_stages_, chain.stages.size());
+    plan_.assign(chain.stages.begin(),
+                 chain.stages.begin() + detail::narrow<std::ptrdiff_t>(prefix));
+    return {.prefix = prefix, .declined = "too many stages"};
+  }
+
+  auto absorbed_plan() const -> ir::QueryPlan const& {
+    return plan_;
   }
 
 private:
@@ -183,7 +178,7 @@ private:
   std::string to_;
   Option<ir::QueryStage> stage_;
   size_t max_stages_ = std::numeric_limits<size_t>::max();
-  Option<ir::OptimizeAggregation> absorbed_;
+  ir::QueryPlan plan_;
 };
 
 auto filter_mock(std::string tag) -> Mock {
@@ -227,11 +222,10 @@ auto stage_kind(ir::QueryStage const& stage) -> std::string {
     });
 }
 
-/// The kinds of the stages of `aggregation`, in order.
-auto stage_kinds(ir::OptimizeAggregation const& aggregation)
-  -> std::vector<std::string> {
+/// The kinds of `stages`, in order.
+auto stage_kinds(ir::QueryPlan const& stages) -> std::vector<std::string> {
   auto result = std::vector<std::string>{};
-  for (auto const& stage : aggregation.stages) {
+  for (auto const& stage : stages) {
     result.push_back(stage_kind(stage));
   }
   return result;
@@ -261,11 +255,22 @@ auto names(ir::pipeline const& pipe) -> std::vector<std::string> {
   return result;
 }
 
-auto absorbed(ir::pipeline const& pipe, size_t index)
-  -> Option<ir::OptimizeAggregation> const& {
+/// The stages that the source at `index` of `pipe` took over.
+auto plan(ir::pipeline const& pipe, size_t index) -> ir::QueryPlan const& {
   auto const* mock = dynamic_cast<Mock const*>(&*pipe.operators.at(index));
   REQUIRE(mock);
-  return mock->absorbed();
+  return mock->absorbed_plan();
+}
+
+/// The aggregation that the source at `index` of `pipe` took over as its
+/// first stage.
+auto aggregate(ir::pipeline const& pipe, size_t index)
+  -> ir::QueryStage::Aggregate const& {
+  auto const& stages = plan(pipe, index);
+  REQUIRE(not stages.empty());
+  auto const* result = try_as<ir::QueryStage::Aggregate>(stages.front().kind);
+  REQUIRE(result);
+  return *result;
 }
 
 /// Compiles `source` without instantiating it, as for a subpipeline.
@@ -280,35 +285,35 @@ auto compile(base_ctx ctx, std::string_view source) -> ir::pipeline {
   return std::move(*compiled);
 }
 
-/// Rewrites `make_aggregation()` through a `set` with `assignments`.
+/// Rewrites `make_aggregate()` through a `set` with `assignments`.
 auto through_set(std::vector<ast::assignment> assignments)
-  -> Option<ir::OptimizeAggregation> {
-  return ir::SetIr{std::move(assignments)}.rewrite_aggregation(
-    make_aggregation(), optimize_ctx());
+  -> Option<ir::QueryStage::Aggregate> {
+  return ir::SetIr{std::move(assignments)}.rewrite_aggregate(make_aggregate(),
+                                                             optimize_ctx());
 }
 
 } // namespace
 
 TEST("aggregation rewrite maps inputs and keeps outputs") {
-  auto rewritten = ir::rewrite_aggregation(
-    make_aggregation(), [](ast::field_path const& field) {
-      auto name = field.path().front().id.name;
-      if (name == "k") {
-        return Option<ast::expression>{parse("a.b")};
-      }
-      return Option<ast::expression>{field.inner()};
-    });
+  auto rewritten
+    = ir::rewrite_aggregate(make_aggregate(), [](ast::field_path const& field) {
+        auto name = field.path().front().id.name;
+        if (name == "k") {
+          return Option<ast::expression>{parse("a.b")};
+        }
+        return Option<ast::expression>{field.inner()};
+      });
   REQUIRE(rewritten);
   CHECK_EQUAL(inputs(*rewritten),
               (std::vector<Path>{{"a", "b"}, {}, {"v", "w"}}));
-  CHECK_EQUAL(outputs(*rewritten), outputs(make_aggregation()));
+  CHECK_EQUAL(outputs(*rewritten), outputs(make_aggregate()));
   CHECK_EQUAL(rewritten->schema_name, "tenzir.summarize");
 }
 
 TEST("aggregation rewrite requires plain fields") {
   auto rewrite_k = [](std::string_view replacement) {
-    return ir::rewrite_aggregation(
-      make_aggregation(), [&](ast::field_path const& field) {
+    return ir::rewrite_aggregate(
+      make_aggregate(), [&](ast::field_path const& field) {
         if (field.path().front().id.name == "k") {
           return Option<ast::expression>{parse(replacement)};
         }
@@ -324,10 +329,9 @@ TEST("aggregation rewrite requires plain fields") {
   CHECK(not rewrite_k("this"));
   CHECK(not rewrite_k("x[0]"));
   // A field without replacement prevents the rewrite.
-  CHECK(
-    not ir::rewrite_aggregation(make_aggregation(), [](ast::field_path const&) {
-      return Option<ast::expression>{};
-    }));
+  CHECK(not ir::rewrite_aggregate(make_aggregate(), [](ast::field_path const&) {
+    return Option<ast::expression>{};
+  }));
 }
 
 TEST("aggregation rewrite through set") {
@@ -339,7 +343,7 @@ TEST("aggregation rewrite through set") {
   auto unrelated
     = through_set({assign("z", "x + 1"), assign("@name", "\"a\"")});
   REQUIRE(unrelated);
-  CHECK_EQUAL(inputs(*unrelated), inputs(make_aggregation()));
+  CHECK_EQUAL(inputs(*unrelated), inputs(make_aggregate()));
   // The source skips the `set`, so no assignment may fail the pipeline, also
   // not one whose value the summary does not read.
   CHECK(not through_set({assign("z", "x.length()")}));
@@ -384,7 +388,7 @@ TEST("aggregation rewrite through select") {
   auto selected = through_set({assign("this", "{}"), assign("k", "k"),
                                assign("v", "v"), assign("x", "x")});
   REQUIRE(selected);
-  CHECK_EQUAL(inputs(*selected), inputs(make_aggregation()));
+  CHECK_EQUAL(inputs(*selected), inputs(make_aggregate()));
   auto renamed = through_set(
     {assign("this", "{}"), assign("k", "a.b"), assign("v.w", "c")});
   REQUIRE(renamed);
@@ -400,7 +404,7 @@ TEST("aggregation rewrite through select") {
   CHECK(not through_set({assign("this", "{...r}")}));
 }
 
-TEST("optimizer offers an aggregation through operators that rewrite it") {
+TEST("optimizer folds an aggregation through operators that rewrite it") {
   using enum Mock::Kind;
   auto pipe = optimized(make_pipeline({
     Mock{"source", source},
@@ -411,23 +415,21 @@ TEST("optimizer offers an aggregation through operators that rewrite it") {
   }));
   // The source computes the summary in place of the operators before it.
   CHECK_EQUAL(names(pipe), (std::vector<std::string>{"source", "after"}));
-  auto const& aggregation = absorbed(pipe, 0);
-  REQUIRE(aggregation);
+  CHECK_EQUAL(stage_kinds(plan(pipe, 0)),
+              (std::vector<std::string>{"aggregate"}));
   // The input maps back through both renames, and the outputs stay.
-  CHECK_EQUAL(inputs(*aggregation), (std::vector<Path>{{"a"}, {}, {"v", "w"}}));
-  CHECK_EQUAL(outputs(*aggregation), outputs(make_aggregation()));
-  // The fallback replays the skipped operators in their original order.
-  CHECK_EQUAL(names(aggregation->fallback),
-              (std::vector<std::string>{"first", "second", "summary"}));
-  // Another pass finds nothing left to absorb.
+  auto const& folded = aggregate(pipe, 0);
+  CHECK_EQUAL(inputs(folded), (std::vector<Path>{{"a"}, {}, {"v", "w"}}));
+  CHECK_EQUAL(outputs(folded), outputs(make_aggregate()));
+  CHECK_EQUAL(folded.schema_name, "tenzir.summarize");
+  // Another pass finds nothing left to take over.
   auto again = optimized(std::move(pipe));
   CHECK_EQUAL(names(again), (std::vector<std::string>{"source", "after"}));
-  REQUIRE(absorbed(again, 0));
-  CHECK_EQUAL(names(absorbed(again, 0)->fallback),
-              (std::vector<std::string>{"first", "second", "summary"}));
+  CHECK_EQUAL(inputs(aggregate(again, 0)),
+              (std::vector<Path>{{"a"}, {}, {"v", "w"}}));
 }
 
-TEST("optimizer keeps the pipeline when no operator absorbs an aggregation") {
+TEST("optimizer keeps the operators that no source takes over") {
   using enum Mock::Kind;
   // A barrier between the source and the summary stops the rewrite.
   auto blocked = optimized(make_pipeline({
@@ -438,7 +440,16 @@ TEST("optimizer keeps the pipeline when no operator absorbs an aggregation") {
   }));
   CHECK_EQUAL(names(blocked), (std::vector<std::string>{"source", "barrier",
                                                         "rename", "summary"}));
-  CHECK(not absorbed(blocked, 0));
+  CHECK(plan(blocked, 0).empty());
+  // A stage that cannot rewrite the aggregation stays a stage of its own.
+  auto unrewritable = optimized(make_pipeline({
+    Mock{"source", source},
+    filter_mock("where"),
+    Mock{"summary", summary},
+  }));
+  CHECK_EQUAL(names(unrewritable), (std::vector<std::string>{"source"}));
+  CHECK_EQUAL(stage_kinds(plan(unrewritable, 0)),
+              (std::vector<std::string>{"filter", "aggregate"}));
   // Without a source, the rewrites leave every operator in place.
   auto sourceless = optimized(make_pipeline({
     Mock{"rename", rename, "a", "k"},
@@ -446,24 +457,44 @@ TEST("optimizer keeps the pipeline when no operator absorbs an aggregation") {
   }));
   CHECK_EQUAL(names(sourceless),
               (std::vector<std::string>{"rename", "summary"}));
+  // A source that declines the aggregation keeps the operators that it would
+  // have folded.
+  auto declined = optimized(make_pipeline({
+    Mock::source("source", 0),
+    Mock{"rename", rename, "a", "k"},
+    Mock{"summary", summary},
+  }));
+  CHECK_EQUAL(names(declined),
+              (std::vector<std::string>{"source", "rename", "summary"}));
+  CHECK(plan(declined, 0).empty());
 }
 
-TEST("optimizer offers each aggregation to the closest absorber") {
+TEST("optimizer folds only the first aggregation behind a source") {
   using enum Mock::Kind;
-  // The first source takes over the first summary. The second summary then
-  // follows a source that already emits an aggregation, which declines.
+  // The source takes over the first summary. The second one ends the chain.
   auto pipe = optimized(make_pipeline({
     Mock{"source", source},
     Mock{"first", summary},
     Mock{"second", summary},
   }));
   CHECK_EQUAL(names(pipe), (std::vector<std::string>{"source", "second"}));
-  REQUIRE(absorbed(pipe, 0));
-  CHECK_EQUAL(names(absorbed(pipe, 0)->fallback),
-              (std::vector<std::string>{"first"}));
+  CHECK_EQUAL(stage_kinds(plan(pipe, 0)),
+              (std::vector<std::string>{"aggregate"}));
+  // A rename between the two cannot carry the second one to the source
+  // either.
+  auto renamed = optimized(make_pipeline({
+    Mock{"source", source},
+    Mock{"first", summary},
+    Mock{"rename", rename, "a", "k"},
+    Mock{"second", summary},
+  }));
+  CHECK_EQUAL(names(renamed),
+              (std::vector<std::string>{"source", "rename", "second"}));
+  CHECK_EQUAL(stage_kinds(plan(renamed, 0)),
+              (std::vector<std::string>{"aggregate"}));
 }
 
-TEST("generic operators decline aggregations after absorbing events") {
+TEST("sources take over aggregations behind drops") {
   set_nova_enabled(true);
   auto dh = collecting_diagnostic_handler{};
   auto provider = session_provider::make(dh, test::builtin_registry());
@@ -489,8 +520,7 @@ TEST("generic operators decline aggregations after absorbing events") {
 TEST("optimizer offers the stages after an aggregation") {
   using enum Mock::Kind;
   using Strings = std::vector<std::string>;
-  // The source takes over the stages, whose operators leave the pipeline and
-  // trail the fallback.
+  // The source takes over the stages, whose operators leave the pipeline.
   auto pipe = optimized(make_pipeline({
     Mock{"source", source},
     Mock{"summary", summary},
@@ -500,69 +530,18 @@ TEST("optimizer offers the stages after an aggregation") {
     Mock{"after", barrier},
   }));
   CHECK_EQUAL(names(pipe), (Strings{"source", "after"}));
-  REQUIRE(absorbed(pipe, 0));
-  CHECK_EQUAL(stage_kinds(*absorbed(pipe, 0)),
-              (Strings{"filter", "sort", "limit"}));
-  CHECK_EQUAL(names(absorbed(pipe, 0)->fallback),
-              (Strings{"summary", "where", "sort", "head"}));
-  // A source that accepts fewer stages gets the longest prefix it accepts.
+  CHECK_EQUAL(stage_kinds(plan(pipe, 0)),
+              (Strings{"aggregate", "filter", "sort", "limit"}));
+  // A source that takes over fewer stages leaves the others in place.
   auto fewer = optimized(make_pipeline({
-    Mock::source("source", 1),
+    Mock::source("source", 2),
     Mock{"summary", summary},
     filter_mock("where"),
     sort_mock("sort"),
     limit_mock("head"),
   }));
-  REQUIRE(absorbed(fewer, 0));
-  CHECK_EQUAL(stage_kinds(*absorbed(fewer, 0)), (Strings{"filter"}));
+  CHECK_EQUAL(stage_kinds(plan(fewer, 0)), (Strings{"aggregate", "filter"}));
   CHECK_EQUAL(names(fewer), (Strings{"source", "sort", "head"}));
-  CHECK_EQUAL(names(absorbed(fewer, 0)->fallback),
-              (Strings{"summary", "where"}));
-  auto none = optimized(make_pipeline({
-    Mock::source("source", 0),
-    Mock{"summary", summary},
-    limit_mock("head"),
-  }));
-  REQUIRE(absorbed(none, 0));
-  CHECK(absorbed(none, 0)->stages.empty());
-  CHECK_EQUAL(names(none), (Strings{"source", "head"}));
-  CHECK_EQUAL(names(absorbed(none, 0)->fallback), (Strings{"summary"}));
-}
-
-TEST("optimizer hints only stages that compose") {
-  using enum Mock::Kind;
-  using Strings = std::vector<std::string>;
-  auto stages = [](std::vector<Mock> after) {
-    auto ops
-      = std::vector<Mock>{Mock{"source", source}, Mock{"summary", summary}};
-    ops.append_range(std::move(after));
-    auto pipe = optimized(make_pipeline(std::move(ops)));
-    REQUIRE(absorbed(pipe, 0));
-    return stage_kinds(*absorbed(pipe, 0));
-  };
-  // Nothing follows a limit, which counts the groups before it.
-  CHECK_EQUAL(stages({limit_mock("a"), filter_mock("b")}), (Strings{"limit"}));
-  CHECK_EQUAL(stages({limit_mock("a"), sort_mock("b")}), (Strings{"limit"}));
-  CHECK_EQUAL(stages({limit_mock("a"), limit_mock("b")}), (Strings{"limit"}));
-  // A filter commutes with a sort, unless the sort keeps only its first
-  // events. Such a sort also goes without the limit behind it, as when an
-  // operator that is no stage separates them.
-  CHECK_EQUAL(stages({sort_mock("a"), filter_mock("b"), limit_mock("c")}),
-              (Strings{"sort", "filter", "limit"}));
-  CHECK_EQUAL(stages({sort_mock("a", true), filter_mock("b")}),
-              (Strings{"sort"}));
-  CHECK_EQUAL(
-    stages({sort_mock("a", true), Mock{"b", barrier}, limit_mock("c")}),
-    (Strings{"sort"}));
-  CHECK_EQUAL(stages({sort_mock("a", true), limit_mock("b")}),
-              (Strings{"sort", "limit"}));
-  // A second sort ends the stages.
-  CHECK_EQUAL(stages({sort_mock("a"), sort_mock("b"), limit_mock("c")}),
-              (Strings{"sort"}));
-  // So does any other operator.
-  CHECK_EQUAL(stages({filter_mock("a"), Mock{"b", barrier}, limit_mock("c")}),
-              (Strings{"filter"}));
-  CHECK_EQUAL(stages({Mock{"a", barrier}, limit_mock("b")}), (Strings{}));
 }
 
 TEST("operators describe the stages after an aggregation") {

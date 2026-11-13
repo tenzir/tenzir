@@ -120,8 +120,6 @@ struct OptimizeCtx {
 
 class PlanBuilder;
 
-struct OptimizeAggregation;
-
 /// An output column of an aggregation.
 struct AggregateColumn {
   /// The field of the output event, as path segments.
@@ -191,8 +189,11 @@ struct QueryStage {
   };
 
   /// A final `summarize` that reads its input fields directly: one event per
-  /// group, and without group keys exactly one event.
+  /// group, and without group keys exactly one event, also for empty input.
+  /// Each column is either a group key, which copies a field, or a call of an
+  /// aggregation function with at most one field as argument.
   struct Aggregate {
+    /// The output columns, in the order of the output fields.
     std::vector<AggregateColumn> columns;
     /// The schema name of the output events.
     std::string schema_name;
@@ -336,35 +337,11 @@ public:
   virtual auto
   optimize(OptimizeRequest req, const OptimizeCtx& octx) && -> OptimizeResult;
 
-  /// Return the aggregation that this operator computes from its input, if the
-  /// operator before it may compute that aggregation instead. The default
-  /// returns `None`.
-  virtual auto aggregation() const -> Option<OptimizeAggregation>;
-
-  /// Take over `aggregation`, which an operator after this one computes from
-  /// this operator's output, either directly or behind operators that
-  /// rewrote it as in `rewrite_aggregation`. Return whether this operator now
-  /// emits the result of the aggregation, in which case the optimizer removes
-  /// the aggregating operator and the operators between the two. Their copies
-  /// lead `aggregation.fallback`, in the order in which they run. The default
-  /// declines. The optimizer offers the aggregation with the longest prefix of
-  /// the stages after it first, and then with ever shorter ones. On success,
-  /// it also removes the operators of the stages in `aggregation.stages`,
-  /// whose copies trail `aggregation.fallback`.
-  ///
-  /// This runs after the optimization walk, so an implementation knows the
-  /// filters and limits it absorbed. It must decline unless it can produce
-  /// the result exactly, either by computing it or by running
-  /// `aggregation.fallback` on what it would otherwise emit. An operator that
-  /// keeps the aggregation must also substitute its fallback in `substitute`,
-  /// whose operators may reference bindings.
-  virtual auto absorb_aggregation(OptimizeAggregation const& aggregation)
-    -> bool;
-
   /// Return an aggregation over this operator's input whose result equals
-  /// that of `aggregation` over this operator's output, so that the optimizer
-  /// may remove this operator, or `None` if there is none. The default returns
-  /// `None`, and an implementation may always decline.
+  /// that of `aggregate` over this operator's output, so that a source before
+  /// this operator may compute the aggregation as one `Aggregate` stage
+  /// without it, or `None` if there is none. The default returns `None`, and
+  /// an implementation may always decline.
   ///
   /// Returning an aggregation asserts, for every input that the operator
   /// accepts, that removing the operator ahead of the aggregation changes
@@ -380,14 +357,14 @@ public:
   ///   `OptimizeRequest::filter`, warnings may differ.
   ///
   /// Rewrite only the inputs of the columns, for example through the free
-  /// function `rewrite_aggregation`, and leave the outputs, the schema name,
-  /// and the fallback as they are. On success, the optimizer offers the result
-  /// to the operator before this one, and prepends a copy of this operator to
-  /// its `fallback`. This runs after the optimization walk and must not modify
-  /// the operator.
-  virtual auto rewrite_aggregation(OptimizeAggregation aggregation,
-                                   OptimizeCtx const& octx) const
-    -> Option<OptimizeAggregation>;
+  /// function `rewrite_aggregate`, and leave the outputs and the schema name
+  /// as they are. On success, the optimizer asks the operator before this one
+  /// to rewrite the result in turn, until it reaches the source that takes
+  /// over the stages. This runs after the optimization walk and must not
+  /// modify the operator.
+  virtual auto rewrite_aggregate(QueryStage::Aggregate aggregate,
+                                 OptimizeCtx const& octx) const
+    -> Option<QueryStage::Aggregate>;
 
   /// Return the stage that this operator applies to its input, if it is one,
   /// so that a source before it may take it over. The default returns `None`.
@@ -396,18 +373,18 @@ public:
   /// including anything that it absorbed during the optimization walk, and the
   /// operator must have no side effects. A source that takes over the stage
   /// removes the operator and computes the stage with the semantics of its
-  /// target. This runs after the optimization walk and must not modify the
-  /// operator.
+  /// target. An `Aggregate` stage may also reach a source through the
+  /// operators before this one, as in `rewrite_aggregate`. This runs after the
+  /// optimization walk and must not modify the operator.
   virtual auto query_stage(OptimizeCtx const& octx) const -> Option<QueryStage>;
 
   /// Take over a prefix of `chain`, the stages of the operators after this
   /// one, and return its length. The optimizer removes the operators of the
   /// prefix. The default takes over nothing.
   ///
-  /// This runs after the optimization walk, and before aggregations are
-  /// offered through `absorb_aggregation`. An operator decides from the stages
-  /// alone, and must compute every stage of the prefix at runtime, with the
-  /// semantics of its target: there is no local fallback. An operator that
+  /// This runs after the optimization walk. An operator decides from the
+  /// stages alone, and must compute every stage of the prefix at runtime, with
+  /// the semantics of its target: there is no local fallback. An operator that
   /// took over stages declines later chains.
   virtual auto absorb(QueryChain const& chain, OptimizeCtx const& octx)
     -> Absorption;
@@ -547,50 +524,6 @@ struct pipeline {
   optimize(OptimizeRequest req, const OptimizeCtx& octx) && -> OptimizeResult;
 };
 
-/// An aggregation that a source may compute instead of the operator that
-/// follows it.
-///
-/// Only an aggregation that reads its input fields directly qualifies. Each
-/// output column is either a group key, which copies a field, or a call of an
-/// aggregation function with at most one field as argument. The output holds
-/// one event per group. Without group keys, it holds exactly one event, also
-/// for empty input.
-///
-/// The description names functions and fields, but leaves their spelling to
-/// the source. A source that cannot compute every column with the semantics of
-/// TQL must decline, or run `fallback` itself.
-struct OptimizeAggregation {
-  using Column = AggregateColumn;
-
-  /// The output columns, in the order of the output fields.
-  std::vector<Column> columns;
-
-  /// The schema name of the output events.
-  std::string schema_name;
-
-  /// The operators that compute the aggregation from the source's events.
-  /// A source that accepts the aggregation but finds at runtime that it cannot
-  /// compute it runs these on the events that it would otherwise emit.
-  pipeline fallback;
-
-  /// The stages that follow the aggregation, in order, which the operator
-  /// computes, too. The optimizer removed their operators, whose copies trail
-  /// `fallback`. A source computes all stages with the aggregation, with the
-  /// semantics of its target, or neither of them, by running `fallback`.
-  /// Only `Filter`, `Sort`, and `Limit` stages occur here.
-  std::vector<QueryStage> stages;
-
-  /// Substitutes the fallback and the predicates of the stages.
-  auto substitute(substitute_ctx ctx, bool instantiate) -> failure_or<void>;
-
-  friend auto inspect(auto& f, OptimizeAggregation& x) -> bool {
-    return f.object(x).fields(f.field("columns", x.columns),
-                              f.field("schema_name", x.schema_name),
-                              f.field("fallback", x.fallback),
-                              f.field("stages", x.stages));
-  }
-};
-
 struct CompileResult {
   CompileResult() = default;
 
@@ -693,17 +626,17 @@ auto split_filter_by_substitution(OptimizeFilter filter, registry const& reg,
                                   ast::MetaSubstitution const& meta = {})
   -> split_filter_result;
 
-/// Rewrites the inputs of `aggregation` with `fields`, which resolves fields
-/// of an operator's output to expressions over its input, as for
+/// Rewrites the inputs of `aggregate` with `fields`, which resolves fields of
+/// an operator's output to expressions over its input, as for
 /// `split_filter_by_substitution`. Returns `None` unless every input resolves
-/// to a plain field path without `?`. Outputs and the fallback stay as they
-/// are.
+/// to a plain field path without `?`. Outputs and the schema name stay as
+/// they are.
 ///
 /// This serves operators that keep every event, as in
-/// `Operator::rewrite_aggregation`.
-auto rewrite_aggregation(OptimizeAggregation aggregation,
-                         ast::FieldSubstitution const& fields)
-  -> Option<OptimizeAggregation>;
+/// `Operator::rewrite_aggregate`.
+auto rewrite_aggregate(QueryStage::Aggregate aggregate,
+                       ast::FieldSubstitution const& fields)
+  -> Option<QueryStage::Aggregate>;
 
 /// Simplifies a predicate without changing which events it keeps.
 ///
@@ -1201,9 +1134,9 @@ public:
   auto optimize(OptimizeRequest req,
                 const OptimizeCtx& octx) && -> OptimizeResult override;
 
-  auto rewrite_aggregation(OptimizeAggregation aggregation,
-                           OptimizeCtx const& octx) const
-    -> Option<OptimizeAggregation> override;
+  auto rewrite_aggregate(QueryStage::Aggregate aggregate,
+                         OptimizeCtx const& octx) const
+    -> Option<QueryStage::Aggregate> override;
 
   /// Describes the assignments as a `Select` stage if they have the shape
   /// that `select` produces from plain fields: `this = {}`, then assignments
