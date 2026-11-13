@@ -14,7 +14,6 @@ build:
           - flake.lock
           - Dockerfile
           - ansible/**
-          - docker-compose.yaml
           - scripts/**
           - .clang-format
           - .clang-tidy

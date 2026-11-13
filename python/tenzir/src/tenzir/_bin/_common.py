@@ -1,3 +1,4 @@
+import importlib.metadata
 import os
 import shutil
 import sys
@@ -46,9 +47,22 @@ def _prepare_environment() -> None:
     os.environ["TENZIR_PLUGINS__PYTHON__IMPLICIT_REQUIREMENTS"] = value
 
 
+def _v7_or_later() -> bool:
+    # From v7 on, `tenzir` uses the unified command interface when
+    # `TENZIR_UNIFIED` is unset or empty, and Tenzir ships no node. The package
+    # has the version of the engine it bundles.
+    try:
+        major = importlib.metadata.version("tenzir").split(".", 1)[0]
+    except importlib.metadata.PackageNotFoundError:
+        return False
+    return major.isdigit() and int(major) >= 7
+
+
 def _unified_mode() -> bool:
     value = os.environ.get("TENZIR_UNIFIED", "").lower()
-    return value not in {"", "0", "false", "no"}
+    if not value:
+        return _v7_or_later()
+    return value not in {"0", "false", "no"}
 
 
 def _is_remote_run(arguments: list[str]) -> bool:
@@ -72,6 +86,13 @@ def _exec_platform_cli(arguments: list[str]) -> NoReturn:
 def exec_binary(name: str) -> NoReturn:
     # We don't support calling this helper outside of the generated tenzir(*) wrappers
     # from the [project.scripts] in pyproject.toml.
+    if name == "tenzir-node" and _v7_or_later():
+        _ = sys.stderr.write(
+            "tenzir-node: Tenzir v7 and later ship no node; "
+            "see https://tenzir.com/docs\n",
+        )
+        _ = sys.stderr.flush()
+        raise SystemExit(1)
     _prepare_environment()
     arguments = sys.argv[1:]
     if name == "tenzir":

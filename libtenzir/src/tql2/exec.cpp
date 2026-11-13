@@ -15,6 +15,7 @@
 #include "tenzir/atomic.hpp"
 #include "tenzir/co_match.hpp"
 #include "tenzir/compile_ctx.hpp"
+#include "tenzir/config.hpp"
 #include "tenzir/configuration.hpp"
 #include "tenzir/defaults.hpp"
 #include "tenzir/detail/assert.hpp"
@@ -202,16 +203,17 @@ auto load_packages_for_exec(diagnostic_handler& dh, caf::actor_system& sys,
   -> failure_or<ExternPrelude> {
   // In a workspace, a pipeline uses the packages the workspace uses, the way
   // its deployments would, and none installed elsewhere. `tenzir.workspace`
-  // names one, or `none` for none. Otherwise, only the unified command
-  // interface, which brings workspaces, looks for one: a released `tenzir`
-  // loads packages as it always has.
+  // names one, or `none` for none. Otherwise, the unified command interface
+  // looks for one from the current directory. The previous interface, the
+  // default in v6 and earlier, loads packages from the configuration
+  // directories and `tenzir.package-dirs` instead.
   auto const& cfg = caf::content(sys.config());
   auto root = Option<std::filesystem::path>{};
   if (auto const* chosen = caf::get_if<std::string>(&cfg, "tenzir.workspace")) {
     if (*chosen != "none") {
       root = std::filesystem::path{*chosen};
     }
-  } else if (unified_mode()) {
+  } else if (unified_mode(version::major)) {
     auto ec = std::error_code{};
     root = find_workspace(std::filesystem::current_path(ec));
   }

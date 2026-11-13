@@ -40,6 +40,21 @@ endfunction ()
 
 set(engine "tenzir-engine\nunset\n")
 set(platform "tenzir-platform\n${libexec}\n")
+# An unset or empty `TENZIR_UNIFIED` selects the unified interface from v7 on.
+set(previous_modes
+    0
+    false
+    FALSE
+    FaLsE
+    no
+    NO
+    nO)
+set(unified_modes 1 true yes arbitrary)
+if (VERSION_MAJOR GREATER_EQUAL 7)
+  list(APPEND unified_modes unset "")
+else ()
+  list(APPEND previous_modes unset "")
+endif ()
 foreach (
   mode
   unset
@@ -66,17 +81,7 @@ foreach (
     check("${mode}" "${name}" "${engine}up\n" up)
   endforeach ()
 endforeach ()
-foreach (
-  mode
-  unset
-  ""
-  0
-  false
-  FALSE
-  FaLsE
-  no
-  NO
-  nO)
+foreach (mode IN LISTS previous_modes)
   check("${mode}" tenzir "${platform}--help\n" platform --help)
   check("${mode}" tenzir "${platform}" platform)
   check("${mode}" tenzir "${engine}run\n-r\nfrom {x: 1}\n" run -r "from {x: 1}")
@@ -85,7 +90,7 @@ foreach (
   check("${mode}" tenzir "${engine}unknown\n--flag\na b\n" unknown --flag "a b")
   check("${mode}" tenzir "${engine}")
 endforeach ()
-foreach (mode 1 true yes arbitrary)
+foreach (mode IN LISTS unified_modes)
   check("${mode}" tenzir "${platform}run\n-r\nfrom {x: 1}\n" run -r
         "from {x: 1}")
   check(
@@ -124,3 +129,20 @@ execute_process(
 if (NOT status EQUAL 42)
   message(FATAL_ERROR "Backend exit status was lost: ${status}")
 endif ()
+
+# A build without the platform CLI says that it supports only `tenzir run`.
+file(REMOVE "${libexec}/tenzir-platform")
+foreach (arguments "--help" "platform;--help" "up")
+  execute_process(
+    COMMAND "${CMAKE_COMMAND}" -E env TENZIR_UNIFIED=1 "${TEST_ROOT}/bin/tenzir"
+            ${arguments}
+    RESULT_VARIABLE status
+    OUTPUT_VARIABLE output
+    ERROR_VARIABLE error)
+  if (status EQUAL 0 OR NOT error MATCHES "supports only `tenzir run`")
+    message(
+      FATAL_ERROR
+        "Missing platform CLI: ${arguments}: ${status}\n${output}${error}")
+  endif ()
+endforeach ()
+check(1 tenzir "${engine}run\nfrom {x: 1}\n" run "from {x: 1}")

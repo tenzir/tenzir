@@ -6,8 +6,8 @@ ARM64, and macOS 13 or later on ARM64. Install it with
 `platform-cli --help`.
 
 The `tenzir` package installs this dependency automatically and exposes
-it through `tenzir platform`. With `TENZIR_UNIFIED=1`, platform commands are also
-available directly through `tenzir`.
+its commands directly through `tenzir`. With `TENZIR_UNIFIED=0`, they are
+available through `tenzir platform` instead.
 
 Build a wheel from a repository checkout with
 `uv build --wheel --package tenzir-platform-cli` in `engine/python/`. The build

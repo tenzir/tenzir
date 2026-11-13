@@ -10,6 +10,21 @@
     owner: "{{ ansible_user_id }}"
     group: "{{ ansible_user_id }}"
 
+# The role runs a Tenzir node, which Tenzir packages ship only before v7.
+- name: List the contents of the Debian package
+  ansible.builtin.command:
+    cmd: dpkg-deb --contents /tmp/tenzir.deb
+  changed_when: false
+  register: tenzir_package_contents
+
+- name: Fail for packages without a Tenzir node
+  ansible.builtin.fail:
+    msg: "{{ tenzir_debian_package }} contains no Tenzir node. This role supports only Tenzir packages before v7."
+  when: >-
+    tenzir_package_contents.stdout_lines
+    | select('search', ' [.]/opt/tenzir/bin/tenzir-node( |$)')
+    | list | length == 0
+
 - name: Install Tenzir Debian package
   ansible.builtin.apt:
     deb: /tmp/tenzir.deb

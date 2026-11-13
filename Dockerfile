@@ -193,8 +193,9 @@ RUN mkdir -p \
 WORKDIR /var/lib/tenzir
 VOLUME ["/var/lib/tenzir"]
 
+# The image has no platform CLI, so `tenzir` supports only `run`.
 ENTRYPOINT ["tenzir"]
-CMD ["--help"]
+CMD ["run", "--help"]
 
 # -- tenzir-untested -----------------------------------------------------------
 
@@ -297,8 +298,9 @@ VOLUME ["/var/cache/tenzir", "/var/lib/tenzir"]
 # Verify that Tenzir starts up correctly.
 RUN tenzir run 'version'
 
+# The image has no platform CLI, so `tenzir` supports only `run`.
 ENTRYPOINT ["tenzir"]
-CMD ["--help"]
+CMD ["run", "--help"]
 
 # -- tenzir-integration --------------------------------------------------------
 
@@ -311,9 +313,12 @@ COPY --chown=tenzir:tenzir test/ ./test
 # nix/test-dependencies.nix). `uv tool run` otherwise resolves the latest PyPI
 # release, whose different stdout/stderr handling reorders diagnostics relative
 # to the reference outputs.
-RUN XDG_CACHE_HOME=/tmp XDG_DATA_HOME=/tmp \
+# Packages from v7 on install no `tenzir-node`. Started under that name,
+# `tenzir` runs a node all the same.
+RUN mkdir -p /tmp/node && ln -sf "$PREFIX/bin/tenzir" /tmp/node/tenzir-node && \
+    XDG_CACHE_HOME=/tmp XDG_DATA_HOME=/tmp \
     TENZIR_BINARY="$PREFIX/bin/tenzir run" \
-    TENZIR_NODE_BINARY="$PREFIX/bin/tenzir-node" \
+    TENZIR_NODE_BINARY=/tmp/node/tenzir-node \
     "${PREFIX}/libexec/uv" tool run \
     --python ">=3.12" \
     --with grpcio \

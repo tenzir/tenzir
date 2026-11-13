@@ -6,7 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <cctype>
+#include "tenzir/unified.hpp"
+
 #include <cerrno>
 #include <cstdlib>
 #include <cstring>
@@ -20,20 +21,6 @@
 #include <vector>
 
 namespace {
-
-// libtenzir has its own copy of this rule in `tenzir::unified_mode`, for
-// `tenzir run`, which runs in the engine. The two have to agree.
-auto unified_mode() -> bool {
-  auto const* value = std::getenv("TENZIR_UNIFIED");
-  if (not value or not *value) {
-    return false;
-  }
-  auto normalized = std::string{value};
-  for (auto& c : normalized) {
-    c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-  }
-  return normalized != "0" and normalized != "false" and normalized != "no";
-}
 
 // A `run` with `-r` or `--remote` runs on the platform, so in unified mode it
 // goes to the platform CLI like every other command.
@@ -90,6 +77,16 @@ auto run(std::filesystem::path const& binary, std::vector<char*> arguments)
 
 auto run_platform_cli(std::filesystem::path const& libexec, std::string& name,
                       char** first, char** last) -> int {
+  auto const binary = libexec / "tenzir-platform";
+  // A build without a packaged platform CLI, such as a standalone engine
+  // build, runs pipelines locally and nothing else.
+  if (::access(binary.c_str(), F_OK) != 0 and errno == ENOENT) {
+    std::cerr << "tenzir: this build of Tenzir comes without the platform CLI "
+                 "and supports only `tenzir run`\n"
+                 "tenzir: get a Tenzir package with all commands at "
+                 "https://tenzir.com/docs\n";
+    return EXIT_FAILURE;
+  }
   // The platform CLI starts deployments through the engine, so it needs to
   // know where to find it.
   if (::setenv("TENZIR_LIBEXEC", libexec.c_str(), 1) != 0) {
@@ -99,7 +96,7 @@ auto run_platform_cli(std::filesystem::path const& libexec, std::string& name,
   }
   auto arguments = std::vector<char*>{name.data()};
   arguments.insert(arguments.end(), first, last);
-  return run(libexec / "tenzir-platform", std::move(arguments));
+  return run(binary, std::move(arguments));
 }
 
 } // namespace
@@ -112,7 +109,7 @@ auto main(int argc, char** argv) -> int {
   if (name == "tenzir") {
     auto const command
       = argc > 1 ? std::string_view{argv[1]} : std::string_view{};
-    if (unified_mode()) {
+    if (tenzir::unified_mode(TENZIR_VERSION_MAJOR)) {
       if (command != "run" or is_remote_run(argc, argv)) {
         return run_platform_cli(libexec, name, argv + 1, argv + argc);
       }

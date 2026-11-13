@@ -1,0 +1,11 @@
+#!/bin/sh
+
+set -e
+
+# Whether this package ships `tenzir-node.service`, which only packages before
+# v7 do.
+node_service=@TENZIR_INSTALL_NODE@
+
+if [ "$node_service" = ON ]; then
+    deb-systemd-invoke stop tenzir-node.service || true
+fi

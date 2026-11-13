@@ -96,9 +96,9 @@ scripts/build.sh tenzir-unit-test
 
 ### Run pipelines
 
-Use the `tenzir` binary to execute a TQL program:
+Use `tenzir run` to execute a TQL program:
 
-- The first argument is the pipeline definition.
+- The first argument after `run` is the pipeline definition.
 - Alternatively, pass the pipeline definition as file via `-f <path>`.
 - TQL files typically end with `.tql`.
 - The pipeline may read stdin as data, based on the first operator.
@@ -113,6 +113,10 @@ scripts/build.sh
 # Or `uvx tenzir-test` when `tenzir-test` is not in $PATH
 tenzir-test --root test
 ```
+
+The suite uses the local build's `tenzir run`. To test another binary, set
+`TENZIR_BINARY="/path/to/tenzir run"`: a bare `tenzir` goes to the platform
+CLI.
 
 Common `tenzir-test` options:
 

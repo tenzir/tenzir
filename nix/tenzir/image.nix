@@ -305,12 +305,25 @@ let
       };
     };
 
+  # From v7 on, Tenzir ships no node, so there are no node images either.
+  installsNode = lib.toInt (lib.versions.major pkg.version) < 7;
+
 in
 {
   tenzir = buildTenzirImage {
     name = "tenzir/tenzir";
-    cmd = [ "--help" ];
+    # Without a platform CLI, `tenzir` supports only `run`.
+    cmd =
+      if pkg.hasPlatformCli then
+        [ "--help" ]
+      else
+        [
+          "run"
+          "--help"
+        ];
   };
+}
+// lib.optionalAttrs installsNode {
   tenzir-node = buildTenzirImage {
     name = "tenzir/tenzir-node";
     entrypoint = [ "tenzir-node" ];

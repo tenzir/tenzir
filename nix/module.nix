@@ -103,6 +103,16 @@ in
   };
 
   config = mkIf cfg.enable {
+    assertions = [
+      {
+        assertion = lib.versionOlder cfg.package.version "7";
+        message = ''
+          services.tenzir runs a Tenzir node, which Tenzir ships only before
+          v7, but services.tenzir.package is version ${cfg.package.version}.
+        '';
+      }
+    ];
+
     environment.systemPackages = [ cfg.package ];
 
     systemd.services.tenzir = {

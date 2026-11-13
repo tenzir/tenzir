@@ -2,6 +2,10 @@
 
 set -e
 
+# Whether this package ships `tenzir-node.service`, which only packages before
+# v7 do.
+node_service=@TENZIR_INSTALL_NODE@
+
 if [ "$1" = "configure" ]; then
     mkdir -p /var/lib/tenzir
     if ! getent passwd tenzir >/dev/null; then
@@ -23,13 +27,29 @@ if [ "$1" = "configure" ]; then
 fi
 
 if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
-  if [ -d /run/systemd/system ]; then
+  if [ "$node_service" = ON ] && [ -d /run/systemd/system ]; then
     # Link the service into systemd's default service directory to make
     # it known.
     /usr/bin/systemctl link /opt/tenzir/lib/systemd/system/tenzir-node.service
   fi
   echo "Adding tenzir to \$PATH"
   echo "export PATH=\$PATH:/opt/tenzir/bin" > /etc/profile.d/tenzir.sh
+fi
+
+if [ "$node_service" != ON ]; then
+    # An upgrade from a package with `tenzir-node.service` removed the unit
+    # file, but leaves the links that enabled it.
+    if [ "$1" = "configure" ] && [ -x "/usr/bin/deb-systemd-helper" ] \
+        && deb-systemd-helper debian-installed 'tenzir-node.service'; then
+        deb-systemd-helper purge 'tenzir-node.service' >/dev/null || true
+        if [ -L /etc/systemd/system/tenzir-node.service ]; then
+            rm -f /etc/systemd/system/tenzir-node.service
+        fi
+        if [ -d /run/systemd/system ]; then
+            /usr/bin/systemctl --system daemon-reload >/dev/null || true
+        fi
+    fi
+    exit 0
 fi
 
 # Automatically added by dh_installsystemd/13.3.4

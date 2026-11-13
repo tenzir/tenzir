@@ -1,14 +1,16 @@
 # SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 # SPDX-License-Identifier: BSD-3-Clause
 
-# `tenzir run` must behave exactly like `tenzir` with the same arguments.
+# `tenzir run` must behave exactly like `tenzir` with the same arguments in the
+# previous interface, which is the only one where `tenzir` alone runs a
+# pipeline.
 set(pipeline "from {answer: 42} | write_ndjson")
 file(MAKE_DIRECTORY "${TEST_ROOT}")
 file(WRITE "${TEST_ROOT}/pipeline.tql" "${pipeline}\n")
 
 function (tenzir result)
   execute_process(
-    COMMAND "${CMAKE_COMMAND}" -E env --unset=TENZIR_UNIFIED "${TENZIR_BINARY}"
+    COMMAND "${CMAKE_COMMAND}" -E env TENZIR_UNIFIED=0 "${TENZIR_BINARY}"
             ${ARGN}
     RESULT_VARIABLE status
     OUTPUT_VARIABLE output

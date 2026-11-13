@@ -53,7 +53,12 @@ file(RELATIVE_PATH TENZIR_LIBEXEC_FROM_BINDIR "${CMAKE_INSTALL_FULL_BINDIR}"
      "${CMAKE_INSTALL_FULL_LIBEXECDIR}")
 add_executable(tenzir dispatcher.cpp)
 target_compile_definitions(
-  tenzir PRIVATE TENZIR_LIBEXEC_FROM_BINDIR="${TENZIR_LIBEXEC_FROM_BINDIR}")
+  tenzir PRIVATE TENZIR_LIBEXEC_FROM_BINDIR="${TENZIR_LIBEXEC_FROM_BINDIR}"
+                 TENZIR_VERSION_MAJOR=${Tenzir_VERSION_MAJOR})
+# The dispatcher links no libtenzir, but shares its rule for `TENZIR_UNIFIED`
+# through `tenzir/unified.hpp`, which needs nothing else.
+target_include_directories(
+  tenzir PRIVATE "$<TARGET_PROPERTY:libtenzir,SOURCE_DIR>/include")
 TenzirTargetEnableTooling(tenzir)
 add_dependencies(tenzir tenzir-engine)
 add_executable(tenzir::tenzir ALIAS tenzir)
@@ -65,7 +70,10 @@ install(
   LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Runtime
   RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT Runtime)
 
-macro (create_tenzir_symlink name)
+# Creates `name` next to `tenzir` in the build tree, and installs it unless
+# `BUILD_TREE_ONLY` is given.
+function (create_tenzir_symlink name)
+  cmake_parse_arguments(PARSE_ARGV 1 ARG "BUILD_TREE_ONLY" "" "")
   # Implicitly create the compatibility symlinks when building tenzir.
   # That means that the links get re-created every time tenzir is built, but we
   # tolerate this overhead to avoid the inconvenience of missing links.
@@ -83,6 +91,9 @@ macro (create_tenzir_symlink name)
     TARGET tenzir
     APPEND
     PROPERTY ADDITIONAL_CLEAN_FILES "$<TARGET_FILE_DIR:tenzir>/${name}")
+  if (ARG_BUILD_TREE_ONLY)
+    return()
+  endif ()
   # The generated code in cmake_install.cmake for executable targets is
   # different depending on whether the CMAKE_INSTALL_BINDIR is set to an
   # absolute path or not. We emulate this behavior for the symlinks here so they
@@ -102,9 +113,14 @@ macro (create_tenzir_symlink name)
         \"\$ENV{DESTDIR}${CMAKE_INSTALL_FULL_BINDIR}/${name}\")"
       COMPONENT Runtime)
   endif ()
-endmacro ()
+endfunction ()
 
-create_tenzir_symlink(tenzir-node)
+if (TENZIR_INSTALL_NODE)
+  create_tenzir_symlink(tenzir-node)
+else ()
+  # The integration tests start nodes through it.
+  create_tenzir_symlink(tenzir-node BUILD_TREE_ONLY)
+endif ()
 create_tenzir_symlink(tenzir-ctl)
 create_tenzir_symlink(tenzir-rebuild)
 
@@ -114,7 +130,8 @@ if (BUILD_TESTING)
     COMMAND
       "${CMAKE_COMMAND}" "-DTENZIR_BINARY=$<TARGET_FILE:tenzir>"
       "-DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/dispatcher-test"
-      "-DLIBEXEC_FROM_BINDIR=${TENZIR_LIBEXEC_FROM_BINDIR}" -P
+      "-DLIBEXEC_FROM_BINDIR=${TENZIR_LIBEXEC_FROM_BINDIR}"
+      "-DVERSION_MAJOR=${Tenzir_VERSION_MAJOR}" -P
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/dispatcher.cmake")
   add_test(
     NAME tenzir/run-subcommand
@@ -122,11 +139,16 @@ if (BUILD_TESTING)
       "${CMAKE_COMMAND}" "-DTENZIR_BINARY=$<TARGET_FILE:tenzir>"
       "-DTEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/run-subcommand-test" -P
       "${CMAKE_CURRENT_SOURCE_DIR}/tests/run-subcommand.cmake")
-  foreach (mode 0 1)
+  foreach (mode unset 0 1)
+    if (mode STREQUAL "unset")
+      set(environment --unset=TENZIR_UNIFIED)
+    else ()
+      set(environment TENZIR_UNIFIED=${mode})
+    endif ()
     add_test(
       NAME tenzir/dispatcher-run-${mode}
-      COMMAND "${CMAKE_COMMAND}" -E env TENZIR_UNIFIED=${mode}
-              "$<TARGET_FILE:tenzir>" run "from {answer: 42} | write_ndjson")
+      COMMAND "${CMAKE_COMMAND}" -E env ${environment} "$<TARGET_FILE:tenzir>"
+              run "from {answer: 42} | write_ndjson")
     set_tests_properties(
       tenzir/dispatcher-run-${mode} PROPERTIES PASS_REGULAR_EXPRESSION
                                                "\"answer\"[^0-9]*42")
@@ -143,7 +165,8 @@ TenzirInstallExampleConfiguration(
 option(TENZIR_ENABLE_INIT_SYSTEM_INTEGRATION
        "Integrate with init systems when installing" ON)
 
-if (TENZIR_ENABLE_INIT_SYSTEM_INTEGRATION)
+# The services run a node, which Tenzir installs only before v7.
+if (TENZIR_ENABLE_INIT_SYSTEM_INTEGRATION AND TENZIR_INSTALL_NODE)
   if (${CMAKE_SYSTEM_NAME} STREQUAL "FreeBSD")
     # Install rc.d script on FreeBSD into PREFIX/etc/rc.d.
     # TODO: Technically this can break for relocatable binaries when the install
@@ -164,7 +187,7 @@ if (TENZIR_ENABLE_INIT_SYSTEM_INTEGRATION)
       if (NOT IS_ABSOLUTE \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}\")
         string(PREPEND CMAKE_INSTALL_PREFIX \"${CMAKE_SOURCE_DIR}/\")
       endif ()
-      set(TENZIR_BINARY \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/bin/$<TARGET_FILE_NAME:tenzir>\")
+      set(TENZIR_BINARY \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/bin/tenzir-node\")
       set(TENZIR_WORKING_DIRECTORY \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/share/tenzir\")
       message(STATUS
         \"Installing: \$ENV{HOME}/Library/LaunchAgents/com.tenzir.tenzir.plist\")

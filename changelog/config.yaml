@@ -1,5 +1,5 @@
 id: tenzir
-name: Tenzir Node
+name: Tenzir
 description: >-
   The security data pipeline engine that collects security telemetry, normalizes
   events to OCSF, and offers an open data lake for storage.

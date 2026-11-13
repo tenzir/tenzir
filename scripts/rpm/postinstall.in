@@ -1,0 +1,19 @@
+# Whether this package ships `tenzir-node.service`, which only packages before
+# v7 do.
+node_service=@TENZIR_INSTALL_NODE@
+
+if [ $1 -eq 1 ]; then
+  # Initial installation
+  if [ "$node_service" = ON ]; then
+    systemctl link /opt/tenzir/lib/systemd/system/tenzir-node.service || :
+    systemctl enable tenzir-node.service >/dev/null 2>&1 || :
+    systemctl start tenzir-node.service >/dev/null 2>&1 || :
+  fi
+
+  echo "export PATH=\$PATH:/opt/tenzir/bin" > /etc/profile.d/tenzir.sh
+elif [ "$node_service" != ON ]; then
+  # An upgrade from a package with `tenzir-node.service`. Its unit file is
+  # still in place until the old package is removed, so this stops the
+  # service and removes every link to it.
+  systemctl disable --now tenzir-node.service >/dev/null 2>&1 || :
+fi

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import shlex
+import shutil
 import socket
 import subprocess
 import tempfile
@@ -15,6 +16,14 @@ from pathlib import Path
 
 NUM_MESSAGES = 10
 GROUP_TIMEOUT = 20
+
+
+def node_binary() -> list[str]:
+    if env_value := os.environ.get("TENZIR_NODE_BINARY"):
+        return shlex.split(env_value)
+    if binary := shutil.which("tenzir-node"):
+        return [binary]
+    raise RuntimeError("tenzir-node executable not found")
 
 
 def free_port() -> int:
@@ -130,7 +139,7 @@ def wait_for_offsets(
 
 
 tenzir = shlex.split(os.environ["TENZIR_PYTHON_FIXTURE_BINARY"])
-tenzir_node = Path(tenzir[0]).with_name("tenzir-node")
+tenzir_node = node_binary()
 bootstrap_servers = os.environ["KAFKA_BOOTSTRAP_SERVERS"]
 topic = os.environ["KAFKA_TOPIC"]
 kafka_container = os.environ["KAFKA_CONTAINER_ID"]
@@ -196,7 +205,7 @@ with tempfile.TemporaryDirectory(
 
     node = subprocess.Popen(
         [
-            tenzir_node,
+            *tenzir_node,
             "--nova=true",
             f"--config={config_path}",
             f"--state-directory={root / 'state'}",

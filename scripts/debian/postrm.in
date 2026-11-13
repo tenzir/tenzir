@@ -2,6 +2,10 @@
 
 set -e
 
+# Whether this package ships `tenzir-node.service`, which only packages before
+# v7 do.
+node_service=@TENZIR_INSTALL_NODE@
+
 if [ "$1" = "purge" ] ; then
     if dpkg-statoverride --list /var/lib/tenzir >/dev/null 2>&1 ; then
         dpkg-statoverride --remove /var/lib/tenzir
@@ -19,6 +23,10 @@ if [ "$1" = "purge" ] ; then
 
     echo "Removing tenzir from \$PATH"
     rm -f /etc/profile.d/tenzir.sh
+fi
+
+if [ "$node_service" != ON ]; then
+    exit 0
 fi
 
 # Automatically added by dh_installsystemd/13.3.4

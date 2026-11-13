@@ -42,7 +42,7 @@ pidfile="${tenzir_pidfile}"
 required_files="${tenzir_config}"
 tenzir_program="/usr/sbin/daemon"
 tenzir_flags="-f -P ${pidfile} -r -u ${tenzir_proc_user}"
-command_args="@CMAKE_INSTALL_FULL_BINDIR@/${name} -d ${tenzir_dir} start"
+command_args="@CMAKE_INSTALL_FULL_BINDIR@/tenzir-node -d ${tenzir_dir}"
 
 tenzir_check()
 {

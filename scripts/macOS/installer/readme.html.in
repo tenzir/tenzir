@@ -43,8 +43,7 @@
   <h2>Getting Started</h2>
   <p>After installation, you can:</p>
   <ul>
-    <li>Run pipelines with the <code>tenzir</code> command</li>
-    <li>Start a node with <code>tenzir-node</code></li>
+    @TENZIR_INSTALLER_GETTING_STARTED@
   </ul>
 
   <h2>Documentation</h2>

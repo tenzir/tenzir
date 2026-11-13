@@ -360,6 +360,7 @@ let
             bundledPluginRoot = "${tenzir-source}/plugins";
             excludedBundledPluginNames = privatePluginNames ++ excludedPluginNames;
             darwinDeploymentTarget = "26.0";
+            hasPlatformCli = platformCli != null;
             plugins = [ ];
             withPlugins =
               if isStatic then

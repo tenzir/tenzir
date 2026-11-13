@@ -68,8 +68,20 @@ if (APPLE)
   set(CPACK_PRODUCTBUILD_IDENTIFIER "com.tenzir.tenzir")
   set(CPACK_RESOURCE_FILE_WELCOME
       "${CMAKE_CURRENT_SOURCE_DIR}/scripts/macOS/installer/welcome.html")
+  # Only packages before v7 install `tenzir-node`.
+  if (TENZIR_INSTALL_NODE)
+    set(TENZIR_INSTALLER_GETTING_STARTED
+        "<li>Run pipelines with the <code>tenzir</code> command</li>
+    <li>Start a node with <code>tenzir-node</code></li>")
+  else ()
+    set(TENZIR_INSTALLER_GETTING_STARTED
+        "<li>Run pipelines with <code>tenzir run</code></li>")
+  endif ()
+  configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/scripts/macOS/installer/readme.html.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/scripts/macOS/installer/readme.html" @ONLY)
   set(CPACK_RESOURCE_FILE_README
-      "${CMAKE_CURRENT_SOURCE_DIR}/scripts/macOS/installer/readme.html")
+      "${CMAKE_CURRENT_BINARY_DIR}/scripts/macOS/installer/readme.html")
   set(CPACK_RESOURCE_FILE_LICENSE
       "${CMAKE_CURRENT_SOURCE_DIR}/scripts/macOS/installer/license.html")
 else ()
@@ -84,20 +96,28 @@ set(CPACK_DEBIAN_PACKAGE_DEPENDS "python3-venv, tzdata")
 
 set(CPACK_DEBIAN_COMPRESSION_TYPE "gzip")
 set(CPACK_DEBIAN_PACKAGE_SECTION "contrib/database")
+# The maintainer scripts manage `tenzir-node.service` only for the versions that
+# install it.
+foreach (script debian/postinst debian/postrm debian/prerm rpm/postinstall
+                rpm/preuninstall rpm/postuninstall)
+  configure_file("${CMAKE_CURRENT_SOURCE_DIR}/scripts/${script}.in"
+                 "${CMAKE_CURRENT_BINARY_DIR}/scripts/${script}" @ONLY)
+endforeach ()
+
 set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA
-    "${CMAKE_CURRENT_SOURCE_DIR}/scripts/debian/postinst"
-    "${CMAKE_CURRENT_SOURCE_DIR}/scripts/debian/postrm"
-    "${CMAKE_CURRENT_SOURCE_DIR}/scripts/debian/prerm")
+    "${CMAKE_CURRENT_BINARY_DIR}/scripts/debian/postinst"
+    "${CMAKE_CURRENT_BINARY_DIR}/scripts/debian/postrm"
+    "${CMAKE_CURRENT_BINARY_DIR}/scripts/debian/prerm")
 set(CPACK_DEBIAN_PACKAGE_DEBUG ON)
 
 set(CPACK_RPM_PRE_INSTALL_SCRIPT_FILE
     "${CMAKE_CURRENT_SOURCE_DIR}/scripts/rpm/preinstall")
 set(CPACK_RPM_POST_INSTALL_SCRIPT_FILE
-    "${CMAKE_CURRENT_SOURCE_DIR}/scripts/rpm/postinstall")
+    "${CMAKE_CURRENT_BINARY_DIR}/scripts/rpm/postinstall")
 set(CPACK_RPM_PRE_UNINSTALL_SCRIPT_FILE
-    "${CMAKE_CURRENT_SOURCE_DIR}/scripts/rpm/preuninstall")
+    "${CMAKE_CURRENT_BINARY_DIR}/scripts/rpm/preuninstall")
 set(CPACK_RPM_POST_UNINSTALL_SCRIPT_FILE
-    "${CMAKE_CURRENT_SOURCE_DIR}/scripts/rpm/postuninstall")
+    "${CMAKE_CURRENT_BINARY_DIR}/scripts/rpm/postuninstall")
 set(CPACK_RPM_PACKAGE_REQUIRES_PRE "shadow-utils")
 
 # For the static binary builds it doesn't make much sense to install development

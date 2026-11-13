@@ -106,15 +106,23 @@ void write_workspace(Scratch const& scratch) {
 TEST("workspaces come with the unified command interface") {
   {
     auto unset = Env{"TENZIR_UNIFIED", None{}};
-    CHECK(not unified_mode());
+    CHECK(not unified_mode(6));
+    CHECK(unified_mode(7));
   }
-  for (auto const* off : {"", "0", "false", "No"}) {
+  {
+    auto empty = Env{"TENZIR_UNIFIED", std::string{}};
+    CHECK(not unified_mode(6));
+    CHECK(unified_mode(7));
+  }
+  for (auto const* off : {"0", "false", "No"}) {
     auto value = Env{"TENZIR_UNIFIED", std::string{off}};
-    CHECK(not unified_mode());
+    CHECK(not unified_mode(6));
+    CHECK(not unified_mode(7));
   }
   for (auto const* on : {"1", "true", "YES"}) {
     auto value = Env{"TENZIR_UNIFIED", std::string{on}};
-    CHECK(unified_mode());
+    CHECK(unified_mode(6));
+    CHECK(unified_mode(7));
   }
 }
 

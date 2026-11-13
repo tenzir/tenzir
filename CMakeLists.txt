@@ -24,6 +24,15 @@ set(TENZIR_EDITION_NAME
     "Tenzir"
     CACHE STRING "Set the edition name")
 
+# From v7 on, Tenzir installs no `tenzir-node` and no service that runs one.
+# Every build still contains the node, and the build tree keeps a `tenzir-node`
+# for the integration tests.
+if (Tenzir_VERSION_MAJOR LESS 7)
+  set(TENZIR_INSTALL_NODE ON)
+else ()
+  set(TENZIR_INSTALL_NODE OFF)
+endif ()
+
 add_compile_options("-ffile-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}/=")
 
 # -- sanity checks -------------------------------------------------------------
@@ -1207,7 +1216,7 @@ if (TENZIR_PLATFORM_CLI_PATH)
     COMPONENT Runtime)
   if (BUILD_TESTING)
     add_test(NAME tenzir/dispatcher-platform
-             COMMAND "${CMAKE_COMMAND}" -E env --unset=TENZIR_UNIFIED
+             COMMAND "${CMAKE_COMMAND}" -E env TENZIR_UNIFIED=0
                      $<TARGET_FILE:tenzir> platform --help)
     add_test(NAME tenzir/dispatcher-unified-platform
              COMMAND "${CMAKE_COMMAND}" -E env TENZIR_UNIFIED=1
