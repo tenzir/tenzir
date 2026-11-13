@@ -90,6 +90,9 @@ struct ChannelMetrics {
   size_t index;
   uint64_t events = 0;
   uint64_t bytes = 0;
+  /// Messages that carried data, such as batches of events. Signals do not
+  /// count.
+  uint64_t batches = 0;
   uint64_t queued = 0;
   /// Zero for channels without a fixed capacity, such as fused ones.
   uint64_t capacity = 0;

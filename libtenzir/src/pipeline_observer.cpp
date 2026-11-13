@@ -199,7 +199,13 @@ struct InspectionState {
     std::vector<Option<Arc<ExecutorStats>>> operator_stats;
     std::vector<Option<Arc<ChannelStats>>> channel_stats;
     std::vector<int64_t> cpu;
-    std::vector<std::pair<uint64_t, uint64_t>> flow;
+    /// What each channel had moved at the preceding sample.
+    struct Flow {
+      uint64_t events = 0;
+      uint64_t bytes = 0;
+      uint64_t batches = 0;
+    };
+    std::vector<Flow> flow;
     bool retired = false;
   };
   // Retired plans live until the next tick so even sub-second instances get a
@@ -225,11 +231,11 @@ struct InspectionState {
     // first snapshot, which also covers counters attached in between. Later
     // instances started after that baseline, so zero is their true origin.
     metric_plans.emplace(
-      plan.id_, MetricPlan{history.graph(*plan.graph_id_)->path,
-                           plan.operator_stats_, plan.channel_stats_,
-                           std::vector<int64_t>(plan.operator_stats_.size()),
-                           std::vector<std::pair<uint64_t, uint64_t>>(
-                             plan.channel_stats_.size())});
+      plan.id_,
+      MetricPlan{history.graph(*plan.graph_id_)->path, plan.operator_stats_,
+                 plan.channel_stats_,
+                 std::vector<int64_t>(plan.operator_stats_.size()),
+                 std::vector<MetricPlan::Flow>(plan.channel_stats_.size())});
   }
 
   auto metrics_snapshot(bool baseline = false) -> Arc<MetricsSnapshot const> {
@@ -269,14 +275,16 @@ struct InspectionState {
         auto const& stats = *plan.channel_stats[i];
         auto events = stats->out.events.load(std::memory_order::relaxed);
         auto bytes = stats->out.bytes.load(std::memory_order::relaxed);
+        auto batches = stats->out.batches.load(std::memory_order::relaxed);
         auto [it, inserted]
           = channels.try_emplace({plan.path, i}, ChannelMetrics{plan.path, i});
         auto& value = it->second;
         if (not baseline) {
-          value.events += events - plan.flow[i].first;
-          value.bytes += bytes - plan.flow[i].second;
+          value.events += events - plan.flow[i].events;
+          value.bytes += bytes - plan.flow[i].bytes;
+          value.batches += batches - plan.flow[i].batches;
         }
-        plan.flow[i] = {events, bytes};
+        plan.flow[i] = {events, bytes, batches};
         // Retired instances hold no queue. Fused channels have no capacity and
         // at most one message in transit.
         if (not plan.retired) {

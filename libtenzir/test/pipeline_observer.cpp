@@ -1710,6 +1710,7 @@ TEST("inspection runtime captures regular tiny fused and nested bridge "
                 ++event_edges;
                 check_eq(channel.events, 12u);
                 check(channel.bytes > 0);
+                check(channel.batches > 0);
               }
             }
             // Nested boundary edges have taps but no metrics.
