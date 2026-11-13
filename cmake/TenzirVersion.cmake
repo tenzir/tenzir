@@ -1,4 +1,15 @@
 file(READ "${CMAKE_CURRENT_LIST_DIR}/../version.json" TENZIR_VERSION_JSON)
+# Reconfigure when the version changes, because `project()` and every target
+# that compiles the major version in, such as the `tenzir` dispatcher, take it
+# from here. A build tree from before a major release would otherwise keep the
+# command interface of the previous one.
+if (NOT CMAKE_SCRIPT_MODE_FILE)
+  set_property(
+    DIRECTORY
+    APPEND
+    PROPERTY CMAKE_CONFIGURE_DEPENDS
+             "${CMAKE_CURRENT_LIST_DIR}/../version.json")
+endif ()
 string(JSON TENZIR_VERSION GET "${TENZIR_VERSION_JSON}" tenzir-version)
 string(JSON TENZIR_PARTITION_VERSION GET "${TENZIR_VERSION_JSON}"
        tenzir-partition-version)
