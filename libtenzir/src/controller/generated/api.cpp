@@ -530,43 +530,6 @@ auto parse_no_principal(simdjson::dom::element value)
   return NoPrincipal{};
 }
 
-auto UserId::make(std::string value) -> Result<UserId, ParseError> {
-  return UserId{std::move(value)};
-}
-
-auto parse_user_id(simdjson::dom::element value) -> Result<UserId, ParseError> {
-  TRY(auto raw, api::string_of(value, "UserId"));
-  return UserId::make(std::move(raw));
-}
-
-auto parse_user(simdjson::dom::element value) -> Result<User, ParseError> {
-  TRY(auto object, api::object_of(value, "User"));
-
-  TRY(auto id_raw, api::field(object, "id", "User"));
-  TRY(auto id, parse_user_id(id_raw));
-
-  TRY(auto issuer_raw, api::field(object, "issuer", "User"));
-  TRY(auto issuer, api::string_of(issuer_raw, "User.issuer"));
-
-  TRY(auto subject_raw, api::field(object, "subject", "User"));
-  TRY(auto subject, api::string_of(subject_raw, "User.subject"));
-
-  auto email = Option<std::string>{None{}};
-  if (auto email_raw = api::optional_field(object, "email")) {
-    TRY(auto email_present, api::string_of(*email_raw, "User.email"));
-    email = std::move(email_present);
-  }
-
-  auto name = Option<std::string>{None{}};
-  if (auto name_raw = api::optional_field(object, "name")) {
-    TRY(auto name_present, api::string_of(*name_raw, "User.name"));
-    name = std::move(name_present);
-  }
-
-  return User{std::move(id), std::move(issuer), std::move(subject),
-              std::move(email), std::move(name)};
-}
-
 auto parse_user_principal(simdjson::dom::element value)
   -> Result<UserPrincipal, ParseError> {
   TRY(auto object, api::object_of(value, "UserPrincipal"));
@@ -577,10 +540,7 @@ auto parse_user_principal(simdjson::dom::element value)
     return Err{ParseError{"UserPrincipal", "expected `_tag` 'UserPrincipal'"}};
   }
 
-  TRY(auto user_raw, api::field(object, "user", "UserPrincipal"));
-  TRY(auto user, parse_user(user_raw));
-
-  return UserPrincipal{std::move(user)};
+  return UserPrincipal{};
 }
 
 auto DeploymentId::make(std::string value) -> Result<DeploymentId, ParseError> {
@@ -2309,38 +2269,9 @@ auto write_json(NoPrincipal const&, std::string& out) -> void {
   out += '}';
 }
 
-auto write_json(UserId const& value, std::string& out) -> void {
-  api::write_string(value.to_string(), out);
-}
-
-auto write_json(User const& value, std::string& out) -> void {
-  out += '{';
-  out += "\"id\":";
-  write_json(value.id, out);
-  out += ",\"issuer\":";
-  api::write_string(value.issuer, out);
-  out += ",\"subject\":";
-  api::write_string(value.subject, out);
-  out += ",\"email\":";
-  if (value.email) {
-    api::write_string(*value.email, out);
-  } else {
-    out += "null";
-  }
-  out += ",\"name\":";
-  if (value.name) {
-    api::write_string(*value.name, out);
-  } else {
-    out += "null";
-  }
-  out += '}';
-}
-
-auto write_json(UserPrincipal const& value, std::string& out) -> void {
+auto write_json(UserPrincipal const&, std::string& out) -> void {
   out += '{';
   out += "\"_tag\":\"UserPrincipal\"";
-  out += ",\"user\":";
-  write_json(value.user, out);
   out += '}';
 }
 

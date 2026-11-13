@@ -60,98 +60,16 @@ struct std::hash<tenzir::NoPrincipal> {
 
 namespace tenzir {
 
-/// The platform's own identifier for a user
-class UserId {
-public:
-  static auto make(std::string value) -> Result<UserId, ParseError>;
-
-  auto to_string() const -> std::string_view {
-    return value_;
-  }
-
-  friend auto operator==(UserId const&, UserId const&) -> bool = default;
-
-  template <class HashAlgorithm>
-  friend auto hash_append(HashAlgorithm& h, UserId const& value) -> void {
-    hash_append(h, value.to_string());
-  }
-
-private:
-  explicit UserId(std::string value) : value_{std::move(value)} {
-  }
-
-  std::string value_;
-};
-
-template <>
-inline constexpr auto enable_default_formatter<UserId> = true;
-
-} // namespace tenzir
-
-template <>
-struct std::hash<tenzir::UserId> {
-  auto operator()(tenzir::UserId const& value) const -> std::size_t {
-    return tenzir::hash(value);
-  }
-};
-
-namespace tenzir {
-
-/// A user as the platform knows one: its own id, and the identity a provider
-/// vouched for
-class User {
-public:
-  User(UserId id, std::string issuer, std::string subject,
-       Option<std::string> email, Option<std::string> name)
-    : id{std::move(id)},
-      issuer{std::move(issuer)},
-      subject{std::move(subject)},
-      email{std::move(email)},
-      name{std::move(name)} {
-  }
-
-  UserId id;
-  std::string issuer;
-  std::string subject;
-  /// `email`, may be absent, may be null.
-  Option<std::string> email;
-  /// `name`, may be absent, may be null.
-  Option<std::string> name;
-
-  friend auto operator==(User const&, User const&) -> bool = default;
-
-  template <class HashAlgorithm>
-  friend auto hash_append(HashAlgorithm& h, User const& value) -> void {
-    hash_append(h, value.id, value.issuer, value.subject, value.email,
-                value.name);
-  }
-};
-
-} // namespace tenzir
-
-template <>
-struct std::hash<tenzir::User> {
-  auto operator()(tenzir::User const& value) const -> std::size_t {
-    return tenzir::hash(value);
-  }
-};
-
-namespace tenzir {
-
 class UserPrincipal {
 public:
-  explicit UserPrincipal(User user) : user{std::move(user)} {
-  }
-
-  User user;
+  UserPrincipal() = default;
 
   friend auto operator==(UserPrincipal const&, UserPrincipal const&) -> bool
     = default;
 
   template <class HashAlgorithm>
-  friend auto hash_append(HashAlgorithm& h, UserPrincipal const& value)
-    -> void {
-    hash_append(h, value.user);
+  friend auto hash_append(HashAlgorithm& h, UserPrincipal const&) -> void {
+    hash_append(h, std::string_view{"UserPrincipal"});
   }
 };
 
@@ -3010,8 +2928,6 @@ auto dispatch(DeploymentApi& handler, HttpRequest request)
 /// outlive the call. The result owns its data.
 auto parse_no_principal(simdjson::dom::element value)
   -> Result<NoPrincipal, ParseError>;
-auto parse_user_id(simdjson::dom::element value) -> Result<UserId, ParseError>;
-auto parse_user(simdjson::dom::element value) -> Result<User, ParseError>;
 auto parse_user_principal(simdjson::dom::element value)
   -> Result<UserPrincipal, ParseError>;
 auto parse_deployment_id(simdjson::dom::element value)
@@ -3141,8 +3057,6 @@ auto parse_adhoc_pipeline_definition(simdjson::dom::element value)
 /// Appends the type as JSON, in the bytes the API puts on the wire, so a
 /// copy stored elsewhere decodes with the same function.
 auto write_json(NoPrincipal const& value, std::string& out) -> void;
-auto write_json(UserId const& value, std::string& out) -> void;
-auto write_json(User const& value, std::string& out) -> void;
 auto write_json(UserPrincipal const& value, std::string& out) -> void;
 auto write_json(DeploymentId const& value, std::string& out) -> void;
 auto write_json(WorkspaceId const& value, std::string& out) -> void;
