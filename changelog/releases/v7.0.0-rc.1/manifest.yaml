@@ -1,0 +1,10 @@
+created: 2026-11-13
+title: A new foundation for security data
+intro: >-
+  This release candidate rebuilds Tenzir with a new platform and interface, a new
+  deployment model with configuration management, versioned packages, and live rollout,
+  an MCP server for AI agents, and a built-in assistant. Tenzir Node v6 continues
+  to receive maintenance releases until the migration path is ready.
+source:
+  mode: snapshot-prerelease
+  previous_stable: v6.22.0
