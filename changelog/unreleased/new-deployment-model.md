@@ -1,5 +1,5 @@
 ---
-title: The all-new Tenzir
+title: Platform and deployments reimagined
 type: breaking
 authors:
   - aljazerzen
@@ -30,6 +30,10 @@ deployments, configurations, and packages from one place.
 **Better configuration management.** Each deployment runs one configuration
 that holds its pipelines, packages, and secrets. Edit it in the web interface
 or with the `tenzir` command, and always know what a deployment runs.
+
+**Versioned packages with dependencies.** Packages now have versions and can
+depend on each other, with a lock file pinning exactly what your deployments
+run.
 
 **Live configuration rollout.** The new deployment model applies configuration
 changes to running deployments live. Change a pipeline, and your deployments
