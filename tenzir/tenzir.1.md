@@ -49,15 +49,18 @@ tenzir run -f pipeline.tql
 
 ## Get help
 
-Run `tenzir --help` to list all commands and their options:
+Run `tenzir help` to list all commands and their options, and
+`tenzir help <command>` for the flags and examples of one command:
 
 ```bash
-tenzir --help
+tenzir help
+tenzir help config apply
 ```
 
-Run `tenzir run --help` for the options of a local pipeline run. In the
-previous command interface, `tenzir --help` lists only the engine's options, and
-`tenzir platform --help` lists the platform commands.
+`tenzir --help` and `tenzir <command> --help` work as well. Run
+`tenzir run --help` for the options of a local pipeline run. In the
+previous command interface, `tenzir help` and `tenzir --help` list only the
+engine's options, and `tenzir platform help` lists the platform commands.
 
 ## Next steps
 
