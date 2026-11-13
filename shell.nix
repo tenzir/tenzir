@@ -78,6 +78,8 @@ let
       (deps.nativeBuildInputs or [ ])
       ++ (deps.propagatedNativeBuildInputs or [ ])
       ++ [
+        # The build's `tenzir` runs the platform CLI from source with Bun.
+        pkgs.bun
         pkgs.ccache
         pkgs.llvmPackages_22.clang-tools
         pkgs.cmake-format
