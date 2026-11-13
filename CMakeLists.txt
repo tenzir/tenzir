@@ -1179,15 +1179,16 @@ set(TENZIR_PLATFORM_CLI_PATH
 # Without a packaged CLI, a monorepo build runs the sibling platform's CLI from
 # source, so that the build tree's `tenzir` dispatches like an installed one.
 # The source shim needs Bun and the platform's node_modules, so it only serves
-# the build tree and is never installed.
-set(TENZIR_PLATFORM_CLI_SHIM
+# the build tree and is never installed. TENZIR_PLATFORM_CLI_PATH is the only
+# supported override: configure replaces any other libexec/tenzir-platform.
+set(platform_cli_shim
     "${CMAKE_CURRENT_SOURCE_DIR}/../platform/tools/bin/tenzir-platform")
-cmake_path(NORMAL_PATH TENZIR_PLATFORM_CLI_SHIM)
+cmake_path(NORMAL_PATH platform_cli_shim)
 set(build_libexecdir "${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_LIBEXECDIR}")
 if (TENZIR_PLATFORM_CLI_PATH)
   set(build_platform_cli "${TENZIR_PLATFORM_CLI_PATH}")
-elseif (EXISTS "${TENZIR_PLATFORM_CLI_SHIM}")
-  set(build_platform_cli "${TENZIR_PLATFORM_CLI_SHIM}")
+elseif (EXISTS "${platform_cli_shim}")
+  set(build_platform_cli "${platform_cli_shim}")
 else ()
   set(build_platform_cli "")
 endif ()
