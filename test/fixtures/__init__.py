@@ -34,6 +34,7 @@ from . import microsoft_sql  # noqa: F401
 from . import mysql  # noqa: F401
 from . import nats  # noqa: F401
 from . import nic  # noqa: F401
+from . import node  # noqa: F401
 from . import openai_responses  # noqa: F401
 from . import otlp_grpc  # noqa: F401
 from . import package_http  # noqa: F401
@@ -99,6 +100,7 @@ __all__ = [
     "mysql",
     "nats",
     "nic",
+    "node",
     "openai_responses",
     "otlp_grpc",
     "packages",
