@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "tenzir/detail/cgroup.hpp"
 #include "tenzir/option.hpp"
 
 #include <cstddef>
@@ -35,5 +36,14 @@ auto read_cgroup_cpu_limit(std::filesystem::path const& dir) -> Option<size_t>;
 /// its whole subtree. Exposed for testing; use `available_cpus()` elsewhere.
 auto read_cgroup_cpu_limit(std::filesystem::path const& root,
                            std::filesystem::path const& path) -> Option<size_t>;
+
+/// The tightest CPU quota of the cgroup v2 cgroup at `path`, a path in the
+/// hierarchy like `/proc/self/cgroup` gives it, read through `mount`. When the
+/// mount shows only a subtree, `path` is relative to the root of that subtree,
+/// and a cgroup outside of it leaves only the quota of the mount point. Exposed
+/// for testing; use `available_cpus()` elsewhere.
+auto read_cgroup2_cpu_limit(cgroup2_mount const& mount,
+                            std::filesystem::path const& path)
+  -> Option<size_t>;
 
 } // namespace tenzir::detail

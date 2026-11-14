@@ -56,6 +56,14 @@ public:
     return detail::read_cgroup_cpu_limit(root_, cgroup);
   }
 
+  /// The quota of `cgroup` with this directory as the mount point of the
+  /// cgroup v2 subtree at `subtree`.
+  auto mounted(std::filesystem::path const& subtree,
+               std::filesystem::path const& cgroup) const -> Option<size_t> {
+    return detail::read_cgroup2_cpu_limit(
+      detail::cgroup2_mount{.root = subtree, .mount_point = root_}, cgroup);
+  }
+
 private:
   std::filesystem::path root_;
 };
@@ -111,6 +119,23 @@ TEST("the tightest quota along the hierarchy applies") {
   CHECK_EQUAL(cgroups.tightest("/../elsewhere"), size_t{3});
   CHECK_EQUAL(cgroups.tightest("/../../elsewhere"), size_t{3});
   CHECK_EQUAL(cgroups.tightest("/docker/abc"), size_t{3});
+}
+
+TEST("a cgroup v2 mount of a subtree reads cgroups relative to its root") {
+  // A container that only sees the subtree of its pod.
+  auto const cgroups = FakeCgroups{};
+  cgroups.write("", "cpu.max", "400000 100000\n")
+    .write("container", "cpu.max", "100000 100000\n")
+    .write("elsewhere", "cpu.max", "100000 100000\n");
+  CHECK_EQUAL(cgroups.mounted("/kubepods/pod", "/kubepods/pod/container"),
+              size_t{1});
+  CHECK_EQUAL(cgroups.mounted("/kubepods/pod", "/kubepods/pod"), size_t{4});
+  // Outside of the subtree, only the mount point's own quota counts, not that
+  // of the unrelated `elsewhere` below it.
+  CHECK_EQUAL(cgroups.mounted("/kubepods/pod", "/elsewhere"), size_t{4});
+  // The whole hierarchy, mounted at its root.
+  CHECK_EQUAL(cgroups.mounted("/", "/container"), size_t{1});
+  CHECK_EQUAL(cgroups.mounted("/", "/"), size_t{4});
 }
 
 TEST("the available CPUs are at least one and at most all of them") {

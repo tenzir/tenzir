@@ -102,6 +102,15 @@ auto read_cgroup_cpu_limit(std::filesystem::path const& root,
   return result;
 }
 
+auto read_cgroup2_cpu_limit(cgroup2_mount const& mount,
+                            std::filesystem::path const& path)
+  -> Option<size_t> {
+  // Outside of the root, the relative path starts with `..`, where the walk
+  // stops.
+  return read_cgroup_cpu_limit(mount.mount_point,
+                               path.lexically_relative(mount.root));
+}
+
 auto available_cpus() -> size_t {
   // Called when a pipeline compiles, and cheap enough for that: it reads a few
   // tiny files from procfs and sysfs.
@@ -126,7 +135,11 @@ auto available_cpus() -> size_t {
     auto path = std::filesystem::path{std::string{fields[2]}};
     auto limit = Option<size_t>{};
     if (fields[0] == "0" and fields[1].empty()) {
-      limit = read_cgroup_cpu_limit("/sys/fs/cgroup", path);
+      auto mount = find_cgroup2_mount().value_or(cgroup2_mount{
+        .root = "/",
+        .mount_point = "/sys/fs/cgroup",
+      });
+      limit = read_cgroup2_cpu_limit(mount, path);
     } else if (std::ranges::contains(split(fields[1], ","), "cpu")) {
       for (auto const* root :
            {"/sys/fs/cgroup/cpu,cpuacct", "/sys/fs/cgroup/cpuacct,cpu",
