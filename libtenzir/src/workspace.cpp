@@ -103,7 +103,7 @@ auto locked_packages(std::filesystem::path const& root, diagnostic_handler& dh)
     = [&](std::string_view why) -> failure_or<std::vector<LockedPackage>> {
     diagnostic::error("{} is not a lock this version of Tenzir reads", path)
       .note("{}", why)
-      .hint("run `tenzir-platform package lock` to write it again")
+      .hint("run `tenzir package lock` to write it again")
       .emit(dh);
     return failure::promise();
   };
@@ -247,7 +247,7 @@ auto require_loaded(Workspace const& workspace,
           });
       if (not loaded and reported.insert(id).second) {
         diagnostic::error("`{}` is neither a local package nor locked", id)
-          .hint("run `tenzir-platform package lock` in {}", root)
+          .hint("run `tenzir package lock` in {}", root)
           .emit(dh);
       }
     }
@@ -443,7 +443,7 @@ auto load_workspace(std::filesystem::path const& root, diagnostic_handler& dh)
                         entry.version ? fmt::format(" {}", *entry.version)
                                       : std::string{})
         .note("looked in {}", dir)
-        .hint("run `tenzir-platform package fetch` in {}", root)
+        .hint("run `tenzir package fetch` in {}", root)
         .emit(dh);
       return failure::promise();
     }
