@@ -33,64 +33,82 @@ struct PipelineResources {
 // From the generated API, which is too large to include for one name.
 class ServedRequest;
 
-/// Per-run state; copies share counters, diagnostics and the bounded sender.
-class PlatformProfiler {
-public:
-  PlatformProfiler(PlatformConnection connection, std::string pipeline_id,
-                   uint64_t run);
-  /// Uses the same transport seam as generated clients, including fixtures.
-  PlatformProfiler(PlatformConnection connection, std::string pipeline_id,
-                   uint64_t run, Box<Transport> transport);
-  auto diagnostic(tenzir::diagnostic const& value,
-                  SourceMap const& sources) const -> void;
-  /// Reports the connector counters, and what the operators cost if known.
-  ///
-  /// A sample with resources is sent even without traffic, so that a running
-  /// pipeline reports regularly.
-  auto sample(std::span<MetricsSnapshotEntry const> counters,
-              Option<PipelineResources> resources = None{}) const -> void;
-  auto transition(std::string state, Option<std::string> error = {}) const
-    -> void;
-  auto send() const -> Task<void>;
-  auto flush() const -> Task<void>;
+class PlatformProfiler;
 
-private:
-  class State;
-  Arc<State> state_;
-};
-
-/// What a deployment reports of itself rather than of one pipeline run: for
-/// now, the requests it answers.
+/// Everything a process reports to the platform: the samples, diagnostics and
+/// run transitions of each pipeline run that a `PlatformProfiler` records, and
+/// the requests the process answers.
 ///
-/// Its batches share the process's boot and sequence with those of the
-/// pipeline runs, and are bounded and best effort in the same way. Copies
-/// share the pending samples and the sender.
+/// It sends one batch a second for all of them, however many pipelines run,
+/// and splits a batch only where the platform's limits require it. Its batches
+/// share the process's boot and sequence. Pending data waits in bounded
+/// queues, and delivery is best effort: what is lost counts as dropped, and
+/// the next batch reports it. Copies share the pending data and the sender.
 class PlatformReporter {
 public:
-  /// The most served requests one batch carries. One takes at most about
-  /// 1.1 KiB on the wire, so a full batch stays well under the 256 KiB limit
-  /// of a batch.
-  static constexpr auto max_batch_requests = std::size_t{200};
+  /// The most ended runs whose reports wait for a batch, as they do while the
+  /// platform is out of reach. Past it, the oldest one's report goes, and what
+  /// it recorded counts as dropped.
+  static constexpr auto max_ended_runs = std::size_t{1024};
 
   explicit PlatformReporter(PlatformConnection connection);
   /// Uses the same transport seam as generated clients, including fixtures.
   PlatformReporter(PlatformConnection connection, Box<Transport> transport);
 
-  /// Keeps `sample` for the next batch. Never waits: with too many pending,
-  /// the sample is dropped and the next batch counts it in `dropped`.
+  /// Keeps `served` for the next batch. Never waits: with too many pending,
+  /// the request is dropped and the next batch counts it in `dropped`.
   auto request(ServedRequest served) const -> void;
 
   /// Batches what is pending once a second and sends it. Once `stop` is
   /// requested, it sends what is still pending, for at most a few seconds,
   /// and returns. Cancelled, it returns at once and what is pending is lost.
   ///
+  /// A batch is due half a second into each second, after the runs sampled at
+  /// its start, so that each batch carries one sample of every running
+  /// pipeline. Stop it after the runs it reports on have ended, so that their
+  /// last samples and transitions go out with its final batches.
+  ///
   /// One `run` at a time: its batches have one sender.
   auto run(StopFlag stop) const -> Task<void>;
 
 private:
-  /// The last part of `run`, once its sender has let go of the queue.
-  auto flush() const -> Task<void>;
+  friend class PlatformProfiler;
+  class State;
 
+  Arc<State> state_;
+};
+
+/// One run of a pipeline, as the reporter it records into sees it.
+///
+/// It never sends anything itself: its reporter takes what it records into
+/// the batch of each second. Copies share the run's counters and what is
+/// pending. Once the last copy is gone, the reporter sends what is left and
+/// forgets the run.
+class PlatformProfiler {
+public:
+  /// The most samples of one run that wait for a batch. Past it, a sample
+  /// merges into the last one pending, so that its counters and CPU time add
+  /// up over their combined interval: a backlog costs resolution, not data.
+  static constexpr auto max_pending_samples = std::size_t{8};
+
+  PlatformProfiler(PlatformReporter const& reporter, std::string pipeline_id,
+                   uint64_t run);
+
+  auto diagnostic(tenzir::diagnostic const& value,
+                  SourceMap const& sources) const -> void;
+  /// Records the connector counters, and what the operators cost if known.
+  ///
+  /// A sample with resources is recorded even without traffic, so that a
+  /// running pipeline reports regularly.
+  auto sample(std::span<MetricsSnapshotEntry const> counters,
+              Option<PipelineResources> resources = None{}) const -> void;
+  auto transition(std::string state, Option<std::string> error = {}) const
+    -> void;
+
+  /// The reporter that sends what this run records.
+  auto reporter() const -> PlatformReporter;
+
+private:
   class State;
   Arc<State> state_;
 };

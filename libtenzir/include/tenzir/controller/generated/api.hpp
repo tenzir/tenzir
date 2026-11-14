@@ -325,8 +325,8 @@ struct std::hash<tenzir::DeploymentPath> {
 
 namespace tenzir {
 
-/// Counts batches across all concurrent senders per boot, including pipelines
-/// and the deployment itself. A retry repeats the identical batch and (boot, seq)
+/// Counts the batches of the process that sends them, per boot. A retry repeats
+/// the identical batch and (boot, seq)
 class TelemetryCount {
 public:
   static auto make(std::int64_t value) -> Result<TelemetryCount, ParseError>;
@@ -1002,8 +1002,10 @@ struct std::hash<tenzir::ServedRequest> {
 
 namespace tenzir {
 
-/// Everything a deployment reports in one second. Pipeline samples come about
-/// every second while a pipeline runs
+/// Everything a deployment reports in one second, for all its pipeline runs
+/// together. Each running pipeline has about one sample per batch. A deployment
+/// sends one batch a second, and more only where one would exceed 256 KiB or
+/// 10,000 rows of a kind
 class Batch {
 public:
   Batch(std::string boot, TelemetryCount seq, TelemetryCount dropped,
