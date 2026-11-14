@@ -8,6 +8,7 @@
 
 #include "tenzir/async.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/detail/available_cpus.hpp"
 #include "tenzir/detail/scope_guard.hpp"
 #include "tenzir/detail/string.hpp"
 #include "tenzir/element_type.hpp"
@@ -21,7 +22,6 @@
 #include <cstdint>
 #include <span>
 #include <string_view>
-#include <thread>
 #include <utility>
 #include <vector>
 
@@ -584,8 +584,9 @@ auto parse_positive(std::string_view value) -> Option<T> {
 /// Parse a parallelism degree: `max`, or a positive integer.
 auto parse_degree(std::string_view value) -> Option<size_t> {
   if (value == "max") {
-    size_t hw = std::thread::hardware_concurrency();
-    return hw == 0 ? 1 : hw;
+    // Not the hardware concurrency, which ignores the CPU limit of a
+    // container.
+    return detail::available_cpus();
   }
   if (auto degree = parse_positive<size_t>(value)) {
     return *degree;
