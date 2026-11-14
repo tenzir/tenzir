@@ -325,6 +325,45 @@ struct std::hash<tenzir::DeploymentPath> {
 
 namespace tenzir {
 
+/// A UUID
+/// Values must match
+/// `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`.
+class Uuid {
+public:
+  static auto make(std::string value) -> Result<Uuid, ParseError>;
+
+  auto to_string() const -> std::string_view {
+    return value_;
+  }
+
+  friend auto operator==(Uuid const&, Uuid const&) -> bool = default;
+
+  template <class HashAlgorithm>
+  friend auto hash_append(HashAlgorithm& h, Uuid const& value) -> void {
+    hash_append(h, value.to_string());
+  }
+
+private:
+  explicit Uuid(std::string value) : value_{std::move(value)} {
+  }
+
+  std::string value_;
+};
+
+template <>
+inline constexpr auto enable_default_formatter<Uuid> = true;
+
+} // namespace tenzir
+
+template <>
+struct std::hash<tenzir::Uuid> {
+  auto operator()(tenzir::Uuid const& value) const -> std::size_t {
+    return tenzir::hash(value);
+  }
+};
+
+namespace tenzir {
+
 /// Counts the batches of the process that sends them, per boot. A retry repeats
 /// the identical batch and (boot, seq)
 class TelemetryCount {
@@ -535,33 +574,6 @@ public:
 template <>
 struct std::hash<tenzir::PipelineSample> {
   auto operator()(tenzir::PipelineSample const& value) const -> std::size_t {
-    return tenzir::hash(value);
-  }
-};
-
-namespace tenzir {
-
-class RetiredOperatorSample {
-public:
-  RetiredOperatorSample() = default;
-
-  friend auto
-  operator==(RetiredOperatorSample const&, RetiredOperatorSample const&) -> bool
-    = default;
-
-  template <class HashAlgorithm>
-  friend auto hash_append(HashAlgorithm& h, RetiredOperatorSample const&)
-    -> void {
-    hash_append(h, std::string_view{"RetiredOperatorSample"});
-  }
-};
-
-} // namespace tenzir
-
-template <>
-struct std::hash<tenzir::RetiredOperatorSample> {
-  auto operator()(tenzir::RetiredOperatorSample const& value) const
-    -> std::size_t {
     return tenzir::hash(value);
   }
 };
@@ -1008,43 +1020,38 @@ namespace tenzir {
 /// 10,000 rows of a kind
 class Batch {
 public:
-  Batch(std::string boot, TelemetryCount seq, TelemetryCount dropped,
+  Batch(Uuid boot, TelemetryCount seq, TelemetryCount dropped,
         std::vector<PipelineSample> pipelines,
-        Option<std::vector<RetiredOperatorSample>> operators,
         std::vector<DiagnosticSample> diagnostics,
         std::vector<RunTransition> runs,
         std::vector<DeploymentSample> deployment,
-        Option<std::vector<ServedRequest>> requests)
+        std::vector<ServedRequest> requests)
     : boot{std::move(boot)},
       seq{std::move(seq)},
       dropped{std::move(dropped)},
       pipelines{std::move(pipelines)},
-      operators{std::move(operators)},
       diagnostics{std::move(diagnostics)},
       runs{std::move(runs)},
       deployment{std::move(deployment)},
       requests{std::move(requests)} {
   }
 
-  std::string boot;
+  Uuid boot;
   TelemetryCount seq;
   TelemetryCount dropped;
   std::vector<PipelineSample> pipelines;
-  /// `operators`, may be absent.
-  Option<std::vector<RetiredOperatorSample>> operators;
   std::vector<DiagnosticSample> diagnostics;
   std::vector<RunTransition> runs;
   std::vector<DeploymentSample> deployment;
-  /// `requests`, may be absent.
-  Option<std::vector<ServedRequest>> requests;
+  std::vector<ServedRequest> requests;
 
   friend auto operator==(Batch const&, Batch const&) -> bool = default;
 
   template <class HashAlgorithm>
   friend auto hash_append(HashAlgorithm& h, Batch const& value) -> void {
     hash_append(h, value.boot, value.seq, value.dropped, value.pipelines,
-                value.operators, value.diagnostics, value.runs,
-                value.deployment, value.requests);
+                value.diagnostics, value.runs, value.deployment,
+                value.requests);
   }
 };
 
@@ -1413,22 +1420,21 @@ class Liveness {
 public:
   Liveness(std::string status, double uptime_ms,
            Option<std::int64_t> generation, Option<std::string> digest,
-           Option<bool> suspended)
+           bool suspended)
     : status{std::move(status)},
       uptime_ms{uptime_ms},
       generation{std::move(generation)},
       digest{std::move(digest)},
-      suspended{std::move(suspended)} {
+      suspended{suspended} {
   }
 
   std::string status;
   double uptime_ms;
-  /// `generation`, may be absent, may be null.
+  /// `generation`, may be null.
   Option<std::int64_t> generation;
-  /// `digest`, may be absent, may be null.
+  /// `digest`, may be null.
   Option<std::string> digest;
-  /// `suspended`, may be absent.
-  Option<bool> suspended;
+  bool suspended;
 
   friend auto operator==(Liveness const&, Liveness const&) -> bool = default;
 
@@ -1560,45 +1566,6 @@ public:
 template <>
 struct std::hash<tenzir::PipelinePath> {
   auto operator()(tenzir::PipelinePath const& value) const -> std::size_t {
-    return tenzir::hash(value);
-  }
-};
-
-namespace tenzir {
-
-/// A UUID
-/// Values must match
-/// `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`.
-class Uuid {
-public:
-  static auto make(std::string value) -> Result<Uuid, ParseError>;
-
-  auto to_string() const -> std::string_view {
-    return value_;
-  }
-
-  friend auto operator==(Uuid const&, Uuid const&) -> bool = default;
-
-  template <class HashAlgorithm>
-  friend auto hash_append(HashAlgorithm& h, Uuid const& value) -> void {
-    hash_append(h, value.to_string());
-  }
-
-private:
-  explicit Uuid(std::string value) : value_{std::move(value)} {
-  }
-
-  std::string value_;
-};
-
-template <>
-inline constexpr auto enable_default_formatter<Uuid> = true;
-
-} // namespace tenzir
-
-template <>
-struct std::hash<tenzir::Uuid> {
-  auto operator()(tenzir::Uuid const& value) const -> std::size_t {
     return tenzir::hash(value);
   }
 };
@@ -1919,7 +1886,7 @@ class ExecutionChannelMetrics {
 public:
   ExecutionChannelMetrics(std::vector<std::int64_t> path,
                           std::int64_t channel_index, std::int64_t events,
-                          std::int64_t bytes, Option<std::int64_t> batches,
+                          std::int64_t bytes, std::int64_t batches,
                           std::int64_t queued_bytes,
                           std::int64_t capacity_bytes)
     : path{std::move(path)},
@@ -1935,8 +1902,7 @@ public:
   std::int64_t channel_index;
   std::int64_t events;
   std::int64_t bytes;
-  /// `batches`, may be absent.
-  Option<std::int64_t> batches;
+  std::int64_t batches;
   std::int64_t queued_bytes;
   std::int64_t capacity_bytes;
 
@@ -2872,6 +2838,7 @@ auto parse_principal(simdjson::dom::element value)
   -> Result<Principal, ParseError>;
 auto parse_deployment_path(simdjson::dom::element value)
   -> Result<DeploymentPath, ParseError>;
+auto parse_uuid(simdjson::dom::element value) -> Result<Uuid, ParseError>;
 auto parse_telemetry_count(simdjson::dom::element value)
   -> Result<TelemetryCount, ParseError>;
 auto parse_pipeline_id(simdjson::dom::element value)
@@ -2882,8 +2849,6 @@ auto parse_telemetry_seconds(simdjson::dom::element value)
   -> Result<TelemetrySeconds, ParseError>;
 auto parse_pipeline_sample(simdjson::dom::element value)
   -> Result<PipelineSample, ParseError>;
-auto parse_retired_operator_sample(simdjson::dom::element value)
-  -> Result<RetiredOperatorSample, ParseError>;
 auto parse_telemetry_small_count(simdjson::dom::element value)
   -> Result<TelemetrySmallCount, ParseError>;
 auto parse_severity(simdjson::dom::element value)
@@ -2938,7 +2903,6 @@ auto parse_pipeline_status(simdjson::dom::element value)
   -> Result<PipelineStatus, ParseError>;
 auto parse_pipeline_path(simdjson::dom::element value)
   -> Result<PipelinePath, ParseError>;
-auto parse_uuid(simdjson::dom::element value) -> Result<Uuid, ParseError>;
 auto parse_source_location(simdjson::dom::element value)
   -> Result<SourceLocation, ParseError>;
 auto parse_inspection_operator(simdjson::dom::element value)
@@ -2989,12 +2953,12 @@ auto write_json(OrganizationId const& value, std::string& out) -> void;
 auto write_json(DeploymentPrincipal const& value, std::string& out) -> void;
 auto write_json(Principal const& value, std::string& out) -> void;
 auto write_json(DeploymentPath const& value, std::string& out) -> void;
+auto write_json(Uuid const& value, std::string& out) -> void;
 auto write_json(TelemetryCount const& value, std::string& out) -> void;
 auto write_json(PipelineId const& value, std::string& out) -> void;
 auto write_json(ConnectorFlow const& value, std::string& out) -> void;
 auto write_json(TelemetrySeconds const& value, std::string& out) -> void;
 auto write_json(PipelineSample const& value, std::string& out) -> void;
-auto write_json(RetiredOperatorSample const& value, std::string& out) -> void;
 auto write_json(TelemetrySmallCount const& value, std::string& out) -> void;
 auto write_json(Severity const& value, std::string& out) -> void;
 auto write_json(PushTelemetryPayloadDiagnosticsNotes const& value,
@@ -3027,7 +2991,6 @@ auto write_json(IdentifiedPipeline const& value, std::string& out) -> void;
 auto write_json(PipelineState const& value, std::string& out) -> void;
 auto write_json(PipelineStatus const& value, std::string& out) -> void;
 auto write_json(PipelinePath const& value, std::string& out) -> void;
-auto write_json(Uuid const& value, std::string& out) -> void;
 auto write_json(SourceLocation const& value, std::string& out) -> void;
 auto write_json(InspectionOperator const& value, std::string& out) -> void;
 auto write_json(ChannelDataType const& value, std::string& out) -> void;

@@ -297,9 +297,6 @@ TEST("platform profiler reports resources even without traffic") {
   CHECK(encoded.find(R"("intervalSeconds":1)") != std::string::npos);
   CHECK(encoded.find(R"("queuedBytes":4096)") != std::string::npos);
   CHECK(encoded.find(R"("activity":11)") != std::string::npos);
-  // Older backends require the retired operator samples, empty.
-  REQUIRE(batches[0].operators.is_some());
-  CHECK(batches[0].operators->empty());
 }
 
 TEST("platform profiler keeps rapid samples distinct at millisecond "
@@ -389,9 +386,7 @@ TEST("platform reporter sends the runs of a process in one batch") {
   auto const& batch = sent->batches[0];
   CHECK_EQUAL(batch.pipelines.size(), 300u);
   CHECK_EQUAL(batch.runs.size(), 300u);
-  // Present without requests too, as the platform tells absent from none.
-  REQUIRE(batch.requests.is_some());
-  CHECK(batch.requests->empty());
+  CHECK(batch.requests.empty());
   auto pipelines = std::set<std::string>{};
   for (auto const& sample : batch.pipelines) {
     pipelines.emplace(sample.pipeline_id.to_string());
@@ -444,8 +439,7 @@ TEST("platform reporter splits the widest served requests by size") {
   auto requests = std::size_t{0};
   for (auto index = size_t{0}; index < sent->batches.size(); ++index) {
     CHECK_LESS_EQUAL(sent->sizes[index], max_batch_bytes);
-    REQUIRE(sent->batches[index].requests.is_some());
-    requests += sent->batches[index].requests->size();
+    requests += sent->batches[index].requests.size();
   }
   CHECK_EQUAL(requests, 1000u);
 }
@@ -470,7 +464,7 @@ TEST("platform reporter puts the runs ahead of served requests") {
   CHECK_EQUAL(sent->batches[0].pipelines.size(), 1u);
   auto requests = std::size_t{0};
   for (auto const& batch : sent->batches) {
-    requests += batch.requests->size();
+    requests += batch.requests.size();
   }
   CHECK_EQUAL(requests, 1000u);
 }

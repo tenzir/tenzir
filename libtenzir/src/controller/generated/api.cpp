@@ -688,6 +688,21 @@ auto parse_deployment_path(simdjson::dom::element value)
                         std::move(deployment_id)};
 }
 
+auto Uuid::make(std::string value) -> Result<Uuid, ParseError> {
+  static auto const pattern = std::regex{
+    R"(^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$)"};
+  if (not std::regex_match(value, pattern)) {
+    return Err{ParseError{"Uuid", fmt::format("`{}` does not match the pattern",
+                                              value)}};
+  }
+  return Uuid{std::move(value)};
+}
+
+auto parse_uuid(simdjson::dom::element value) -> Result<Uuid, ParseError> {
+  TRY(auto raw, api::string_of(value, "Uuid"));
+  return Uuid::make(std::move(raw));
+}
+
 auto TelemetryCount::make(std::int64_t value)
   -> Result<TelemetryCount, ParseError> {
   if (value < -9'007'199'254'740'991 or value > 9'007'199'254'740'991) {
@@ -820,13 +835,6 @@ auto parse_pipeline_sample(simdjson::dom::element value)
                         std::move(interval_seconds),
                         std::move(queued_bytes),
                         std::move(activity)};
-}
-
-auto parse_retired_operator_sample(simdjson::dom::element value)
-  -> Result<RetiredOperatorSample, ParseError> {
-  TRY(api::object_of(value, "RetiredOperatorSample"));
-
-  return RetiredOperatorSample{};
 }
 
 auto TelemetrySmallCount::make(std::int64_t value)
@@ -1173,7 +1181,7 @@ auto parse_batch(simdjson::dom::element value) -> Result<Batch, ParseError> {
   TRY(auto object, api::object_of(value, "Batch"));
 
   TRY(auto boot_raw, api::field(object, "boot", "Batch"));
-  TRY(auto boot, api::string_of(boot_raw, "Batch.boot"));
+  TRY(auto boot, parse_uuid(boot_raw));
 
   TRY(auto seq_raw, api::field(object, "seq", "Batch"));
   TRY(auto seq, parse_telemetry_count(seq_raw));
@@ -1190,22 +1198,6 @@ auto parse_batch(simdjson::dom::element value) -> Result<Batch, ParseError> {
   for (auto pipelines_item : pipelines_array) {
     TRY(auto pipelines_decoded, parse_pipeline_sample(pipelines_item));
     pipelines.push_back(std::move(pipelines_decoded));
-  }
-
-  auto operators = Option<std::vector<RetiredOperatorSample>>{None{}};
-  if (auto operators_raw = api::optional_field(object, "operators")) {
-    auto operators_present = std::vector<RetiredOperatorSample>{};
-    auto operators_present_array = simdjson::dom::array{};
-    if ((*operators_raw).get_array().get(operators_present_array)
-        != simdjson::SUCCESS) {
-      return Err{ParseError{"Batch.operators", "expected an array"}};
-    }
-    for (auto operators_present_item : operators_present_array) {
-      TRY(auto operators_present_decoded,
-          parse_retired_operator_sample(operators_present_item));
-      operators_present.push_back(std::move(operators_present_decoded));
-    }
-    operators = std::move(operators_present);
   }
 
   TRY(auto diagnostics_raw, api::field(object, "diagnostics", "Batch"));
@@ -1241,27 +1233,21 @@ auto parse_batch(simdjson::dom::element value) -> Result<Batch, ParseError> {
     deployment.push_back(std::move(deployment_decoded));
   }
 
-  auto requests = Option<std::vector<ServedRequest>>{None{}};
-  if (auto requests_raw = api::optional_field(object, "requests")) {
-    auto requests_present = std::vector<ServedRequest>{};
-    auto requests_present_array = simdjson::dom::array{};
-    if ((*requests_raw).get_array().get(requests_present_array)
-        != simdjson::SUCCESS) {
-      return Err{ParseError{"Batch.requests", "expected an array"}};
-    }
-    for (auto requests_present_item : requests_present_array) {
-      TRY(auto requests_present_decoded,
-          parse_served_request(requests_present_item));
-      requests_present.push_back(std::move(requests_present_decoded));
-    }
-    requests = std::move(requests_present);
+  TRY(auto requests_raw, api::field(object, "requests", "Batch"));
+  auto requests = std::vector<ServedRequest>{};
+  auto requests_array = simdjson::dom::array{};
+  if (requests_raw.get_array().get(requests_array) != simdjson::SUCCESS) {
+    return Err{ParseError{"Batch.requests", "expected an array"}};
+  }
+  for (auto requests_item : requests_array) {
+    TRY(auto requests_decoded, parse_served_request(requests_item));
+    requests.push_back(std::move(requests_decoded));
   }
 
-  return Batch{std::move(boot),      std::move(seq),
-               std::move(dropped),   std::move(pipelines),
-               std::move(operators), std::move(diagnostics),
-               std::move(runs),      std::move(deployment),
-               std::move(requests)};
+  return Batch{std::move(boot),        std::move(seq),
+               std::move(dropped),     std::move(pipelines),
+               std::move(diagnostics), std::move(runs),
+               std::move(deployment),  std::move(requests)};
 }
 
 auto IngestEndpointName::make(std::string value)
@@ -1485,28 +1471,26 @@ auto parse_liveness(simdjson::dom::element value)
   TRY(auto uptime_ms_raw, api::field(object, "uptime_ms", "Liveness"));
   TRY(auto uptime_ms, api::double_of(uptime_ms_raw, "Liveness.uptime_ms"));
 
+  TRY(auto generation_raw, api::field(object, "generation", "Liveness"));
   auto generation = Option<std::int64_t>{None{}};
-  if (auto generation_raw = api::optional_field(object, "generation")) {
-    TRY(auto generation_present,
-        api::int64_of(*generation_raw, "Liveness.generation"));
-    generation = std::move(generation_present);
+  if (not api::is_null(generation_raw)) {
+    TRY(auto generation_value,
+        api::int64_of(generation_raw, "Liveness.generation"));
+    generation = std::move(generation_value);
   }
 
+  TRY(auto digest_raw, api::field(object, "digest", "Liveness"));
   auto digest = Option<std::string>{None{}};
-  if (auto digest_raw = api::optional_field(object, "digest")) {
-    TRY(auto digest_present, api::string_of(*digest_raw, "Liveness.digest"));
-    digest = std::move(digest_present);
+  if (not api::is_null(digest_raw)) {
+    TRY(auto digest_value, api::string_of(digest_raw, "Liveness.digest"));
+    digest = std::move(digest_value);
   }
 
-  auto suspended = Option<bool>{None{}};
-  if (auto suspended_raw = api::optional_field(object, "suspended")) {
-    TRY(auto suspended_present,
-        api::bool_of(*suspended_raw, "Liveness.suspended"));
-    suspended = std::move(suspended_present);
-  }
+  TRY(auto suspended_raw, api::field(object, "suspended", "Liveness"));
+  TRY(auto suspended, api::bool_of(suspended_raw, "Liveness.suspended"));
 
   return Liveness{std::move(status), uptime_ms, std::move(generation),
-                  std::move(digest), std::move(suspended)};
+                  std::move(digest), suspended};
 }
 
 auto parse_identified_pipeline(simdjson::dom::element value)
@@ -1608,21 +1592,6 @@ auto parse_pipeline_path(simdjson::dom::element value)
   TRY(auto pipeline_id, parse_pipeline_id(pipeline_id_raw));
 
   return PipelinePath{std::move(pipeline_id)};
-}
-
-auto Uuid::make(std::string value) -> Result<Uuid, ParseError> {
-  static auto const pattern = std::regex{
-    R"(^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$)"};
-  if (not std::regex_match(value, pattern)) {
-    return Err{ParseError{"Uuid", fmt::format("`{}` does not match the pattern",
-                                              value)}};
-  }
-  return Uuid{std::move(value)};
-}
-
-auto parse_uuid(simdjson::dom::element value) -> Result<Uuid, ParseError> {
-  TRY(auto raw, api::string_of(value, "Uuid"));
-  return Uuid::make(std::move(raw));
 }
 
 auto parse_source_location(simdjson::dom::element value)
@@ -2007,12 +1976,10 @@ auto parse_execution_channel_metrics(simdjson::dom::element value)
   TRY(auto bytes_raw, api::field(object, "bytes", "ExecutionChannelMetrics"));
   TRY(auto bytes, api::int64_of(bytes_raw, "ExecutionChannelMetrics.bytes"));
 
-  auto batches = Option<std::int64_t>{None{}};
-  if (auto batches_raw = api::optional_field(object, "batches")) {
-    TRY(auto batches_present,
-        api::int64_of(*batches_raw, "ExecutionChannelMetrics.batches"));
-    batches = std::move(batches_present);
-  }
+  TRY(auto batches_raw,
+      api::field(object, "batches", "ExecutionChannelMetrics"));
+  TRY(auto batches,
+      api::int64_of(batches_raw, "ExecutionChannelMetrics.batches"));
 
   TRY(auto queued_bytes_raw,
       api::field(object, "queuedBytes", "ExecutionChannelMetrics"));
@@ -2346,6 +2313,10 @@ auto write_json(DeploymentPath const& value, std::string& out) -> void {
   out += '}';
 }
 
+auto write_json(Uuid const& value, std::string& out) -> void {
+  api::write_string(value.to_string(), out);
+}
+
 auto write_json(TelemetryCount const& value, std::string& out) -> void {
   fmt::format_to(std::back_inserter(out), "{}", value.value());
 }
@@ -2450,11 +2421,6 @@ auto write_json(PipelineSample const& value, std::string& out) -> void {
       out += "null";
     }
   }
-  out += '}';
-}
-
-auto write_json(RetiredOperatorSample const&, std::string& out) -> void {
-  out += '{';
   out += '}';
 }
 
@@ -2625,22 +2591,13 @@ auto write_json(ServedRequest const& value, std::string& out) -> void {
 
 auto write_json(Batch const& value, std::string& out) -> void {
   out += '{';
-  auto field_separator = "";
-  out += field_separator;
-  field_separator = ",";
   out += "\"boot\":";
-  api::write_string(value.boot, out);
-  out += field_separator;
-  field_separator = ",";
-  out += "\"seq\":";
+  write_json(value.boot, out);
+  out += ",\"seq\":";
   write_json(value.seq, out);
-  out += field_separator;
-  field_separator = ",";
-  out += "\"dropped\":";
+  out += ",\"dropped\":";
   write_json(value.dropped, out);
-  out += field_separator;
-  field_separator = ",";
-  out += "\"pipelines\":";
+  out += ",\"pipelines\":";
   {
     out += '[';
     auto separator0 = "";
@@ -2651,28 +2608,7 @@ auto write_json(Batch const& value, std::string& out) -> void {
     }
     out += ']';
   }
-  if (value.operators) {
-    out += field_separator;
-    field_separator = ",";
-    out += "\"operators\":";
-    if (value.operators) {
-      {
-        out += '[';
-        auto separator0 = "";
-        for (auto const& element0 : *value.operators) {
-          out += separator0;
-          separator0 = ",";
-          write_json(element0, out);
-        }
-        out += ']';
-      }
-    } else {
-      out += "null";
-    }
-  }
-  out += field_separator;
-  field_separator = ",";
-  out += "\"diagnostics\":";
+  out += ",\"diagnostics\":";
   {
     out += '[';
     auto separator0 = "";
@@ -2683,9 +2619,7 @@ auto write_json(Batch const& value, std::string& out) -> void {
     }
     out += ']';
   }
-  out += field_separator;
-  field_separator = ",";
-  out += "\"runs\":";
+  out += ",\"runs\":";
   {
     out += '[';
     auto separator0 = "";
@@ -2696,9 +2630,7 @@ auto write_json(Batch const& value, std::string& out) -> void {
     }
     out += ']';
   }
-  out += field_separator;
-  field_separator = ",";
-  out += "\"deployment\":";
+  out += ",\"deployment\":";
   {
     out += '[';
     auto separator0 = "";
@@ -2709,24 +2641,16 @@ auto write_json(Batch const& value, std::string& out) -> void {
     }
     out += ']';
   }
-  if (value.requests) {
-    out += field_separator;
-    field_separator = ",";
-    out += "\"requests\":";
-    if (value.requests) {
-      {
-        out += '[';
-        auto separator0 = "";
-        for (auto const& element0 : *value.requests) {
-          out += separator0;
-          separator0 = ",";
-          write_json(element0, out);
-        }
-        out += ']';
-      }
-    } else {
-      out += "null";
+  out += ",\"requests\":";
+  {
+    out += '[';
+    auto separator0 = "";
+    for (auto const& element0 : value.requests) {
+      out += separator0;
+      separator0 = ",";
+      write_json(element0, out);
     }
+    out += ']';
   }
   out += '}';
 }
@@ -2835,41 +2759,24 @@ auto write_json(ResolvedSecret const& value, std::string& out) -> void {
 
 auto write_json(Liveness const& value, std::string& out) -> void {
   out += '{';
-  auto field_separator = "";
-  out += field_separator;
-  field_separator = ",";
   out += "\"status\":";
   api::write_string(value.status, out);
-  out += field_separator;
-  field_separator = ",";
-  out += "\"uptime_ms\":";
+  out += ",\"uptime_ms\":";
   fmt::format_to(std::back_inserter(out), "{}", value.uptime_ms);
-  out += field_separator;
-  field_separator = ",";
-  out += "\"generation\":";
+  out += ",\"generation\":";
   if (value.generation) {
     fmt::format_to(std::back_inserter(out), "{}", *value.generation);
   } else {
     out += "null";
   }
-  out += field_separator;
-  field_separator = ",";
-  out += "\"digest\":";
+  out += ",\"digest\":";
   if (value.digest) {
     api::write_string(*value.digest, out);
   } else {
     out += "null";
   }
-  if (value.suspended) {
-    out += field_separator;
-    field_separator = ",";
-    out += "\"suspended\":";
-    if (value.suspended) {
-      out += *value.suspended ? "true" : "false";
-    } else {
-      out += "null";
-    }
-  }
+  out += ",\"suspended\":";
+  out += value.suspended ? "true" : "false";
   out += '}';
 }
 
@@ -2914,10 +2821,6 @@ auto write_json(PipelinePath const& value, std::string& out) -> void {
   out += "\"pipelineId\":";
   write_json(value.pipeline_id, out);
   out += '}';
-}
-
-auto write_json(Uuid const& value, std::string& out) -> void {
-  api::write_string(value.to_string(), out);
 }
 
 auto write_json(SourceLocation const& value, std::string& out) -> void {
@@ -3131,9 +3034,6 @@ auto write_json(ExecutionOperatorMetrics const& value, std::string& out)
 auto write_json(ExecutionChannelMetrics const& value, std::string& out)
   -> void {
   out += '{';
-  auto field_separator = "";
-  out += field_separator;
-  field_separator = ",";
   out += "\"path\":";
   {
     out += '[';
@@ -3145,35 +3045,17 @@ auto write_json(ExecutionChannelMetrics const& value, std::string& out)
     }
     out += ']';
   }
-  out += field_separator;
-  field_separator = ",";
-  out += "\"channelIndex\":";
+  out += ",\"channelIndex\":";
   fmt::format_to(std::back_inserter(out), "{}", value.channel_index);
-  out += field_separator;
-  field_separator = ",";
-  out += "\"events\":";
+  out += ",\"events\":";
   fmt::format_to(std::back_inserter(out), "{}", value.events);
-  out += field_separator;
-  field_separator = ",";
-  out += "\"bytes\":";
+  out += ",\"bytes\":";
   fmt::format_to(std::back_inserter(out), "{}", value.bytes);
-  if (value.batches) {
-    out += field_separator;
-    field_separator = ",";
-    out += "\"batches\":";
-    if (value.batches) {
-      fmt::format_to(std::back_inserter(out), "{}", *value.batches);
-    } else {
-      out += "null";
-    }
-  }
-  out += field_separator;
-  field_separator = ",";
-  out += "\"queuedBytes\":";
+  out += ",\"batches\":";
+  fmt::format_to(std::back_inserter(out), "{}", value.batches);
+  out += ",\"queuedBytes\":";
   fmt::format_to(std::back_inserter(out), "{}", value.queued_bytes);
-  out += field_separator;
-  field_separator = ",";
-  out += "\"capacityBytes\":";
+  out += ",\"capacityBytes\":";
   fmt::format_to(std::back_inserter(out), "{}", value.capacity_bytes);
   out += '}';
 }
