@@ -9,6 +9,7 @@
 #include "tenzir/detail/available_memory.hpp"
 
 #include "tenzir/config.hpp"
+#include "tenzir/detail/cgroup.hpp"
 #include "tenzir/detail/saturating_arithmetic.hpp"
 
 #if defined(__APPLE__) && __has_include(<mach/mach.h>)
@@ -156,27 +157,6 @@ auto relative_cgroup_path(std::string_view raw) -> std::filesystem::path {
     raw.remove_prefix(1);
   }
   return std::filesystem::path{std::string{raw}};
-}
-
-struct cgroup2_mount {
-  std::filesystem::path root = {};
-  std::filesystem::path mount_point = {};
-};
-
-auto find_cgroup2_mount() -> Option<cgroup2_mount> {
-  try {
-    for (const auto& mount : pfs::procfs{}.get_task().get_mountinfo()) {
-      if (mount.filesystem_type != "cgroup2") {
-        continue;
-      }
-      return cgroup2_mount{
-        .root = mount.root,
-        .mount_point = mount.point,
-      };
-    }
-  } catch (const std::exception&) {
-  }
-  return None{};
 }
 
 auto path_stays_below_root(const std::filesystem::path& path) -> bool {
