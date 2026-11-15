@@ -2565,10 +2565,12 @@ auto call(Transport& transport, ResolveSecret request)
 // ── Deployment (platform → deployment) ──────────────────────────────────────
 
 /// `GET /health`
-/// Answered as long as the deployment is running. The backend probes this
-/// through the gateway, which is where `reachable` comes from. It also reports
-/// the generation and digest of the configuration the deployment has accepted
-/// and can read. Health probes do not restore configuration archives.
+/// Answered as long as the deployment is running, with how long it has been up,
+/// whether it is suspended, and the generation and digest of the configuration
+/// it has accepted and can read. The platform asks it through the gateway to
+/// diagnose a deployment and to compare what it holds with what it should run.
+/// Whether a deployment is `reachable` comes from its connection to the gateway,
+/// not from this endpoint. Health probes do not restore configuration archives.
 class ReadHealth {
 public:
   ReadHealth() = default;
