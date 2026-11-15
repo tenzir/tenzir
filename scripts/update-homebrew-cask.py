@@ -7,10 +7,10 @@ from pathlib import Path
 
 def render_cask(version: str, sha256: str, pkgutil_identifier: str) -> str:
     return f'''cask "tenzir" do
+  arch arm: "arm64"
+
   version "{version}"
   sha256 "{sha256}"
-
-  arch arm: "arm64"
 
   url "https://github.com/tenzir/tenzir/releases/download/v#{{version}}/tenzir-#{{version}}-#{{arch}}-darwin-static.pkg"
   name "Tenzir"
@@ -22,6 +22,7 @@ def render_cask(version: str, sha256: str, pkgutil_identifier: str) -> str:
   end
 
   depends_on arch: :arm64
+  depends_on :macos
 
   pkg "tenzir-#{{version}}-#{{arch}}-darwin-static.pkg"
   binary "/opt/tenzir/bin/tenzir"
