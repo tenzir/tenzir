@@ -3,7 +3,6 @@ fixtures:
   - azure_log_analytics:
       case: value-budget
 timeout: 60
-error: true
 assertions:
   fixtures:
     azure_log_analytics:
@@ -11,6 +10,8 @@ assertions:
       tokens: 1
 ---
 
+// A dynamic value of 2 Mi nodes decodes: the decoded value budget scales with
+// the response size limit.
 from_azure_log_analytics env("AZLOG_QUERY"),
   workspace_id=env("AZLOG_WORKSPACE"),
   azure_auth={
@@ -20,4 +21,6 @@ from_azure_log_analytics env("AZLOG_QUERY"),
     authority: env("AZLOG_AUTHORITY"),
   },
   _base_url=env("AZLOG_URL"),
-  tls=false
+  tls=false,
+  pushdown=false
+select nodes=Value.length()

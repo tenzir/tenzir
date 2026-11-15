@@ -1,0 +1,7 @@
+error: invalid Azure Log Analytics response: the service reported an error or partial results
+  --> tests/operators/from_azure_log_analytics/partial-conflicting.tql:34:28
+   |
+34 |   from_azure_log_analytics "Q",
+   |                            ^^^
+   |
+   = hint: reduce the query's output or time range and check projected types

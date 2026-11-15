@@ -1,0 +1,40 @@
+---
+fixtures:
+  # Once `accept_http` below listens, signal it to start the source.
+  - http_request:
+      path: /start
+      initial_delay: 0
+      max_attempts_per_request: 1000
+      request_timeout: 30
+      stop_on_connection_drop: true
+timeout: 60
+error: true
+---
+
+// A failure that merely names the truncation code, such as an entity that a
+// fuzzy `union` fails to resolve, fails the pipeline.
+let $url = "http://" + env("HTTP_REQUEST_ENDPOINT")
+// Serve a token, and the canned query response next to this test. The
+// source starts with the signal, after the server listens.
+accept_http env("HTTP_REQUEST_ENDPOINT"), responses={
+  "/t/oauth2/v2.0/token": {
+    code: 200,
+    content_type: "application/json",
+    body: r#"{"access_token":"token","expires_in":3600}"#,
+  },
+  "/v1/workspaces/01234567-89ab-cdef-0123-456789abcdef/query": {
+    code: 200,
+    content_type: "application/json",
+    body: file_contents(env("TENZIR_INPUT")),
+  },
+} {
+  read_all
+  where $request.path == "/start"
+}
+each {
+  from_azure_log_analytics "Q",
+    workspace_id="01234567-89ab-cdef-0123-456789abcdef",
+    azure_auth={tenant_id: "t", client_id: "c", client_secret: "s", authority: $url},
+    _base_url=$url,
+    tls=false
+}

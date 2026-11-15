@@ -1,0 +1,18 @@
+warning: the result is incomplete
+  --> tests/operators/from_azure_log_analytics/pushdown-partial-truncation.tql:38:28
+   |
+38 |   from_azure_log_analytics "Q",
+   |                            ~~~
+   |
+   = note: Log Analytics truncates a result beyond its record count or data size limit, by default 500,000 rows or 64 MiB
+   = hint: narrow the query or its time range, return fewer columns, or limit or aggregate rows in the query, for example with `take` or `summarize`
+{
+  Id: 0,
+  Name: "alice",
+  Port: 443,
+}
+{
+  Id: 4,
+  Name: "straße",
+  Port: 443,
+}
