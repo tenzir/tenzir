@@ -24,6 +24,7 @@ def render_cask(version: str, sha256: str, pkgutil_identifier: str) -> str:
   depends_on arch: :arm64
 
   pkg "tenzir-#{{version}}-#{{arch}}-darwin-static.pkg"
+  binary "/opt/tenzir/bin/tenzir"
 
   uninstall pkgutil: "{pkgutil_identifier}"
 end
