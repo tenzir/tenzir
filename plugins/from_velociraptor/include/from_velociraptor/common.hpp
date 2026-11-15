@@ -16,9 +16,7 @@
 #include <tenzir/nova/events.hpp>
 #include <tenzir/nova/json_parser.hpp>
 #include <tenzir/nova/record_array_builder.hpp>
-#include <tenzir/series_builder.hpp>
 #include <tenzir/uuid.hpp>
-#include <tenzir/view.hpp>
 
 #include <fmt/format.h>
 
@@ -126,62 +124,6 @@ inline auto make_subscribe_query(std::string_view artifact) -> std::string {
   return fmt::format(subscribe_artifact_vql, artifact);
 }
 
-/// Parses a response as table slice.
-inline auto parse(const proto::VQLResponse& response)
-  -> caf::expected<std::vector<table_slice>> {
-  auto builder = series_builder{};
-  auto us = std::chrono::microseconds(response.timestamp());
-  auto timestamp = time{std::chrono::duration_cast<duration>(us)};
-  // Velociraptor sends a stream of responses that consists of "control"
-  // and "data" messages. If the response payload is empty, then we have a
-  // control message, otherwise we have a data message.
-  if (not response.response().empty()) {
-    TENZIR_DEBUG("got a data message");
-    // There's an opportunity for improvement here, as we are not (yet)
-    // making use of the additional types provided in the response. We
-    // should synthesize a schema from that and provide that as hint to
-    // the series builder.
-    auto json = from_json(response.response());
-    if (not json) {
-      return caf::make_error(ec::parse_error,
-                             "Velociraptor response not in JSON format");
-    }
-    const auto* objects = try_as<list>(&*json);
-    if (objects == nullptr) {
-      return caf::make_error(ec::parse_error,
-                             "expected JSON array in Velociraptor response");
-    }
-    for (const auto& object : *objects) {
-      const auto* rec = try_as<record>(&object);
-      if (rec == nullptr) {
-        return caf::make_error(ec::parse_error,
-                               "expected objects in Velociraptor response");
-      }
-      auto row = builder.record();
-      row.field("timestamp").data(timestamp);
-      row.field("query_id").data(response.query_id());
-      row.field("query").data(record{
-        {"name", response.query().name()},
-        {"vql", response.query().vql()},
-      });
-      row.field("part").data(response.part());
-      auto resp = row.field("response").record();
-      for (const auto& [field, value] : *rec) {
-        resp.field(field).data(make_view(value));
-      }
-    }
-    return builder.finish_as_table_slice("velociraptor.response");
-  }
-  if (not response.log().empty()) {
-    TENZIR_DEBUG("got a control message");
-    auto row = builder.record();
-    row.field("timestamp").data(timestamp);
-    row.field("log").data(response.log());
-    return builder.finish_as_table_slice("velociraptor.log");
-  }
-  return caf::make_error(ec::unspecified, "empty Velociraptor response");
-}
-
 /// Parses a response as events.
 ///
 /// Returns an empty batch for a data message without rows.
@@ -190,7 +132,9 @@ parse_events(proto::VQLResponse const& response, nova::JsonParser& parser)
   -> caf::expected<nova::Events> {
   auto us = std::chrono::microseconds(response.timestamp());
   auto timestamp = time{std::chrono::duration_cast<duration>(us)};
-  // See `parse` above for the two kinds of messages.
+  // Velociraptor sends a stream of responses that consists of "control"
+  // and "data" messages. If the response payload is empty, then we have a
+  // control message, otherwise we have a data message.
   if (not response.response().empty()) {
     TENZIR_DEBUG("got a data message");
     auto json = parser.parse_document_value(response.response());

@@ -287,111 +287,6 @@ private:
   std::atomic<bool> queue_overflow_{false};
 };
 
-namespace legacy {
-
-class FromVelociraptor final : public Operator<void, table_slice> {
-public:
-  explicit FromVelociraptor(FromVelociraptorArgs args)
-    : args_{std::move(args)} {
-  }
-
-  auto start(OpCtx& ctx) -> Task<void> override {
-    bytes_read_counter_
-      = ctx.make_counter(MetricsLabel{"operator", "from_velociraptor"},
-                         MetricsDirection::read, MetricsVisibility::external_,
-                         MetricsUnit::bytes);
-    events_read_counter_
-      = ctx.make_counter(MetricsLabel{"operator", "from_velociraptor"},
-                         MetricsDirection::read, MetricsVisibility::external_,
-                         MetricsUnit::events);
-    auto normalized = normalize_args(args_, ctx);
-    TENZIR_ASSERT(normalized);
-    auto config = select_client_config(args_, ctx.dh());
-    TENZIR_ASSERT(config);
-    auto credentials = grpc::SslCredentials({
-      .pem_root_certs = config->ca_certificate,
-      .pem_private_key = config->client_private_key,
-      .pem_cert_chain = config->client_cert,
-    });
-    auto channel_args = grpc::ChannelArguments{};
-    channel_args.SetSslTargetNameOverride("VelociraptorServer");
-    auto channel = grpc::CreateCustomChannel(config->api_connection_string,
-                                             credentials, channel_args);
-    auto stub = proto::API::NewStub(channel);
-    reactor_.emplace(std::in_place, *stub, make_collector_args(*normalized),
-                     message_queue_);
-    co_return;
-  }
-
-  auto await_task(diagnostic_handler&) const -> Task<Any> override {
-    TENZIR_ASSERT(reactor_);
-    co_return co_await message_queue_->dequeue();
-  }
-
-  auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override {
-    auto responses = std::vector<proto::VQLResponse>{};
-    auto terminal_error = Option<std::string>{};
-    auto collect_message = [&](Message message) -> void {
-      if (auto* response = try_as<Response>(&message)) {
-        responses.push_back(std::move(response->response));
-        return;
-      }
-      auto finish_message = as<StreamFinished>(std::move(message));
-      terminal_error = std::move(finish_message.error);
-      stream_finished_ = true;
-    };
-    collect_message(std::move(result).as<Message>());
-    while (auto next = message_queue_->try_dequeue()) {
-      collect_message(std::move(*next));
-    }
-    for (auto& response : responses) {
-      const auto bytes = response.ByteSizeLong();
-      if (bytes > 0) {
-        bytes_read_counter_.add(bytes);
-      }
-      if (auto slices = parse(response)) {
-        for (auto& slice : *slices) {
-          auto const rows = slice.rows();
-          co_await push(std::move(slice));
-          events_read_counter_.add(rows);
-        }
-      } else {
-        emit_parse_warning(response, ctx.dh(), slices.error(),
-                           args_.operator_location);
-      }
-    }
-    TENZIR_ASSERT(not stream_finished_ or message_queue_->empty());
-    if (terminal_error) {
-      diagnostic::error(grpc_request_failed_error)
-        .primary(args_.operator_location)
-        .note("{}", *terminal_error)
-        .emit(ctx);
-    }
-  }
-
-  auto stop(OpCtx&) -> Task<void> override {
-    TENZIR_ASSERT(reactor_);
-    (*reactor_)->request_shutdown();
-    co_return;
-  }
-
-  auto state() -> OperatorState override {
-    return stream_finished_ ? OperatorState::done : OperatorState::normal;
-  }
-
-private:
-  FromVelociraptorArgs args_;
-  mutable Arc<MessageQueue> message_queue_{std::in_place,
-                                           message_queue_capacity};
-  Option<Box<VelociraptorReadReactor>> reactor_;
-  bool stream_finished_ = false;
-  MetricsCounter bytes_read_counter_;
-  MetricsCounter events_read_counter_;
-};
-
-} // namespace legacy
-
 class FromVelociraptor final : public Operator<void, nova::Events> {
 public:
   explicit FromVelociraptor(FromVelociraptorArgs args)
@@ -542,8 +437,8 @@ public:
   auto describe() const -> Description override {
     auto initial = FromVelociraptorArgs{};
     initial.plugin_config = config_;
-    auto d = Describer<FromVelociraptorArgs, legacy::FromVelociraptor,
-                       FromVelociraptor>{std::move(initial)};
+    auto d
+      = Describer<FromVelociraptorArgs, FromVelociraptor>{std::move(initial)};
     auto request_name
       = d.named("request_name", &FromVelociraptorArgs::request_name);
     auto org_id = d.named("org_id", &FromVelociraptorArgs::org_id);

@@ -17,7 +17,6 @@
 #include <tenzir/detail/eval_as.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/detail/string.hpp>
-#include <tenzir/multi_series_builder.hpp>
 #include <tenzir/nova/array_builder.hpp>
 #include <tenzir/nova/bitmap_iteration.hpp>
 #include <tenzir/nova/eval_kernel.hpp>
@@ -257,27 +256,6 @@ auto make_cloudwatch_http_client(Args const& args, OpCtx& ctx, location primary,
 }
 
 namespace {
-
-auto build_slice(std::vector<CloudWatchEvent> const& events,
-                 diagnostic_handler& dh) -> std::vector<table_slice> {
-  auto opts = multi_series_builder::options{};
-  opts.settings.ordered = true;
-  opts.settings.raw = true;
-  opts.settings.default_schema_name = "tenzir.cloudwatch";
-  auto msb = multi_series_builder{std::move(opts), dh};
-  for (auto const& event : events) {
-    auto record = msb.record();
-    record.field("timestamp").data(event.timestamp);
-    record.field("ingestion_time").data(event.ingestion_time);
-    record.field("log_group").data(event.log_group);
-    record.field("log_stream").data(event.log_stream);
-    record.field("message").data(event.message);
-    if (event.event_id) {
-      record.field("event_id").data(*event.event_id);
-    }
-  }
-  return msb.finalize_as_table_slice();
-}
 
 /// The `limit` of a request, which caps the events of a page at 10,000.
 auto read_request_limit(CloudWatchRequest const& request, uint64_t emitted)
@@ -1494,48 +1472,6 @@ auto build_events(std::vector<CloudWatchEvent> const& events)
 }
 
 } // namespace
-
-// --- FromCloudWatch ---
-
-FromCloudWatch::FromCloudWatch(FromCloudWatchArgs args)
-  : reader_{std::move(args)} {
-}
-
-auto FromCloudWatch::snapshot(Serde& serde) -> void {
-  reader_.snapshot(serde);
-}
-
-auto FromCloudWatch::start(OpCtx& ctx) -> Task<void> {
-  co_await reader_.start(ctx);
-}
-
-auto FromCloudWatch::await_task(diagnostic_handler& dh) const -> Task<Any> {
-  TENZIR_UNUSED(dh);
-  return reader_.next();
-}
-
-auto FromCloudWatch::process_task(Any result, Push<table_slice>& push,
-                                  OpCtx& ctx) -> Task<void> {
-  auto events = reader_.handle(std::move(result), ctx);
-  if (events.empty()) {
-    co_return;
-  }
-  for (auto&& slice : build_slice(events, ctx.dh())) {
-    auto const rows = slice.rows();
-    co_await push(std::move(slice));
-    reader_.count_events(rows);
-  }
-}
-
-auto FromCloudWatch::state() -> OperatorState {
-  return reader_.state();
-}
-
-auto FromCloudWatch::stop(OpCtx& ctx) -> Task<void> {
-  TENZIR_UNUSED(ctx);
-  reader_.stop();
-  co_return;
-}
 
 // --- FromCloudWatchEvents ---
 

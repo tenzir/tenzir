@@ -8,7 +8,6 @@
 
 #include "cloudwatch/operators.hpp"
 
-#include <tenzir/nova_flag.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin/register.hpp>
 #include <tenzir/pushdown/plan.hpp>
@@ -144,8 +143,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d
-      = Describer<FromCloudWatchArgs, FromCloudWatch, FromCloudWatchEvents>{};
+    auto d = Describer<FromCloudWatchArgs, FromCloudWatchEvents>{};
     d.operator_location(&FromCloudWatchArgs::operator_location);
     auto group = d.positional("group", &FromCloudWatchArgs::group,
                               "string|list<string>");
@@ -166,14 +164,11 @@ public:
     d.optimization(&FromCloudWatchArgs::optimization);
     // CloudWatch Logs computes the stages after the operator with its own
     // semantics: filters as a filter pattern, a time window, or log stream
-    // names, and a limit. Only the Nova operator takes over stages.
+    // names, and a limit.
     d.query_plan([](FromCloudWatchArgs const& args,
                     ir::QueryChain const& chain) -> ir::Absorption {
       if (not pushdown::pushdown_enabled(args.pushdown)) {
         return {.prefix = 0, .declined = "`pushdown=false`"};
-      }
-      if (not nova_enabled()) {
-        return {.prefix = 0, .declined = "the operator runs without Nova"};
       }
       return absorb_cloudwatch_stages(args, chain);
     });

@@ -19,14 +19,12 @@
 #include <tenzir/logger.hpp>
 #include <tenzir/nova/array_builder.hpp>
 #include <tenzir/nova/events.hpp>
-#include <tenzir/nova_flag.hpp>
 #include <tenzir/operator/optimization.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/pipeline_metrics.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/pushdown/layout.hpp>
 #include <tenzir/pushdown/read.hpp>
-#include <tenzir/series_builder.hpp>
 #include <tenzir/tls_options.hpp>
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/try.hpp>
@@ -1402,81 +1400,20 @@ auto parse_first_optional_int64(std::vector<result_row> const& rows)
   return parse_optional_int64(cell);
 }
 
-/// Output formats of a query: table slices and events.
-///
-/// A format also counts the remaining limit on every batch with `apply`.
-struct SliceFormat {
-  using Output = table_slice;
-  using Builder = series_builder;
+/// Finishes the rows in `builder` as a batch of events.
+auto finish_events(nova::ArrayBuilder<nova::Record>& builder,
+                   std::string const& schema_name) -> nova::Events {
+  auto data = builder.finish();
+  auto const rows = data.length();
+  return nova::Events{std::move(data), nova::storage::BitMap{rows, true},
+                      nova::Events::Meta::make_empty(rows, schema_name)};
+}
 
-  static auto event(Builder& builder) {
-    return builder.record();
-  }
-
-  static auto set_blob(auto& field, std::span<std::byte const> bytes) -> void {
-    field.data(blob{bytes});
-  }
-
-  static auto finish(Builder& builder, std::string const& schema_name)
-    -> std::vector<Output> {
-    return builder.finish_as_table_slice(schema_name);
-  }
-
-  static auto rows(Output const& output) -> uint64_t {
-    return output.rows();
-  }
-
-  static auto active_rows(Output const& output) -> uint64_t {
-    return output.rows();
-  }
-
-  /// A restored read of slices restarts from scratch, as before the stages.
-  static auto skip(Output output, uint64_t&) -> Output {
-    return output;
-  }
-};
-
-struct EventsFormat {
-  using Output = nova::Events;
-  using Builder = nova::ArrayBuilder<nova::Record>;
-
-  static auto event(Builder& builder) {
-    return builder.record();
-  }
-
-  static auto set_blob(auto& field, std::span<std::byte const> bytes) -> void {
-    field.data(blob_view{bytes});
-  }
-
-  static auto finish(Builder& builder, std::string const& schema_name)
-    -> std::vector<Output> {
-    auto data = builder.finish();
-    auto const rows = data.length();
-    auto result = std::vector<Output>{};
-    result.emplace_back(std::move(data), nova::storage::BitMap{rows, true},
-                        nova::Events::Meta::make_empty(rows, schema_name));
-    return result;
-  }
-
-  static auto rows(Output const& output) -> uint64_t {
-    return detail::narrow<uint64_t>(output.length());
-  }
-
-  static auto active_rows(Output const& output) -> uint64_t {
-    return detail::narrow<uint64_t>(output.active_count());
-  }
-
-  static auto skip(Output output, uint64_t& count) -> Output {
-    return pushdown::skip_rows(std::move(output), count);
-  }
-};
-
-/// Parse a row packet into a record of a series or event array builder.
-template <class Format>
+/// Parse a row packet into a record of an event array builder.
 void parse_row_into_builder(std::span<std::byte const> data,
                             std::vector<column_info> const& cols,
-                            typename Format::Builder& builder) {
-  auto event = Format::event(builder);
+                            nova::ArrayBuilder<nova::Record>& builder) {
+  auto event = builder.record();
   auto reader = packet_reader{data};
   for (auto const& col : cols) {
     auto field = event.field(col.name);
@@ -1542,9 +1479,8 @@ void parse_row_into_builder(std::span<std::byte const> data,
       case mysql_type::long_blob:
       case mysql_type::blob:
         if (is_binary(col)) {
-          Format::set_blob(
-            field, std::span{reinterpret_cast<std::byte const*>(str.data()),
-                             str.size()});
+          field.data(blob_view{std::span{
+            reinterpret_cast<std::byte const*>(str.data()), str.size()}});
         } else {
           field.data(std::string_view{str});
         }
@@ -1585,10 +1521,8 @@ public:
     co_return Box<async_client>{std::in_place, std::move(conn)};
   }
 
-  /// Execute query and stream results as table slices or events.
-  template <class Format = SliceFormat>
-  auto query(query_config cfg)
-    -> AsyncGenerator<MysqlResult<typename Format::Output>> {
+  /// Execute query and stream results as events.
+  auto query(query_config cfg) -> AsyncGenerator<MysqlResult<nova::Events>> {
     auto columns_result = co_await start_query(cfg.sql);
     if (columns_result.is_err()) {
       co_yield Err{std::move(columns_result).unwrap_err()};
@@ -1599,7 +1533,7 @@ public:
       co_return;
     }
     // Stream rows, building batches.
-    auto builder = typename Format::Builder{};
+    auto builder = nova::ArrayBuilder<nova::Record>{};
     auto row_count = int64_t{0};
     while (true) {
       auto row_packet_result = co_await read_next_row_packet();
@@ -1612,20 +1546,16 @@ public:
         break;
       }
       // Parse row into builder.
-      parse_row_into_builder<Format>(*maybe_row_packet, columns, builder);
+      parse_row_into_builder(*maybe_row_packet, columns, builder);
       ++row_count;
       if (row_count >= cfg.batch_size) {
-        for (auto&& output : Format::finish(builder, cfg.schema_name)) {
-          co_yield std::move(output);
-        }
-        builder = typename Format::Builder{};
+        co_yield finish_events(builder, cfg.schema_name);
+        builder = nova::ArrayBuilder<nova::Record>{};
         row_count = 0;
       }
     }
     if (row_count > 0) {
-      for (auto&& output : Format::finish(builder, cfg.schema_name)) {
-        co_yield std::move(output);
-      }
+      co_yield finish_events(builder, cfg.schema_name);
     }
   }
 
@@ -1803,11 +1733,8 @@ struct TablePlan {
   std::vector<std::string> extra;
 };
 
-/// Reads from MySQL in one of the output formats.
-template <class Format>
-class FromMySQLOperator final : public Operator<void, typename Format::Output> {
-  using Output = typename Format::Output;
-
+/// Reads from MySQL.
+class FromMySQLOperator final : public Operator<void, nova::Events> {
 public:
   FromMySQLOperator() = default;
 
@@ -1845,19 +1772,18 @@ private:
 
   /// Arranges rows read from MySQL as the stages that the query computes
   /// produce them, and emits those that a restored read did not emit before.
-  auto emit(Output output, Push<Output>& push, OpCtx& ctx) -> Task<void> {
-    events_read_counter_.add(Format::rows(output));
-    output = Format::skip(std::move(output), skip_);
-    auto const rows = Format::active_rows(output);
+  auto emit(nova::Events output, Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<void> {
+    events_read_counter_.add(detail::narrow<uint64_t>(output.length()));
+    output = pushdown::skip_rows(std::move(output), skip_);
+    auto const rows = detail::narrow<uint64_t>(output.active_count());
     if (rows == 0) {
       co_return;
     }
     if (not live_) {
       emitted_ += rows;
     }
-    if constexpr (std::same_as<Format, EventsFormat>) {
-      output = pushdown::apply_layout(std::move(output), layout_, ctx.dh());
-    }
+    output = pushdown::apply_layout(std::move(output), layout_, ctx.dh());
     co_await push(std::move(output));
   }
 
@@ -1866,7 +1792,7 @@ private:
   auto query_generated(std::string sql) {
     TENZIR_DEBUG("from_mysql runs `{}`",
                  pushdown::redact_query(sql, mysql_lexicon));
-    return client_->query<Format>({
+    return client_->query({
       .sql = std::move(sql),
       .schema_name = schema_name_,
     });
@@ -2146,7 +2072,7 @@ private:
 
   template <class Integer>
   auto stream_live_window(Option<Integer> lower, Integer upper,
-                          Push<Output>& push, OpCtx& ctx) -> Task<bool> {
+                          Push<nova::Events>& push, OpCtx& ctx) -> Task<bool> {
     static_assert(std::is_same_v<Integer, int64_t>
                   or std::is_same_v<Integer, uint64_t>);
     // Columns may come and go while the operator runs, so plan anew for every
@@ -2190,7 +2116,8 @@ private:
 
   template <class QueryUpperFn, class Integer>
   auto process_live_tracking(QueryUpperFn&& query_upper, Integer& watermark,
-                             Push<Output>& push, OpCtx& ctx) -> Task<bool> {
+                             Push<nova::Events>& push, OpCtx& ctx)
+    -> Task<bool> {
     static_assert(std::is_same_v<Integer, int64_t>
                   or std::is_same_v<Integer, uint64_t>);
     auto upper_result = co_await query_upper();
@@ -2385,7 +2312,7 @@ public:
     co_return {};
   }
 
-  auto process_task(Any result, Push<Output>& push, OpCtx& ctx)
+  auto process_task(Any result, Push<nova::Events>& push, OpCtx& ctx)
     -> Task<void> override {
     TENZIR_UNUSED(result);
     if (done_ or finished_) {
@@ -2418,7 +2345,7 @@ public:
       co_return;
     }
     auto slice_stream = generated_ ? query_generated(query_)
-                                   : client_->query<Format>({
+                                   : client_->query({
                                        .sql = query_,
                                        .schema_name = schema_name_,
                                      });
@@ -2435,7 +2362,7 @@ public:
     co_await finish(ctx);
   }
 
-  auto finalize(Push<Output>& push, OpCtx& ctx)
+  auto finalize(Push<nova::Events>& push, OpCtx& ctx)
     -> Task<FinalizeBehavior> override {
     TENZIR_UNUSED(push);
     co_await finish(ctx);
@@ -2500,9 +2427,6 @@ private:
   uint64_t skip_ = 0;
 };
 
-using FromMySQL = FromMySQLOperator<SliceFormat>;
-using FromMySQLEvents = FromMySQLOperator<EventsFormat>;
-
 // -- Plugin Registration -----------------------------------------------------
 
 class Plugin final : public virtual OperatorPlugin {
@@ -2512,7 +2436,7 @@ public:
   }
 
   auto describe() const -> Description override {
-    auto d = Describer<FromMySQLArgs, FromMySQL, FromMySQLEvents>{};
+    auto d = Describer<FromMySQLArgs, FromMySQLOperator>{};
     auto table_arg = d.named("table", &FromMySQLArgs::table);
     // Connection options.
     d.named("host", &FromMySQLArgs::host);
@@ -2615,7 +2539,7 @@ public:
     pushdown::add_pushdown_argument(d, &FromMySQLArgs::pushdown);
     d.optimization(&FromMySQLArgs::optimization);
     // A table read takes over the stages that MySQL spells. Queries of the
-    // user are opaque. Only the Nova operator arranges the result of stages.
+    // user are opaque.
     d.query_plan([](FromMySQLArgs const& args,
                     ir::QueryChain const& chain) -> ir::Absorption {
       if (not pushdown::pushdown_enabled(args.pushdown)) {
@@ -2623,9 +2547,6 @@ public:
       }
       if (not args.table or args.sql or args.show) {
         return {.prefix = 0, .declined = "the query of the user is opaque"};
-      }
-      if (not nova_enabled()) {
-        return {.prefix = 0, .declined = "the operator runs without Nova"};
       }
       return absorb_stages(chain, args.live and args.live->inner);
     });

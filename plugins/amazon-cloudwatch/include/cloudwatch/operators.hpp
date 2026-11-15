@@ -259,22 +259,6 @@ private:
   bool done_ = false;
 };
 
-class FromCloudWatch final : public Operator<void, table_slice> {
-public:
-  explicit FromCloudWatch(FromCloudWatchArgs args);
-
-  auto start(OpCtx& ctx) -> Task<void> override;
-  auto snapshot(Serde& serde) -> void override;
-  auto await_task(diagnostic_handler& dh) const -> Task<Any> override;
-  auto process_task(Any result, Push<table_slice>& push, OpCtx& ctx)
-    -> Task<void> override;
-  auto state() -> OperatorState override;
-  auto stop(OpCtx& ctx) -> Task<void> override;
-
-private:
-  CloudWatchReader reader_;
-};
-
 class FromCloudWatchEvents final : public Operator<void, nova::Events> {
 public:
   explicit FromCloudWatchEvents(FromCloudWatchArgs args);

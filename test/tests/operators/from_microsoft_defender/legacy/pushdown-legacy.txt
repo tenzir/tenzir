@@ -1,4 +1,0 @@
-{
-  DeviceName: "host-a",
-  Id: 0,
-}
