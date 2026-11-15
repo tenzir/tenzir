@@ -78,10 +78,10 @@ auto exec_command(const invocation& inv, caf::actor_system& sys) -> bool {
         .emit(*make_diagnostic_printer(color_diagnostics::no, std::cerr));
       return false;
     }
-    cfg.platform_profile.emplace(PlatformConnection{std::move(platform),
-                                                    std::move(deployment),
-                                                    std::move(key_file)},
-                                 std::move(pipeline), run);
+    // The process runs one pipeline, so its reporter is this run's alone.
+    auto reporter = PlatformReporter{PlatformConnection{
+      std::move(platform), std::move(deployment), std::move(key_file)}};
+    cfg.platform_profile.emplace(reporter, std::move(pipeline), run);
   }
   auto color_mode = caf::get_or(inv.options, "tenzir.exec.color", "auto");
   auto color = color_diagnostics{};

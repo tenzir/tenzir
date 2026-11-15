@@ -1597,23 +1597,23 @@ auto run_profiler(Profiler const& profiler, TestExecCtx& exec_ctx,
       co_return;
     },
     [&](PlatformProfiler const& platform) -> Task<void> {
-      co_await async_scope([&](AsyncScope& scope) -> Task<void> {
-        scope.spawn(platform.send());
-        while (true) {
-          platform.sample(exec_ctx.take_metrics_snapshot(),
-                          exec_ctx.take_resources());
-          // Waking at the start of every second puts one sample into each
-          // second the platform aggregates by, rather than none into some and
-          // two into others as the wake-ups drift.
-          auto now = time::clock::now();
-          auto boundary
-            = floor(now, std::chrono::seconds{1}) + std::chrono::seconds{1};
-          auto delay = std::clamp(boundary - now, duration::zero(),
-                                  duration{std::chrono::seconds{1}});
-          co_await folly::coro::sleep(
-            std::chrono::duration_cast<folly::HighResDuration>(delay));
-        }
-      });
+      // The process's reporter sends what this records, in one batch a second
+      // for all runs.
+      while (true) {
+        platform.sample(exec_ctx.take_metrics_snapshot(),
+                        exec_ctx.take_resources());
+        // Waking at the start of every second puts one sample into each
+        // second the platform aggregates by, rather than none into some and
+        // two into others as the wake-ups drift. The reporter batches half a
+        // second later, so that each batch carries one sample of every run.
+        auto now = time::clock::now();
+        auto boundary
+          = floor(now, std::chrono::seconds{1}) + std::chrono::seconds{1};
+        auto delay = std::clamp(boundary - now, duration::zero(),
+                                duration{std::chrono::seconds{1}});
+        co_await folly::coro::sleep(
+          std::chrono::duration_cast<folly::HighResDuration>(delay));
+      }
     },
     [&](NodeProfiler const& node) -> Task<void> {
       auto start_time = time::clock::now();
@@ -2159,6 +2159,24 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg,
 auto exec2(Arc<const Source> source, diagnostic_handler& dh,
            const exec_config& cfg, caf::actor_system& sys,
            SourceMap& source_map) -> bool {
+  // The reporter sends what the run records once a second while it runs, and
+  // what is left once it has ended.
+  auto reporter_stop = StopFlag{};
+  auto reporter_done = Option<folly::SemiFuture<folly::Unit>>{};
+  if (cfg.platform_profile) {
+    reporter_done = folly::coro::co_withExecutor(
+                      folly::getGlobalCPUExecutor(),
+                      cfg.platform_profile->reporter().run(reporter_stop))
+                      .start();
+  }
+  // Also when compiling or running throws, so that the reporter's task does
+  // not outlive this call.
+  auto stop_reporter = detail::scope_guard{[&]() noexcept {
+    if (reporter_done) {
+      reporter_stop.request();
+      std::move(*reporter_done).wait();
+    }
+  }};
   auto reporting = Option<PlatformDiagnosticHandler>{};
   if (cfg.platform_profile) {
     reporting.emplace(dh, *cfg.platform_profile, source_map);
@@ -2204,15 +2222,11 @@ auto exec2(Arc<const Source> source, diagnostic_handler& dh,
                         reporting ? &*reporting : nullptr);
   });
   auto success = result ? *result : false;
-  if (cfg.platform_profile) {
-    if (not success) {
-      cfg.platform_profile->transition("failed");
-    }
-    folly::coro::blockingWait(folly::coro::co_withExecutor(
-      folly::getGlobalCPUExecutor(),
-      folly::coro::co_withCancellation(folly::CancellationToken{},
-                                       cfg.platform_profile->flush())));
+  if (cfg.platform_profile and not success) {
+    cfg.platform_profile->transition("failed");
   }
+  // The final batches carry the last transition and what else is left.
+  stop_reporter.trigger();
   return success;
 }
 
