@@ -9,8 +9,6 @@ from pathlib import Path
 from tenzir_test import FixtureHandle, fixture
 from tenzir_test.fixtures import current_options
 
-from ._utils import find_free_port
-
 _HOST = "127.0.0.1"
 _ASSERTION_WAIT_INTERVAL = 0.01
 _ASSERTION_WAIT_TIMEOUT = 2.0
@@ -219,18 +217,14 @@ def _run_server(
     stop_event: threading.Event,
     state: _FtpState,
     payload: str,
-    port: int,
+    server: socket.socket,
     download_chunk_size: int | None,
     download_chunk_delay: float,
     upload_abort_after_bytes: int | None,
     upload_chunk_delay: float,
 ) -> None:
-    download_payload = payload.encode("utf-8")
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
-        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        server.bind((_HOST, port))
-        server.listen(5)
-        server.settimeout(0.1)
+    with server:
+        download_payload = payload.encode("utf-8")
         while not stop_event.is_set():
             try:
                 control, _ = server.accept()
@@ -251,24 +245,34 @@ def _run_server(
 @fixture(options=FtpOptions, assertions=FtpAssertions)
 def ftp() -> FixtureHandle:
     opts = current_options("ftp")
-    port = opts.port if opts.port is not None else find_free_port()
     state = _FtpState()
     stop_event = threading.Event()
-    worker = threading.Thread(
-        target=_run_server,
-        kwargs={
-            "stop_event": stop_event,
-            "state": state,
-            "payload": opts.download_payload,
-            "port": port,
-            "download_chunk_size": opts.download_chunk_size,
-            "download_chunk_delay": opts.download_chunk_delay,
-            "upload_abort_after_bytes": opts.upload_abort_after_bytes,
-            "upload_chunk_delay": opts.upload_chunk_delay,
-        },
-        daemon=True,
-    )
-    worker.start()
+    # Reserve the port and start listening before publishing the fixture URLs.
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        server.bind((_HOST, opts.port if opts.port is not None else 0))
+        server.listen(5)
+        server.settimeout(0.1)
+        port = server.getsockname()[1]
+        worker = threading.Thread(
+            target=_run_server,
+            kwargs={
+                "stop_event": stop_event,
+                "state": state,
+                "payload": opts.download_payload,
+                "server": server,
+                "download_chunk_size": opts.download_chunk_size,
+                "download_chunk_delay": opts.download_chunk_delay,
+                "upload_abort_after_bytes": opts.upload_abort_after_bytes,
+                "upload_chunk_delay": opts.upload_chunk_delay,
+            },
+            daemon=True,
+        )
+        worker.start()
+    except BaseException:
+        server.close()
+        raise
     base_url = f"ftp://{_HOST}:{port}"
     env = {
         "FTP_DOWNLOAD_URL": f"{base_url}{_DOWNLOAD_PATH}",
