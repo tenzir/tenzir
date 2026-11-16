@@ -229,9 +229,8 @@ let
       name,
       entrypoint ? [ "tenzir" ],
       # Only the `tenzir` image prints its help when run without arguments.
-      # The node images have no command either way: a Dockerfile stage that
-      # sets `ENTRYPOINT` resets the `CMD` it inherited, so the images built
-      # from it never had one.
+      # The node images have no command, as the Dockerfile-built images that
+      # preceded them had none.
       cmd ? [ ],
       # Layers stacked on top of the shared ones, so that an image-specific
       # addition does not invalidate what the other images share.

@@ -10,8 +10,7 @@
 # to_google_cloud_monitoring. A plugin whose API
 # is missing disables itself with nothing but a CMake warning, so the list has
 # to be complete on every platform - the nixpkgs default carries no `oauth2`,
-# and the static list used to carry no `logging`. It matches
-# GOOGLE_CLOUD_CPP_ENABLE in scripts/debian/build-google-cloud-cpp-package.sh.
+# and the static list used to carry no `logging`.
 (google-cloud-cpp.override {
   apis = [
     "logging"
