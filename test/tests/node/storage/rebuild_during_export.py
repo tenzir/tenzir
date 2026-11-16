@@ -96,9 +96,9 @@ class NodeController:
                 f"(exit code {returncode}; stderr:\n{stderr})"
             )
         self.env = {
-            "TENZIR_NODE_CLIENT_ENDPOINT": endpoint,
-            "TENZIR_NODE_CLIENT_BINARY": os.environ["TENZIR_BINARY"],
-            "TENZIR_NODE_CLIENT_TIMEOUT": os.environ.get("TENZIR_TIMEOUT", "180"),
+            "TENZIR_PYTHON_FIXTURE_ENDPOINT": endpoint,
+            "TENZIR_PYTHON_FIXTURE_BINARY": os.environ["TENZIR_BINARY"],
+            "TENZIR_PYTHON_FIXTURE_TIMEOUT": os.environ.get("TENZIR_TIMEOUT", "180"),
             "TENZIR_NODE_STATE_DIRECTORY": str(self.state_dir),
             "TENZIR_NODE_CACHE_DIRECTORY": str(self.cache_dir),
         }
@@ -123,9 +123,9 @@ class NodeController:
 
 
 def run_ctl(node: NodeController, *args: str) -> subprocess.CompletedProcess[str]:
-    binary = shlex.split(node.env["TENZIR_NODE_CLIENT_BINARY"])
+    binary = shlex.split(node.env["TENZIR_PYTHON_FIXTURE_BINARY"])
     tenzir_ctl = str(Path(binary[0]).with_name("tenzir-ctl"))
-    endpoint = node.env["TENZIR_NODE_CLIENT_ENDPOINT"]
+    endpoint = node.env["TENZIR_PYTHON_FIXTURE_ENDPOINT"]
     return subprocess.run(
         [
             tenzir_ctl,

@@ -30,7 +30,7 @@ def main() -> None:
         capture_output=True,
         text=True,
     )
-    binary = shlex.split(os.environ["TENZIR_NODE_CLIENT_BINARY"])
+    binary = shlex.split(os.environ["TENZIR_PYTHON_FIXTURE_BINARY"])
 
     def read(table: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(

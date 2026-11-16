@@ -6,7 +6,7 @@ import os
 import shlex
 import subprocess
 
-binary = shlex.split(os.environ["TENZIR_NODE_CLIENT_BINARY"])
+binary = shlex.split(os.environ["TENZIR_PYTHON_FIXTURE_BINARY"])
 for connection in [
     'env("QUACK_TLS_URI"), tls=true',
     'env("QUACK_TLS_URI"), tls={cacert: env("QUACK_UNTRUSTED_CA")}',

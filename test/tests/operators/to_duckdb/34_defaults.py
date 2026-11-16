@@ -21,7 +21,7 @@ def main() -> None:
         ],
         check=True,
     )
-    binary = shlex.split(os.environ["TENZIR_NODE_CLIENT_BINARY"])
+    binary = shlex.split(os.environ["TENZIR_PYTHON_FIXTURE_BINARY"])
     subprocess.run(
         [
             *binary,

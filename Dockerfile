@@ -320,13 +320,13 @@ RUN mkdir -p /tmp/node && ln -sf "$PREFIX/bin/tenzir" /tmp/node/tenzir-node && \
     TENZIR_BINARY="$PREFIX/bin/tenzir run" \
     TENZIR_NODE_BINARY=/tmp/node/tenzir-node \
     "${PREFIX}/libexec/uv" tool run \
-    --python ">=3.12" \
+    --python ">=3.13" \
     --with grpcio \
     --with grpcio-tools \
     --with googleapis-common-protos \
     --with protobuf \
     --with trustme \
-    tenzir-test==2.0.2 \
+    tenzir-test==3.0.0 \
     --root test \
     -j $(nproc) && \
     echo "success" > /tmp/tenzir-integration-result

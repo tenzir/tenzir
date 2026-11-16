@@ -2,21 +2,19 @@
 
 Tests declare ``fixtures: [node]`` to run their pipelines against a fresh node
 with its own state and cache directories. The fixture started out as a
-built-in of ``tenzir-test``, which drops it from 3.0 on because Tenzir v7 has
-no user-facing nodes. This copy relies only on the public fixture API, so it
-works with ``tenzir-test`` 2.x, where it replaces the built-in of the same
-name, and with 3.x, which has none.
+built-in of ``tenzir-test``, which dropped it in 3.0 because Tenzir v7 has no
+user-facing nodes.
 
 The fixture provides:
 
 - **TENZIR_ENDPOINT** - The node's endpoint, which ``tenzir`` reads as
-  ``tenzir.endpoint``. ``tenzir-test`` 2.x also passes it as ``--endpoint``.
+  ``tenzir.endpoint``.
 - **TENZIR_NODE_CLIENT_ENDPOINT**, **TENZIR_NODE_CLIENT_BINARY**,
   **TENZIR_NODE_CLIENT_TIMEOUT** - The endpoint, client command, and timeout,
-  as the ``Executor`` of ``tenzir-test`` 2.x reads them.
+  for tests that talk to the node themselves.
 - **TENZIR_PYTHON_FIXTURE_ENDPOINT**, **TENZIR_PYTHON_FIXTURE_BINARY**,
   **TENZIR_PYTHON_FIXTURE_TIMEOUT** - The same values, as the ``Executor`` of
-  ``tenzir-test`` 3.x reads them.
+  ``tenzir-test`` reads them.
 - **TENZIR_NODE_STATE_DIRECTORY**, **TENZIR_NODE_CACHE_DIRECTORY** - The
   node's directories.
 - **TENZIR_NODE_STDOUT_LOG**, **TENZIR_NODE_STDERR_LOG** - The node's output.
@@ -243,14 +241,7 @@ def _ensure_temp_dir(context: "FixtureContext") -> Path:
 
 
 def _resolve_node_binary(context: "FixtureContext") -> tuple[str, ...] | None:
-    """Find the command that starts a node, as ``tenzir-test`` 2.x did.
-
-    ``tenzir-test`` 3.x neither resolves the node binary nor provides
-    ``FixtureContext.tenzir_node_binary``, so the fixture looks it up itself.
-    """
-    resolved = getattr(context, "tenzir_node_binary", None)
-    if resolved:
-        return tuple(resolved)
+    """Find the command that starts a node."""
     configured = context.env.get("TENZIR_NODE_BINARY") or os.environ.get(
         "TENZIR_NODE_BINARY"
     )
@@ -273,11 +264,10 @@ def _resolve_node_binary(context: "FixtureContext") -> tuple[str, ...] | None:
 
 
 def _resolve_node_config(context: "FixtureContext") -> str | None:
-    """Return the node configuration file, as ``tenzir-test`` 2.x set it.
+    """Return the node configuration file.
 
-    A ``tenzir-node.yaml`` next to the test takes precedence; ``tenzir-test``
-    2.x exported it as ``TENZIR_NODE_CONFIG``, which 3.x no longer does. For a
-    suite, ``context.test`` is its first test.
+    A ``tenzir-node.yaml`` next to the test takes precedence over
+    ``TENZIR_NODE_CONFIG``. For a suite, ``context.test`` is its first test.
     """
     node_config_file = context.test.parent / "tenzir-node.yaml"
     if node_config_file.is_file():
@@ -469,14 +459,13 @@ def node() -> Iterator[dict[str, str]]:
             client_binary = env.get("TENZIR_BINARY")
         timeout = str(context.config["timeout"])
         fixture_env = {
-            # `tenzir-test` 3.x passes no `--endpoint` for this fixture, so
-            # clients pick the endpoint up from the environment.
+            # Pipelines of tests that request this fixture connect here.
             "TENZIR_ENDPOINT": endpoint,
-            # The `Executor` of `tenzir-test` 2.x and many tests read these.
+            # Tests that talk to the node themselves read these.
             "TENZIR_NODE_CLIENT_ENDPOINT": endpoint,
             "TENZIR_NODE_CLIENT_BINARY": client_binary,
             "TENZIR_NODE_CLIENT_TIMEOUT": timeout,
-            # The `Executor` of `tenzir-test` 3.x reads these.
+            # For `Executor.from_env`.
             "TENZIR_PYTHON_FIXTURE_ENDPOINT": endpoint,
             "TENZIR_PYTHON_FIXTURE_BINARY": client_binary,
             "TENZIR_PYTHON_FIXTURE_TIMEOUT": timeout,
@@ -521,10 +510,7 @@ def node() -> Iterator[dict[str, str]]:
             watcher.join(_PUMP_JOIN_TIMEOUT)
 
 
-# The harness imports its built-in fixtures before project fixtures, so this
-# replaces the built-in `node` of `tenzir-test` 2.x. From 3.x on, there is no
-# built-in left to replace.
-register("node", node, replace=True)
+register("node", node)
 
 
 @atexit.register

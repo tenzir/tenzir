@@ -306,7 +306,7 @@ function (tenzir_build_test_command out_var)
     "tool"
     "run"
     "--python"
-    ">=3.12"
+    ">=3.13"
     "tenzir-test")
 
   # Add extra arguments if provided

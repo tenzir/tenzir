@@ -25,7 +25,7 @@ def run(binary: list[str], pipeline: str) -> None:
 
 
 def main() -> None:
-    binary = shlex.split(os.environ["TENZIR_NODE_CLIENT_BINARY"])
+    binary = shlex.split(os.environ["TENZIR_PYTHON_FIXTURE_BINARY"])
     db = os.path.join(os.environ["DUCKDB_ROOT"], "live.duckdb")
     run(
         binary,

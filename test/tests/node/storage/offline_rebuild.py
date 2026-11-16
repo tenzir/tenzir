@@ -101,9 +101,9 @@ class NodeController:
                 f"(exit code {returncode}; stderr:\n{stderr})"
             )
         self.env = {
-            "TENZIR_NODE_CLIENT_ENDPOINT": endpoint,
-            "TENZIR_NODE_CLIENT_BINARY": os.environ["TENZIR_BINARY"],
-            "TENZIR_NODE_CLIENT_TIMEOUT": os.environ.get("TENZIR_TIMEOUT", "120"),
+            "TENZIR_PYTHON_FIXTURE_ENDPOINT": endpoint,
+            "TENZIR_PYTHON_FIXTURE_BINARY": os.environ["TENZIR_BINARY"],
+            "TENZIR_PYTHON_FIXTURE_TIMEOUT": os.environ.get("TENZIR_TIMEOUT", "120"),
             "TENZIR_NODE_STATE_DIRECTORY": str(self.state_dir),
             "TENZIR_NODE_CACHE_DIRECTORY": str(self.cache_dir),
         }
