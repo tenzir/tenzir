@@ -57,8 +57,9 @@ auto next_sequence() -> uint64_t {
   return value;
 }
 
-auto boot() -> std::string const& {
-  static auto const value = fmt::format("{}", uuid::random());
+auto boot() -> Uuid const& {
+  static auto const value
+    = Uuid::make(fmt::format("{}", uuid::random())).expect("a UUID");
   return value;
 }
 
@@ -330,16 +331,7 @@ auto envelope_bytes() -> std::size_t {
   static auto const value = [] {
     auto widest = count<TelemetryCount>(max_wire_count);
     auto body = std::string{};
-    write_json(Batch{boot(),
-                     widest,
-                     widest,
-                     {},
-                     std::vector<RetiredOperatorSample>{},
-                     {},
-                     {},
-                     {},
-                     std::vector<ServedRequest>{}},
-               body);
+    write_json(Batch{boot(), widest, widest, {}, {}, {}, {}, {}}, body);
     return body.size();
   }();
   return value;
@@ -384,14 +376,10 @@ public:
                  count<TelemetryCount>(next_sequence()),
                  count<TelemetryCount>(lost),
                  std::move(pipelines_),
-                 // Always empty, but older backends require the array.
-                 std::vector<RetiredOperatorSample>{},
                  std::move(diagnostics_),
                  std::move(runs_),
                  {},
-                 // Always present, if empty; the platform takes its absence
-                 // for a deployment that predates it.
-                 Option<std::vector<ServedRequest>>{std::move(requests_)}};
+                 std::move(requests_)};
   }
 
 private:
