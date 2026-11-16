@@ -24,6 +24,22 @@ A migration path from Tenzir Node to the new deployment model is planned, but no
 
 *By @aljazerzen, @Avaq, @gitryder, @IyeOnline, @jachris, @lava, @mavam, @raxyte, @tobim, and @zedoraps.*
 
+## 🚀 Features
+
+### Get help with tenzir help
+
+Run `tenzir help` to list all commands, and `tenzir help <command>` for the flags and examples of one, such as `tenzir help config apply`. This works the same as `tenzir --help` and `tenzir <command> --help`, except for `run`: `tenzir help run` describes local and remote runs, and `tenzir run --help` lists the options of a local run.
+
+The examples in the help now show what you can do with each command, starting with a typical session in `tenzir help`.
+
+*By @mavam.*
+
+### Homebrew puts tenzir on PATH
+
+Installing Tenzir with `brew install --cask tenzir/tenzir/tenzir` now links the `tenzir` command into Homebrew's `bin` directory, so it is on your `PATH` without adding `/opt/tenzir/bin` by hand. Uninstalling the cask removes the link.
+
+*By @mavam.*
+
 ## 🔧 Changes
 
 ### Content-skipping filters and limits after from_microsoft_365_activity
@@ -147,3 +163,33 @@ Sink operators now report the bytes they write consistently: the payload before 
 For example, `to_splunk`, `to_hydrolix`, `to_opensearch`, `to_prometheus`, `to_google_secops`, `to_azure_log_analytics`, and `to_sentinelone_data_lake` now count the request body before compressing it, and only once the destination accepted it. `to_google_secops` counts nothing in `dry_run` mode. `to_google_cloud_logging` counts entries once Cloud Logging accepted them, `to_http` with `buffer_all` counts the body once the request succeeded, and `to_kafka` counts a message once the brokers acknowledged it.
 
 *By @mavam.*
+
+### Truncated Log Analytics results warn instead of failing
+
+When a query result exceeds the Log Analytics record count or data size limit, by default 500,000 rows or 64 MiB, the service returns the rows it kept together with a partial error. `from_azure_log_analytics` now emits these rows with a single warning instead of failing the pipeline:
+
+```
+warning: the result is incomplete
+  = note: Log Analytics truncates a result beyond its record count or data size limit, by default 500,000 rows or 64 MiB
+  = hint: narrow the query or its time range, return fewer columns, or limit or aggregate rows in the query, for example with `take` or `summarize`
+```
+
+Other partial errors, such as overflows or queries that exceed their memory budget, still fail the pipeline because their rows may be incorrect.
+
+Results with more than about two million values no longer fail with "result exceeds the decoded value limit". Every result within the service's limits now decodes.
+
+*By @mavam.*
+
+## 🐞 Bug fixes
+
+### Package hints name the tenzir command
+
+When a workspace's lock is unreadable, misses a dependency, or names a package that is not fetched yet, the hint now tells you to run `tenzir package lock` or `tenzir package fetch` instead of the `tenzir-platform` variants, matching the unified `tenzir` command of Tenzir 7.
+
+*By @mavam.*
+
+### Parallelism max respects container CPU limits
+
+A degree of parallelism of `max` now respects the CPU limit of a container. Previously, it used the number of CPUs of the host, so a container limited to 2 CPUs on a 64-core host ran 64 instances of every parallelizable operator. Now `max` is the number of CPUs that the process may run on, capped by the CPU quota of its cgroup and rounded up.
+
+*By @jachris.*
