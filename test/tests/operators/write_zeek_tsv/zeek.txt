@@ -1,0 +1,10 @@
+#separator \x09
+#set_separator	,
+#empty_field	(empty)
+#unset_field	-
+#path	conn
+#open	<time>
+#fields	ts	uid	id.orig_h	id.orig_p	id.resp_h	id.resp_p	proto	duration	negative	before_epoch	rounds_up	epoch_scale
+#types	time	string	addr	int	addr	int	string	interval	interval	time	time	time
+1794812400.123456	C1	10.0.0.5	51544	203.0.113.9	443	tcp	1.500000	-0.250000	-0.500000	1794812401.000000	1794812400.123457
+#close	<time>

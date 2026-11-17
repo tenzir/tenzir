@@ -32,10 +32,16 @@ struct real_printer : printer_base<real_printer<T, MaxDigits, MinDigits>> {
       x = -x;
     }
     T left;
-    uint64_t right = std::round(std::modf(x, &left) * std::pow(10, MaxDigits));
+    auto const scale = std::pow(T{10}, MaxDigits);
+    uint64_t right = std::round(std::modf(x, &left) * scale);
     if constexpr (MaxDigits == 0) {
       detail::print_numeric(out, static_cast<uint64_t>(std::round(x)));
       return true;
+    }
+    // Rounding the decimal digits may carry over into the integral part.
+    if (right >= scale) {
+      left += 1;
+      right = 0;
     }
     detail::print_numeric(out, static_cast<uint64_t>(left));
     *out++ = '.';

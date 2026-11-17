@@ -130,6 +130,22 @@ TEST("floating point") {
   str.clear();
   CHECK((real_printer<double, 6, 6>{}(str, d)));
   CHECK_EQUAL(str, "123456.123000");
+
+  // Rounding the decimal digits carries over into the integral part.
+  d = 0.9999996;
+  str.clear();
+  CHECK((real_printer<double, 6, 6>{}(str, d)));
+  CHECK_EQUAL(str, "1.000000");
+
+  d = 2.9999997;
+  str.clear();
+  CHECK((real_printer<double, 6, 6>{}(str, d)));
+  CHECK_EQUAL(str, "3.000000");
+
+  d = -2.96;
+  str.clear();
+  CHECK((real_printer<double, 1>{}(str, d)));
+  CHECK_EQUAL(str, "-3.0");
 }
 
 // -- string ------------------------------------------------------------------

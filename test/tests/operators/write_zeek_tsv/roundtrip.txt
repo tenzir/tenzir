@@ -1,0 +1,15 @@
+{
+  ts: 2026-11-16T07:00:00.123456001Z,
+  uid: "C1",
+  id: {
+    orig_h: 10.0.0.5,
+    orig_p: 51544,
+    resp_h: 203.0.113.9,
+    resp_p: 443,
+  },
+  proto: "tcp",
+  duration: 1.5s,
+  negative: -250ms,
+  before_epoch: 1969-12-31T23:59:59.500Z,
+  schema: "zeek.conn",
+}

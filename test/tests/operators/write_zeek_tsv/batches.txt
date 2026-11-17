@@ -41,3 +41,4 @@ a
 #types	vector[string]
 b
 (empty)
+#close <time>

@@ -14,6 +14,7 @@
 #include "tenzir/concept/parseable/string/any.hpp"
 #include "tenzir/concept/parseable/tenzir/option_set.hpp"
 #include "tenzir/concept/parseable/tenzir/pipeline.hpp"
+#include "tenzir/concept/printable/numeric/real.hpp"
 #include "tenzir/concept/printable/tenzir/json.hpp"
 #include "tenzir/concept/printable/to_string.hpp"
 #include "tenzir/data.hpp"
@@ -34,6 +35,7 @@
 #include "tenzir/plugin/register.hpp"
 #include "tenzir/read_detection.hpp"
 #include "tenzir/series_builder.hpp"
+#include "tenzir/time.hpp"
 #include "tenzir/tql2/plugin.hpp"
 #include "tenzir/type.hpp"
 #include "tenzir/view.hpp"
@@ -69,6 +71,12 @@ struct zeek_parser {
   }
 };
 
+/// The value that `zeek_parser<Type>` produces.
+template <concrete_type Type>
+using zeek_value_t =
+  typename decltype(zeek_parser<Type>{}(std::declval<Type const&>(), char{},
+                                        std::string{}))::attribute;
+
 template <>
 struct zeek_parser<bool_type> {
   auto operator()(const bool_type&, char, const std::string&) const {
@@ -102,8 +110,11 @@ struct zeek_parser<double_type> {
 template <>
 struct zeek_parser<duration_type> {
   auto operator()(const duration_type&, char, const std::string&) const {
+    // Out-of-range values parse as `None` and become null.
     return parsers::real.then([](double x) {
-      return std::chrono::duration_cast<duration>(double_seconds(x));
+      return from_unix_timestamp(x).map([](time t) {
+        return t - time{};
+      });
     });
   }
 };
@@ -111,8 +122,9 @@ struct zeek_parser<duration_type> {
 template <>
 struct zeek_parser<time_type> {
   auto operator()(const time_type&, char, const std::string&) const {
+    // Out-of-range values parse as `None` and become null.
     return parsers::real.then([](double x) {
-      return time{} + std::chrono::duration_cast<duration>(double_seconds(x));
+      return from_unix_timestamp(x);
     });
   }
 };
@@ -159,8 +171,12 @@ struct zeek_parser<list_type> {
       = [&]<concrete_type Type>(
           const Type& type) -> rule<std::string_view::const_iterator, list> {
       return (zeek_parser<Type>{}(type, separator, set_separator)
-                .then([](type_to_data_t<Type> value) {
-                  return data{value};
+                .then([](zeek_value_t<Type> value) -> data {
+                  if constexpr (detail::is_option_v<zeek_value_t<Type>>) {
+                    return value ? data{*value} : data{};
+                  } else {
+                    return data{value};
+                  }
                 })
               % set_separator);
     };
@@ -328,8 +344,20 @@ struct zeek_printer {
   }
 
   auto generate_timestamp() const -> std::string {
-    auto now = std::chrono::system_clock::now();
+    auto now = std::chrono::floor<std::chrono::seconds>(
+      std::chrono::system_clock::now());
     return fmt::format(timestamp_format, now);
+  }
+
+  /// Returns the `#path` for a schema name. We strip the `zeek.` prefix that
+  /// `read_zeek_tsv` adds, e.g., to write `#path conn` instead of `#path
+  /// zeek.conn`. All other schema names keep their prefix to avoid conflicts.
+  static auto to_zeek_path(std::string_view name) -> std::string_view {
+    constexpr auto prefix = std::string_view{"zeek."};
+    if (name.starts_with(prefix) and name.size() > prefix.size()) {
+      name.remove_prefix(prefix.size());
+    }
+    return name;
   }
 
   template <typename It>
@@ -339,7 +367,8 @@ struct zeek_printer {
                               "#empty_field{0}{2}\n"
                               "#unset_field{0}{3}\n"
                               "#path{0}{4}",
-                              sep, set_sep, empty_field, unset_field, t.name());
+                              sep, set_sep, empty_field, unset_field,
+                              to_zeek_path(t.name()));
     if (not disable_timestamp_tags) {
       header.append(fmt::format("\n#open{}{}", sep, generate_timestamp()));
     }
@@ -396,6 +425,20 @@ struct zeek_printer {
 
     auto operator()(view<bool> x) noexcept -> bool {
       return printers::any.print(out, x ? 'T' : 'F');
+    }
+
+    // Zeek represents times and intervals as seconds with microsecond
+    // precision, e.g., `1258531221.486539`.
+    auto operator()(view<duration> x) noexcept -> bool {
+      // Round the exact tick count, because the `double` may be too coarse to
+      // round correctly at epoch scale.
+      auto us = std::chrono::round<std::chrono::microseconds>(x);
+      return zeek_real.print(
+        out, std::chrono::duration_cast<double_seconds>(us).count());
+    }
+
+    auto operator()(view<time> x) noexcept -> bool {
+      return (*this)(x.time_since_epoch());
     }
 
     auto operator()(view<pattern>) noexcept -> bool {
@@ -482,6 +525,7 @@ struct zeek_printer {
   };
 
   static constexpr auto timestamp_format{"{:%Y-%m-%d-%H-%M-%S}"};
+  static constexpr auto zeek_real = real_printer<double, 6, 6>{};
   char sep{'\t'};
   char set_sep{','};
   std::string empty_field{};
@@ -877,9 +921,16 @@ private:
                                      std::same_as<Type, list_type>
                                        ? log_.set_separator
                                        : std::string{})
-                   .then([&, field](type_to_data_t<Type> value) {
+                   .then([&, field](zeek_value_t<Type> value) {
                      if constexpr (std::same_as<Type, map_type>) {
                        TENZIR_UNREACHABLE();
+                     } else if constexpr (detail::is_option_v<
+                                            zeek_value_t<Type>>) {
+                       if (value) {
+                         log_.event->field(field, std::move(*value));
+                       } else {
+                         log_.event->field(field).null();
+                       }
                      } else {
                        log_.event->field(field, std::move(value));
                      }
@@ -914,6 +965,15 @@ auto append_zeek_value(auto out, auto const& value) -> void {
   using T = std::remove_cvref_t<decltype(value)>;
   if constexpr (std::same_as<T, std::string>) {
     out.data(std::string_view{value});
+  } else if constexpr (detail::is_option_v<T>) {
+    // Out-of-range times and intervals.
+    if (value) {
+      append_zeek_value(out, *value);
+    } else {
+      out.null();
+    }
+  } else if constexpr (std::same_as<T, caf::none_t>) {
+    out.null();
   } else if constexpr (std::same_as<T, list>) {
     auto elements = out.list();
     for (auto const& element : value) {
@@ -1246,7 +1306,7 @@ private:
                                        std::same_as<Type, list_type>
                                          ? log_.set_separator
                                          : std::string{})
-                     .then([this, field](type_to_data_t<Type> value) {
+                     .then([this, field](zeek_value_t<Type> value) {
                        append_zeek_value(event_->field(field), value);
                        return true;
                      });
@@ -1323,6 +1383,20 @@ public:
     }
     co_await push(
       chunk::make(std::move(buffer), {.content_type = "application/x-zeek"}));
+  }
+
+  auto finalize(Push<chunk_ptr>& push, OpCtx&)
+    -> Task<FinalizeBehavior> override {
+    if (last_schema_ and not args_.disable_timestamp_tags) {
+      auto printer = zeek_printer{resolved_set_separator(), args_.empty_field,
+                                  args_.unset_field};
+      auto buffer = std::vector<char>{};
+      auto out_iter = std::back_inserter(buffer);
+      printer.print_closing_line(out_iter);
+      co_await push(
+        chunk::make(std::move(buffer), {.content_type = "application/x-zeek"}));
+    }
+    co_return FinalizeBehavior::done;
   }
 
 private:
@@ -1532,6 +1606,20 @@ public:
       }
       written_ = has_header;
     }
+  }
+
+  auto finalize(Push<chunk_ptr>& push, OpCtx&)
+    -> Task<FinalizeBehavior> override {
+    auto buffer = std::string{};
+    if (written_) {
+      auto it = std::back_inserter(buffer);
+      printer_.print_closing_line(it);
+    }
+    if (not buffer.empty()) {
+      co_await push(
+        chunk::make(std::move(buffer), {.content_type = "application/x-zeek"}));
+    }
+    co_return FinalizeBehavior::done;
   }
 
 private:
@@ -1773,7 +1861,8 @@ private:
                         "#unset_field{0}{3}\n"
                         "#path{0}{4}",
                         printer_.sep, printer_.set_sep, printer_.empty_field,
-                        printer_.unset_field, header_->path());
+                        printer_.unset_field,
+                        zeek_printer::to_zeek_path(header_->path()));
     if (not printer_.disable_timestamp_tags) {
       it = fmt::format_to(it, "\n#open{}{}", printer_.sep,
                           printer_.generate_timestamp());
