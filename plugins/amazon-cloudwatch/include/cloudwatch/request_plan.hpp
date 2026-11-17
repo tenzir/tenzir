@@ -10,6 +10,7 @@
 
 #include <tenzir/ir.hpp>
 #include <tenzir/option.hpp>
+#include <tenzir/pushdown/planner.hpp>
 #include <tenzir/time.hpp>
 
 #include <cstdint>
@@ -52,14 +53,8 @@ struct CloudWatchRequest {
   Option<uint64_t> limit;
 };
 
-/// Spells the stages that a read with `args` takes over, or returns `None`
-/// if CloudWatch Logs cannot compute them.
-auto plan_cloudwatch_request(FromCloudWatchArgs const& args,
-                             std::span<ir::QueryStage const> stages)
-  -> Option<CloudWatchRequest>;
-
-/// Returns the stages of `chain` that a read with `args` takes over.
-auto absorb_cloudwatch_stages(FromCloudWatchArgs const& args,
-                              ir::QueryChain const& chain) -> ir::Absorption;
+/// Returns the planner of the stages that a read with `args` takes over.
+auto cloudwatch_planner(FromCloudWatchArgs args)
+  -> pushdown::Planner<CloudWatchRequest>;
 
 } // namespace tenzir::plugins::cloudwatch

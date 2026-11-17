@@ -99,8 +99,6 @@
 -              path: [
 -                {
 -                  id: `first` @ [1]:268..273 from 0,
--                  has_question_mark: false
--                }
 +      plan: [
 +        Aggregate {
 +          columns: [
@@ -108,8 +106,11 @@
 +              output: [
 +                "src_ip"
 +              ],
-+              input: [
-+                "dst_ip"
++              args: [
++                root_field {
++                  id: `dst_ip` @ [1]:228..234 from 0,
+                   has_question_mark: false
+                 }
                ]
              },
 -            call: {
@@ -119,15 +120,17 @@
 -                ],
 -                ref: std::min/fn
 -              },
--              args: [
--                root_field {
--                  id: `dst_ip` @ [1]:278..284 from 0,
--                  has_question_mark: false
--                }
 +            {
 +              output: [
 +                "first"
-               ],
++              ],
++              function: "min",
+               args: [
+                 root_field {
+-                  id: `dst_ip` @ [1]:278..284 from 0,
+-                  has_question_mark: false
+-                }
+-              ],
 -              method: false,
 -              location: [1]:274..285 from 0
 -            }
@@ -144,11 +147,9 @@
 -              path: [
 -                {
 -                  id: `src_ip` @ [1]:260..266 from 0,
--                  has_question_mark: false
--                }
-+              function: "min",
-+              input: [
-+                "src_ip"
++                  id: `src_ip` @ [1]:243..249 from 0,
+                   has_question_mark: false
+                 }
                ]
              }
 -          }

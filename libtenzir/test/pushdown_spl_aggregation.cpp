@@ -24,7 +24,38 @@ using namespace std::literals;
 
 namespace {
 
+/// The result columns of `layout` that decode as `decode`.
+auto decoded(Layout const& layout, Decode decode) -> std::vector<std::string> {
+  auto result = std::vector<std::string>{};
+  for (auto const& [column, x] : layout.decode) {
+    if (x == decode) {
+      result.push_back(column);
+    }
+  }
+  return result;
+}
+
 using Path = std::vector<std::string>;
+
+/// The field at `path` as an expression.
+auto field_at(std::vector<std::string> const& path) -> ast::expression {
+  auto result = ast::expression{
+    ast::root_field{ast::identifier{path.front(), location::unknown}, false}};
+  for (auto i = size_t{1}; i < path.size(); ++i) {
+    result = ast::field_access{std::move(result), location::unknown, false,
+                               ast::identifier{path[i], location::unknown}};
+  }
+  return result;
+}
+
+/// The arguments of a column that reads `input`, if any.
+auto args_of(Option<std::vector<std::string>> const& input)
+  -> std::vector<ast::expression> {
+  if (not input) {
+    return {};
+  }
+  return {field_at(*input)};
+}
 
 auto parse(std::string_view source) -> ast::expression {
   auto dh = collecting_diagnostic_handler{};
@@ -46,7 +77,8 @@ auto filter(std::string_view predicate) -> ir::QueryStage {
 
 auto key(Path input, Option<Path> output = None{}) -> ir::AggregateColumn {
   auto out = output ? std::move(*output) : input;
-  return {.output = std::move(out), .function = None{}, .input = input};
+  return {
+    .output = std::move(out), .function = None{}, .args = {field_at(input)}};
 }
 
 auto call(Path output, std::string function, Option<Path> input = None{})
@@ -54,7 +86,7 @@ auto call(Path output, std::string function, Option<Path> input = None{})
   return {
     .output = std::move(output),
     .function = std::move(function),
-    .input = std::move(input),
+    .args = args_of(input),
   };
 }
 
@@ -95,7 +127,11 @@ auto main_index() -> SplSource {
 
 auto plan(std::vector<ir::QueryStage> stages,
           SplSource const& source = main_index()) -> Option<SplQuery> {
-  return plan_spl_query(source, stages, None{});
+  auto planned = spl_planner(source, None{}, None{}).plan(stages, nullptr);
+  if (not planned) {
+    return None{};
+  }
+  return std::move(planned).unwrap();
 }
 
 /// The summary of the mock and live tests.
@@ -132,7 +168,7 @@ TEST("summaries become stats stages") {
   CHECK_EQUAL(*query->layout.schema_name, "tenzir.summarize"s);
   REQUIRE(query->sentinel);
   CHECK_EQUAL(*query->sentinel, "tenzir_groups_0"s);
-  CHECK_EQUAL(query->counts,
+  CHECK_EQUAL(decoded(query->layout, Decode::integer),
               (std::vector<std::string>{"tenzir_column_0", "tenzir_column_1"}));
   // The search that a user wrote gets the same stages.
   auto search = plan({by_user()}, {.search = "index=main", .indexes = {}});
@@ -165,7 +201,8 @@ TEST("summaries compute repeated calls and keys once") {
     {{"k2"}, "k"},
   };
   CHECK_EQUAL(*query->layout.fields, expected);
-  CHECK_EQUAL(query->counts, std::vector<std::string>{"tenzir_column_0"});
+  CHECK_EQUAL(decoded(query->layout, Decode::integer),
+              std::vector<std::string>{"tenzir_column_0"});
 }
 
 TEST("summaries of group keys only count in a hidden column") {
@@ -176,7 +213,7 @@ TEST("summaries of group keys only count in a hidden column") {
               "user, \"a b\"\n| appendpipe [stats count as tenzir_groups_0]");
   CHECK_EQUAL(*query->layout.fields,
               (LayoutFields{{{"user"}, "user"}, {{"x", "y"}, "a b"}}));
-  CHECK(query->counts.empty());
+  CHECK(decoded(query->layout, Decode::integer).empty());
   // A summary without columns yields one event without fields.
   auto empty = plan({aggregate({})});
   REQUIRE(empty);
@@ -221,7 +258,8 @@ TEST("stages after a summary read its columns") {
               (LayoutFields{{{"who"}, "user"}, {{"n"}, "tenzir_column_0"}}));
   REQUIRE(query->layout.schema_name);
   CHECK_EQUAL(*query->layout.schema_name, "tenzir.summarize"s);
-  CHECK_EQUAL(query->counts, std::vector<std::string>{"tenzir_column_0"});
+  CHECK_EQUAL(decoded(query->layout, Decode::integer),
+              std::vector<std::string>{"tenzir_column_0"});
   // The window ends at the summary.
   auto windowed = plan({
     aggregate({key({"_time"})}),
@@ -231,9 +269,62 @@ TEST("stages after a summary read its columns") {
   CHECK(not windowed->window.begin);
 }
 
+TEST("summaries count conditionally and distinctly, sum, and average") {
+  auto query = plan({aggregate({
+    call({"big"}, "count_if", Path{"n"}),
+    call({"users"}, "count_distinct", Path{"user"}),
+    call({"total"}, "sum", Path{"n"}),
+    call({"avg"}, "mean", Path{"n"}),
+  })});
+  // `count_if` without its predicate has no spelling.
+  CHECK(not query);
+  auto big = by_user();
+  auto& columns = as<ir::QueryStage::Aggregate>(big.kind).columns;
+  columns = {
+    {.output = {"big"},
+     .function = "count_if",
+     .args = {field_at({"n"}), parse("n > 1")}},
+    call({"users"}, "count_distinct", Path{"user"}),
+    call({"total"}, "sum", Path{"n"}),
+    call({"avg"}, "mean", Path{"n"}),
+  };
+  query = plan({big});
+  REQUIRE(query);
+  CHECK_EQUAL(query->search,
+              "search index=\"main\"\n| stats count(eval(('n' > 1))) as "
+              "tenzir_column_0, dc(user) as tenzir_column_1, sum(n) as "
+              "tenzir_column_2, avg(n) as tenzir_column_3\n| appendpipe "
+              "[stats count as tenzir_groups_0]");
+  CHECK_EQUAL(decoded(query->layout, Decode::integer),
+              (std::vector<std::string>{"tenzir_column_0", "tenzir_column_1"}));
+  CHECK_EQUAL(decoded(query->layout, Decode::number),
+              (std::vector<std::string>{"tenzir_column_2", "tenzir_column_3"}));
+  // A predicate compares no time literal, which only `_time` compares with.
+  columns.resize(1);
+  columns[0].args[1] = parse("n > 2024-01-01");
+  CHECK(not plan({big}));
+}
+
+TEST("summaries compute keys and arguments with eval") {
+  auto query = plan({aggregate({
+    {.output = {"k"}, .function = None{}, .args = {parse("user.to_lower()")}},
+    {.output = {"m"}, .function = "max", .args = {parse("n * 2")}},
+    {.output = {"again"}, .function = "min", .args = {parse("n * 2")}},
+  })});
+  REQUIRE(query);
+  CHECK_EQUAL(query->search,
+              "search index=\"main\"\n| eval tenzir_column_0=lower('user'), "
+              "tenzir_column_1=('n' * 2)\n| stats max(tenzir_column_1) as "
+              "tenzir_column_2, min(tenzir_column_1) as tenzir_column_3 by "
+              "tenzir_column_0\n| appendpipe [stats count as tenzir_groups_0]");
+  // Time literals compare only with `_time` in a filter.
+  CHECK(not plan({aggregate({{.output = {"k"},
+                              .function = None{},
+                              .args = {parse("_time - 2024-01-01")}}})}));
+}
+
 TEST("summaries with functions that Splunk does not compute stay local") {
-  CHECK(not plan({aggregate({call({"s"}, "sum", Path{"n"})})}));
-  CHECK(not plan({aggregate({call({"s"}, "count_distinct", Path{"n"})})}));
+  CHECK(not plan({aggregate({call({"s"}, "median", Path{"n"})})}));
   CHECK(not plan({aggregate({call({"s"}, "min")})}));
   CHECK(not plan({aggregate({key({"a*"}), call({"c"}, "count")})}));
   CHECK(not plan({aggregate({key({"a", "b"}), call({"c"}, "count")})}));

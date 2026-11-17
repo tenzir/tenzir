@@ -1,0 +1,184 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "from_duckdb",
+       store: {
+         op: {
+           path: [
+             `from_duckdb` @ [1]:144..155 from 0
+           ],
+           ref: std::from_duckdb/op
+         },
+         args: [
+           located "events.duckdb" @ [1]:156..171 from 0
+         ],
+         named_args: [
+           {
+             index: 2,
+             value: located "events" @ [1]:179..187 from 0
+           }
+         ]
+       },
+       filter: [
+         
+       ],
+-      order: "ordered"
+-    },
+-    SetIr {
+-      assignments: [
++      order: "ordered",
++      projection: [
+         {
+-          left: root_field {
+-            id: `level` @ [1]:188..193 from 0,
++          expr: root_field {
++            id: `severity` @ [1]:196..204 from 0,
+             has_question_mark: false
+           },
+-          right: function_call {
+-            fn: {
+-              path: [
+-                `to_lower` @ [1]:205..213 from 0
+-              ],
+-              ref: std::to_lower/fn
+-            },
+-            args: [
+-              root_field {
+-                id: `severity` @ [1]:196..204 from 0,
+-                has_question_mark: false
+-              }
+-            ],
+-            method: true,
+-            location: [1]:196..215 from 0
+-          },
+-          location: [1]:188..215 from 0
++          has_this: false,
++          path: [
++            {
++              id: `severity` @ [1]:196..204 from 0,
++              has_question_mark: false
++            }
++          ]
+         }
+       ],
+-      order: "ordered"
+-    },
+-    summarize {
+-      self: [1]:216..225 from 0,
+-      cfg: {
+-        aggregates: [
+-          {
+-            dest: {
+-              expr: root_field {
+-                id: `events` @ [1]:233..239 from 0,
+-                has_question_mark: false
+-              },
+-              has_this: false,
+-              path: [
+-                {
+-                  id: `events` @ [1]:233..239 from 0,
+-                  has_question_mark: false
++      plan: [
++        Aggregate {
++          columns: [
++            {
++              output: [
++                "level"
++              ],
++              args: [
++                function_call {
++                  fn: {
++                    path: [
++                      `to_lower` @ [1]:205..213 from 0
++                    ],
++                    ref: std::to_lower/fn
++                  },
++                  args: [
++                    root_field {
++                      id: `severity` @ [1]:196..204 from 0,
++                      has_question_mark: false
++                    }
++                  ],
++                  method: true,
++                  location: [1]:196..215 from 0
+                 }
+               ]
+             },
+-            call: {
+-              fn: {
+-                path: [
+-                  `count` @ [1]:240..245 from 0
+-                ],
+-                ref: std::count/fn
+-              },
++            {
++              output: [
++                "events"
++              ],
++              function: "count",
+               args: [
+                 
+-              ],
+-              method: false,
+-              location: [1]:240..247 from 0
+-            }
+-          }
+-        ],
+-        groups: [
+-          {
+-            expr: {
+-              expr: root_field {
+-                id: `level` @ [1]:226..231 from 0,
+-                has_question_mark: false
+-              },
+-              has_this: false,
+-              path: [
+-                {
+-                  id: `level` @ [1]:226..231 from 0,
+-                  has_question_mark: false
+-                }
+               ]
+             }
+-          }
++          ],
++          schema_name: "tenzir.summarize"
++        }
++      ],
++      declined: "`to_stdout` is no stage"
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:247..247 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
+         ],
+-        indices: [
+-          -1,
+-          0
+-        ],
+-        emission: "final",
+-        mode: "reset",
+-        output: "summary",
+-        emit_every: 1
+-      }
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ],
+   definition_location: [1]:144..247 from 0
+ }

@@ -8,10 +8,11 @@ assertions:
     azure_log_analytics:
       queries: 1
       tokens: 1
-      appended: ""
+      appended: "\n| project ['Value'] = column_ifexists('Value', dynamic(null))"
 ---
 
-// With `pushdown=false`, the summary runs in Tenzir over every decoded row.
+// With `pushdown=false`, the summary runs in Tenzir over every decoded row,
+// of which the query only keeps the field that it reads.
 from_azure_log_analytics env("AZLOG_QUERY"),
   workspace_id=env("AZLOG_WORKSPACE"),
   azure_auth={

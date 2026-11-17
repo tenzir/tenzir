@@ -68,7 +68,7 @@ struct FromCloudWatchArgs {
   location operator_location;
   Option<located<bool>> pushdown;
   // The stages after the operator that it takes over (see
-  // `plan_cloudwatch_request`).
+  // `cloudwatch_planner`).
   OptimizationArgs<opt::Plan> optimization;
 };
 

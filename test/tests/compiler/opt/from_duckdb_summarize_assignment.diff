@@ -84,58 +84,9 @@
 -          },
 -          right: constant string "unused" @ [1]:207..215 from 0,
 -          location: [1]:200..215 from 0
-+      plan: [
-+        Aggregate {
-+          columns: [
-+            {
-+              output: [
-+                "ip"
-+              ],
-+              input: [
-+                "src_ip"
-+              ]
-+            },
-+            {
-+              output: [
-+                "events"
-+              ],
-+              function: "count"
-+            },
-+            {
-+              output: [
-+                "worst"
-+              ],
-+              function: "max",
-+              input: [
-+                "severity"
-+              ]
-+            }
-+          ],
-+          schema_name: "tenzir.summarize"
-         }
-       ],
-+      declined: "`to_stdout` is no stage"
-+    },
-+    GenericIr {
-+      desc: "to_stdout",
-+      store: {
-+        op: {
-+          path: [
-+            `to_stdout` @ [1]:262..262 from 0
-+          ],
-+          ref: std::to_stdout/op
-+        },
-+        args: [
-+          
-+        ],
-+        named_args: [
-+          
-+        ]
-+      },
-+      filter: [
-+        
-+      ],
-       order: "ordered"
+-        }
+-      ],
+-      order: "ordered"
 -    },
 -    summarize {
 -      self: [1]:216..225 from 0,
@@ -151,10 +102,20 @@
 -              path: [
 -                {
 -                  id: `events` @ [1]:230..236 from 0,
--                  has_question_mark: false
--                }
--              ]
--            },
++      plan: [
++        Aggregate {
++          columns: [
++            {
++              output: [
++                "ip"
++              ],
++              args: [
++                root_field {
++                  id: `src_ip` @ [1]:171..177 from 0,
+                   has_question_mark: false
+                 }
+               ]
+             },
 -            call: {
 -              fn: {
 -                path: [
@@ -162,8 +123,13 @@
 -                ],
 -                ref: std::count/fn
 -              },
--              args: [
--                
++            {
++              output: [
++                "events"
++              ],
++              function: "count",
+               args: [
+                 
 -              ],
 -              method: false,
 -              location: [1]:237..244 from 0
@@ -181,8 +147,8 @@
 -                  id: `worst` @ [1]:246..251 from 0,
 -                  has_question_mark: false
 -                }
--              ]
--            },
+               ]
+             },
 -            call: {
 -              fn: {
 -                path: [
@@ -190,8 +156,13 @@
 -                ],
 -                ref: std::max/fn
 -              },
--              args: [
--                root_field {
++            {
++              output: [
++                "worst"
++              ],
++              function: "max",
+               args: [
+                 root_field {
 -                  id: `level` @ [1]:256..261 from 0,
 -                  has_question_mark: false
 -                }
@@ -212,12 +183,30 @@
 -              path: [
 -                {
 -                  id: `ip` @ [1]:226..228 from 0,
--                  has_question_mark: false
--                }
--              ]
--            }
++                  id: `severity` @ [1]:190..198 from 0,
+                   has_question_mark: false
+                 }
+               ]
+             }
 -          }
--        ],
++          ],
++          schema_name: "tenzir.summarize"
++        }
++      ],
++      declined: "`to_stdout` is no stage"
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:262..262 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
+         ],
 -        indices: [
 -          -1,
 -          0,
@@ -228,6 +217,14 @@
 -        output: "summary",
 -        emit_every: 1
 -      }
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
      }
    ],
    definition_location: [1]:122..262 from 0

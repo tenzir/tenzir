@@ -43,6 +43,11 @@ struct Plan {
   /// operator must compute every stage, with the semantics of its target.
   /// See `Describer::query_plan` for when the optimizer sets this.
   Option<ir::QueryPlan> plan;
+
+  /// The stages that the operator took over, if any.
+  auto stages() const -> std::span<ir::QueryStage const> {
+    return plan ? std::span{*plan} : std::span<ir::QueryStage const>{};
+  }
 };
 
 } // namespace opt

@@ -19,6 +19,7 @@
 #include <fmt/ranges.h>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <functional>
 #include <iterator>
@@ -169,7 +170,7 @@ auto render_select(SqlSelect const& select, SqlQueryDialect const& dialect)
 
 namespace {
 
-/// The `SELECT` that `render_plan` assembles, stage by stage.
+/// The `SELECT` that `render_sql` assembles, stage by stage.
 class PlanBuilder {
 public:
   PlanBuilder(SqlRelation relation, SqlQueryDialect const& dialect)
@@ -185,13 +186,13 @@ public:
     });
   }
 
-  auto finish() && -> SqlPlan {
+  auto finish() && -> SqlQuery {
     auto layout = SqlLayout{
       .fields = selection_ ? output_ : input_,
       .hidden = std::move(hidden_),
       .schema_name = std::move(schema_name_),
     };
-    return SqlPlan{
+    return SqlQuery{
       .select = current(),
       .layout = std::move(layout),
       .aliases = std::move(aliases_),
@@ -468,6 +469,17 @@ private:
     return true;
   }
 
+  /// Spells a call of the aggregation function `name` on `args`.
+  auto
+  aggregate(std::string_view name, std::span<ast::expression const> args) const
+    -> Option<std::string> {
+    auto const* row = find_row(dialect_->aggregations(), name, args.size());
+    if (not row) {
+      return None{};
+    }
+    return renderer().spell(*row, args);
+  }
+
   auto apply(ir::QueryStage::Aggregate const& x) -> bool {
     // An aggregation does not depend on the order of its input, unless the
     // order decides which rows a limit keeps.
@@ -480,28 +492,22 @@ private:
     auto output = SqlFields{};
     auto group_by = std::vector<std::string>{};
     for (auto const& column : x.columns) {
-      auto value = Option<std::string>{};
+      // A group key has its value as the only argument. It must read a
+      // field, since a target may read a constant as the position of a
+      // result column, or reject it.
       if (not column.function) {
-        if (not column.input) {
+        auto refs = ast::collect_refs(column.args.front());
+        if (not refs or refs->field_paths.empty()) {
           return false;
         }
-        value = bind(*column.input);
-        if (not value) {
-          return false;
-        }
+      }
+      auto value = column.function ? aggregate(*column.function, column.args)
+                                   : renderer().value(column.args.front());
+      if (not value) {
+        return false;
+      }
+      if (not column.function) {
         group_by.push_back(*value);
-      } else {
-        auto arg = Option<std::string>{};
-        if (column.input) {
-          arg = bind(*column.input);
-          if (not arg) {
-            return false;
-          }
-        }
-        value = dialect_->render_aggregate(*column.function, arg);
-        if (not value) {
-          return false;
-        }
       }
       auto name = alias("column");
       selection.push_back(
@@ -511,7 +517,7 @@ private:
     if (selection.empty()) {
       // A summary without columns yields one empty event, also for empty
       // input, as an aggregation without groups yields one row.
-      auto count = dialect_->render_aggregate("count", None{});
+      auto count = aggregate("count", {});
       if (not count) {
         return false;
       }
@@ -618,22 +624,18 @@ auto SqlQueryDialect::bind_field(std::span<std::string const> path) const
   return quote_identifier(path.front());
 }
 
-auto SqlQueryDialect::render_aggregate(std::string_view name,
-                                       Option<std::string> const& arg) const
-  -> Option<std::string> {
-  if (name == "count") {
-    return fmt::format("COUNT({})", arg ? *arg : std::string{"*"});
-  }
-  if (not arg) {
-    return None{};
-  }
-  if (name == "min") {
-    return fmt::format("MIN({})", *arg);
-  }
-  if (name == "max") {
-    return fmt::format("MAX({})", *arg);
-  }
-  return None{};
+auto SqlQueryDialect::aggregations() const -> std::span<Aggregation const> {
+  static constexpr auto rows = std::array{
+    Aggregation{"count", 0, "COUNT(*)", Decode::integer},
+    Aggregation{"count", 1, "COUNT({0})", Decode::integer},
+    Aggregation{"min", 1, "MIN({0})"},
+    Aggregation{"max", 1, "MAX({0})"},
+    Aggregation{"count_if", 2, "COUNT(CASE WHEN {1:pred} THEN {0} END)",
+                Decode::integer},
+    Aggregation{"count_distinct", 1, "COUNT(DISTINCT {0})", Decode::integer},
+    Aggregation{"mean", 1, "AVG({0})"},
+  };
+  return rows;
 }
 
 auto SqlQueryDialect::render_exclude(std::span<std::string const> columns) const
@@ -642,10 +644,10 @@ auto SqlQueryDialect::render_exclude(std::span<std::string const> columns) const
   return None{};
 }
 
-auto render_plan(SqlRelation relation, std::span<ir::QueryStage const> plan,
-                 SqlQueryDialect const& dialect) -> Option<SqlPlan> {
+auto render_sql(SqlRelation relation, std::span<ir::QueryStage const> stages,
+                SqlQueryDialect const& dialect) -> Option<SqlQuery> {
   auto builder = PlanBuilder{std::move(relation), dialect};
-  for (auto const& stage : plan) {
+  for (auto const& stage : stages) {
     if (not builder.add(stage)) {
       return None{};
     }

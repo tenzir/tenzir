@@ -8,17 +8,17 @@
        store: {
          op: {
            path: [
-             `from_duckdb` @ [1]:177..188 from 0
+             `from_duckdb` @ [1]:139..150 from 0
            ],
            ref: std::from_duckdb/op
          },
          args: [
-           located "events.duckdb" @ [1]:189..204 from 0
+           located "events.duckdb" @ [1]:151..166 from 0
          ],
          named_args: [
            {
              index: 2,
-             value: located "events" @ [1]:212..220 from 0
+             value: located "events" @ [1]:174..182 from 0
            }
          ]
        },
@@ -44,153 +44,155 @@
 -        },
 -        {
 -          left: root_field {
--            id: `src_ip` @ [1]:228..234 from 0,
+-            id: `src_ip` @ [1]:190..196 from 0,
 -            has_question_mark: false
 -          },
 -          right: root_field {
--            id: `src_ip` @ [1]:228..234 from 0,
+-            id: `src_ip` @ [1]:190..196 from 0,
 -            has_question_mark: false
 -          },
--          location: [1]:228..234 from 0
+-          location: [1]:190..196 from 0
 -        },
 -        {
 -          left: root_field {
 +          expr: root_field {
-             id: `severity` @ [1]:236..244 from 0,
+             id: `severity` @ [1]:198..206 from 0,
              has_question_mark: false
            },
 -          right: root_field {
--            id: `severity` @ [1]:236..244 from 0,
+-            id: `severity` @ [1]:198..206 from 0,
 -            has_question_mark: false
 -          },
--          location: [1]:236..244 from 0
+-          location: [1]:198..206 from 0
 +          has_this: false,
 +          path: [
 +            {
-+              id: `severity` @ [1]:236..244 from 0,
++              id: `severity` @ [1]:198..206 from 0,
 +              has_question_mark: false
 +            }
 +          ]
          }
        ],
 -      order: "ordered"
+-    },
+-    SetIr {
+-      assignments: [
+-        {
+-          left: root_field {
+-            id: `severity` @ [1]:207..215 from 0,
+-            has_question_mark: false
+-          },
+-          right: binary_expr {
+-            left: root_field {
+-              id: `severity` @ [1]:218..226 from 0,
+-              has_question_mark: false
+-            },
+-            op: "add",
+-            right: constant int64 1 @ [1]:229..230 from 0,
+-            location: [1]:218..230 from 0
+-          },
+-          location: [1]:207..230 from 0
+-        }
+-      ],
+-      order: "ordered"
+-    },
+-    summarize {
+-      self: [1]:231..240 from 0,
+-      cfg: {
+-        aggregates: [
+-          {
+-            dest: {
+-              expr: root_field {
+-                id: `events` @ [1]:251..257 from 0,
+-                has_question_mark: false
+-              },
+-              has_this: false,
+-              path: [
+-                {
+-                  id: `events` @ [1]:251..257 from 0,
+-                  has_question_mark: false
 +      plan: [
-+        Select {
-+          fields: [
-+            {
-+              output: [
-+                "src_ip"
-+              ],
-+              input: [
-+                "src_ip"
-+              ]
-+            },
++        Aggregate {
++          columns: [
 +            {
 +              output: [
 +                "severity"
 +              ],
-+              input: [
-+                "severity"
-+              ]
-+            }
-+          ]
-+        }
-+      ],
-+      declined: "`set` is no stage"
-     },
-     SetIr {
-       assignments: [
-         {
-           left: root_field {
-             id: `severity` @ [1]:245..253 from 0,
-             has_question_mark: false
-           },
-           right: binary_expr {
-             left: root_field {
-               id: `severity` @ [1]:256..264 from 0,
-               has_question_mark: false
-             },
-             op: "add",
-             right: constant int64 1 @ [1]:267..268 from 0,
-             location: [1]:256..268 from 0
-           },
-           location: [1]:245..268 from 0
-         }
-       ],
-       order: "ordered"
-     },
-     summarize {
-       self: [1]:269..278 from 0,
-       cfg: {
-         aggregates: [
-           {
-             dest: {
-               expr: root_field {
-                 id: `events` @ [1]:289..295 from 0,
-                 has_question_mark: false
-               },
-               has_this: false,
-               path: [
-                 {
-                   id: `events` @ [1]:289..295 from 0,
-                   has_question_mark: false
++              args: [
++                binary_expr {
++                  left: root_field {
++                    id: `severity` @ [1]:198..206 from 0,
++                    has_question_mark: false
++                  },
++                  op: "add",
++                  right: constant int64 1 @ [1]:229..230 from 0,
++                  location: [1]:218..230 from 0
                  }
                ]
              },
-             call: {
-               fn: {
-                 path: [
-                   `count` @ [1]:296..301 from 0
-                 ],
-                 ref: std::count/fn
-               },
+-            call: {
+-              fn: {
+-                path: [
+-                  `count` @ [1]:258..263 from 0
+-                ],
+-                ref: std::count/fn
+-              },
++            {
++              output: [
++                "events"
++              ],
++              function: "count",
                args: [
                  
-               ],
-               method: false,
-               location: [1]:296..303 from 0
-             }
-           }
-         ],
-         groups: [
-           {
-             expr: {
-               expr: root_field {
-                 id: `severity` @ [1]:279..287 from 0,
-                 has_question_mark: false
-               },
-               has_this: false,
-               path: [
-                 {
-                   id: `severity` @ [1]:279..287 from 0,
-                   has_question_mark: false
-                 }
+-              ],
+-              method: false,
+-              location: [1]:258..265 from 0
+-            }
+-          }
+-        ],
+-        groups: [
+-          {
+-            expr: {
+-              expr: root_field {
+-                id: `severity` @ [1]:241..249 from 0,
+-                has_question_mark: false
+-              },
+-              has_this: false,
+-              path: [
+-                {
+-                  id: `severity` @ [1]:241..249 from 0,
+-                  has_question_mark: false
+-                }
                ]
              }
-           }
-         ],
-         indices: [
-           -1,
-           0
-         ],
-         emission: "final",
-         mode: "reset",
-         output: "summary",
-         emit_every: 1
-       }
+-          }
++          ],
++          schema_name: "tenzir.summarize"
++        }
++      ],
++      declined: "`to_stdout` is no stage"
 +    },
 +    GenericIr {
 +      desc: "to_stdout",
 +      store: {
 +        op: {
 +          path: [
-+            `to_stdout` @ [1]:303..303 from 0
++            `to_stdout` @ [1]:265..265 from 0
 +          ],
 +          ref: std::to_stdout/op
 +        },
 +        args: [
 +          
-+        ],
+         ],
+-        indices: [
+-          -1,
+-          0
+-        ],
+-        emission: "final",
+-        mode: "reset",
+-        output: "summary",
+-        emit_every: 1
+-      }
 +        named_args: [
 +          
 +        ]
@@ -201,5 +203,5 @@
 +      order: "ordered"
      }
    ],
-   definition_location: [1]:177..303 from 0
+   definition_location: [1]:139..265 from 0
  }

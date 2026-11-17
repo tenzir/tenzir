@@ -126,15 +126,14 @@ struct AggregateColumn {
   std::vector<std::string> output;
   /// The name of the aggregation function, or `None` for a group key.
   Option<std::string> function;
-  /// The field that the column reads, as path segments: the group key, or
-  /// the argument of the function. `None` only for a function without
-  /// arguments, such as `count()`.
-  Option<std::vector<std::string>> input;
+  /// The arguments of the function, or the value of a group key as the only
+  /// one. They are expressions over the input of the aggregation.
+  std::vector<ast::expression> args;
 
   friend auto inspect(auto& f, AggregateColumn& x) -> bool {
     return f.object(x).fields(f.field("output", x.output),
                               f.field("function", x.function),
-                              f.field("input", x.input));
+                              f.field("args", x.args));
   }
 };
 
@@ -188,10 +187,9 @@ struct QueryStage {
     }
   };
 
-  /// A final `summarize` that reads its input fields directly: one event per
-  /// group, and without group keys exactly one event, also for empty input.
-  /// Each column is either a group key, which copies a field, or a call of an
-  /// aggregation function with at most one field as argument.
+  /// A final `summarize`: one event per group, and without group keys exactly
+  /// one event, also for empty input. Each column is either a group key or a
+  /// call of an aggregation function of the standard library.
   struct Aggregate {
     /// The output columns, in the order of the output fields.
     std::vector<AggregateColumn> columns;
@@ -252,7 +250,7 @@ struct QueryStage {
 /// The stages that a source took over, in the order in which they apply.
 using QueryPlan = std::vector<QueryStage>;
 
-/// Substitutes the bindings in the predicates of `plan`.
+/// Substitutes the bindings in the expressions of `plan`.
 auto substitute(QueryPlan& plan, substitute_ctx ctx) -> failure_or<void>;
 
 /// The stages behind a source that the optimizer offers it.
@@ -626,17 +624,22 @@ auto split_filter_by_substitution(OptimizeFilter filter, registry const& reg,
                                   ast::MetaSubstitution const& meta = {})
   -> split_filter_result;
 
-/// Rewrites the inputs of `aggregate` with `fields`, which resolves fields of
-/// an operator's output to expressions over its input, as for
-/// `split_filter_by_substitution`. Returns `None` unless every input resolves
-/// to a plain field path without `?`. Outputs and the schema name stay as
-/// they are.
+/// Rewrites the arguments of `aggregate` with `fields` and `meta`, which
+/// resolve references to an operator's output to expressions over its input,
+/// as in `ast::substitute_refs`. Returns `None` if a reference does not
+/// resolve. Outputs and the schema name stay as they are.
 ///
 /// This serves operators that keep every event, as in
 /// `Operator::rewrite_aggregate`.
-auto rewrite_aggregate(QueryStage::Aggregate aggregate,
-                       ast::FieldSubstitution const& fields)
+auto rewrite_aggregate(QueryStage::Aggregate aggregate, registry const& reg,
+                       ast::FieldSubstitution const& fields,
+                       ast::MetaSubstitution const& meta = {})
   -> Option<QueryStage::Aggregate>;
+
+/// Returns the segments of the field path `expr`, unless it has a `?` or
+/// names no field.
+auto field_segments(ast::expression const& expr)
+  -> Option<std::vector<std::string>>;
 
 /// Simplifies a predicate without changing which events it keeps.
 ///

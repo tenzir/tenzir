@@ -27,7 +27,7 @@
 #include "tenzir/pipeline_metrics.hpp"
 #include "tenzir/plugin/register.hpp"
 #include "tenzir/pushdown/layout.hpp"
-#include "tenzir/pushdown/plan.hpp"
+#include "tenzir/pushdown/redact.hpp"
 #include "tenzir/tql2/plugin.hpp"
 
 #include <boost/url/parse.hpp>
@@ -163,6 +163,14 @@ auto with_read_compression(::clickhouse::ClientOptions options)
   -> ::clickhouse::ClientOptions {
   options.SetCompressionMethod(::clickhouse::CompressionMethod::LZ4);
   return options;
+}
+
+/// Returns the planner of a read of `source`. A query of the user is opaque.
+auto make_planner(ReadSource const& source)
+  -> pushdown::Planner<ClickHouseRead, ClickHouseTable> {
+  return planner(source.hydrolix.has_value(), not source.table or source.sql
+                                                ? pushdown::SqlMode::query
+                                                : pushdown::SqlMode::table);
 }
 
 /// Fails a checkpoint. A query has no cursor to resume from, so a restored
@@ -568,7 +576,9 @@ public:
       .schema_name = fmt::format("{}.query", names.schema_prefix),
       .plan = plan_,
       .projection = projection_,
+      .planner = make_planner(source_),
       .hydrolix = hydrolix,
+      .operator_location = source_.operator_location,
     };
     if (source_.table) {
       read.table = source_.table->inner;
@@ -651,8 +661,10 @@ private:
     ir::QueryPlan plan;
     /// The fields that the stages and the operators after them need.
     Option<ir::OptimizeProjection> projection;
+    pushdown::Planner<ClickHouseRead, ClickHouseTable> planner;
     /// Whether the read runs as `from_hydrolix`.
     bool hydrolix = false;
+    location operator_location;
   };
 
   struct EventsMessage {
@@ -671,12 +683,12 @@ private:
       = {.fields = None{}, .hidden = {}, .schema_name = None{}};
     /// The layout of a catch-all table, whose rows need reconstruction.
     Option<CatchAllLayout> catch_all = None{};
-    BoundPlan bound;
+    /// The settings of a table read.
+    std::vector<QuerySetting> settings;
   };
 
   /// Plans the query of `read`, which in `table` mode depends on the columns
-  /// of the table. Fails with a diagnostic if a field that the stages read
-  /// does not bind to the table.
+  /// of the table.
   static auto prepare(::clickhouse::Client& client, Read const& read,
                       diagnostic_handler& dh) -> failure_or<PreparedRead> {
     if (not read.table) {
@@ -685,11 +697,10 @@ private:
         .sql = read.sql,
         .layout = {.fields = None{}, .hidden = {}, .schema_name = None{}},
         .catch_all = None{},
-        .bound = {},
+        .settings = {},
       };
     }
     auto const& table = *read.table;
-    auto const names = backend_names(read.hydrolix);
     TRY(auto description, describe_table(client, table, dh));
     TRY(auto catch_all, make_catch_all_layout(description, dh));
     auto columns = std::vector<std::string>{};
@@ -699,52 +710,24 @@ private:
       schema.add_column(column.name, column.type,
                         is_generated_kind(column.default_kind));
     }
-    auto bound
-      = bind_plan(TableBinding{std::move(description), catch_all}, read.plan);
-    if (bound.is_err()) {
-      auto error = std::move(bound).unwrap_err();
-      auto diag = [&] {
-        switch (error.kind) {
-          case BindError::Kind::field:
-            return diagnostic::error("cannot bind `{}` in {} table `{}`",
-                                     error.subject, names.service, table);
-          case BindError::Kind::stage:
-            return diagnostic::error("cannot compute `{}` in {} table `{}`",
-                                     error.subject, names.service, table);
-          case BindError::Kind::sort:
-            return diagnostic::error("cannot sort by the JSON field `{}` "
-                                     "before further stages in {} table `{}`",
-                                     error.subject, names.service, table);
-        }
-        TENZIR_UNREACHABLE();
-      }();
-      std::move(diag)
-        .note("{}", error.reason)
-        .hint("use `pushdown=false` to run the operators after `{}` in "
-              "Tenzir instead",
-              names.operator_name)
-        .emit(dh);
-      return failure::promise();
-    }
-    // A catch-all table needs every column for the reconstruction, and a
-    // drop keeps every column that it does not name.
+    // A drop keeps every column that it does not name.
     auto const drops = std::ranges::any_of(read.plan, [](auto const& stage) {
       return is<ir::QueryStage::Drop>(stage.kind);
     });
-    auto const selection = catch_all or drops
-                             ? std::string{"*"}
-                             : select_columns(&schema, read.projection);
-    auto rendered
-      = make_table_read(table, selection, read.plan, columns, bound.unwrap());
-    if (rendered.is_err()) {
-      diagnostic::error("{}", rendered.unwrap_err()).emit(dh);
-      return failure::promise();
-    }
+    auto const known = ClickHouseTable{
+      .table = {.from = table,
+                .columns = std::move(columns),
+                .selection = drops ? std::string{"*"}
+                                   : select_columns(&schema, read.projection)},
+      .binding = TableBinding{std::move(description), catch_all},
+    };
+    TRY(auto planned, pushdown::replan(read.planner, read.plan, known,
+                                       read.operator_location, dh));
     return PreparedRead{
-      .sql = std::move(rendered.unwrap().sql),
-      .layout = std::move(rendered.unwrap().layout),
+      .sql = std::move(planned.read.sql),
+      .layout = std::move(planned.read.layout),
       .catch_all = std::move(catch_all),
-      .bound = std::move(bound).unwrap(),
+      .settings = std::move(planned.settings),
     };
   }
 
@@ -815,15 +798,11 @@ private:
                                               clickhouse_lexicon));
         }
         auto query = ::clickhouse::Query{prepared.sql};
-        if (read.table) {
-          // A query of the user keeps the session's settings.
-          for (auto const& setting : table_read_settings(
-                 prepared.bound, prepared.catch_all.has_value(),
-                 read.hydrolix)) {
-            query.SetSetting(std::string{setting.name},
-                             {std::string{setting.value},
-                              ::clickhouse::QuerySettingsField::IMPORTANT});
-          }
+        // A query of the user keeps the session's settings.
+        for (auto const& setting : prepared.settings) {
+          query.SetSetting(std::string{setting.name},
+                           {std::string{setting.value},
+                            ::clickhouse::QuerySettingsField::IMPORTANT});
         }
         apply_read_settings(query);
         query.OnDataCancelable(on_data);
@@ -840,15 +819,11 @@ private:
                                 e.GetCode(), e.what());
         // Running the operators in Tenzir would not give the query of a
         // Hydrolix cluster the time range that it lacks.
+        // The server may reject a stage that it computes with its own
+        // semantics, such as a comparison of values of different types.
         if (computes and not(read.hydrolix and is_time_range_error(e.what()))) {
-          // The server may reject a stage that it computes with its own
-          // semantics, such as a comparison of values of different types.
-          diag = std::move(diag)
-                   .note("the query computes the operators after `{}` with "
-                         "{}'s semantics",
-                         names.operator_name, names.service)
-                   .hint("use `pushdown=false` to run them in Tenzir "
-                         "instead");
+          diag = pushdown::note_absorbed(std::move(diag), read.plan,
+                                         names.service);
         }
         std::move(diag).emit(dh);
       }
@@ -932,20 +907,11 @@ public:
       }
       return {};
     });
-    pushdown::add_pushdown_argument(d, &FromClickhouseArgs::pushdown);
     d.optimization(&FromClickhouseArgs::optimization);
-    // A table read takes over the stages that ClickHouse spells. A query of
-    // the user is opaque.
-    d.query_plan([](FromClickhouseArgs const& args,
-                    ir::QueryChain const& chain) -> ir::Absorption {
-      if (not pushdown::pushdown_enabled(args.pushdown)) {
-        return {.prefix = 0, .declined = "`pushdown=false`"};
-      }
-      if (not args.table or args.sql) {
-        return {.prefix = 0, .declined = "the query of the user is opaque"};
-      }
-      return absorb_stages(chain, "ClickHouse");
-    });
+    pushdown::add_pushdown(d, &FromClickhouseArgs::pushdown,
+                           [](auto const& args) {
+                             return make_planner(args.source());
+                           });
     return d.without_optimize();
   }
 };
@@ -1000,20 +966,11 @@ public:
         }
         return {};
       });
-    pushdown::add_pushdown_argument(d, &FromHydrolixArgs::pushdown);
     d.optimization(&FromHydrolixArgs::optimization);
-    // A table read takes over the stages that Hydrolix's ClickHouse engine
-    // spells, as `from_clickhouse` does. A query of the user is opaque.
-    d.query_plan([](FromHydrolixArgs const& args,
-                    ir::QueryChain const& chain) -> ir::Absorption {
-      if (not pushdown::pushdown_enabled(args.pushdown)) {
-        return {.prefix = 0, .declined = "`pushdown=false`"};
-      }
-      if (not args.table or args.sql) {
-        return {.prefix = 0, .declined = "the query of the user is opaque"};
-      }
-      return absorb_stages(chain, "Hydrolix");
-    });
+    pushdown::add_pushdown(d, &FromHydrolixArgs::pushdown,
+                           [](auto const& args) {
+                             return make_planner(args.source());
+                           });
     return d.without_optimize();
   }
 };

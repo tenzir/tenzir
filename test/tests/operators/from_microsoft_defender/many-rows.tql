@@ -4,10 +4,11 @@ timeout: 60
 assertions:
   fixtures:
     microsoft_defender:
-      appended: ""
+      appended: "\n| project ['Count'] = column_ifexists('Count', dynamic(null))"
 ---
 
-// With `pushdown=false`, the summary runs in Tenzir over every decoded row.
+// With `pushdown=false`, the summary runs in Tenzir over every decoded row,
+// of which the query only keeps the field that it reads.
 from_microsoft_defender "many-rows",
   azure_auth={
     tenant_id: env("DEFENDER_TENANT"),

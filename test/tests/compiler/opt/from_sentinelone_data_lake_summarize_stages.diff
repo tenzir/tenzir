@@ -42,7 +42,6 @@
 -                {
 -                  id: `events` @ [1]:232..238 from 0,
 -                  has_question_mark: false
--                }
 +      order: "ordered",
 +      projection: [
 +        {
@@ -76,9 +75,16 @@
 +                "event",
 +                "type"
 +              ],
-+              input: [
-+                "event",
-+                "type"
++              args: [
++                field_access {
++                  left: root_field {
++                    id: `event` @ [1]:220..225 from 0,
++                    has_question_mark: false
++                  },
++                  has_question_mark: false,
++                  name: `type` @ [1]:226..230 from 0,
++                  location: [1]:220..230 from 0
+                 }
                ]
              },
 -            call: {
@@ -88,29 +94,18 @@
 -                ],
 -                ref: std::count/fn
 -              },
--              args: [
--                
 +            {
 +              output: [
 +                "events"
-               ],
++              ],
++              function: "count",
+               args: [
+                 
+-              ],
 -              method: false,
 -              location: [1]:239..246 from 0
-+              function: "count"
-             }
-+          ],
-+          schema_name: "tenzir.summarize"
-+        },
-+        Filter {
-+          predicate: binary_expr {
-+            left: root_field {
-+              id: `events` @ [1]:253..259 from 0,
-+              has_question_mark: false
-+            },
-+            op: "geq",
-+            right: constant int64 10 @ [1]:263..265 from 0,
-+            location: [1]:253..265 from 0
-           }
+-            }
+-          }
 -        ],
 -        groups: [
 -          {
@@ -134,17 +129,21 @@
 -                  id: `type` @ [1]:226..230 from 0,
 -                  has_question_mark: false
 -                }
--              ]
-+        },
-+        Sort {
-+          keys: [
-+            {
-+              field: [
-+                "events"
-+              ],
-+              descending: true
+               ]
              }
--          }
++          ],
++          schema_name: "tenzir.summarize"
++        },
++        Filter {
++          predicate: binary_expr {
++            left: root_field {
++              id: `events` @ [1]:253..259 from 0,
++              has_question_mark: false
++            },
++            op: "geq",
++            right: constant int64 10 @ [1]:263..265 from 0,
++            location: [1]:253..265 from 0
+           }
 -        ],
 -        indices: [
 -          -1,
@@ -172,6 +171,15 @@
 -          op: "geq",
 -          right: constant int64 10 @ [1]:263..265 from 0,
 -          location: [1]:253..265 from 0
++        },
++        Sort {
++          keys: [
++            {
++              field: [
++                "events"
++              ],
++              descending: true
++            }
 +          ],
 +          bound: 3
 +        },

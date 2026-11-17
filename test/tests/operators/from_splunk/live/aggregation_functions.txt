@@ -1,0 +1,12 @@
+{
+  user: "alice",
+  logins: 1,
+  ips: 1,
+  missing: 0,
+}
+{
+  user: "bob",
+  logins: 1,
+  ips: 1,
+  missing: 0,
+}

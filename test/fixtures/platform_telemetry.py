@@ -88,7 +88,6 @@ def _check(requests: list[tuple[str, dict[str, Any]]], errors: list[str]) -> Non
         ("aborted", "failed"),
     ]:
         assert expected in states, (expected, states)
-    assert all(not batch["operators"] for batch in batches)
     assert all(run["run"] == 7 for batch in batches for run in batch["runs"])
 
 

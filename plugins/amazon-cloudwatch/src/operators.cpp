@@ -926,21 +926,8 @@ auto CloudWatchReader::snapshot(Serde& serde) -> void {
 
 auto CloudWatchReader::start(OpCtx& ctx) -> Task<void> {
   mode_ = from_mode(args_);
-  auto stages = std::span<ir::QueryStage const>{};
-  if (args_.optimization.plan) {
-    stages = *args_.optimization.plan;
-  }
-  auto planned = plan_cloudwatch_request(args_, stages);
-  if (not planned) {
-    diagnostic::error("failed to spell the stages that the operator took "
-                      "over as a CloudWatch Logs request")
-      .primary(args_.operator_location)
-      .hint("use `pushdown=false` to run them in Tenzir")
-      .emit(ctx);
-    done_ = true;
-    co_return;
-  }
-  request_ = std::move(*planned);
+  request_
+    = pushdown::replan(cloudwatch_planner(args_), args_.optimization.stages());
   // No event can pass, or a restored read emitted all that its limit
   // admits, so do not even create a client.
   if (request_.empty or (request_.limit and emitted_ >= *request_.limit)) {
@@ -1128,15 +1115,11 @@ auto CloudWatchReader::handle(Any result, OpCtx& ctx)
   -> std::vector<CloudWatchEvent> {
   auto outcome = std::move(result).as<SourceResult>();
   if (outcome.is_err()) {
-    auto d = diagnostic::error("{}", outcome.unwrap_err())
-               .primary(args_.operator_location);
     // CloudWatch Logs rejects a request that it cannot compute.
-    if (args_.optimization.plan and not args_.optimization.plan->empty()) {
-      d = std::move(d)
-            .note("the request carries the stages that the operator took over")
-            .hint("use `pushdown=false` to run them in Tenzir");
-    }
-    std::move(d).emit(ctx);
+    pushdown::note_absorbed(diagnostic::error("{}", outcome.unwrap_err())
+                              .primary(args_.operator_location),
+                            args_.optimization.stages(), "CloudWatch Logs")
+      .emit(ctx);
     done_ = true;
     return {};
   }

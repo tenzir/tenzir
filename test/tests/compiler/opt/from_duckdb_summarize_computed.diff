@@ -8,17 +8,17 @@
        store: {
          op: {
            path: [
-             `from_duckdb` @ [1]:111..122 from 0
+             `from_duckdb` @ [1]:155..166 from 0
            ],
            ref: std::from_duckdb/op
          },
          args: [
-           located "events.duckdb" @ [1]:123..138 from 0
+           located "events.duckdb" @ [1]:167..182 from 0
          ],
          named_args: [
            {
              index: 2,
-             value: located "events" @ [1]:146..154 from 0
+             value: located "events" @ [1]:190..198 from 0
            }
          ]
        },
@@ -26,162 +26,186 @@
          
        ],
 -      order: "ordered"
+-    },
+-    SetIr {
+-      assignments: [
 +      order: "ordered",
 +      projection: [
-+        {
+         {
+-          left: root_field {
+-            id: `level` @ [1]:199..204 from 0,
 +          expr: root_field {
-+            id: `src_ip` @ [1]:186..192 from 0,
-+            has_question_mark: false
-+          },
++            id: `src_ip` @ [1]:230..236 from 0,
+             has_question_mark: false
+           },
+-          right: binary_expr {
+-            left: root_field {
 +          has_this: false,
 +          path: [
 +            {
-+              id: `src_ip` @ [1]:186..192 from 0,
++              id: `src_ip` @ [1]:230..236 from 0,
 +              has_question_mark: false
 +            }
 +          ]
 +        },
 +        {
 +          expr: root_field {
-+            id: `severity` @ [1]:163..171 from 0,
++            id: `severity` @ [1]:207..215 from 0,
 +            has_question_mark: false
 +          },
 +          has_this: false,
 +          path: [
 +            {
-+              id: `severity` @ [1]:163..171 from 0,
-+              has_question_mark: false
+               id: `severity` @ [1]:207..215 from 0,
+               has_question_mark: false
+-            },
+-            op: "mul",
+-            right: constant int64 2 @ [1]:218..219 from 0,
+-            location: [1]:207..219 from 0
+-          },
+-          location: [1]:199..219 from 0
 +            }
 +          ]
-+        }
-+      ],
-+      declined: "`set` is no stage"
-     },
-     SetIr {
-       assignments: [
-         {
-           left: root_field {
-             id: `level` @ [1]:155..160 from 0,
-             has_question_mark: false
-           },
-           right: binary_expr {
-             left: root_field {
-               id: `severity` @ [1]:163..171 from 0,
-               has_question_mark: false
-             },
-             op: "mul",
-             right: constant int64 2 @ [1]:174..175 from 0,
-             location: [1]:163..175 from 0
-           },
-           location: [1]:155..175 from 0
          }
        ],
-       order: "ordered"
-     },
-     summarize {
-       self: [1]:176..185 from 0,
-       cfg: {
-         aggregates: [
-           {
-             dest: {
-               expr: root_field {
-                 id: `events` @ [1]:194..200 from 0,
-                 has_question_mark: false
-               },
-               has_this: false,
-               path: [
-                 {
-                   id: `events` @ [1]:194..200 from 0,
+-      order: "ordered"
+-    },
+-    summarize {
+-      self: [1]:220..229 from 0,
+-      cfg: {
+-        aggregates: [
+-          {
+-            dest: {
+-              expr: root_field {
+-                id: `events` @ [1]:238..244 from 0,
+-                has_question_mark: false
+-              },
+-              has_this: false,
+-              path: [
+-                {
+-                  id: `events` @ [1]:238..244 from 0,
++      plan: [
++        Aggregate {
++          columns: [
++            {
++              output: [
++                "src_ip"
++              ],
++              args: [
++                root_field {
++                  id: `src_ip` @ [1]:230..236 from 0,
                    has_question_mark: false
                  }
                ]
              },
-             call: {
-               fn: {
-                 path: [
-                   `count` @ [1]:201..206 from 0
-                 ],
-                 ref: std::count/fn
-               },
+-            call: {
+-              fn: {
+-                path: [
+-                  `count` @ [1]:245..250 from 0
+-                ],
+-                ref: std::count/fn
+-              },
++            {
++              output: [
++                "events"
++              ],
++              function: "count",
                args: [
                  
-               ],
-               method: false,
-               location: [1]:201..208 from 0
-             }
-           },
-           {
-             dest: {
-               expr: root_field {
-                 id: `worst` @ [1]:210..215 from 0,
-                 has_question_mark: false
-               },
-               has_this: false,
-               path: [
-                 {
-                   id: `worst` @ [1]:210..215 from 0,
-                   has_question_mark: false
-                 }
+-              ],
+-              method: false,
+-              location: [1]:245..252 from 0
+-            }
+-          },
+-          {
+-            dest: {
+-              expr: root_field {
+-                id: `worst` @ [1]:254..259 from 0,
+-                has_question_mark: false
+-              },
+-              has_this: false,
+-              path: [
+-                {
+-                  id: `worst` @ [1]:254..259 from 0,
+-                  has_question_mark: false
+-                }
                ]
              },
-             call: {
-               fn: {
-                 path: [
-                   `max` @ [1]:216..219 from 0
-                 ],
-                 ref: std::max/fn
-               },
+-            call: {
+-              fn: {
+-                path: [
+-                  `max` @ [1]:260..263 from 0
+-                ],
+-                ref: std::max/fn
+-              },
++            {
++              output: [
++                "worst"
++              ],
++              function: "max",
                args: [
-                 root_field {
-                   id: `level` @ [1]:220..225 from 0,
-                   has_question_mark: false
-                 }
-               ],
-               method: false,
-               location: [1]:216..226 from 0
-             }
-           }
-         ],
-         groups: [
-           {
-             expr: {
-               expr: root_field {
-                 id: `src_ip` @ [1]:186..192 from 0,
-                 has_question_mark: false
-               },
-               has_this: false,
-               path: [
-                 {
-                   id: `src_ip` @ [1]:186..192 from 0,
-                   has_question_mark: false
+-                root_field {
+-                  id: `level` @ [1]:264..269 from 0,
+-                  has_question_mark: false
+-                }
+-              ],
+-              method: false,
+-              location: [1]:260..270 from 0
+-            }
+-          }
+-        ],
+-        groups: [
+-          {
+-            expr: {
+-              expr: root_field {
+-                id: `src_ip` @ [1]:230..236 from 0,
+-                has_question_mark: false
+-              },
+-              has_this: false,
+-              path: [
+-                {
+-                  id: `src_ip` @ [1]:230..236 from 0,
+-                  has_question_mark: false
++                binary_expr {
++                  left: root_field {
++                    id: `severity` @ [1]:207..215 from 0,
++                    has_question_mark: false
++                  },
++                  op: "mul",
++                  right: constant int64 2 @ [1]:218..219 from 0,
++                  location: [1]:207..219 from 0
                  }
                ]
              }
-           }
-         ],
-         indices: [
-           -1,
-           0,
-           1
-         ],
-         emission: "final",
-         mode: "reset",
-         output: "summary",
-         emit_every: 1
-       }
+-          }
++          ],
++          schema_name: "tenzir.summarize"
++        }
++      ],
++      declined: "`to_stdout` is no stage"
 +    },
 +    GenericIr {
 +      desc: "to_stdout",
 +      store: {
 +        op: {
 +          path: [
-+            `to_stdout` @ [1]:226..226 from 0
++            `to_stdout` @ [1]:270..270 from 0
 +          ],
 +          ref: std::to_stdout/op
 +        },
 +        args: [
 +          
-+        ],
+         ],
+-        indices: [
+-          -1,
+-          0,
+-          1
+-        ],
+-        emission: "final",
+-        mode: "reset",
+-        output: "summary",
+-        emit_every: 1
+-      }
 +        named_args: [
 +          
 +        ]
@@ -192,5 +216,5 @@
 +      order: "ordered"
      }
    ],
-   definition_location: [1]:111..226 from 0
+   definition_location: [1]:155..270 from 0
  }

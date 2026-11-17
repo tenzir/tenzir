@@ -7,5 +7,5 @@ error: Splunk search ended without its last result
    = note: search: search index=main
            | stats count as tenzir_column_0, count(action) as tenzir_column_1, min(n) as tenzir_column_2, max(n) as tenzir_column_3 by user
            | appendpipe [stats count as tenzir_groups_0]
-   = note: the search may have failed in a stage that the operator took over
-   = hint: use `pushdown=false` to run the stages in Tenzir
+   = note: Splunk computes the stages that the operator took over with its own semantics
+   = hint: use `pushdown=false` to run them in Tenzir

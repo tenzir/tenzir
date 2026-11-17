@@ -85,15 +85,21 @@
 +              output: [
 +                "src_ip"
 +              ],
-+              input: [
-+                "src_ip"
++              args: [
++                root_field {
++                  id: `src_ip` @ [1]:185..191 from 0,
++                  has_question_mark: false
++                }
 +              ]
 +            },
 +            {
 +              output: [
 +                "events"
 +              ],
-+              function: "count"
++              function: "count",
++              args: [
++                
++              ]
 +            }
 +          ],
 +          schema_name: "tenzir.summarize"

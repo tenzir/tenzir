@@ -88,7 +88,6 @@
 -                {
 -                  id: `events` @ [1]:199..205 from 0,
 -                  has_question_mark: false
--                }
 +      plan: [
 +        Aggregate {
 +          columns: [
@@ -96,9 +95,16 @@
 +              output: [
 +                "kind"
 +              ],
-+              input: [
-+                "event",
-+                "type"
++              args: [
++                field_access {
++                  left: root_field {
++                    id: `event` @ [1]:172..177 from 0,
++                    has_question_mark: false
++                  },
++                  has_question_mark: false,
++                  name: `type` @ [1]:178..182 from 0,
++                  location: [1]:172..182 from 0
+                 }
                ]
              },
 -            call: {
@@ -108,15 +114,33 @@
 -                ],
 -                ref: std::count/fn
 -              },
--              args: [
--                
 +            {
 +              output: [
 +                "events"
-               ],
++              ],
++              function: "count",
+               args: [
+                 
+-              ],
 -              method: false,
 -              location: [1]:206..213 from 0
-+              function: "count"
+-            }
+-          }
+-        ],
+-        groups: [
+-          {
+-            expr: {
+-              expr: root_field {
+-                id: `kind` @ [1]:193..197 from 0,
+-                has_question_mark: false
+-              },
+-              has_this: false,
+-              path: [
+-                {
+-                  id: `kind` @ [1]:193..197 from 0,
+-                  has_question_mark: false
+-                }
+               ]
              }
 -          }
 +          ],
@@ -137,23 +161,6 @@
 +        args: [
 +          
          ],
--        groups: [
--          {
--            expr: {
--              expr: root_field {
--                id: `kind` @ [1]:193..197 from 0,
--                has_question_mark: false
--              },
--              has_this: false,
--              path: [
--                {
--                  id: `kind` @ [1]:193..197 from 0,
--                  has_question_mark: false
--                }
--              ]
--            }
--          }
--        ],
 -        indices: [
 -          -1,
 -          0

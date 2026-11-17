@@ -1,0 +1,30 @@
+---
+fixtures:
+  - azure_log_analytics:
+      case: "bad-query"
+timeout: 60
+error: true
+assertions:
+  fixtures:
+    azure_log_analytics:
+      queries: 1
+      tokens: 1
+      appended: "\n| project ['Missing'] = column_ifexists('Missing', dynamic(null))"
+---
+
+// With `pushdown=false`, the query only projects the fields that downstream
+// reads. When the service rejects it, the error does not suggest
+// `pushdown=false`, since the query carries no stages.
+from_azure_log_analytics env("AZLOG_QUERY"),
+  workspace_id=env("AZLOG_WORKSPACE"),
+  azure_auth={
+    tenant_id: "fixture-tenant",
+    client_id: "fixture-client",
+    client_secret: "fixture-secret",
+    authority: env("AZLOG_AUTHORITY"),
+  },
+  _base_url=env("AZLOG_URL"),
+  tls=false,
+  pushdown=false
+where Missing == 1
+select Missing

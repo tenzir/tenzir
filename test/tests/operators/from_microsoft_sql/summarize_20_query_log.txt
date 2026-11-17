@@ -1,4 +1,7 @@
 {
+  query: "SELECT * FROM (SELECT DATE_BUCKET(second, 86400, CAST(SWITCHOFFSET(CAST([ts] AS datetimeoffset(7)), '+00:00') AS datetime2(7)), CAST('1970-01-01' AS datetime2(7))) AS [__tenzir_column_0], COUNT_BIG(*) AS [__tenzir_column_1] FROM (SELECT [ts] FROM [agg]) AS [__tenzir_table] GROUP BY DATE_BUCKET(second, 86400, CAST(SWITCHOFFSET(CAST([ts] AS datetimeoffset(7)), '+00:00') AS datetime2(7)), CAST('1970-01-01' AS datetime2(7)))) AS [__tenzir_level_2] ORDER BY [__tenzir_column_0] ASC",
+}
+{
   query: "SELECT * FROM (SELECT [s] AS [__tenzir_column_0], COUNT_BIG(*) AS [__tenzir_column_1], MAX([s]) AS [__tenzir_column_2], MAX([id]) AS [__tenzir_column_3] FROM (SELECT [id], [s] FROM [agg]) AS [__tenzir_table] GROUP BY [s]) AS [__tenzir_level_4] ORDER BY [__tenzir_column_0] ASC",
 }
 {
@@ -6,6 +9,9 @@
 }
 {
   query: "SELECT COUNT_BIG(*) AS [__tenzir_column_0], MIN([n]) AS [__tenzir_column_1] FROM (SELECT [n], [id] FROM [agg]) AS [__tenzir_table] WHERE ([id] > 100)",
+}
+{
+  query: "SELECT COUNT_BIG(CASE WHEN (([n] IS NOT NULL) AND ([n] > 0)) THEN [n] END) AS [__tenzir_column_0], COUNT_BIG(DISTINCT [n]) AS [__tenzir_column_1], SUM([id]) AS [__tenzir_column_2], AVG(CAST([id] AS float)) AS [__tenzir_column_3] FROM (SELECT [n], [id] FROM [agg]) AS [__tenzir_table]",
 }
 {
   query: "SELECT [f], [ts], [n], [id], [s] FROM [agg]",

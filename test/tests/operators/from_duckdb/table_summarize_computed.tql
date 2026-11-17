@@ -1,0 +1,5 @@
+// DuckDB computes the value that the summary reads together with the summary.
+from_duckdb env("DUCKDB_SEED"), table="events"
+double = id * 2
+summarize key=ok, top=max(double)
+sort key

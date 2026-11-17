@@ -54,16 +54,70 @@ auto ExpressionDialect::render_binary(ast::binary_expr const& x,
   return Option<std::string>{None{}};
 }
 
-auto ExpressionDialect::render_call(std::string_view name,
-                                    std::span<std::string const> args) const
-  -> Option<std::string> {
-  TENZIR_UNUSED(name, args);
-  return None{};
+auto ExpressionDialect::functions() const -> std::span<Function const> {
+  return {};
 }
 
-auto ExpressionDialect::call_is_predicate(std::string_view name) const -> bool {
-  TENZIR_UNUSED(name);
-  return false;
+auto ExpressionDialect::aggregations() const -> std::span<Aggregation const> {
+  return {};
+}
+
+auto ExpressionDialect::render_call(ast::function_call const& call,
+                                    ExpressionRenderer const& renderer) const
+  -> Option<std::string> {
+  auto const* row
+    = find_row(functions(), call.fn.ref.segments().front(), call.args.size());
+  if (not row) {
+    return None{};
+  }
+  return renderer.spell(*row, call.args);
+}
+
+auto ExpressionDialect::time_literal_arithmetic() const -> bool {
+  return true;
+}
+
+auto spell(std::string_view spelling, std::span<ast::expression const> args,
+           folly::FunctionRef<auto(size_t, bool)->Option<std::string>> fill)
+  -> Option<std::string> {
+  auto result = std::string{};
+  while (not spelling.empty()) {
+    auto const open = spelling.find('{');
+    result += spelling.substr(0, open);
+    if (open == std::string_view::npos) {
+      break;
+    }
+    auto const close = spelling.find('}', open);
+    TENZIR_ASSERT(close != std::string_view::npos);
+    auto hole = spelling.substr(open + 1, close - open - 1);
+    auto const index = static_cast<size_t>(hole.front() - '0');
+    TENZIR_ASSERT(index < args.size());
+    auto const unit = hole.substr(hole.find(':') + 1);
+    if (hole.size() < 2 or unit == "pred") {
+      TRY(auto text, fill(index, hole.size() >= 2));
+      result += text;
+    } else {
+      // A count of a unit, from a constant duration that is a whole, positive
+      // multiple of it. TQL aligns multiples of weeks and months to the
+      // calendar, so they have no count.
+      auto const* constant = try_as<ast::constant>(args[index]);
+      auto const* width
+        = constant ? try_as<duration>(constant->value) : nullptr;
+      auto const ticks = unit == "s"    ? duration{std::chrono::seconds{1}}
+                         : unit == "ms" ? duration{std::chrono::milliseconds{1}}
+                         : unit == "us" ? duration{std::chrono::microseconds{1}}
+                                        : duration{1};
+      using std::chrono::months, std::chrono::weeks;
+      if (not width or *width <= duration::zero()
+          or *width % ticks != duration{} or *width % weeks{1} == duration{}
+          or *width % months{1} == duration{}) {
+        return None{};
+      }
+      result += fmt::to_string(*width / ticks);
+    }
+    spelling.remove_prefix(close + 1);
+  }
+  return result;
 }
 
 ExpressionRenderer::ExpressionRenderer(ExpressionDialect const& dialect,
@@ -201,6 +255,11 @@ auto is_null(ast::expression const& expr) -> bool {
   return constant and is<caf::none_t>(constant->value);
 }
 
+auto is_time(ast::expression const& expr) -> bool {
+  auto const* constant = try_as<ast::constant>(expr);
+  return constant and is<time>(constant->value);
+}
+
 } // namespace
 
 auto ExpressionRenderer::binary(ast::binary_expr const& x) const
@@ -243,6 +302,10 @@ auto ExpressionRenderer::binary(ast::binary_expr const& x) const
     case sub:
     case mul:
     case div:
+      if (not dialect_->time_literal_arithmetic()
+          and (is_time(x.left) or is_time(x.right))) {
+        return None{};
+      }
       return spell(false, false);
     case and_:
     case or_:
@@ -267,18 +330,11 @@ auto ExpressionRenderer::call(ast::function_call const& x) const
       or ref.segments().size() != 1) {
     return None{};
   }
-  auto args = std::vector<std::string>{};
-  for (auto const& arg : x.args) {
-    // Named arguments are assignments, which no dialect spells.
-    if (is<ast::assignment>(arg)) {
-      return None{};
-    }
-    TRY(auto rendered, value(arg));
-    args.push_back(std::move(rendered));
-  }
-  auto const& name = ref.segments().front();
-  TRY(auto text, dialect_->render_call(name, args));
-  return Fragment{std::move(text), dialect_->call_is_predicate(name)};
+  // Named arguments are assignments, which have no spelling as a value.
+  TRY(auto text, dialect_->render_call(x, *this));
+  auto const* row
+    = find_row(dialect_->functions(), ref.segments().front(), x.args.size());
+  return Fragment{std::move(text), row and row->predicate};
 }
 
 auto ExpressionRenderer::render(ast::expression const& expr) const
@@ -290,6 +346,9 @@ auto ExpressionRenderer::render(ast::expression const& expr) const
     return binary(*x);
   }
   if (auto const* x = try_as<ast::unary_expr>(expr)) {
+    if (is_time(x->expr) and not dialect_->time_literal_arithmetic()) {
+      return None{};
+    }
     if (x->op == ast::unary_op::not_) {
       TRY(auto operand, predicate(x->expr));
       TRY(auto text, dialect_->render_not(operand));

@@ -12,7 +12,8 @@
 #include "tenzir/option.hpp"
 #include "tenzir/pushdown/layout.hpp"
 #include "tenzir/pushdown/pipe_plan.hpp"
-#include "tenzir/pushdown/plan.hpp"
+#include "tenzir/pushdown/planner.hpp"
+#include "tenzir/pushdown/redact.hpp"
 
 #include <cstdint>
 #include <span>
@@ -102,11 +103,6 @@ struct SplSource {
   std::vector<std::string> indexes;
 };
 
-/// Returns why `from_splunk` takes over no stage after `source`, or `None` if
-/// it may. A user's search must accept stages after it and must not format
-/// its values.
-auto spl_declines(SplSource const& source) -> Option<std::string>;
-
 /// The search that `from_splunk` sends, and how its results become events.
 struct SplQuery {
   /// The search to send.
@@ -120,28 +116,26 @@ struct SplQuery {
   /// search ends with one. A search that fails in `eval` or `stats` returns
   /// no results and no error, so the row proves that the search ran.
   Option<std::string> sentinel;
-  /// The result fields that hold counts, which decode as integers also
-  /// without type inference.
-  std::vector<std::string> counts;
   /// The time window of the events that pass the leading filters, for the
   /// time bounds of the request. Only searches for indexes have one.
   TimeWindow window;
 };
 
-/// Spells the search that reads `source` and computes `stages` after it, or
-/// returns `None` if Splunk does not spell some stage. Without stages that
-/// enumerate their output, the search ends with `fields`, which keeps the
-/// top-level fields of `projection`, or every field without one, since
-/// Splunk's export endpoint returns only the fields that a search references.
-/// A search with an aggregation ends with the sentinel row.
+/// Returns the planner of the search that reads `source` and computes the
+/// stages after it, with the `projection` that downstream needs, if the
+/// operator knows it. It takes over no stage if `gate` says why, or if a user's
+/// search does not accept stages after it or may format its values, and no
+/// limit that could cut the side effects of a user's search short.
 ///
-/// A user's search that `spl_declines` rejects takes no stages, and a user's
-/// search that gets none goes out unchanged if it does not accept them. A
-/// limit needs a search that `spl_stages` finds limitable.
-auto plan_spl_query(SplSource const& source,
-                    std::span<ir::QueryStage const> stages,
-                    Option<ir::OptimizeProjection> const& projection)
-  -> Option<SplQuery>;
+/// Without stages that enumerate their output, the search ends with `fields`,
+/// which keeps the top-level fields of the projection, or every field without
+/// one, since Splunk's export endpoint returns only the fields that a search
+/// references. A search with an aggregation ends with the sentinel row. A
+/// user's search that gets no stages goes out unchanged if it does not accept
+/// them.
+auto spl_planner(SplSource source, Option<std::string> gate,
+                 Option<ir::OptimizeProjection> projection)
+  -> Planner<SplQuery>;
 
 /// Parses a count that Splunk renders as decimal digits.
 auto parse_spl_count(std::string_view text) -> Option<int64_t>;

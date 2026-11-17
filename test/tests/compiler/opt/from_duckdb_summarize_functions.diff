@@ -1,0 +1,293 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "from_duckdb",
+       store: {
+         op: {
+           path: [
+             `from_duckdb` @ [1]:151..162 from 0
+           ],
+           ref: std::from_duckdb/op
+         },
+         args: [
+           located "events.duckdb" @ [1]:163..178 from 0
+         ],
+         named_args: [
+           {
+             index: 2,
+             value: located "events" @ [1]:186..194 from 0
+           }
+         ]
+       },
+       filter: [
+         
+       ],
+-      order: "ordered"
+-    },
+-    summarize {
+-      self: [1]:195..204 from 0,
+-      cfg: {
+-        aggregates: [
+-          {
+-            dest: {
+-              expr: root_field {
+-                id: `bad` @ [1]:213..216 from 0,
+-                has_question_mark: false
+-              },
+-              has_this: false,
+-              path: [
+-                {
+-                  id: `bad` @ [1]:213..216 from 0,
++      order: "ordered",
++      projection: [
++        {
++          expr: root_field {
++            id: `src_ip` @ [1]:205..211 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `src_ip` @ [1]:205..211 from 0,
++              has_question_mark: false
++            }
++          ]
++        },
++        {
++          expr: root_field {
++            id: `severity` @ [1]:226..234 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `severity` @ [1]:226..234 from 0,
++              has_question_mark: false
++            }
++          ]
++        },
++        {
++          expr: root_field {
++            id: `s` @ [1]:241..242 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `s` @ [1]:241..242 from 0,
++              has_question_mark: false
++            }
++          ]
++        },
++        {
++          expr: root_field {
++            id: `port` @ [1]:270..274 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `port` @ [1]:270..274 from 0,
++              has_question_mark: false
++            }
++          ]
++        }
++      ],
++      plan: [
++        Aggregate {
++          columns: [
++            {
++              output: [
++                "src_ip"
++              ],
++              args: [
++                root_field {
++                  id: `src_ip` @ [1]:205..211 from 0,
+                   has_question_mark: false
+                 }
+               ]
+             },
+-            call: {
+-              fn: {
+-                path: [
+-                  `count_if` @ [1]:217..225 from 0
+-                ],
+-                ref: std::count_if/fn
+-              },
++            {
++              output: [
++                "bad"
++              ],
++              function: "count_if",
+               args: [
+                 root_field {
+                   id: `severity` @ [1]:226..234 from 0,
+                   has_question_mark: false
+                 },
+-                lambda_expr {
+-                  params: [
+-                    `s` @ [1]:236..237 from 0
+-                  ],
+-                  body: binary_expr {
++                binary_expr {
++                  left: binary_expr {
+                     left: root_field {
+-                      id: `s` @ [1]:241..242 from 0,
++                      id: `severity` @ [1]:226..234 from 0,
++                      has_question_mark: false
++                    },
++                    op: "neq",
++                    right: constant none_t {} @ [0]:0..0 from 0,
++                    location: [1]:226..234 from 0
++                  },
++                  op: "and_",
++                  right: binary_expr {
++                    left: root_field {
++                      id: `severity` @ [1]:226..234 from 0,
+                       has_question_mark: false
+                     },
+                     op: "gt",
+                     right: constant int64 3 @ [1]:245..246 from 0,
+                     location: [1]:241..246 from 0
+                   },
+-                  location: [1]:236..246 from 0
+-                }
+-              ],
+-              method: false,
+-              location: [1]:217..247 from 0
+-            }
+-          },
+-          {
+-            dest: {
+-              expr: root_field {
+-                id: `ports` @ [1]:249..254 from 0,
+-                has_question_mark: false
+-              },
+-              has_this: false,
+-              path: [
+-                {
+-                  id: `ports` @ [1]:249..254 from 0,
+-                  has_question_mark: false
++                  location: [1]:226..246 from 0
+                 }
+               ]
+             },
+-            call: {
+-              fn: {
+-                path: [
+-                  `count_distinct` @ [1]:255..269 from 0
+-                ],
+-                ref: std::count_distinct/fn
+-              },
++            {
++              output: [
++                "ports"
++              ],
++              function: "count_distinct",
+               args: [
+                 root_field {
+                   id: `port` @ [1]:270..274 from 0,
+                   has_question_mark: false
+                 }
+-              ],
+-              method: false,
+-              location: [1]:255..275 from 0
+-            }
+-          },
+-          {
+-            dest: {
+-              expr: root_field {
+-                id: `avg` @ [1]:277..280 from 0,
+-                has_question_mark: false
+-              },
+-              has_this: false,
+-              path: [
+-                {
+-                  id: `avg` @ [1]:277..280 from 0,
+-                  has_question_mark: false
+-                }
+               ]
+             },
+-            call: {
+-              fn: {
+-                path: [
+-                  `mean` @ [1]:281..285 from 0
+-                ],
+-                ref: std::mean/fn
+-              },
++            {
++              output: [
++                "avg"
++              ],
++              function: "mean",
+               args: [
+                 root_field {
+                   id: `severity` @ [1]:286..294 from 0,
+                   has_question_mark: false
+                 }
+-              ],
+-              method: false,
+-              location: [1]:281..295 from 0
+-            }
+-          }
+-        ],
+-        groups: [
+-          {
+-            expr: {
+-              expr: root_field {
+-                id: `src_ip` @ [1]:205..211 from 0,
+-                has_question_mark: false
+-              },
+-              has_this: false,
+-              path: [
+-                {
+-                  id: `src_ip` @ [1]:205..211 from 0,
+-                  has_question_mark: false
+-                }
+               ]
+             }
+-          }
++          ],
++          schema_name: "tenzir.summarize"
++        }
++      ],
++      declined: "`to_stdout` is no stage"
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:295..295 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
+         ],
+-        indices: [
+-          -1,
+-          0,
+-          1,
+-          2
+-        ],
+-        emission: "final",
+-        mode: "reset",
+-        output: "summary",
+-        emit_every: 1
+-      }
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ],
+   definition_location: [1]:151..295 from 0
+ }

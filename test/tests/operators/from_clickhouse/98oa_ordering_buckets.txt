@@ -1,0 +1,16 @@
+{
+  bucket: 2026-01-01T00:00:00Z,
+  rows: 2,
+}
+{
+  bucket: 2026-01-03T00:00:00Z,
+  rows: 2,
+}
+{
+  bucket: 2026-01-05T00:00:00Z,
+  rows: 2,
+}
+{
+  bucket: null,
+  rows: 1,
+}

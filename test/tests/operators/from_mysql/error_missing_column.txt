@@ -1,0 +1,3 @@
+error: MySQL error 1054: Unknown column 'missing' in 'where clause'
+  = note: MySQL computes the stages that the operator took over with its own semantics
+  = hint: use `pushdown=false` to run them in Tenzir

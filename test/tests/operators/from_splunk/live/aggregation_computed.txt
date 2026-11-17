@@ -1,0 +1,8 @@
+{
+  kind: "LOGIN",
+  events: 2,
+}
+{
+  kind: "LOGOUT",
+  events: 1,
+}

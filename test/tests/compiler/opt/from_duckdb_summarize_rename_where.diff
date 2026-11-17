@@ -101,6 +101,26 @@
 -          op: "geq",
 -          right: constant int64 3 @ [1]:238..239 from 0,
 -          location: [1]:229..239 from 0
+-        }
+-      ],
+-      named_args: [
+-        
+-      ]
+-    },
+-    summarize {
+-      self: [1]:240..249 from 0,
+-      cfg: {
+-        aggregates: [
+-          {
+-            dest: {
+-              expr: root_field {
+-                id: `events` @ [1]:254..260 from 0,
+-                has_question_mark: false
+-              },
+-              has_this: false,
+-              path: [
+-                {
+-                  id: `events` @ [1]:254..260 from 0,
 +      plan: [
 +        Filter {
 +          predicate: binary_expr {
@@ -119,61 +139,13 @@
 +              output: [
 +                "ip"
 +              ],
-+              input: [
-+                "src_ip"
-+              ]
-+            },
-+            {
-+              output: [
-+                "events"
-+              ],
-+              function: "count"
-+            }
-+          ],
-+          schema_name: "tenzir.summarize"
-         }
-       ],
--      named_args: [
-+      declined: "`to_stdout` is no stage"
-+    },
-+    GenericIr {
-+      desc: "to_stdout",
-+      store: {
-+        op: {
-+          path: [
-+            `to_stdout` @ [1]:268..268 from 0
-+          ],
-+          ref: std::to_stdout/op
-+        },
-+        args: [
-+          
-+        ],
-+        named_args: [
-+          
-+        ]
-+      },
-+      filter: [
-         
--      ]
--    },
--    summarize {
--      self: [1]:240..249 from 0,
--      cfg: {
--        aggregates: [
--          {
--            dest: {
--              expr: root_field {
--                id: `events` @ [1]:254..260 from 0,
--                has_question_mark: false
--              },
--              has_this: false,
--              path: [
--                {
--                  id: `events` @ [1]:254..260 from 0,
--                  has_question_mark: false
--                }
--              ]
--            },
++              args: [
++                root_field {
++                  id: `src_ip` @ [1]:200..206 from 0,
+                   has_question_mark: false
+                 }
+               ]
+             },
 -            call: {
 -              fn: {
 -                path: [
@@ -181,8 +153,13 @@
 -                ],
 -                ref: std::count/fn
 -              },
--              args: [
--                
++            {
++              output: [
++                "events"
++              ],
++              function: "count",
+               args: [
+                 
 -              ],
 -              method: false,
 -              location: [1]:261..268 from 0
@@ -202,10 +179,27 @@
 -                  id: `ip` @ [1]:250..252 from 0,
 -                  has_question_mark: false
 -                }
--              ]
--            }
+               ]
+             }
 -          }
--        ],
++          ],
++          schema_name: "tenzir.summarize"
++        }
++      ],
++      declined: "`to_stdout` is no stage"
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:268..268 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
+         ],
 -        indices: [
 -          -1,
 -          0
@@ -215,6 +209,12 @@
 -        output: "summary",
 -        emit_every: 1
 -      }
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
 +      ],
 +      order: "ordered"
      }

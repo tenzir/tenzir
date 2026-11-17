@@ -50,7 +50,7 @@ Database source operators should use this common query surface:
   `tracking_column` for that API.
 - In `table` mode, take over the stages that follow the operator through the
   stage contract (`ir::QueryStage`, `Describer::query_plan`, and
-  `pushdown::render_plan`), following `from_duckdb`. Absorbed stages leave the
+  `pushdown::render_sql`), following `from_duckdb`. Absorbed stages leave the
   pipeline and run with the backend's native semantics, which may differ from
   TQL for nulls, collations, `NaN`, and type coercion; document the
   differences on the operator's reference page. Accept the longest prefix that

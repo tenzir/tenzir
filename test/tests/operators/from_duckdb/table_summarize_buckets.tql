@@ -1,0 +1,6 @@
+// DuckDB buckets times by multiples of the width since the epoch, with the
+// result of the same operators in the pipeline.
+from_duckdb env("DUCKDB_SEED"), table="events"
+hour = floor(ts_ns, 7h)
+summarize hour, rows=count()
+sort hour

@@ -1,0 +1,8 @@
+---
+error: true
+---
+
+// DuckDB rejects the filter that it computes with its own semantics, which
+// cannot cast the string to the type of the column.
+from_duckdb env("DUCKDB_SEED"), table="keyed"
+where n == "many"

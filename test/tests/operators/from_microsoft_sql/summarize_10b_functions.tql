@@ -1,0 +1,10 @@
+// SQL Server counts conditionally and distinctly, sums, and averages, with the
+// result of the same operators in the pipeline. A mean of integers is no
+// integer.
+from_microsoft_sql table="agg",
+                   host=env("MSSQL_HOST"),
+                   port=int(env("MSSQL_PORT")),
+                   user=env("MSSQL_USER"),
+                   password=env("MSSQL_PASSWORD"),
+                   database=env("MSSQL_DATABASE")
+summarize big=count_if(n, v => v > 0), kinds=count_distinct(n), total=sum(id), avg=mean(id)

@@ -204,7 +204,7 @@ public:
           TENZIR_ASSERT(field);
           dropped.push_back(std::move(*field));
         }
-        return ir::rewrite_aggregate(std::move(aggregate),
+        return ir::rewrite_aggregate(std::move(aggregate), ctx.reg(),
                                      [&](ast::field_path const& field) {
                                        return resolve_dropped(dropped, field);
                                      });

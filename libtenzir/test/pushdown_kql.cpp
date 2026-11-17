@@ -31,6 +31,26 @@ namespace {
 
 using Path = std::vector<std::string>;
 
+/// The field at `path` as an expression.
+auto field_at(std::vector<std::string> const& path) -> ast::expression {
+  auto result = ast::expression{
+    ast::root_field{ast::identifier{path.front(), location::unknown}, false}};
+  for (auto i = size_t{1}; i < path.size(); ++i) {
+    result = ast::field_access{std::move(result), location::unknown, false,
+                               ast::identifier{path[i], location::unknown}};
+  }
+  return result;
+}
+
+/// The arguments of a column that reads `input`, if any.
+auto args_of(Option<std::vector<std::string>> const& input)
+  -> std::vector<ast::expression> {
+  if (not input) {
+    return {};
+  }
+  return {field_at(*input)};
+}
+
 auto parse(std::string_view source) -> ast::expression {
   auto dh = collecting_diagnostic_handler{};
   auto provider = session_provider::make(dh, test::builtin_registry());
@@ -81,7 +101,8 @@ auto drop(std::vector<Path> fields) -> ir::QueryStage {
 
 auto key(Path input, Option<Path> output = None{}) -> ir::AggregateColumn {
   auto out = output ? std::move(*output) : input;
-  return {.output = std::move(out), .function = None{}, .input = input};
+  return {
+    .output = std::move(out), .function = None{}, .args = {field_at(input)}};
 }
 
 auto call(Path output, std::string function, Option<Path> input = None{})
@@ -89,7 +110,7 @@ auto call(Path output, std::string function, Option<Path> input = None{})
   return {
     .output = std::move(output),
     .function = std::move(function),
-    .input = std::move(input),
+    .args = args_of(input),
   };
 }
 
@@ -118,6 +139,20 @@ auto limit(uint64_t count) -> ir::QueryStage {
 
 /// The text that a source appends to the query `T` for `stages`, or `"-"` if
 /// KQL does not spell them.
+/// The query that runs `query` and computes `stages`, or `None` if KQL does
+/// not spell them.
+auto plan_kql_query(std::string_view query,
+                    std::span<ir::QueryStage const> stages,
+                    Option<ir::OptimizeProjection> const& projection)
+  -> Option<KqlQuery> {
+  auto planned
+    = kql_planner("KQL", std::string{query}, projection).plan(stages, nullptr);
+  if (not planned) {
+    return None{};
+  }
+  return std::move(planned).unwrap();
+}
+
 auto kql(std::vector<ir::QueryStage> stages,
          Option<std::vector<std::string_view>> projection = None{})
   -> std::string {
@@ -345,6 +380,20 @@ TEST("kql spells summaries with summarize") {
                                                                       "t")})}),
               "\n| summarize ['__tenzir_column_1'] = count() by "
               "['__tenzir_column_0']");
+  // `extend` computes keys and arguments.
+  CHECK_EQUAL(
+    kql({aggregate(
+      {{.output = {"k"}, .function = None{}, .args = {parse("x.to_lower()")}},
+       {.output = {"m"}, .function = "max", .args = {parse("y * 2")}}})}),
+    "\n| extend ['__tenzir_column_0'] = tolower(['x']), "
+    "['__tenzir_column_1'] = (['y'] * 2)\n| summarize "
+    "['__tenzir_column_2'] = max(['__tenzir_column_1']) by "
+    "['__tenzir_column_0']");
+  // `countif` counts the rows for which the predicate holds.
+  CHECK_EQUAL(kql({aggregate({{.output = {"n"},
+                               .function = "count_if",
+                               .args = {field_at({"x"}), parse("x > 1")}}})}),
+              "\n| summarize ['__tenzir_column_0'] = countif((['x'] > 1))");
   // `avg` yields `NaN` for no values, and other functions have no spelling.
   CHECK_EQUAL(kql({aggregate({call({"m"}, "mean", Path{"x"})})}), "-");
   CHECK_EQUAL(kql({aggregate({call({"m"}, "count_distinct", Path{"x"})})}),
@@ -400,7 +449,10 @@ TEST("kql appends at most a bounded number of bytes") {
   }
   auto const large = fmt::format("x in [{}]", fmt::join(values, ", "));
   CHECK_EQUAL(kql({filter(large)}), "-");
-  CHECK(not plan_kql_query("T", std::vector{filter(large)}, None{}));
+  CHECK_EQUAL(kql_planner("KQL", "T", None{})
+                .plan(std::vector{filter(large)}, nullptr)
+                .unwrap_err(),
+              "the stages would grow the query by more than 16384 bytes");
   // One that fits still goes out.
   auto const small
     = fmt::format("x in [{}]", fmt::join(std::span{values}.first(10), ", "));
@@ -506,12 +558,9 @@ TEST("kql appends stages only to queries that accept them") {
 TEST("kql sources take over the longest prefix that KQL spells") {
   auto const absorb
     = [](std::string_view query, std::vector<ir::QueryStage> stages) {
-        return absorb_prefix(
+        return pushdown::absorb(
           ir::QueryChain{.stages = std::move(stages), .end = ""},
-          [&](std::span<ir::QueryStage const> prefix) {
-            return plan_kql_query(query, prefix, None{}).is_some();
-          },
-          {.target = "Defender", .filters_only = false, .veto = {}});
+          kql_planner("Defender", std::string{query}, None{}));
       };
   auto all = absorb("T", {filter("x > 1"),
                           aggregate({key({"k"}), call({"n"}, "count")}),

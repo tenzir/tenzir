@@ -203,45 +203,32 @@ auto ir::split_filter_by_substitution(OptimizeFilter filter,
   return result;
 }
 
-auto ir::rewrite_aggregate(QueryStage::Aggregate aggregate,
-                           ast::FieldSubstitution const& fields)
+auto ir::rewrite_aggregate(QueryStage::Aggregate aggregate, registry const& reg,
+                           ast::FieldSubstitution const& fields,
+                           ast::MetaSubstitution const& meta)
   -> Option<QueryStage::Aggregate> {
   for (auto& column : aggregate.columns) {
-    if (not column.input) {
-      continue;
+    for (auto& arg : column.args) {
+      TRY(arg, ast::substitute_refs(arg, reg, fields, meta));
     }
-    auto const& input = *column.input;
-    TENZIR_ASSERT(not input.empty());
-    auto expr = ast::expression{ast::root_field{
-      ast::identifier{input.front(), location::unknown},
-      false,
-    }};
-    for (auto const& name : std::span{input}.subspan(1)) {
-      expr = ast::expression{ast::field_access{
-        std::move(expr),
-        location::unknown,
-        false,
-        ast::identifier{name, location::unknown},
-      }};
-    }
-    auto field = ast::field_path::try_from(std::move(expr));
-    TENZIR_ASSERT(field);
-    TRY(auto resolved, fields(*field));
-    TRY(auto path, ast::field_path::try_from(std::move(resolved)));
-    if (path.has_this() or path.path().empty()) {
-      return None{};
-    }
-    auto segments = std::vector<std::string>{};
-    segments.reserve(path.path().size());
-    for (auto const& segment : path.path()) {
-      if (segment.has_question_mark) {
-        return None{};
-      }
-      segments.push_back(segment.id.name);
-    }
-    column.input = std::move(segments);
   }
   return aggregate;
+}
+
+auto ir::field_segments(ast::expression const& expr)
+  -> Option<std::vector<std::string>> {
+  TRY(auto path, ast::field_path::try_from(expr));
+  if (path.path().empty()) {
+    return None{};
+  }
+  auto result = std::vector<std::string>{};
+  for (auto const& segment : path.path()) {
+    if (segment.has_question_mark) {
+      return None{};
+    }
+    result.push_back(segment.id.name);
+  }
+  return result;
 }
 
 auto ir::is_field_path_prefix(const ast::field_path& prefix,
@@ -845,6 +832,12 @@ auto ir::substitute(QueryPlan& plan, substitute_ctx ctx) -> failure_or<void> {
   for (auto& stage : plan) {
     if (auto* filter = try_as<QueryStage::Filter>(stage.kind)) {
       TRY(filter->predicate.substitute(ctx));
+    } else if (auto* aggregate = try_as<QueryStage::Aggregate>(stage.kind)) {
+      for (auto& column : aggregate->columns) {
+        for (auto& arg : column.args) {
+          TRY(arg.substitute(ctx));
+        }
+      }
     }
   }
   return {};

@@ -110,8 +110,6 @@
 -              path: [
 -                {
 -                  id: `events` @ [1]:202..208 from 0,
--                  has_question_mark: false
--                }
 +      plan: [
 +        Aggregate {
 +          columns: [
@@ -119,8 +117,11 @@
 +              output: [
 +                "src_ip"
 +              ],
-+              input: [
-+                "src_ip"
++              args: [
++                root_field {
++                  id: `src_ip` @ [1]:163..169 from 0,
+                   has_question_mark: false
+                 }
                ]
              },
 -            call: {
@@ -130,12 +131,14 @@
 -                ],
 -                ref: std::count/fn
 -              },
--              args: [
--                
 +            {
 +              output: [
 +                "events"
-               ],
++              ],
++              function: "count",
+               args: [
+                 
+-              ],
 -              method: false,
 -              location: [1]:209..216 from 0
 -            }
@@ -152,8 +155,7 @@
 -                  id: `worst` @ [1]:218..223 from 0,
 -                  has_question_mark: false
 -                }
--              ]
-+              function: "count"
+               ]
              },
 -            call: {
 -              fn: {
@@ -162,15 +164,17 @@
 -                ],
 -                ref: std::max/fn
 -              },
--              args: [
--                root_field {
--                  id: `severity` @ [1]:228..236 from 0,
--                  has_question_mark: false
--                }
 +            {
 +              output: [
 +                "worst"
-               ],
++              ],
++              function: "max",
+               args: [
+                 root_field {
+-                  id: `severity` @ [1]:228..236 from 0,
+-                  has_question_mark: false
+-                }
+-              ],
 -              method: false,
 -              location: [1]:224..237 from 0
 -            }
@@ -187,11 +191,9 @@
 -              path: [
 -                {
 -                  id: `src_ip` @ [1]:194..200 from 0,
--                  has_question_mark: false
--                }
-+              function: "max",
-+              input: [
-+                "severity"
++                  id: `severity` @ [1]:171..179 from 0,
+                   has_question_mark: false
+                 }
                ]
              }
 -          }

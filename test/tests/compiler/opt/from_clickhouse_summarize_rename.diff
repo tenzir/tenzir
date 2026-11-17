@@ -82,8 +82,6 @@
 -              path: [
 -                {
 -                  id: `events` @ [1]:140..146 from 0,
--                  has_question_mark: false
--                }
 +      plan: [
 +        Aggregate {
 +          columns: [
@@ -91,8 +89,11 @@
 +              output: [
 +                "ip"
 +              ],
-+              input: [
-+                "src_ip"
++              args: [
++                root_field {
++                  id: `src_ip` @ [1]:119..125 from 0,
+                   has_question_mark: false
+                 }
                ]
              },
 -            call: {
@@ -102,12 +103,14 @@
 -                ],
 -                ref: std::count/fn
 -              },
--              args: [
--                
 +            {
 +              output: [
 +                "events"
-               ],
++              ],
++              function: "count",
+               args: [
+                 
+-              ],
 -              method: false,
 -              location: [1]:147..154 from 0
 -            }
@@ -133,8 +136,7 @@
 -                  id: `seen` @ [1]:162..166 from 0,
 -                  has_question_mark: false
 -                }
--              ]
-+              function: "count"
+               ]
              },
 -            call: {
 -              fn: {
@@ -143,16 +145,18 @@
 -                ],
 -                ref: std::min/fn
 -              },
--              args: [
--                root_field {
--                  id: `ts` @ [1]:171..173 from 0,
--                  has_question_mark: false
--                }
 +            {
 +              output: [
 +                "first",
 +                "seen"
-               ],
++              ],
++              function: "min",
+               args: [
+                 root_field {
+                   id: `ts` @ [1]:171..173 from 0,
+                   has_question_mark: false
+                 }
+-              ],
 -              method: false,
 -              location: [1]:167..174 from 0
 -            }
@@ -171,9 +175,6 @@
 -                  id: `ip` @ [1]:136..138 from 0,
 -                  has_question_mark: false
 -                }
-+              function: "min",
-+              input: [
-+                "ts"
                ]
              }
 -          }

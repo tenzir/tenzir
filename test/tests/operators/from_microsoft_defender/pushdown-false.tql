@@ -4,11 +4,11 @@ timeout: 60
 assertions:
   fixtures:
     microsoft_defender:
-      appended: ""
+      appended: "\n| project ['Id'] = column_ifexists('Id', dynamic(null)), ['DeviceName'] = column_ifexists('DeviceName', dynamic(null))"
 ---
 
-// With `pushdown=false`, the query goes out unchanged and the stages run in
-// Tenzir, with the semantics of TQL.
+// With `pushdown=false`, the stages run in Tenzir, with the semantics of TQL.
+// The query only keeps the fields that they read.
 from_microsoft_defender "pushdown",
   azure_auth={
     tenant_id: env("DEFENDER_TENANT"),

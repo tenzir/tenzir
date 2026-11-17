@@ -200,22 +200,13 @@ auto epoch_seconds(time value) -> std::string {
   return fmt::format("{}{}.{}", sign, seconds, digits);
 }
 
-/// Returns the single segment of the field path `expr` without `?`.
-auto top_level_field(ast::expression const& expr) -> Option<std::string> {
-  TRY(auto path, ast::field_path::try_from(expr));
-  if (path.path().size() != 1 or path.path().front().has_question_mark) {
-    return None{};
-  }
-  return std::string{path.path().front().id.name};
-}
-
-/// Spells a field for a term of `search`.
+/// Spells a top-level field for a term of `search`.
 auto term_field(ast::expression const& expr) -> Option<std::string> {
-  TRY(auto name, top_level_field(expr));
-  if (is_search_modifier(name)) {
+  TRY(auto path, ir::field_segments(expr));
+  if (path.size() != 1 or is_search_modifier(path.front())) {
     return None{};
   }
-  return quote_field(name);
+  return quote_field(path.front());
 }
 
 /// Returns the value of a constant, also of a negated number, which the
@@ -543,46 +534,37 @@ public:
     return fmt::format("in({}, {})", operand, fmt::join(elements, ", "));
   }
 
-  auto
-  render_call(std::string_view name, std::span<std::string const> args) const
-    -> Option<std::string> override {
-    if (args.size() == 2) {
-      auto const& x = args[0];
-      auto const& y = args[1];
-      if (name == "starts_with") {
-        return fmt::format("(substr({0}, 1, len({1}))=={1})", x, y);
-      }
-      // Unlike `substr(x, -len(y))`, this also holds for an empty `y`.
-      if (name == "ends_with") {
-        return fmt::format("(substr({0}, len({0})-len({1})+1)=={1})", x, y);
-      }
-      if (name == "match_regex") {
-        return fmt::format("match({}, {})", x, y);
-      }
-      return None{};
-    }
-    if (args.size() != 1) {
-      return None{};
-    }
-    struct Function {
-      std::string_view tql;
-      std::string_view spl;
+  /// Unlike `substr(x, -len(y))`, the spelling of `ends_with` also holds for
+  /// an empty `y`.
+  auto functions() const -> std::span<Function const> override {
+    static constexpr auto rows = std::array{
+      Function{"starts_with", 2, "(substr({0}, 1, len({1}))=={1})", true},
+      Function{"ends_with", 2, "(substr({0}, len({0})-len({1})+1)=={1})", true},
+      Function{"match_regex", 2, "match({0}, {1})", true},
+      Function{"to_lower", 1, "lower({0})"},
+      Function{"to_upper", 1, "upper({0})"},
+      Function{"trim", 1, "trim({0})"},
+      Function{"length_chars", 1, "len({0})"},
+      Function{"abs", 1, "abs({0})"},
     };
-    static constexpr auto functions = std::array{
-      Function{"to_lower", "lower"}, Function{"to_upper", "upper"},
-      Function{"trim", "trim"},      Function{"length_chars", "len"},
-      Function{"abs", "abs"},
-    };
-    auto it = std::ranges::find(functions, name, &Function::tql);
-    if (it == functions.end()) {
-      return None{};
-    }
-    return fmt::format("{}({})", it->spl, args.front());
+    return rows;
   }
 
-  auto call_is_predicate(std::string_view name) const -> bool override {
-    return name == "starts_with" or name == "ends_with"
-           or name == "match_regex";
+  /// Splunk returns every value as a string, so counts and sums decode as
+  /// numbers. `count(eval(...))` counts the events for which the predicate
+  /// holds, and `dc` counts exactly, unlike `estdc`.
+  auto aggregations() const -> std::span<Aggregation const> override {
+    static constexpr auto rows = std::array{
+      Aggregation{"count", 0, "count", Decode::integer},
+      Aggregation{"count", 1, "count({0})", Decode::integer},
+      Aggregation{"min", 1, "min({0})"},
+      Aggregation{"max", 1, "max({0})"},
+      Aggregation{"count_if", 2, "count(eval({1:pred}))", Decode::integer},
+      Aggregation{"count_distinct", 1, "dc({0})", Decode::integer},
+      Aggregation{"sum", 1, "sum({0})", Decode::number},
+      Aggregation{"mean", 1, "avg({0})", Decode::number},
+    };
+    return rows;
   }
 
   /// Fields hold strings, never booleans, and `where` needs a predicate.
@@ -631,22 +613,6 @@ public:
     -> Option<std::string> override {
     TRY(auto names, name_columns(columns));
     return fmt::format("\n| fields - {}", fmt::join(names, ", "));
-  }
-
-  auto render_aggregate(std::string_view function,
-                        Option<std::string_view> column) const
-    -> Option<std::string> override {
-    auto arg = Option<std::string>{};
-    if (column) {
-      TRY(arg, name_column(*column));
-    }
-    if (function == "count") {
-      return arg ? fmt::format("count({})", *arg) : std::string{"count"};
-    }
-    if (not arg or (function != "min" and function != "max")) {
-      return None{};
-    }
-    return fmt::format("{}({})", function, *arg);
   }
 
   /// `stats` names group keys after their fields, and renders a key that is
@@ -701,8 +667,8 @@ private:
     }
     auto assignments = std::vector<std::string>{};
     for (auto const& alias : aliases) {
-      TRY(auto input, bind_column(alias.input));
-      assignments.push_back(fmt::format("{}={}", alias.name, input));
+      TRY(auto value, alias_value(alias));
+      assignments.push_back(fmt::format("{}={}", alias.name, value));
     }
     return fmt::format("\n| eval {}", fmt::join(assignments, ", "));
   }
@@ -903,94 +869,96 @@ auto spl_index_search(std::span<std::string const> indexes)
   return fmt::format("search index IN ({})", fmt::join(values, ", "));
 }
 
-auto spl_declines(SplSource const& source) -> Option<std::string> {
-  if (not source.search) {
-    if (source.indexes.empty() or not spl_index_search(source.indexes)) {
-      return std::string{"an index name has no spelling in SPL"};
-    }
-    return None{};
-  }
-  auto stages = spl_stages(spl_search_command(*source.search));
-  if (not stages.accepted) {
-    return std::string{"the search does not end where stages may follow"};
-  }
-  if (stages.formatted) {
-    return std::string{"the search may format its values with `fieldformat` "
-                       "or a macro"};
-  }
-  return None{};
-}
-
-auto plan_spl_query(SplSource const& source,
-                    std::span<ir::QueryStage const> stages,
-                    Option<ir::OptimizeProjection> const& projection)
-  -> Option<SplQuery> {
-  auto const dialect = SplQueryDialect{};
+auto spl_planner(SplSource source, Option<std::string> gate,
+                 Option<ir::OptimizeProjection> projection)
+  -> Planner<SplQuery> {
+  // A user's search must accept stages after it and must not format its
+  // values, and a limit must not cut its side effects short. The gate of the
+  // caller comes first. Searches for indexes extend their base search.
   auto base = std::string{};
-  // Only Splunk's own `_time` holds epoch seconds, which a time literal
-  // compares with. A stage may make the field `_time` hold another field, as
-  // `select _time=event_time` does, after which a time literal has no
-  // spelling. So may any command of a user's search after the first one, as
-  // `| rename event* AS _*` does, so only a plain search keeps Splunk's own.
-  auto options = PipeOptions{
-    .extend_base = false,
-    .time_column = std::string{"_time"},
-    .native_time = true,
-    .narrow = false,
-  };
+  auto guard = SplStages{.accepted = true, .limitable = true, .plain = true};
   if (source.search) {
-    options.native_time = spl_stages(spl_search_command(*source.search)).plain;
     base = spl_search_command(*source.search);
-    auto guard = spl_stages(base);
-    if (not stages.empty()) {
-      if (spl_declines(source)) {
-        return None{};
-      }
-      auto const limits = std::ranges::any_of(stages, [](auto const& stage) {
-        return is<ir::QueryStage::Limit>(stage.kind);
-      });
-      if (limits and not guard.limitable) {
-        return None{};
-      }
-    } else if (not guard.accepted) {
-      // Nothing may follow the search, which then goes out as it is.
-      return SplQuery{
-        .search = std::move(base),
-        .generated = {},
-        .layout = {},
-        .sentinel = None{},
-        .counts = {},
-        .window = {},
-      };
+    guard = spl_stages(base);
+    if (not guard.accepted) {
+      gate = gate.value_or("the search does not end where stages may follow");
+    } else if (guard.formatted) {
+      gate = gate.value_or("the search may format its values with "
+                           "`fieldformat` or a macro");
     }
+  } else if (auto search = spl_index_search(source.indexes);
+             search and not source.indexes.empty()) {
+    base = std::move(*search);
   } else {
-    TRY(base, spl_index_search(source.indexes));
-    options.extend_base = true;
-    options.narrow = true;
+    gate = gate.value_or("an index name has no spelling in SPL");
   }
-  TRY(auto query, render_pipe(stages, dialect, options));
-  auto generated = std::string{};
-  for (auto const& term : query.base_terms) {
-    generated += ' ';
-    generated += term;
-  }
-  generated += query.stages;
-  if (not query.layout.fields) {
-    generated += fields_stage(projection);
-  }
-  auto sentinel = Option<std::string>{};
-  if (query.aggregates) {
-    sentinel = fresh_name(query, dialect, "groups");
-    generated += fmt::format("\n| appendpipe [stats count as {}]", *sentinel);
-  }
-  auto search = base + generated;
-  return SplQuery{
-    .search = search,
-    .generated = source.search ? std::move(generated) : std::move(search),
-    .layout = std::move(query.layout),
-    .sentinel = std::move(sentinel),
-    .counts = std::move(query.counts),
-    .window = query.window,
+  return {
+    .target = "Splunk",
+    .plan = [user = source.search.has_value(), base = std::move(base), guard,
+             gate = std::move(gate), projection = std::move(projection)](
+              std::span<ir::QueryStage const> stages,
+              std::monostate const*) -> Result<SplQuery, std::string> {
+      if (gate and not stages.empty()) {
+        return Err{*gate};
+      }
+      if (not guard.limitable
+          and std::ranges::any_of(stages, [](auto const& x) {
+                return is<ir::QueryStage::Limit>(x.kind);
+              })) {
+        return Err{std::string{"a `head` stage could cut the side effects of "
+                               "the search short"}};
+      }
+      if (stages.empty() and not guard.accepted) {
+        // Nothing may follow the search, which then goes out as it is.
+        return SplQuery{
+          .search = base,
+          .generated = {},
+          .layout = {},
+          .sentinel = None{},
+          .window = {},
+        };
+      }
+      // Only Splunk's own `_time` holds epoch seconds, which a time literal
+      // compares with. A stage may make the field `_time` hold another field,
+      // as `select _time=event_time` does, after which a time literal has no
+      // spelling. So may any command of a user's search after the first one,
+      // as `| rename event* AS _*` does, so only a plain search keeps
+      // Splunk's own.
+      auto const dialect = SplQueryDialect{};
+      auto query = render_pipe(stages, dialect,
+                               PipeOptions{
+                                 .extend_base = not user,
+                                 .time_column = std::string{"_time"},
+                                 .native_time = guard.plain,
+                                 .narrow = not user,
+                               });
+      if (not query) {
+        return Err{std::string{"Splunk cannot spell the stage"}};
+      }
+      auto generated = std::string{};
+      for (auto const& term : query->base_terms) {
+        generated += ' ';
+        generated += term;
+      }
+      generated += query->stages;
+      if (not query->layout.fields) {
+        generated += fields_stage(projection);
+      }
+      auto sentinel = Option<std::string>{};
+      if (query->aggregates) {
+        sentinel = fresh_name(*query, dialect, "groups");
+        generated
+          += fmt::format("\n| appendpipe [stats count as {}]", *sentinel);
+      }
+      auto search = base + generated;
+      return SplQuery{
+        .search = search,
+        .generated = user ? std::move(generated) : std::move(search),
+        .layout = std::move(query->layout),
+        .sentinel = std::move(sentinel),
+        .window = query->window,
+      };
+    },
   };
 }
 

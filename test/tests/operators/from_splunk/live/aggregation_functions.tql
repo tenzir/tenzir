@@ -1,0 +1,13 @@
+// Splunk counts conditionally with `count(eval(...))` and distinctly with
+// `dc`, with the result of the same operators in the pipeline. A conditional
+// count skips events without a value, also if the predicate holds for none.
+from_splunk env("SPLUNK_MGMT_URL"),
+  index="main",
+  earliest="1735689599",
+  latest="1735689780",
+  headers={
+    Authorization: env("SPLUNK_AUTHORIZATION"),
+  },
+  tls={skip_peer_verification: true}
+summarize user, logins=count_if(action, a => a == "login"), ips=count_distinct(src_ip), missing=count_if(missing, m => m == null)
+sort user

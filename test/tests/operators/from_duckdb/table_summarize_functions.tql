@@ -1,0 +1,5 @@
+// DuckDB computes conditional and distinct counts and means. The result
+// equals that of the same operators with `pushdown=false`.
+from_duckdb env("DUCKDB_SEED"), table="events"
+summarize key=ok, early=count_if(id, x => x < 3), ids=count_distinct(id), avg=mean(id)
+sort key

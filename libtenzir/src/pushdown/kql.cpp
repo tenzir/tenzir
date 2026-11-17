@@ -378,46 +378,34 @@ public:
 
   /// String matching is case-sensitive, and `trim` trims the whitespace that
   /// `\s` matches.
-  auto
-  render_call(std::string_view name, std::span<std::string const> args) const
-    -> Option<std::string> override {
-    if (args.size() == 2) {
-      auto const op = name == "starts_with" ? std::string_view{"startswith_cs"}
-                      : name == "ends_with" ? std::string_view{"endswith_cs"}
-                      : name == "match_regex"
-                        ? std::string_view{"matches regex"}
-                        : std::string_view{};
-      if (op.empty()) {
-        return None{};
-      }
-      return fmt::format("({} {} {})", args[0], op, args[1]);
-    }
-    if (args.size() != 1) {
-      return None{};
-    }
-    if (name == "trim") {
-      return fmt::format("trim(@\"\\s+\", {})", args[0]);
-    }
-    struct Function {
-      std::string_view tql;
-      std::string_view kql;
+  auto functions() const -> std::span<Function const> override {
+    static constexpr auto rows = std::array{
+      Function{"starts_with", 2, "({0} startswith_cs {1})", true},
+      Function{"ends_with", 2, "({0} endswith_cs {1})", true},
+      Function{"match_regex", 2, "({0} matches regex {1})", true},
+      Function{"trim", 1, "trim(@\"\\s+\", {0})"},
+      Function{"to_lower", 1, "tolower({0})"},
+      Function{"to_upper", 1, "toupper({0})"},
+      Function{"length_chars", 1, "strlen({0})"},
+      Function{"abs", 1, "abs({0})"},
     };
-    static constexpr auto functions = std::array{
-      Function{"to_lower", "tolower"},
-      Function{"to_upper", "toupper"},
-      Function{"length_chars", "strlen"},
-      Function{"abs", "abs"},
-    };
-    auto it = std::ranges::find(functions, name, &Function::tql);
-    if (it == functions.end()) {
-      return None{};
-    }
-    return fmt::format("{}({})", it->kql, args[0]);
+    return rows;
   }
 
-  auto call_is_predicate(std::string_view name) const -> bool override {
-    return name == "starts_with" or name == "ends_with"
-           or name == "match_regex";
+  /// `count(x)` counts the values that are not empty: KQL has no `null`
+  /// string, but an empty one. `mean` has no spelling: `avg` yields a `NaN`
+  /// for no values. Neither has `count_distinct`: whether Defender and Log
+  /// Analytics accept the exact `count_distinct()` is not verified.
+  auto aggregations() const -> std::span<Aggregation const> override {
+    static constexpr auto rows = std::array{
+      Aggregation{"count", 0, "count()"},
+      Aggregation{"count", 1, "countif(isnotempty({0}))"},
+      Aggregation{"min", 1, "min({0})"},
+      Aggregation{"max", 1, "max({0})"},
+      Aggregation{"sum", 1, "sum({0})"},
+      Aggregation{"count_if", 2, "countif({1:pred})"},
+    };
+    return rows;
   }
 
   /// `where flag` keeps the rows where a `bool` column holds.
@@ -456,7 +444,7 @@ public:
         assignments.push_back(std::move(name));
         continue;
       }
-      TRY(auto input, bind_column(alias->input));
+      TRY(auto input, alias_value(*alias));
       assignments.push_back(fmt::format("{} = {}", name, input));
     }
     return fmt::format("\n| project {}", fmt::join(assignments, ", "));
@@ -468,43 +456,28 @@ public:
     return fmt::format("\n| project-away {}", fmt::join(names, ", "));
   }
 
-  /// `count(x)` counts the values that are not empty: KQL has no `null`
-  /// string, but an empty one. `mean` has no spelling: `avg` yields a `NaN`
-  /// for no values.
-  auto render_aggregate(std::string_view function,
-                        Option<std::string_view> column) const
-    -> Option<std::string> override {
-    if (not column) {
-      if (function == "count") {
-        return std::string{"count()"};
-      }
-      return None{};
-    }
-    TRY(auto arg, bind_column(*column));
-    if (function == "count") {
-      return fmt::format("countif(isnotempty({}))", arg);
-    }
-    if (function == "min" or function == "max" or function == "sum") {
-      return fmt::format("{}({})", function, arg);
-    }
-    return None{};
-  }
-
   /// `summarize` names every result column, and puts the group keys first.
+  /// `extend` assigns the aliases before it.
   auto aggregate_stage(std::span<PipeAlias const> aliases,
                        std::span<PipeFunction const> functions,
                        std::span<std::string const> keys) const
     -> Option<std::string> override {
-    // Every column that a function reads has a name.
-    if (not aliases.empty()) {
-      return None{};
+    auto result = std::string{};
+    auto assignments = std::vector<std::string>{};
+    for (auto const& alias : aliases) {
+      TRY(auto name, quote_name(alias.name));
+      TRY(auto value, alias_value(alias));
+      assignments.push_back(fmt::format("{} = {}", name, value));
+    }
+    if (not assignments.empty()) {
+      result = fmt::format("\n| extend {}", fmt::join(assignments, ", "));
     }
     auto calls = std::vector<std::string>{};
     for (auto const& function : functions) {
       TRY(auto name, quote_name(function.name));
       calls.push_back(fmt::format("{} = {}", name, function.call));
     }
-    auto result = fmt::format("\n| summarize {}", fmt::join(calls, ", "));
+    result += fmt::format("\n| summarize {}", fmt::join(calls, ", "));
     if (not keys.empty()) {
       TRY(auto names, quote_names(keys));
       result += fmt::format(" by {}", fmt::join(names, ", "));
@@ -830,46 +803,52 @@ auto kql_accepts_trailing_stages(std::string_view query) -> bool {
   return *last != ';' and *last != '|';
 }
 
-auto plan_kql_query(std::string_view query,
-                    std::span<ir::QueryStage const> stages,
-                    Option<ir::OptimizeProjection> const& projection)
-  -> Option<KqlQuery> {
-  auto result = KqlQuery{
-    .query = std::string{query},
-    .generated = {},
-    .layout = {},
+auto kql_planner(std::string target, std::string query,
+                 Option<ir::OptimizeProjection> projection)
+  -> Planner<KqlQuery> {
+  auto declined = fmt::format("{} cannot spell the stage", target);
+  return {
+    .target = std::move(target),
+    .plan = [query = std::move(query), projection = std::move(projection),
+             declined](std::span<ir::QueryStage const> stages,
+                       std::monostate const*) -> Result<KqlQuery, std::string> {
+      auto result = KqlQuery{.query = query, .generated = {}, .layout = {}};
+      if (not kql_accepts_trailing_stages(query)) {
+        if (not stages.empty()) {
+          return Err{std::string{"the query does not accept stages after it"}};
+        }
+        return result;
+      }
+      // KQL holds times in typed columns, so the plan needs no time column,
+      // and the request window never depends on the stages.
+      auto pipe = render_pipe(stages, KqlDialect{},
+                              PipeOptions{.extend_base = false,
+                                          .time_column = None{},
+                                          .native_time = true,
+                                          .narrow = false});
+      if (not pipe) {
+        return Err{declined};
+      }
+      // Both services limit the size of a query, so stages that would grow it
+      // beyond the budget stay in the pipeline, and a projection that would
+      // only stays out of the query.
+      if (pipe->stages.size() > max_kql_appendix) {
+        return Err{fmt::format("the stages would grow the query by more than "
+                               "{} bytes",
+                               max_kql_appendix)};
+      }
+      result.generated = std::move(pipe->stages);
+      if (not pipe->layout.fields) {
+        auto project = projection_stage(projection, stages);
+        if (result.generated.size() + project.size() <= max_kql_appendix) {
+          result.generated += project;
+        }
+      }
+      result.query += result.generated;
+      result.layout = std::move(pipe->layout);
+      return result;
+    },
   };
-  if (not kql_accepts_trailing_stages(query)) {
-    if (not stages.empty()) {
-      return None{};
-    }
-    return result;
-  }
-  // KQL holds times in typed columns, so the plan needs no time column, and
-  // the request window never depends on the stages.
-  auto const options = PipeOptions{
-    .extend_base = false,
-    .time_column = None{},
-    .native_time = true,
-    .narrow = false,
-  };
-  TRY(auto pipe, render_pipe(stages, KqlDialect{}, options));
-  // Both services limit the size of a query, so stages that would grow it
-  // beyond the budget stay in the pipeline, and a projection that would only
-  // stays out of the query.
-  if (pipe.stages.size() > max_kql_appendix) {
-    return None{};
-  }
-  result.generated = std::move(pipe.stages);
-  if (not pipe.layout.fields) {
-    auto project = projection_stage(projection, stages);
-    if (result.generated.size() + project.size() <= max_kql_appendix) {
-      result.generated += project;
-    }
-  }
-  result.query += result.generated;
-  result.layout = std::move(pipe.layout);
-  return result;
 }
 
 } // namespace tenzir::pushdown

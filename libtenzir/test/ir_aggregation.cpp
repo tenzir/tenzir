@@ -53,20 +53,23 @@ auto assign(std::string_view left, std::string_view right) -> ast::assignment {
 auto make_aggregate() -> ir::QueryStage::Aggregate {
   return ir::QueryStage::Aggregate{
     .columns = {
-      {.output = {"k"}, .function = None{}, .input = Path{"k"}},
-      {.output = {"n"}, .function = "count", .input = None{}},
-      {.output = {"m"}, .function = "max", .input = Path{"v", "w"}},
+      {.output = {"k"}, .function = None{}, .args = {parse("k")}},
+      {.output = {"n"}, .function = "count", .args = {}},
+      {.output = {"m"}, .function = "max", .args = {parse("v.w")}},
     },
     .schema_name = "tenzir.summarize",
   };
 }
 
-/// Returns the inputs of the columns of `aggregate`, with an empty path for a
-/// column without input.
+/// Returns the fields that the columns of `aggregate` read, with an empty
+/// path for a column without arguments, and `?` for a computed one.
 auto inputs(ir::QueryStage::Aggregate const& aggregate) -> std::vector<Path> {
   auto result = std::vector<Path>{};
   for (auto const& column : aggregate.columns) {
-    result.push_back(column.input.value_or(Path{}));
+    result.push_back(
+      column.args.empty()
+        ? Path{}
+        : ir::field_segments(column.args.front()).value_or(Path{"?"}));
   }
   return result;
 }
@@ -134,12 +137,11 @@ public:
   auto rewrite_aggregate(ir::QueryStage::Aggregate aggregate,
                          ir::OptimizeCtx const& octx) const
     -> Option<ir::QueryStage::Aggregate> override {
-    TENZIR_UNUSED(octx);
     if (kind_ != Kind::rename) {
       return None{};
     }
     return ir::rewrite_aggregate(
-      std::move(aggregate), [&](ast::field_path const& field) {
+      std::move(aggregate), *octx.reg, [&](ast::field_path const& field) {
         if (field.path().size() == 1 and field.path()[0].id.name == to_) {
           return Option<ast::expression>{parse(from_)};
         }
@@ -296,13 +298,14 @@ auto through_set(std::vector<ast::assignment> assignments)
 
 TEST("aggregation rewrite maps inputs and keeps outputs") {
   auto rewritten
-    = ir::rewrite_aggregate(make_aggregate(), [](ast::field_path const& field) {
-        auto name = field.path().front().id.name;
-        if (name == "k") {
-          return Option<ast::expression>{parse("a.b")};
-        }
-        return Option<ast::expression>{field.inner()};
-      });
+    = ir::rewrite_aggregate(make_aggregate(), test::builtin_registry(),
+                            [](ast::field_path const& field) {
+                              auto name = field.path().front().id.name;
+                              if (name == "k") {
+                                return Option<ast::expression>{parse("a.b")};
+                              }
+                              return Option<ast::expression>{field.inner()};
+                            });
   REQUIRE(rewritten);
   CHECK_EQUAL(inputs(*rewritten),
               (std::vector<Path>{{"a", "b"}, {}, {"v", "w"}}));
@@ -310,28 +313,26 @@ TEST("aggregation rewrite maps inputs and keeps outputs") {
   CHECK_EQUAL(rewritten->schema_name, "tenzir.summarize");
 }
 
-TEST("aggregation rewrite requires plain fields") {
+TEST("aggregation rewrite substitutes expressions") {
   auto rewrite_k = [](std::string_view replacement) {
     return ir::rewrite_aggregate(
-      make_aggregate(), [&](ast::field_path const& field) {
+      make_aggregate(), test::builtin_registry(),
+      [&](ast::field_path const& field) {
         if (field.path().front().id.name == "k") {
           return Option<ast::expression>{parse(replacement)};
         }
         return Option<ast::expression>{field.inner()};
       });
   };
-  CHECK(rewrite_k("x"));
-  CHECK(not rewrite_k("x?"));
-  CHECK(not rewrite_k("x.y?"));
-  CHECK(not rewrite_k("x + 1"));
-  CHECK(not rewrite_k("x.length()"));
-  CHECK(not rewrite_k("null"));
-  CHECK(not rewrite_k("this"));
-  CHECK(not rewrite_k("x[0]"));
+  CHECK_EQUAL(inputs(*rewrite_k("x")).front(), Path{"x"});
+  CHECK_EQUAL(inputs(*rewrite_k("x + 1")).front(), Path{"?"});
+  CHECK_EQUAL(inputs(*rewrite_k("x?")).front(), Path{"?"});
+  CHECK_EQUAL(inputs(*rewrite_k("null")).front(), Path{"?"});
   // A field without replacement prevents the rewrite.
-  CHECK(not ir::rewrite_aggregate(make_aggregate(), [](ast::field_path const&) {
-    return Option<ast::expression>{};
-  }));
+  CHECK(not ir::rewrite_aggregate(make_aggregate(), test::builtin_registry(),
+                                  [](ast::field_path const&) {
+                                    return Option<ast::expression>{};
+                                  }));
 }
 
 TEST("aggregation rewrite through set") {
@@ -344,8 +345,8 @@ TEST("aggregation rewrite through set") {
     = through_set({assign("z", "x + 1"), assign("@name", "\"a\"")});
   REQUIRE(unrelated);
   CHECK_EQUAL(inputs(*unrelated), inputs(make_aggregate()));
-  // The source skips the `set`, so no assignment may fail the pipeline, also
-  // not one whose value the summary does not read.
+  // The source skips the assignments that the summary does not read, so none
+  // of them may fail the pipeline.
   CHECK(not through_set({assign("z", "x.length()")}));
   CHECK(not through_set({assign("z", "file_contents(x)")}));
   CHECK(not through_set({assign("y[x.length()]", "1")}));
@@ -363,24 +364,35 @@ TEST("aggregation rewrite through set") {
   auto moved = through_set({assign("k", "move x")});
   REQUIRE(moved);
   CHECK_EQUAL(inputs(*moved).front(), Path{"x"});
-  CHECK(not through_set({assign("t", "move k")}));
-  // Computed values, optional access, and overwrites stay local.
-  CHECK(not through_set({assign("k", "x + 1")}));
-  CHECK(not through_set({assign("k", "x.length()")}));
-  CHECK(not through_set({assign("k", "x if c else y")}));
-  CHECK(not through_set({assign("k", "x?")}));
-  CHECK(not through_set({assign("k", "x"), assign("k", "k + 1")}));
-  // A later assignment shadows an earlier one.
+  // A moved field reads as `null`.
+  auto gone = through_set({assign("t", "move k")});
+  REQUIRE(gone);
+  CHECK_EQUAL(inputs(*gone).front(), Path{"?"});
+  // The source computes the assignments that the summary reads, also those
+  // that may fail.
+  for (auto right : {"x + 1", "x.length()", "x if c else y", "x?"}) {
+    auto computed = through_set({assign("k", right)});
+    REQUIRE(computed);
+    CHECK_EQUAL(inputs(*computed).front(), Path{"?"});
+  }
+  CHECK(through_set({assign("k", "x"), assign("k", "k + 1")}));
+  // A later assignment to the same field or to a record that contains it
+  // shadows an earlier one, which the summary then does not read.
   auto shadowed = through_set({assign("k", "x + 1"), assign("k", "y")});
   REQUIRE(shadowed);
   CHECK_EQUAL(inputs(*shadowed).front(), Path{"y"});
-  // Assignments into or over a field that the summary reads change its value.
+  CHECK(not through_set({assign("k", "x.length()"), assign("k", "y")}));
+  CHECK(not through_set({assign("v.w", "x.length()"), assign("v", "{w: 1}")}));
+  CHECK(through_set({assign("v", "{w: 1}"), assign("v.w", "x.length()")}));
+  // An assignment into a field that the summary reads changes part of it.
   CHECK(not through_set({assign("v.w.z", "1")}));
-  CHECK(not through_set({assign("v", "{w: 1}")}));
   // Replacing a record that contains the field reads from the new record.
   auto replaced = through_set({assign("v", "x")});
   REQUIRE(replaced);
   CHECK_EQUAL(inputs(*replaced).back(), (Path{"x", "w"}));
+  auto literal = through_set({assign("v", "{w: 1}")});
+  REQUIRE(literal);
+  CHECK_EQUAL(inputs(*literal).back(), Path{"?"});
 }
 
 TEST("aggregation rewrite through select") {
@@ -394,7 +406,9 @@ TEST("aggregation rewrite through select") {
   REQUIRE(renamed);
   CHECK_EQUAL(inputs(*renamed), (std::vector<Path>{{"a", "b"}, {}, {"c"}}));
   // A field that `select` does not keep reads as `null`.
-  CHECK(not through_set({assign("this", "{}"), assign("k", "k")}));
+  auto dropped = through_set({assign("this", "{}"), assign("k", "k")});
+  REQUIRE(dropped);
+  CHECK_EQUAL(inputs(*dropped), (std::vector<Path>{{"k"}, {}, {"?"}}));
   // Keeping only part of a record changes the record.
   auto parts = through_set(
     {assign("this", "{}"), assign("k", "k"), assign("v.w.x", "v.w.x")});

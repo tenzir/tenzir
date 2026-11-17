@@ -11,6 +11,7 @@
 #include "tenzir/ir.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/pushdown/layout.hpp"
+#include "tenzir/pushdown/planner.hpp"
 
 #include <span>
 #include <string>
@@ -67,20 +68,20 @@ struct KqlQuery {
   Layout layout;
 };
 
-/// Spells the query that runs the user's `query` and computes `stages` after
-/// it, or returns `None` if KQL does not spell some stage, if the stages
-/// exceed `max_kql_appendix`, or if `query` does not accept stages after it.
+/// Returns the planner of the query that runs the user's `query` for
+/// `target` and computes the stages after it, with the `projection` that
+/// downstream needs, if the operator knows it. It declines stages that KQL does
+/// not spell, that exceed `max_kql_appendix`, or that `query` does not accept.
 ///
 /// Without a stage that enumerates its output, the query ends with a
-/// `project` that keeps the top-level fields of `projection`, except those that
-/// a drop removed, as long as it fits into `max_kql_appendix` with the stages.
-/// A projected field that the query does not return becomes
-/// `null`, while a returned column keeps its type. Without a projection, or
-/// with one that refers to a whole event, the query keeps every column. A query
-/// that does not accept stages goes out unchanged, if there are none.
-auto plan_kql_query(std::string_view query,
-                    std::span<ir::QueryStage const> stages,
-                    Option<ir::OptimizeProjection> const& projection)
-  -> Option<KqlQuery>;
+/// `project` that keeps the top-level fields of the projection, except those
+/// that a drop removed, as long as it fits into `max_kql_appendix` with the
+/// stages. A projected field that the query does not return becomes `null`,
+/// while a returned column keeps its type. Without a projection, or with one
+/// that refers to a whole event, the query keeps every column. A query that
+/// does not accept stages goes out unchanged, if there are none.
+auto kql_planner(std::string target, std::string query,
+                 Option<ir::OptimizeProjection> projection)
+  -> Planner<KqlQuery>;
 
 } // namespace tenzir::pushdown

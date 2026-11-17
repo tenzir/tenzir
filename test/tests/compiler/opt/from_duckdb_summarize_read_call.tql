@@ -1,0 +1,5 @@
+// The summary reads the value of a call that may fail, which DuckDB then
+// computes with its own semantics, so `from_duckdb` takes over both.
+from_duckdb "events.duckdb", table="events"
+level = severity.to_lower()
+summarize level, events=count()

@@ -337,33 +337,29 @@ auto TableBinding::bind_json(ColumnDescription const& column,
 
 // -- bind_plan ----------------------------------------------------------------
 
-auto bind_plan(TableBinding const& table, std::span<ir::QueryStage const> plan)
-  -> Result<BoundPlan, BindError> {
+auto bind_plan(TableBinding const& table,
+               std::span<ir::QueryStage const> stages)
+  -> Result<BoundPlan, std::string> {
   auto result = BoundPlan{};
-  result.summarizes = std::ranges::any_of(plan, [](auto const& stage) {
+  result.summarizes = std::ranges::any_of(stages, [](auto const& stage) {
     return is<ir::QueryStage::Aggregate>(stage.kind);
   });
   auto const catch_all = table.catch_all();
   // Binds the field at `path` for a stage that reads it as a result column if
   // `output`, or that sorts by it if `sorts`.
   auto bind = [&](std::span<std::string const> path, bool output,
-                  bool sorts) -> Result<void, BindError> {
+                  bool sorts) -> Result<void, std::string> {
     auto bound = table.bind(path);
     if (bound.is_err()) {
-      return Err{BindError{
-        .kind = BindError::Kind::field,
-        .subject = format_path(path),
-        .reason = std::move(bound).unwrap_err(),
-      }};
+      return Err{fmt::format("cannot bind `{}`: {}", format_path(path),
+                             std::move(bound).unwrap_err())};
     }
     auto field = std::move(bound).unwrap();
     if (field.dynamic and output) {
-      return Err{BindError{
-        .kind = BindError::Kind::field,
-        .subject = format_path(path),
-        .reason = "the field lies below a `JSON` column and has a dynamic "
-                  "type, which the operator cannot read as a result column",
-      }};
+      return Err{fmt::format("cannot bind `{}`: the field lies below a `JSON` "
+                             "column and has a dynamic type, which the "
+                             "operator cannot read as a result column",
+                             format_path(path))};
     }
     result.reads_dynamic = result.reads_dynamic or field.dynamic;
     result.sorts_dynamic = result.sorts_dynamic or (field.dynamic and sorts);
@@ -372,78 +368,70 @@ auto bind_plan(TableBinding const& table, std::span<ir::QueryStage const> plan)
     return {};
   };
   // A table with a catch-all column supports stages that keep whole rows.
-  auto whole_rows =
-    [&](ir::QueryStage const& stage,
-        Option<std::span<std::string const>> field) -> Result<void, BindError> {
+  auto whole_rows
+    = [&](ir::QueryStage const& stage) -> Result<void, std::string> {
     if (not catch_all) {
       return {};
     }
-    return Err{BindError{
-      .kind = field ? BindError::Kind::field : BindError::Kind::stage,
-      .subject = field ? format_path(*field) : std::string{stage_name(stage)},
-      .reason = fmt::format("`{}` on a table with the catch-all column `{}` "
-                            "reads fields that "
-                            "may live in any of its columns",
-                            stage_name(stage), catch_all->column),
-    }};
+    return Err{fmt::format("`{}` on a table with the catch-all column `{}` "
+                           "reads fields that may live in any of its columns",
+                           stage_name(stage), catch_all->column)};
   };
-  for (auto const& stage : plan) {
+  // The fields that the renderer binds in `expr`.
+  auto const paths_of = [](ast::expression const& expr) {
+    auto paths = std::vector<std::vector<std::string>>{};
+    // The renderer refers to the dialect, which must outlive it.
+    auto const dialect = ClickHouseDialect{};
+    auto renderer = pushdown::ExpressionRenderer{
+      dialect, [&](std::span<std::string const> path) {
+        paths.emplace_back(path.begin(), path.end());
+        return Option<std::string>{"x"};
+      }};
+    std::ignore = renderer.value(expr);
+    return paths;
+  };
+  for (auto const& stage : stages) {
     // The stages after a projection or a summary read its result columns.
     auto const done = match(
       stage.kind,
-      [&](ir::QueryStage::Filter const& x) -> Result<bool, BindError> {
-        auto paths = std::vector<std::vector<std::string>>{};
-        // The renderer refers to the dialect, which must outlive it.
-        auto const dialect = ClickHouseDialect{};
-        auto renderer = pushdown::ExpressionRenderer{
-          dialect, [&](std::span<std::string const> path) {
-            paths.emplace_back(path.begin(), path.end());
-            return Option<std::string>{"x"};
-          }};
-        std::ignore = renderer.predicate(x.predicate);
-        for (auto const& path : paths) {
+      [&](ir::QueryStage::Filter const& x) -> Result<bool, std::string> {
+        for (auto const& path : paths_of(x.predicate)) {
           TRY(bind(path, false, false));
         }
         return false;
       },
-      [&](ir::QueryStage::Sort const& x) -> Result<bool, BindError> {
+      [&](ir::QueryStage::Sort const& x) -> Result<bool, std::string> {
         for (auto const& key : x.keys) {
           TRY(bind(key.field, false, true));
         }
         return false;
       },
-      [&](ir::QueryStage::Select const& x) -> Result<bool, BindError> {
-        if (x.fields.empty()) {
-          TRY(whole_rows(stage, None{}));
-        }
+      [&](ir::QueryStage::Select const& x) -> Result<bool, std::string> {
+        TRY(whole_rows(stage));
         for (auto const& field : x.fields) {
-          TRY(whole_rows(stage, std::span{field.input}));
           TRY(bind(field.input, true, false));
         }
         return true;
       },
-      [&](ir::QueryStage::Drop const& x) -> Result<bool, BindError> {
-        TRY(whole_rows(stage, x.fields.empty()
-                                ? Option<std::span<std::string const>>{}
-                                : std::span{x.fields.front()}));
+      [&](ir::QueryStage::Drop const&) -> Result<bool, std::string> {
+        TRY(whole_rows(stage));
         return false;
       },
-      [&](ir::QueryStage::Aggregate const& x) -> Result<bool, BindError> {
-        auto const first
-          = std::ranges::find_if(x.columns, [](auto const& column) {
-              return column.input.has_value();
-            });
-        TRY(whole_rows(stage, first == x.columns.end()
-                                ? Option<std::span<std::string const>>{}
-                                : std::span{*first->input}));
+      [&](ir::QueryStage::Aggregate const& x) -> Result<bool, std::string> {
+        // A field in an argument or a key may hold a result column.
+        auto paths = std::vector<std::vector<std::string>>{};
         for (auto const& column : x.columns) {
-          if (column.input) {
-            TRY(bind(*column.input, true, false));
+          for (auto const& arg : column.args) {
+            paths.append_range(paths_of(arg));
           }
+        }
+        TRY(whole_rows(stage));
+        for (auto const& path : paths) {
+          TRY(bind(path, true, false));
         }
         return true;
       },
-      [&](ir::QueryStage::Limit const&) -> Result<bool, BindError> {
+      [&](ir::QueryStage::Limit const&) -> Result<bool, std::string> {
         return false;
       });
     if (done.is_err()) {
@@ -460,20 +448,18 @@ auto bind_plan(TableBinding const& table, std::span<ir::QueryStage const> plan)
   auto dynamic_key = Option<std::vector<std::string>>{};
   auto closed = false;
   auto reads_table = true;
-  for (auto const& stage : plan) {
+  for (auto const& stage : stages) {
     auto const wraps = is<ir::QueryStage::Filter>(stage.kind)
                        or is<ir::QueryStage::Select>(stage.kind)
                        or is<ir::QueryStage::Drop>(stage.kind)
                        or is<ir::QueryStage::Sort>(stage.kind);
     if (wraps and closed) {
       if (dynamic_key) {
-        return Err{BindError{
-          .kind = BindError::Kind::sort,
-          .subject = format_path(*dynamic_key),
-          .reason = "the query would return the order of the sort for the "
-                    "stages after it in a column of a dynamic type, which "
-                    "the operator cannot read",
-        }};
+        return Err{fmt::format("cannot sort by the JSON field `{}` before "
+                               "further stages: the query would return the "
+                               "order in a column of a dynamic type, which "
+                               "the operator cannot read",
+                               format_path(*dynamic_key))};
       }
       closed = false;
     }
@@ -614,49 +600,46 @@ auto ClickHouseDialect::render_binary(
   return Option<std::string>{fmt::format("(NOT {})", present)};
 }
 
-auto ClickHouseDialect::render_call(std::string_view name,
-                                    std::span<std::string const> args) const
-  -> Option<std::string> {
-  struct Function {
-    std::string_view tql;
-    std::string_view clickhouse;
-    size_t arity;
+auto ClickHouseDialect::functions() const
+  -> std::span<pushdown::Function const> {
+  static constexpr auto rows = std::array{
+    pushdown::Function{"starts_with", 2, "startsWith({0}, {1})"},
+    pushdown::Function{"ends_with", 2, "endsWith({0}, {1})"},
+    pushdown::Function{"length_bytes", 1, "length({0})"},
+    pushdown::Function{"length_chars", 1, "lengthUTF8({0})"},
+    pushdown::Function{"to_lower", 1, "lowerUTF8({0})"},
+    pushdown::Function{"to_upper", 1, "upperUTF8({0})"},
+    pushdown::Function{"trim", 1, "trimBoth({0})"},
+    pushdown::Function{"abs", 1, "abs({0})"},
+    pushdown::Function{"match_regex", 2, "match({0}, {1})"},
+    // TQL buckets times by multiples of the width since the epoch, also
+    // before it, which flooring division in nanoseconds reproduces, unlike
+    // `toStartOfInterval`.
+    pushdown::Function{
+      "floor", 2,
+      "fromUnixTimestamp64Nano(toUnixTimestamp64Nano(toDateTime64({0}, 9, "
+      "'UTC')) - positiveModulo(toUnixTimestamp64Nano(toDateTime64({0}, 9, "
+      "'UTC')), {1:ns}), 'UTC')"},
   };
-  static constexpr auto functions = std::array{
-    Function{"starts_with", "startsWith", 2},
-    Function{"ends_with", "endsWith", 2},
-    Function{"length_bytes", "length", 1},
-    Function{"length_chars", "lengthUTF8", 1},
-    Function{"to_lower", "lowerUTF8", 1},
-    Function{"to_upper", "upperUTF8", 1},
-    Function{"trim", "trimBoth", 1},
-    Function{"abs", "abs", 1},
-    Function{"match_regex", "match", 2},
-  };
-  auto it = std::ranges::find(functions, name, &Function::tql);
-  if (it == functions.end() or args.size() != it->arity) {
-    return None{};
-  }
-  return fmt::format("{}({})", it->clickhouse, fmt::join(args, ", "));
+  return rows;
 }
 
-auto ClickHouseDialect::render_aggregate(std::string_view name,
-                                         Option<std::string> const& arg) const
-  -> Option<std::string> {
-  if (name == "count") {
-    // TQL counts as `int64`, ClickHouse as `UInt64`.
-    return fmt::format("toInt64(count({}))", arg ? *arg : std::string{});
-  }
-  if (not arg) {
-    return None{};
-  }
-  // The `OrNull` combinator yields `NULL` for no rows, as TQL does, instead of
-  // the default value of the type. A sum or a mean would yield `NaN` or an
-  // infinity for some input, which the operator reads as `null`.
-  if (name == "min" or name == "max") {
-    return fmt::format("{}OrNull({})", name, *arg);
-  }
-  return None{};
+/// TQL counts as `int64`, ClickHouse as `UInt64`. The `OrNull` combinator
+/// yields `NULL` for no rows, as TQL does, instead of the default value of the
+/// type. `uniqExact` skips `NULL`, unlike the approximate `uniq`.
+auto ClickHouseDialect::aggregations() const
+  -> std::span<pushdown::Aggregation const> {
+  static constexpr auto rows = std::array{
+    pushdown::Aggregation{"count", 0, "toInt64(count())"},
+    pushdown::Aggregation{"count", 1, "toInt64(count({0}))"},
+    pushdown::Aggregation{"min", 1, "minOrNull({0})"},
+    pushdown::Aggregation{"max", 1, "maxOrNull({0})"},
+    pushdown::Aggregation{"count_if", 2, "toInt64(countIf({0}, {1:pred}))"},
+    pushdown::Aggregation{"count_distinct", 1, "toInt64(uniqExact({0}))"},
+    pushdown::Aggregation{"sum", 1, "sumOrNull({0})"},
+    pushdown::Aggregation{"mean", 1, "avgOrNull({0})"},
+  };
+  return rows;
 }
 
 auto ClickHouseDialect::render_exclude(
@@ -702,23 +685,34 @@ auto table_read_settings(BoundPlan const& bound, bool catch_all, bool hydrolix)
   return result;
 }
 
-auto absorb_stages(ir::QueryChain const& chain, std::string_view target)
-  -> ir::Absorption {
-  return pushdown::absorb_prefix(chain, ClickHouseDialect{},
-                                 {
-                                   .target = target,
-                                   .filters_only = false,
-                                   .veto = {},
-                                 });
-}
-
-auto make_table_read(std::string_view table, std::string_view selection,
-                     std::span<ir::QueryStage const> plan,
-                     std::span<std::string const> columns,
-                     BoundPlan const& bound)
-  -> Result<pushdown::TableRead, std::string> {
-  return pushdown::make_table_read(table, selection, {}, plan, columns,
-                                   ClickHouseDialect{bound});
+auto planner(bool hydrolix, pushdown::SqlMode mode)
+  -> pushdown::Planner<ClickHouseRead, ClickHouseTable> {
+  auto const target = std::string{hydrolix ? "Hydrolix" : "ClickHouse"};
+  return {
+    .target = target,
+    .plan
+    = [=](std::span<ir::QueryStage const> stages,
+          ClickHouseTable const* known) -> Result<ClickHouseRead, std::string> {
+      if (not known) {
+        TRY(auto read, pushdown::plan_table_read(target, ClickHouseDialect{},
+                                                 mode, stages, nullptr));
+        return ClickHouseRead{.read = std::move(read), .settings = {}};
+      }
+      TRY(auto bound, bind_plan(known->binding, stages));
+      // A catch-all table needs every column for the reconstruction.
+      auto const catch_all = known->binding.catch_all().has_value();
+      auto table = known->table;
+      if (catch_all) {
+        table.selection = "*";
+      }
+      TRY(auto read, pushdown::plan_table_read(target, ClickHouseDialect{bound},
+                                               mode, stages, &table));
+      return ClickHouseRead{
+        .read = std::move(read),
+        .settings = table_read_settings(bound, catch_all, hydrolix),
+      };
+    },
+  };
 }
 
 } // namespace tenzir::plugins::clickhouse

@@ -13,7 +13,10 @@
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/plugin.hpp"
-#include "tenzir/pushdown/plan.hpp"
+#include "tenzir/pushdown/kql.hpp"
+#include "tenzir/pushdown/planner.hpp"
+#include "tenzir/pushdown/redact.hpp"
+#include "tenzir/pushdown/splunk.hpp"
 #include "tenzir/session.hpp"
 #include "tenzir/substitute_ctx.hpp"
 #include "tenzir/test/registry.hpp"
@@ -222,7 +225,8 @@ TEST("the chain folds transforms into an aggregation") {
   CHECK_EQUAL(kinds(plan), (Strings{"aggregate", "filter"}));
   auto const& aggregate = as<ir::QueryStage::Aggregate>(plan[0].kind);
   CHECK_EQUAL(aggregate.columns[0].output, (Strings{"y"}));
-  CHECK_EQUAL(aggregate.columns[0].input, Option{Strings{"x"}});
+  CHECK_EQUAL(ir::field_segments(aggregate.columns[0].args.at(0)),
+              Option{Strings{"x"}});
   CHECK_EQUAL(aggregate.schema_name, std::string{"tenzir.summarize"});
   // Declining the aggregation keeps the transforms, too.
   auto declined = optimize("y = x\n"
@@ -230,6 +234,28 @@ TEST("the chain folds transforms into an aggregation") {
                            0);
   CHECK_EQUAL(names(declined.pipe),
               (Strings{"chain_source", "set", "summarize"}));
+}
+
+TEST("conditional counts skip null values in every dialect") {
+  // The predicate holds for `null`, which `count_if` passes over, so the
+  // targets must count no event without a value.
+  auto result = optimize("summarize n=count_if(x, v => v == null)");
+  auto const& plan = result.source().absorbed_plan();
+  REQUIRE_EQUAL(kinds(plan), (Strings{"aggregate"}));
+  auto const kql
+    = pushdown::kql_planner("KQL", "T", None{}).plan(plan, nullptr);
+  REQUIRE(kql);
+  CHECK_EQUAL(kql.unwrap().generated,
+              "\n| summarize ['__tenzir_column_0'] = "
+              "countif((isnotnull(['x']) and isnull(['x'])))");
+  auto const spl = pushdown::spl_planner(
+                     {.search = None{}, .indexes = {"main"}}, None{}, None{})
+                     .plan(plan, nullptr);
+  REQUIRE(spl);
+  CHECK_EQUAL(spl.unwrap().search,
+              "search index=\"main\"\n| stats count(eval((isnotnull('x') AND "
+              "isnull('x')))) as tenzir_column_0\n| appendpipe [stats count as "
+              "tenzir_groups_0]");
 }
 
 TEST("the chain ends where a source could not compute it") {
@@ -316,15 +342,18 @@ public:
 
   auto describe() const -> Description override {
     auto d = Describer<PlanSourceArgs>{};
-    pushdown::add_pushdown_argument(d, &PlanSourceArgs::pushdown);
     d.optimization(&PlanSourceArgs::optimization);
-    d.query_plan([](PlanSourceArgs const& args,
-                    ir::QueryChain const& chain) -> ir::Absorption {
-      if (not pushdown::pushdown_enabled(args.pushdown)) {
-        return {.prefix = 0, .declined = "`pushdown=false`"};
-      }
-      return {.prefix = std::min(chain.stages.size(), size_t{2}),
-              .declined = "only two stages"};
+    pushdown::add_pushdown(d, &PlanSourceArgs::pushdown, [](auto const&) {
+      return pushdown::Planner<std::monostate>{
+        .target = "Test",
+        .plan = [](std::span<ir::QueryStage const> stages,
+                   auto) -> Result<std::monostate, std::string> {
+          if (stages.size() > 2) {
+            return Err{std::string{"only two stages"}};
+          }
+          return std::monostate{};
+        },
+      };
     });
     return d.without_optimize();
   }

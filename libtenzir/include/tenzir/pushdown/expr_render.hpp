@@ -10,11 +10,15 @@
 
 #include "tenzir/ip.hpp"
 #include "tenzir/option.hpp"
+#include "tenzir/pushdown/layout.hpp"
 #include "tenzir/ref.hpp"
 #include "tenzir/subnet.hpp"
 #include "tenzir/time.hpp"
 #include "tenzir/tql2/ast.hpp"
 
+#include <folly/Function.h>
+
+#include <algorithm>
 #include <cstdint>
 #include <functional>
 #include <span>
@@ -33,6 +37,46 @@
 namespace tenzir::pushdown {
 
 class ExpressionRenderer;
+
+/// The spelling of a TQL function in a target, with holes for its arguments:
+/// `{i}` is argument `i` as a value, and `{i:pred}` as a predicate. With
+/// `{i:s}`, `{i:ms}`, `{i:us}`, or `{i:ns}`, it is a constant duration as a
+/// whole, positive count of the unit, but no multiple of a week or a month,
+/// which TQL buckets by the calendar. A hole may repeat, as in
+/// `(LEFT({0}, LEN({1})) = {1})`. A call whose argument does not fit its hole
+/// has no spelling.
+struct Function {
+  std::string_view tql;
+  uint8_t arity = 0;
+  std::string_view spelling;
+  /// Whether the spelling is a predicate rather than a value.
+  bool predicate = false;
+};
+
+/// The spelling of a TQL aggregation function, with holes as for `Function`.
+struct Aggregation {
+  std::string_view tql;
+  uint8_t arity = 0;
+  std::string_view spelling;
+  Decode decode = Decode::native;
+};
+
+/// Returns the row of `rows` for `name` with `arity` arguments, if any.
+template <class Row>
+auto find_row(std::span<Row const> rows, std::string_view name, size_t arity)
+  -> Row const* {
+  auto it = std::ranges::find_if(rows, [&](Row const& row) {
+    return row.tql == name and row.arity == arity;
+  });
+  return it == rows.end() ? nullptr : &*it;
+}
+
+/// Fills the holes of `spelling` for `args` with `fill`, which receives the
+/// index of an argument and whether its hole is a predicate. Returns `None` if
+/// `fill` does.
+auto spell(std::string_view spelling, std::span<ast::expression const> args,
+           folly::FunctionRef<auto(size_t, bool)->Option<std::string>> fill)
+  -> Option<std::string>;
 
 /// The spelling of expressions in the language of a target.
 ///
@@ -121,16 +165,25 @@ public:
 
   // -- Calls and classification -----------------------------------------------
 
-  /// Spells a call of the TQL function `name` on its rendered arguments, with
-  /// the receiver of a method call first. Defaults to vetoing.
-  virtual auto
-  render_call(std::string_view name, std::span<std::string const> args) const
+  /// The functions that the dialect spells. Defaults to none.
+  virtual auto functions() const -> std::span<Function const>;
+
+  /// The aggregation functions that the dialect spells. Only functions whose
+  /// result does not depend on the order of their input qualify. Defaults to
+  /// none.
+  virtual auto aggregations() const -> std::span<Aggregation const>;
+
+  /// Spells a call of a function of the standard library, with the receiver
+  /// of a method call first. Defaults to the row of `functions()`.
+  virtual auto render_call(ast::function_call const& call,
+                           ExpressionRenderer const& renderer) const
     -> Option<std::string>;
 
-  /// Whether `render_call` spells the TQL function `name` as a predicate,
-  /// such as `x LIKE 'a%'`, rather than as a value. It matters only where
-  /// `boolean_values()` does not hold. Defaults to `false`.
-  virtual auto call_is_predicate(std::string_view name) const -> bool;
+  /// Whether the target computes with time literals. A dialect that spells
+  /// them as strings that the target casts to the type of the other operand
+  /// of a comparison returns `false`, which vetoes arithmetic with them.
+  /// Defaults to `true`.
+  virtual auto time_literal_arithmetic() const -> bool;
 
   /// Whether a boolean value may stand where the dialect expects a predicate,
   /// as in `WHERE flag`, and a predicate where it expects a value, as in
@@ -156,6 +209,15 @@ public:
 
   /// Spells a literal.
   auto literal(ast::constant::kind const& value) const -> Option<std::string>;
+
+  /// Spells `row` with `args`, filling each hole with `value` or `predicate`.
+  template <class Row>
+  auto spell(Row const& row, std::span<ast::expression const> args) const
+    -> Option<std::string> {
+    return pushdown::spell(row.spelling, args, [&](size_t i, bool predicate) {
+      return predicate ? this->predicate(args[i]) : value(args[i]);
+    });
+  }
 
 private:
   /// Rendered text, and whether it is a predicate rather than a value.

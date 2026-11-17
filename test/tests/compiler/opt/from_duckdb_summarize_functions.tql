@@ -1,0 +1,4 @@
+// DuckDB computes conditional and distinct counts and means. The predicate of
+// `count_if` reads the values of its first argument that are not null.
+from_duckdb "events.duckdb", table="events"
+summarize src_ip, bad=count_if(severity, s => s > 3), ports=count_distinct(port), avg=mean(severity)

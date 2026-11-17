@@ -9,7 +9,9 @@
 #include "tenzir/arc.hpp"
 #include "tenzir/argument_parser2.hpp"
 #include "tenzir/async/task.hpp"
+#include "tenzir/checked_math.hpp"
 #include "tenzir/co_match.hpp"
+#include "tenzir/concept/parseable/numeric/real.hpp"
 #include "tenzir/curl.hpp"
 #include "tenzir/data.hpp"
 #include "tenzir/defaults.hpp"
@@ -29,9 +31,9 @@
 #include "tenzir/option.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/pushdown/layout.hpp"
-#include "tenzir/pushdown/plan.hpp"
+#include "tenzir/pushdown/redact.hpp"
 #include "tenzir/pushdown/splunk.hpp"
-#include "tenzir/pushdown/sql_source.hpp"
+#include "tenzir/pushdown/time_window.hpp"
 #include "tenzir/startup_argument.hpp"
 #include "tenzir/tls_options.hpp"
 #include "tenzir/try.hpp"
@@ -79,7 +81,7 @@ struct FromSplunkArgs {
   Option<located<bool>> pushdown;
   location operator_location = location::unknown;
   // The stages that the operator took over, which run in Splunk after the
-  // search (see `pushdown::plan_spl_query`), and the fields that downstream
+  // search (see `pushdown::spl_planner`), and the fields that downstream
   // needs from events that no stage reshapes.
   OptimizationArgs<opt::Projection, opt::Plan> optimization;
 };
@@ -379,20 +381,21 @@ auto spl_source(FromSplunkArgs const& args) -> pushdown::SplSource {
   return {.search = None{}, .indexes = std::move(*names)};
 }
 
-/// The stages that the operator took over.
-auto taken_stages(FromSplunkArgs const& args)
-  -> std::span<ir::QueryStage const> {
-  if (auto const& plan = args.optimization.plan) {
-    return *plan;
-  }
-  return {};
-}
-
-/// The search to send: the user's search or one for the indexes, followed by
-/// the stages that the operator took over.
-auto plan_query(FromSplunkArgs const& args) -> Option<pushdown::SplQuery> {
-  return pushdown::plan_spl_query(spl_source(args), taken_stages(args),
-                                  args.optimization.projection);
+/// Plans the search to send: the user's search or one for the indexes,
+/// followed by the stages after the operator, which run in Splunk with
+/// Splunk's semantics. Options may change how Splunk runs the search.
+auto make_planner(FromSplunkArgs const& args)
+  -> pushdown::Planner<pushdown::SplQuery> {
+  auto const names = args.index ? index_names(args.index->inner) : None{};
+  auto const valid
+    = args.search.is_some() ? not args.index : names and not names->empty();
+  return pushdown::spl_planner(
+    valid ? spl_source(args) : pushdown::SplSource{},
+    args.options ? Option<std::string>{"`options` may change how Splunk runs "
+                                       "the search"}
+    : not valid  ? Option<std::string>{"invalid arguments"}
+                 : None{},
+    args.optimization.projection);
 }
 
 /// Returns `bound` as an absolute time, if it is one: a time, or a string of
@@ -424,31 +427,22 @@ auto absolute_bound(data const& bound) -> Option<time> {
     std::chrono::duration_cast<duration>(std::chrono::duration<double>{value})};
 }
 
-/// Narrows the time bound `bound` of the request to `filter`, the bound of
+/// Narrows the time bound `bound` of the request to `seconds`, the bound of
 /// `_time` that the filters of the search imply, if both are absolute.
-/// Splunk includes `earliest_time` and excludes `latest_time`, so the bounds
-/// round outwards to whole seconds.
-auto narrow_bound(data const& bound, Option<time> filter, bool lower) -> data {
+auto narrow_bound(data const& bound, Option<int64_t> seconds, bool lower)
+  -> data {
   auto current = absolute_bound(bound);
-  if (not filter or not current) {
-    return bound;
-  }
-  using std::chrono::seconds;
-  auto const since_epoch = filter->time_since_epoch();
-  auto const narrowed
-    = lower ? std::chrono::floor<seconds>(since_epoch)
-            : std::chrono::floor<seconds>(since_epoch) + seconds{1};
   // Rounding outwards can leave what a `time` holds at either end, where the
   // operator keeps the bound rather than overflow.
-  constexpr auto first = std::chrono::ceil<seconds>(duration::min());
-  constexpr auto last = std::chrono::floor<seconds>(duration::max());
-  if (narrowed < first or narrowed > last) {
+  auto narrowed = seconds.and_then([](int64_t x) {
+    return checked_mul(x, int64_t{1'000'000'000});
+  });
+  if (not narrowed or not current
+      or (lower ? time{duration{*narrowed}} <= *current
+                : time{duration{*narrowed}} >= *current)) {
     return bound;
   }
-  if (lower ? time{narrowed} <= *current : time{narrowed} >= *current) {
-    return bound;
-  }
-  return fmt::to_string(narrowed.count());
+  return fmt::to_string(*seconds);
 }
 
 /// Narrows the time bounds `earliest` and `latest` to the bounds `window` that
@@ -462,8 +456,15 @@ auto narrow_bounds(data const& earliest, data const& latest,
   if (not absolute_bound(earliest) or not absolute_bound(latest)) {
     return {earliest, latest};
   }
-  auto lower = narrow_bound(earliest, window.begin, true);
-  auto upper = narrow_bound(latest, window.end, false);
+  // Splunk includes `earliest_time` and excludes `latest_time`, so the
+  // bounds round outwards to whole seconds.
+  auto const [first, last] = pushdown::in_units(window, std::chrono::seconds{1},
+                                                pushdown::Round::outward);
+  auto lower = narrow_bound(earliest, first, true);
+  auto upper = narrow_bound(latest, last.and_then([](int64_t x) {
+    return checked_add(x, int64_t{1});
+  }),
+                            false);
   auto const begin = absolute_bound(lower);
   auto const end = absolute_bound(upper);
   TENZIR_ASSERT(begin and end);
@@ -711,17 +712,7 @@ public:
       = ctx.make_counter(MetricsLabel{"operator", "from_splunk"},
                          MetricsDirection::read, MetricsVisibility::external_,
                          MetricsUnit::events);
-    auto query = plan_query(args_);
-    if (not query) {
-      diagnostic::error("failed to spell the stages that the operator took "
-                        "over in SPL")
-        .primary(search_source(args_))
-        .hint("use `pushdown=false` to run them in Tenzir")
-        .emit(ctx);
-      done_ = true;
-      co_return;
-    }
-    query_ = std::move(*query);
+    query_ = pushdown::replan(make_planner(args_), args_.optimization.stages());
     auto headers = co_await resolve_headers(args_.headers, ctx);
     if (not headers) {
       done_ = true;
@@ -892,12 +883,11 @@ public:
         if (query_->sentinel and not sentinel_seen_) {
           // Splunk answers a search that fails in `eval` or `stats` with an
           // empty response, which only the missing sentinel row reveals.
-          diagnostic::error("Splunk search ended without its last result")
-            .primary(search_source(args_))
-            .note("search: {}", query_->search)
-            .note("the search may have failed in a stage that the operator "
-                  "took over")
-            .hint("use `pushdown=false` to run the stages in Tenzir")
+          pushdown::note_absorbed(diagnostic::error("Splunk search ended "
+                                                    "without its last result")
+                                    .primary(search_source(args_))
+                                    .note("search: {}", query_->search),
+                                  args_.optimization.stages(), "Splunk")
             .emit(ctx);
         }
         done_ = true;
@@ -967,14 +957,29 @@ private:
     return found and fields == 1;
   }
 
-  /// Appends a field of a result row. A count decodes as an integer also
-  /// without type inference.
+  /// Appends a field of a result row. A count or another number decodes as
+  /// one also without type inference.
   auto append_field(nova::FieldBuilder builder, std::string_view name,
                     nova::RowView<nova::Data> const& field) const -> void {
-    if (auto const* text = try_as<nova::RowView<nova::String>>(field);
-        text and std::ranges::contains(query_->counts, name)) {
+    auto const* text = try_as<nova::RowView<nova::String>>(field);
+    auto const decode = query_->layout.decode_of(name);
+    if (text and decode == pushdown::Decode::integer) {
       if (auto count = pushdown::parse_spl_count(**text)) {
         builder.data(*count);
+        return;
+      }
+    }
+    if (text and decode == pushdown::Decode::number) {
+      auto const value = std::string_view{**text};
+      auto integer = int64_t{};
+      auto real = double{};
+      auto [end, error] = std::from_chars(value.begin(), value.end(), integer);
+      if (error == std::errc{} and end == value.end()) {
+        builder.data(integer);
+        return;
+      }
+      if (parsers::real(value, real)) {
+        builder.data(real);
         return;
       }
     }
@@ -1020,53 +1025,8 @@ public:
     auto retry_delay = d.named("retry_delay", &FromSplunkArgs::retry_delay);
     d.named("raw", &FromSplunkArgs::raw);
     d.operator_location(&FromSplunkArgs::operator_location);
-    pushdown::add_pushdown_argument(d, &FromSplunkArgs::pushdown);
     d.optimization(&FromSplunkArgs::optimization);
-    // The stages after the search run in Splunk, with Splunk's semantics.
-    // Options may change how Splunk runs the search.
-    d.query_plan([](FromSplunkArgs const& args,
-                    ir::QueryChain const& chain) -> ir::Absorption {
-      if (not pushdown::pushdown_enabled(args.pushdown)) {
-        return {.prefix = 0, .declined = "`pushdown=false`"};
-      }
-      if (args.options) {
-        return {.prefix = 0,
-                .declined = "`options` may change how Splunk runs the search"};
-      }
-      if (args.search and args.index) {
-        return {.prefix = 0, .declined = "invalid arguments"};
-      }
-      if (not args.search) {
-        auto names = args.index ? index_names(args.index->inner) : None{};
-        if (not names or names->empty()) {
-          return {.prefix = 0, .declined = "invalid arguments"};
-        }
-      }
-      auto source = spl_source(args);
-      if (auto declined = pushdown::spl_declines(source)) {
-        return {.prefix = 0, .declined = std::move(*declined)};
-      }
-      auto const limitable
-        = not source.search
-          or pushdown::spl_stages(pushdown::spl_search_command(*source.search))
-               .limitable;
-      return pushdown::absorb_prefix(
-        chain,
-        [&](std::span<ir::QueryStage const> stages) {
-          return pushdown::plan_spl_query(source, stages, None{}).is_some();
-        },
-        {
-          .target = "Splunk",
-          .filters_only = false,
-          .veto = [&](ir::QueryStage const& stage) -> Option<std::string> {
-            if (not limitable and is<ir::QueryStage::Limit>(stage.kind)) {
-              return std::string{"a `head` stage could cut the side effects "
-                                 "of the search short"};
-            }
-            return None{};
-          },
-        });
-    });
+    pushdown::add_pushdown(d, &FromSplunkArgs::pushdown, make_planner);
     d.validate([=](DescribeCtx& ctx) -> Empty {
       // Fail fast so that one invalid argument yields one diagnostic.
       auto run = [&]() -> failure_or<void> {

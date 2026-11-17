@@ -71,7 +71,11 @@ auto replay() -> FromCloudWatchArgs {
 
 auto plan(FromCloudWatchArgs const& args, std::vector<ir::QueryStage> stages)
   -> Option<CloudWatchRequest> {
-  return plan_cloudwatch_request(args, stages);
+  auto planned = cloudwatch_planner(args).plan(stages, nullptr);
+  if (not planned) {
+    return None{};
+  }
+  return std::move(planned).unwrap();
 }
 
 /// The filter pattern for `stages` in search mode, or `<none>` if CloudWatch
@@ -130,8 +134,9 @@ auto payload(FromCloudWatchArgs const& args, std::vector<ir::QueryStage> stages)
 
 auto absorb(FromCloudWatchArgs const& args, std::vector<ir::QueryStage> stages)
   -> std::pair<size_t, std::string> {
-  auto result = absorb_cloudwatch_stages(
-    args, ir::QueryChain{.stages = std::move(stages), .end = ""});
+  auto result
+    = pushdown::absorb(ir::QueryChain{.stages = std::move(stages), .end = ""},
+                       cloudwatch_planner(args));
   return {result.prefix, result.declined};
 }
 
@@ -247,6 +252,12 @@ TEST("timestamps narrow the window of a search, inclusively") {
                                 filter("timestamp <= 1970-01-01T00:00:09Z")}),
               R"({"logGroupName":"/group","startTime":2000,"endTime":5000})");
   request = plan(bounded, {filter("timestamp > 1970-01-01T00:00:05Z")});
+  REQUIRE(request);
+  CHECK(request->empty);
+  // A strict bound beyond the latest time matches no event, rather than
+  // leaving the window open.
+  request = plan(args("search"),
+                 {filter("timestamp > 2262-04-11T23:47:16.854775807Z")});
   REQUIRE(request);
   CHECK(request->empty);
   // Times before the epoch match no event.
@@ -408,7 +419,8 @@ auto check_completes(Operator<void, nova::Events>& source) -> void {
 } // namespace
 
 TEST("an empty window or limit completes without a request") {
-  for (auto stage : {limit(0), filter("timestamp < 1969-01-01")}) {
+  for (auto stage : {limit(0), filter("timestamp < 1969-01-01"),
+                     filter("timestamp > 2262-04-11T23:47:16.854775807Z")}) {
     auto source = make_search({stage});
     check_completes(*source);
   }

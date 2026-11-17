@@ -71,7 +71,7 @@ auto column_names(std::span<TableColumn const> columns)
 auto select_columns(Option<ir::OptimizeProjection> const& projection,
                     std::span<TableColumn const> columns,
                     std::span<std::string const> required,
-                    std::span<ir::QueryStage const> plan,
+                    std::span<ir::QueryStage const> stages,
                     std::string_view table) -> Selection {
   // A projection keeps what `SELECT *` yields, so only visible columns take
   // part in it.
@@ -83,12 +83,12 @@ auto select_columns(Option<ir::OptimizeProjection> const& projection,
   }
   auto result = Selection{
     .selection = pushdown::select_projection(projection, visible, required,
-                                             plan, MysqlDialect{}),
+                                             stages, MysqlDialect{}),
     .extra = {},
   };
   // The stages may read invisible columns, which the selection adds for them
   // and the result leaves out again.
-  auto const inputs = pushdown::plan_inputs(plan);
+  auto const inputs = pushdown::plan_inputs(stages);
   auto invisible = std::vector<std::string>{};
   for (auto const& column : columns) {
     if (column.visible) {
@@ -156,52 +156,31 @@ auto MysqlDialect::render_ip(ip value) const -> Option<std::string> {
   return SqlQueryDialect::quote_string(fmt::to_string(value));
 }
 
-auto MysqlDialect::render_call(std::string_view name,
-                               std::span<std::string const> args) const
-  -> Option<std::string> {
-  auto const arity = [&](size_t n) {
-    return args.size() == n;
+/// `LIKE` would need escaping of a pattern that is no literal, and
+/// `REGEXP_LIKE` matches with the case sensitivity of RE2.
+auto MysqlDialect::functions() const -> std::span<pushdown::Function const> {
+  static constexpr auto rows = std::array{
+    pushdown::Function{"starts_with", 2, "(LEFT({0}, CHAR_LENGTH({1})) = {1})"},
+    pushdown::Function{"ends_with", 2, "(RIGHT({0}, CHAR_LENGTH({1})) = {1})"},
+    pushdown::Function{"match_regex", 2, "REGEXP_LIKE({0}, {1}, 'c')"},
+    pushdown::Function{"length_bytes", 1, "LENGTH({0})"},
+    pushdown::Function{"length_chars", 1, "CHAR_LENGTH({0})"},
+    pushdown::Function{"to_lower", 1, "LOWER({0})"},
+    pushdown::Function{"to_upper", 1, "UPPER({0})"},
+    pushdown::Function{"trim", 1, "TRIM({0})"},
+    pushdown::Function{"abs", 1, "ABS({0})"},
   };
-  if ((name == "starts_with" or name == "ends_with") and arity(2)) {
-    // `LIKE` would need escaping of a pattern that is no literal.
-    return fmt::format("({}({}, CHAR_LENGTH({})) = {})",
-                       name == "starts_with" ? "LEFT" : "RIGHT", args[0],
-                       args[1], args[1]);
-  }
-  if (name == "match_regex" and arity(2)) {
-    // Matches with the case sensitivity of RE2.
-    return fmt::format("REGEXP_LIKE({}, {}, 'c')", args[0], args[1]);
-  }
-  struct Function {
-    std::string_view tql;
-    std::string_view mysql;
-  };
-  static constexpr auto unary = std::array{
-    Function{"length_bytes", "LENGTH"}, Function{"length_chars", "CHAR_LENGTH"},
-    Function{"to_lower", "LOWER"},      Function{"to_upper", "UPPER"},
-    Function{"trim", "TRIM"},           Function{"abs", "ABS"},
-  };
-  auto it = std::ranges::find(unary, name, &Function::tql);
-  if (it == unary.end() or not arity(1)) {
-    return None{};
-  }
-  return fmt::format("{}({})", it->mysql, args[0]);
+  return rows;
 }
 
-auto absorb_stages(ir::QueryChain const& chain, bool live) -> ir::Absorption {
-  return pushdown::absorb_prefix(
-    chain, MysqlDialect{},
-    {
-      .target = "MySQL",
-      .filters_only = live,
-      .veto = [](ir::QueryStage const& stage) -> Option<std::string> {
-        auto const* filter = try_as<ir::QueryStage::Filter>(stage.kind);
-        if (filter and pushdown::computes_with_time(filter->predicate)) {
-          return std::string{"MySQL cannot compute with a time literal"};
-        }
-        return None{};
-      },
-    });
+auto MysqlDialect::time_literal_arithmetic() const -> bool {
+  return false;
+}
+
+auto planner(pushdown::SqlMode mode)
+  -> pushdown::Planner<pushdown::TableRead, pushdown::SqlTable> {
+  static auto const dialect = MysqlDialect{};
+  return pushdown::sql_planner("MySQL", dialect, mode);
 }
 
 } // namespace tenzir::plugins::mysql

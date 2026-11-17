@@ -62,8 +62,6 @@
 -              path: [
 -                {
 -                  id: `events` @ [1]:261..267 from 0,
--                  has_question_mark: false
--                }
 +      order: "ordered",
 +      projection: [
 +        {
@@ -87,8 +85,11 @@
 +              output: [
 +                "user"
 +              ],
-+              input: [
-+                "user"
++              args: [
++                root_field {
++                  id: `user` @ [1]:255..259 from 0,
+                   has_question_mark: false
+                 }
                ]
              },
 -            call: {
@@ -98,16 +99,17 @@
 -                ],
 -                ref: std::count/fn
 -              },
--              args: [
--                
 +            {
 +              output: [
 +                "events"
-               ],
++              ],
++              function: "count",
+               args: [
+                 
+-              ],
 -              method: false,
 -              location: [1]:268..275 from 0
-+              function: "count"
-             }
+-            }
 -          }
 -        ],
 -        groups: [
@@ -123,17 +125,7 @@
 -                  id: `user` @ [1]:255..259 from 0,
 -                  has_question_mark: false
 -                }
--              ]
-+          ],
-+          schema_name: "tenzir.summarize"
-+        },
-+        Sort {
-+          keys: [
-+            {
-+              field: [
-+                "events"
-+              ],
-+              descending: true
+               ]
              }
 -          }
 -        ],
@@ -154,7 +146,7 @@
 -            `sort` @ [1]:276..280 from 0
            ],
 -          ref: std::sort/op
-+          bound: 3
++          schema_name: "tenzir.summarize"
          },
 -        args: [
 -          expression unary_expr {
@@ -170,6 +162,17 @@
 -          
 -        ]
 -      }
++        Sort {
++          keys: [
++            {
++              field: [
++                "events"
++              ],
++              descending: true
++            }
++          ],
++          bound: 3
++        },
 +        Limit {
 +          count: 3
 +        }

@@ -79,23 +79,32 @@
 +              output: [
 +                "ip"
 +              ],
-+              input: [
-+                "src_ip"
++              args: [
++                root_field {
++                  id: `src_ip` @ [1]:143..149 from 0,
++                  has_question_mark: false
++                }
 +              ]
 +            },
 +            {
 +              output: [
 +                "events"
 +              ],
-+              function: "count"
++              function: "count",
++              args: [
++                
++              ]
 +            },
 +            {
 +              output: [
 +                "first"
 +              ],
 +              function: "min",
-+              input: [
-+                "ts"
++              args: [
++                root_field {
++                  id: `ts` @ [1]:151..153 from 0,
++                  has_question_mark: false
++                }
 +              ]
 +            }
 +          ],

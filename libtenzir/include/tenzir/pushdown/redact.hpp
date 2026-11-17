@@ -17,26 +17,9 @@
 
 /// Shared pieces of sources that take over the stages behind them.
 ///
-/// A source that computes stages with the semantics of its target, as
-/// `Describer::query_plan` describes, offers the `pushdown` argument, which
-/// turns that off, and logs the queries that it sends without their literals.
+/// A source that computes stages with the semantics of its target logs the
+/// queries that it sends without their literals.
 namespace tenzir::pushdown {
-
-/// Adds the argument `pushdown=bool` to a source. With `pushdown=false`, the
-/// source takes over no stage, so that they run in Tenzir with the semantics
-/// of TQL. Explicit arguments of the source, such as a query or a time window,
-/// stay in effect.
-template <class Args, class... Impls>
-auto add_pushdown_argument(Describer<Args, Impls...>& d,
-                           Option<located<bool>> Args::* ptr) -> void {
-  d.named("pushdown", ptr);
-}
-
-/// Returns whether a source with the `pushdown` argument `arg` may take over
-/// stages.
-inline auto pushdown_enabled(Option<located<bool>> const& arg) -> bool {
-  return not arg or arg->inner;
-}
 
 /// How a SQL dialect delimits string literals and quoted identifiers, as far
 /// as `redact_query` needs to know.

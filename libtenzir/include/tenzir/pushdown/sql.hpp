@@ -27,7 +27,7 @@
 ///
 /// In `table` mode, a SQL source reads a table with a `SELECT` that computes
 /// the stages that it took over from the operators after it (see
-/// `render_plan`). What SQL dialects disagree on, such as how to spell a limit
+/// `render_sql`). What SQL dialects disagree on, such as how to spell a limit
 /// or a count, is up to the source's dialect.
 namespace tenzir::pushdown {
 
@@ -116,7 +116,7 @@ public:
 
   // -- Plans ------------------------------------------------------------------
   //
-  // The hooks below let `render_plan` spell stages. Each defaults to vetoing,
+  // The hooks below let `render_sql` spell stages. Each defaults to vetoing,
   // except where noted, so that a dialect opts in to what it spells. Times,
   // durations, IP addresses, subnets, and calls spell through the hooks of
   // `ExpressionDialect`, which veto by default.
@@ -127,13 +127,10 @@ public:
   virtual auto bind_field(std::span<std::string const> path) const
     -> Option<std::string>;
 
-  /// Spells a call of the TQL aggregation function `name` on the rendered
-  /// value of its argument, if any. Defaults to `COUNT`, `MIN`, and `MAX`.
-  /// Only functions whose result does not depend on the order of their input
-  /// qualify, since a plan does not order the input of an aggregation.
-  virtual auto
-  render_aggregate(std::string_view name, Option<std::string> const& arg) const
-    -> Option<std::string>;
+  /// Defaults to `count`, `min`, `max`, `count_if`, `count_distinct`, and
+  /// `mean`, but not `sum`, whose type differs from that of its argument in
+  /// some dialects, such as a `HUGEINT` in DuckDB or a `DECIMAL` in MySQL.
+  auto aggregations() const -> std::span<Aggregation const> override;
 
   /// Spells a selection of every column but the listed top-level ones, such
   /// as `* EXCLUDE (a, b)`.
@@ -168,7 +165,7 @@ struct SqlRelation {
 using SqlLayout = Layout;
 
 /// The `SELECT` that computes a plan, and how its result becomes events.
-struct SqlPlan {
+struct SqlQuery {
   SqlSelect select;
   SqlLayout layout;
   /// The names of the columns that the query introduces, all starting with
@@ -179,7 +176,7 @@ struct SqlPlan {
   std::vector<std::string> aliases;
 };
 
-/// Assembles a `SELECT` that computes `plan` over `relation` with the
+/// Assembles a `SELECT` that computes `stages` over `relation` with the
 /// semantics of the target, or returns `None` if `dialect` cannot spell some
 /// stage. It decides from the syntax of the stages and the fields of the
 /// relation alone, so that a source can decide what to take over before it
@@ -197,7 +194,7 @@ struct SqlPlan {
 /// comparisons, `and`, `or`, `not`, arithmetic, negation, `== null`,
 /// `!= null`, `in` with a list of constants, and calls that the dialect
 /// spells. Sorts order by fields. Limits fit into `dialect.max_limit()`.
-auto render_plan(SqlRelation relation, std::span<ir::QueryStage const> plan,
-                 SqlQueryDialect const& dialect) -> Option<SqlPlan>;
+auto render_sql(SqlRelation relation, std::span<ir::QueryStage const> stages,
+                SqlQueryDialect const& dialect) -> Option<SqlQuery>;
 
 } // namespace tenzir::pushdown

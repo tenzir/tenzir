@@ -41,8 +41,6 @@
 -              path: [
 -                {
 -                  id: `count` @ [1]:173..176 from 0,
--                  has_question_mark: false
--                }
 +      order: "ordered",
 +      projection: [
 +        {
@@ -66,8 +64,11 @@
 +              output: [
 +                "src_ip"
 +              ],
-+              input: [
-+                "src_ip"
++              args: [
++                root_field {
++                  id: `src_ip` @ [1]:177..183 from 0,
+                   has_question_mark: false
+                 }
                ]
              },
 -            call: {
@@ -77,16 +78,17 @@
 -                ],
 -                ref: std::count/fn
 -              },
--              args: [
--                
 +            {
 +              output: [
 +                "count"
-               ],
++              ],
++              function: "count",
+               args: [
+                 
+-              ],
 -              method: false,
 -              location: [1]:173..176 from 0
-+              function: "count"
-             }
+-            }
 -          }
 -        ],
 -        groups: [
@@ -102,17 +104,7 @@
 -                  id: `src_ip` @ [1]:177..183 from 0,
 -                  has_question_mark: false
 -                }
--              ]
-+          ],
-+          schema_name: "tenzir.summarize"
-+        },
-+        Sort {
-+          keys: [
-+            {
-+              field: [
-+                "count"
-+              ],
-+              descending: true
+               ]
              }
 -          }
 -        ],
@@ -133,7 +125,7 @@
 -            `sort` @ [1]:173..176 from 0
            ],
 -          ref: unresolved
-+          bound: 5
++          schema_name: "tenzir.summarize"
          },
 -        args: [
 -          expression unary_expr {
@@ -149,6 +141,17 @@
 -          
 -        ]
 -      }
++        Sort {
++          keys: [
++            {
++              field: [
++                "count"
++              ],
++              descending: true
++            }
++          ],
++          bound: 5
++        },
 +        Limit {
 +          count: 5
 +        }

@@ -10,7 +10,7 @@
 
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin/register.hpp>
-#include <tenzir/pushdown/plan.hpp>
+#include <tenzir/pushdown/redact.hpp>
 
 #include <boost/url/parse.hpp>
 
@@ -160,18 +160,12 @@ public:
     auto unmask = d.named("unmask", &FromCloudWatchArgs::unmask);
     d.named("aws_region", &FromCloudWatchArgs::aws_region);
     d.named("aws_iam", &FromCloudWatchArgs::aws_iam);
-    pushdown::add_pushdown_argument(d, &FromCloudWatchArgs::pushdown);
     d.optimization(&FromCloudWatchArgs::optimization);
     // CloudWatch Logs computes the stages after the operator with its own
     // semantics: filters as a filter pattern, a time window, or log stream
     // names, and a limit.
-    d.query_plan([](FromCloudWatchArgs const& args,
-                    ir::QueryChain const& chain) -> ir::Absorption {
-      if (not pushdown::pushdown_enabled(args.pushdown)) {
-        return {.prefix = 0, .declined = "`pushdown=false`"};
-      }
-      return absorb_cloudwatch_stages(args, chain);
-    });
+    pushdown::add_pushdown(d, &FromCloudWatchArgs::pushdown,
+                           cloudwatch_planner);
     d.validate([=](DescribeCtx& ctx) -> Empty {
       TRY(auto group_value, ctx.get(group));
       auto effective_mode = std::string{"live"};

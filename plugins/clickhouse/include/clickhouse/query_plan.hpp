@@ -13,7 +13,7 @@
 #include "tenzir/detail/flat_map.hpp"
 #include "tenzir/ir.hpp"
 #include "tenzir/option.hpp"
-#include "tenzir/pushdown/plan.hpp"
+#include "tenzir/pushdown/redact.hpp"
 #include "tenzir/pushdown/sql.hpp"
 #include "tenzir/pushdown/sql_source.hpp"
 #include "tenzir/result.hpp"
@@ -30,7 +30,7 @@
 /// In `table` mode, `from_clickhouse` takes over the stages after it that
 /// ClickHouse spells, such as filters, projections, a summary, sorts, and
 /// limits, and computes them in its query with ClickHouse's semantics (see
-/// `pushdown::render_plan`). The operators of the stages leave the pipeline.
+/// `pushdown::render_sql`). The operators of the stages leave the pipeline.
 /// `from_hydrolix` does the same against the ClickHouse engine of Hydrolix.
 ///
 /// It decides what to take over from the syntax of the stages alone. When it
@@ -115,26 +115,6 @@ private:
   Option<CatchAllLayout> catch_all_;
 };
 
-/// The stage of a plan, or the field that it reads, that does not bind to a
-/// table.
-struct BindError {
-  /// What does not bind.
-  enum class Kind {
-    /// A field, which `subject` names.
-    field,
-    /// A stage that reads no field, which `subject` names, such as
-    /// `summarize`.
-    stage,
-    /// A sort by a field below a `JSON` column, which `subject` names, whose
-    /// order the query would carry through a derived table for a later stage.
-    sort,
-  };
-  Kind kind = Kind::field;
-  /// The field path, as TQL spells it, or the name of the stage.
-  std::string subject;
-  std::string reason;
-};
-
 /// The fields that the stages of a plan read from a table, bound to it.
 struct BoundPlan {
   detail::flat_map<std::vector<std::string>, BoundField> fields;
@@ -146,8 +126,8 @@ struct BoundPlan {
   bool summarizes = false;
 };
 
-/// Binds the fields that the stages of `plan` read from the table, up to the
-/// first stage that enumerates its output, such as a `select` or a summary.
+/// Binds the fields that the `stages` read from the table, up to the first
+/// stage that enumerates its output, such as a `select` or a summary.
 ///
 /// A filter and a sort bind any field. A selection and a summary bind no value
 /// below a `JSON` column. Neither does a sort whose order a later stage needs
@@ -155,8 +135,9 @@ struct BoundPlan {
 /// in result columns. A table with a catch-all column supports plans that
 /// keep whole rows only, so a projection, a drop, or a summary fails there:
 /// a field of the reconstructed events may live in any column.
-auto bind_plan(TableBinding const& table, std::span<ir::QueryStage const> plan)
-  -> Result<BoundPlan, BindError>;
+auto bind_plan(TableBinding const& table,
+               std::span<ir::QueryStage const> stages)
+  -> Result<BoundPlan, std::string>;
 
 /// Spells the stages of a plan in ClickHouse SQL.
 ///
@@ -165,8 +146,9 @@ auto bind_plan(TableBinding const& table, std::span<ir::QueryStage const> plan)
 /// nanoseconds since the epoch in UTC, and IP addresses as `toIPv4` or
 /// `toIPv6` of their text. It maps `starts_with`, `ends_with`,
 /// `length_bytes`, `length_chars`, `to_lower`, `to_upper`, `trim`, `abs`, and
-/// `match_regex`, and the aggregation functions `count`, `min`, and `max`,
-/// which yield `null` for no rows, as in TQL.
+/// `match_regex`, and the aggregation functions `count`, `min`, `max`,
+/// `count_if`, `count_distinct`, `sum`, and `mean`, which yield `null` for no
+/// rows, as in TQL.
 ///
 /// Without a `BoundPlan`, it binds every field from its syntax alone, as the
 /// decision of what to take over requires. With one, it spells each field of
@@ -200,13 +182,9 @@ public:
                      pushdown::ExpressionRenderer const& renderer) const
     -> Option<Option<std::string>> override;
 
-  auto
-  render_call(std::string_view name, std::span<std::string const> args) const
-    -> Option<std::string> override;
+  auto functions() const -> std::span<pushdown::Function const> override;
 
-  auto
-  render_aggregate(std::string_view name, Option<std::string> const& arg) const
-    -> Option<std::string> override;
+  auto aggregations() const -> std::span<pushdown::Aggregation const> override;
 
   auto render_exclude(std::span<std::string const> columns) const
     -> Option<std::string> override;
@@ -257,21 +235,22 @@ struct QuerySetting {
 auto table_read_settings(BoundPlan const& bound, bool catch_all, bool hydrolix)
   -> std::vector<QuerySetting>;
 
-/// Returns the stages of `chain` that `from_clickhouse` or `from_hydrolix`
-/// takes over: the longest prefix that `ClickHouseDialect` spells. `target`
-/// names the server in the reason for declining the rest, such as
-/// `Hydrolix`.
-auto absorb_stages(ir::QueryChain const& chain, std::string_view target)
-  -> ir::Absorption;
+/// What a read of a table looked up when it runs.
+struct ClickHouseTable {
+  pushdown::SqlTable table;
+  TableBinding binding;
+};
 
-/// Builds the query that reads `selection`, as it appears after `SELECT`,
-/// from `table` and computes `plan` on top of that, with the fields that
-/// `bound` bound. Fails if a name that the query introduces may collide with
-/// one of the table's `columns`.
-auto make_table_read(std::string_view table, std::string_view selection,
-                     std::span<ir::QueryStage const> plan,
-                     std::span<std::string const> columns,
-                     BoundPlan const& bound)
-  -> Result<pushdown::TableRead, std::string>;
+/// The query of a table read, with the settings that it needs.
+struct ClickHouseRead {
+  pushdown::TableRead read;
+  std::vector<QuerySetting> settings;
+};
+
+/// Returns the planner of `from_hydrolix` if `hydrolix` holds, or else of
+/// `from_clickhouse`. When it runs, it binds the fields that the stages read
+/// to the table first.
+auto planner(bool hydrolix, pushdown::SqlMode mode)
+  -> pushdown::Planner<ClickHouseRead, ClickHouseTable>;
 
 } // namespace tenzir::plugins::clickhouse

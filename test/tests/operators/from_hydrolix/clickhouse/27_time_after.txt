@@ -4,5 +4,5 @@ error: Hydrolix error 407: DB::Exception: Can't compare decimal number due to ov
 9 | from_hydrolix f"http://{env("CLICKHOUSE_HOST")}",
   | ^^^^^^^^^^^^^
   |
-  = note: the query computes the operators after `from_hydrolix` with Hydrolix's semantics
-  = hint: use `pushdown=false` to run them in Tenzir instead
+  = note: Hydrolix computes the stages that the operator took over with its own semantics
+  = hint: use `pushdown=false` to run them in Tenzir

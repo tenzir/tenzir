@@ -1,0 +1,18 @@
+{
+  key: false,
+  early: 1,
+  ids: 1,
+  avg: 2.0,
+}
+{
+  key: true,
+  early: 1,
+  ids: 1,
+  avg: 1.0,
+}
+{
+  key: null,
+  early: 0,
+  ids: 1,
+  avg: 3.0,
+}

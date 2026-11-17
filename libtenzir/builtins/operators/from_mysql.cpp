@@ -543,13 +543,15 @@ auto parse_error_from_packet(std::span<std::byte const> data) -> mysql_error {
   return {code, std::move(msg)};
 }
 
-/// Emits a mysql_error as a diagnostic.
-void emit_mysql_error(mysql_error const& err, diagnostic_handler& dh) {
-  if (err.code != 0) {
-    diagnostic::error("MySQL error {}: {}", err.code, err.message).emit(dh);
-  } else {
-    diagnostic::error("MySQL error: {}", err.message).emit(dh);
-  }
+/// Emits a mysql_error as a diagnostic. The server may reject a stage that the
+/// failing read computes with its own semantics, one of `stages`.
+void emit_mysql_error(mysql_error const& err, diagnostic_handler& dh,
+                      std::span<ir::QueryStage const> stages = {}) {
+  auto code = err.code != 0 ? fmt::format(" {}", err.code) : std::string{};
+  pushdown::note_absorbed(
+    diagnostic::error("MySQL error{}: {}", code, err.message),
+    err.code != 0 ? stages : std::span<ir::QueryStage const>{}, "MySQL")
+    .emit(dh);
 }
 
 /// Parses a column definition packet.
@@ -1719,19 +1721,24 @@ struct FromMySQLArgs {
   Option<located<data>> tls;
   Option<located<bool>> pushdown;
   OptimizationArgs<opt::Projection, opt::Plan> optimization;
+  location operator_location;
 };
 
-/// How a read of a table selects its columns.
+/// What a read of a table looked up, with the invisible columns that the
+/// selection adds only for the stages, which the result leaves out.
 struct TablePlan {
-  /// The columns to select, as they appear after `SELECT`.
-  std::string selection = "*";
-  /// The names of the columns of the table, or none if the plan did not need
-  /// them.
-  std::vector<std::string> columns;
-  /// The invisible columns that the selection adds only for the stages, which
-  /// the result leaves out.
+  pushdown::SqlTable table;
   std::vector<std::string> extra;
 };
+
+/// Returns the planner of a read of `args`. Queries of the user are opaque.
+auto make_planner(FromMySQLArgs const& args)
+  -> pushdown::Planner<pushdown::TableRead, pushdown::SqlTable> {
+  using enum pushdown::SqlMode;
+  return planner(not args.table or args.sql or args.show ? query
+                 : args.live and args.live->inner        ? live
+                                                         : table);
+}
 
 /// Reads from MySQL.
 class FromMySQLOperator final : public Operator<void, nova::Events> {
@@ -1742,32 +1749,28 @@ public:
   }
 
 private:
-  /// The stages that the operator took over from the pipeline.
-  auto stages() const -> std::span<ir::QueryStage const> {
-    auto const& plan = args_.optimization.plan;
-    return plan ? std::span{*plan} : std::span<ir::QueryStage const>{};
-  }
-
   /// Plans a read of the table: projects to the columns that downstream asks
   /// for, and reads the columns that the stages need. Describes the table
   /// only if the projection or the stages need its columns.
-  auto plan_table(std::span<std::string const> required)
-    -> Task<MysqlResult<TablePlan>> {
-    if (not args_.optimization.projection and stages().empty()) {
-      co_return TablePlan{};
+  auto plan_table() -> Task<MysqlResult<TablePlan>> {
+    auto result = TablePlan{
+      .table = {.from = quote_identifier(table_name_)},
+      .extra = {},
+    };
+    if (not args_.optimization.projection
+        and args_.optimization.stages().empty()) {
+      co_return result;
     }
     CO_TRY(auto rows, co_await client_->query_rows_prepared(
                         describe_table_sql, {prepared_param{table_name_}}));
     auto described = parse_table_columns(rows);
-    auto columns = column_names(described);
     auto selection
-      = select_columns(args_.optimization.projection, described, required,
-                       stages(), quote_identifier(table_name_));
-    co_return TablePlan{
-      .selection = std::move(selection.selection),
-      .columns = std::move(columns),
-      .extra = std::move(selection.extra),
-    };
+      = select_columns(args_.optimization.projection, described, {},
+                       args_.optimization.stages(), result.table.from);
+    result.table.columns = column_names(described);
+    result.table.selection = std::move(selection.selection);
+    result.extra = std::move(selection.extra);
+    co_return result;
   }
 
   /// Arranges rows read from MySQL as the stages that the query computes
@@ -2077,7 +2080,7 @@ private:
                   or std::is_same_v<Integer, uint64_t>);
     // Columns may come and go while the operator runs, so plan anew for every
     // window, just like `SELECT *` would.
-    auto planned = co_await plan_table({});
+    auto planned = co_await plan_table();
     if (planned.is_err()) {
       emit_mysql_error(std::move(planned).unwrap_err(), ctx);
       co_return false;
@@ -2091,22 +2094,21 @@ private:
     if (lower) {
       bounds.push_back(fmt::format("{} > {}", tracking, *lower));
     }
-    auto sql = pushdown::make_window_read(quote_identifier(table_name_),
-                                          plan.selection, bounds, stages(),
-                                          tracking_column_, MysqlDialect{});
-    if (sql.is_err()) {
-      diagnostic::error("{}", sql.unwrap_err()).emit(ctx);
+    plan.table.window = pushdown::SqlWindow{.bounds = std::move(bounds),
+                                            .tracking = tracking_column_};
+    auto read
+      = pushdown::replan(make_planner(args_), args_.optimization.stages(),
+                         plan.table, args_.operator_location, ctx);
+    if (not read) {
       co_return false;
     }
-    layout_ = pushdown::Layout{
-      .fields = None{},
-      .hidden = std::move(plan.extra),
-      .schema_name = None{},
-    };
-    auto slice_stream = query_generated(std::move(sql).unwrap());
+    layout_ = std::move(read->layout);
+    layout_.hidden.append_range(plan.extra);
+    auto slice_stream = query_generated(std::move(read->sql));
     while (auto slice_result = co_await slice_stream.next()) {
       if (slice_result->is_err()) {
-        emit_mysql_error(std::move(*slice_result).unwrap_err(), ctx);
+        emit_mysql_error(std::move(*slice_result).unwrap_err(), ctx,
+                         args_.optimization.stages());
         co_return false;
       }
       co_await emit(std::move(*slice_result).unwrap(), push, ctx);
@@ -2276,7 +2278,7 @@ public:
       // Live mode plans every window by itself.
       co_return;
     }
-    auto planned = co_await plan_table({});
+    auto planned = co_await plan_table();
     if (planned.is_err()) {
       emit_mysql_error(std::move(planned).unwrap_err(), ctx);
       co_await finish(ctx);
@@ -2284,15 +2286,14 @@ public:
     }
     auto plan = std::move(planned).unwrap();
     auto read
-      = pushdown::make_table_read(quote_identifier(table_name_), plan.selection,
-                                  {}, stages(), plan.columns, MysqlDialect{});
-    if (read.is_err()) {
-      diagnostic::error("{}", read.unwrap_err()).emit(ctx);
+      = pushdown::replan(make_planner(args_), args_.optimization.stages(),
+                         plan.table, args_.operator_location, ctx);
+    if (not read) {
       co_await finish(ctx);
       co_return;
     }
-    query_ = std::move(read.unwrap().sql);
-    layout_ = std::move(read.unwrap().layout);
+    query_ = std::move(read->sql);
+    layout_ = std::move(read->layout);
     if (not layout_.fields) {
       layout_.hidden.append_range(plan.extra);
     }
@@ -2352,7 +2353,8 @@ public:
     auto completed = true;
     while (auto slice_result = co_await slice_stream.next()) {
       if (slice_result->is_err()) {
-        emit_mysql_error(std::move(*slice_result).unwrap_err(), ctx);
+        emit_mysql_error(std::move(*slice_result).unwrap_err(), ctx,
+                         args_.optimization.stages());
         completed = false;
         break;
       }
@@ -2536,20 +2538,9 @@ public:
       }
       return {};
     });
-    pushdown::add_pushdown_argument(d, &FromMySQLArgs::pushdown);
     d.optimization(&FromMySQLArgs::optimization);
-    // A table read takes over the stages that MySQL spells. Queries of the
-    // user are opaque.
-    d.query_plan([](FromMySQLArgs const& args,
-                    ir::QueryChain const& chain) -> ir::Absorption {
-      if (not pushdown::pushdown_enabled(args.pushdown)) {
-        return {.prefix = 0, .declined = "`pushdown=false`"};
-      }
-      if (not args.table or args.sql or args.show) {
-        return {.prefix = 0, .declined = "the query of the user is opaque"};
-      }
-      return absorb_stages(chain, args.live and args.live->inner);
-    });
+    d.operator_location(&FromMySQLArgs::operator_location);
+    pushdown::add_pushdown(d, &FromMySQLArgs::pushdown, make_planner);
     return d.without_optimize();
   }
 };

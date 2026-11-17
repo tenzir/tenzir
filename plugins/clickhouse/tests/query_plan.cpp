@@ -33,6 +33,26 @@ namespace tenzir::plugins::clickhouse {
 
 namespace {
 
+/// The field at `path` as an expression.
+auto field_at(std::vector<std::string> const& path) -> ast::expression {
+  auto result = ast::expression{
+    ast::root_field{ast::identifier{path.front(), location::unknown}, false}};
+  for (auto i = size_t{1}; i < path.size(); ++i) {
+    result = ast::field_access{std::move(result), location::unknown, false,
+                               ast::identifier{path[i], location::unknown}};
+  }
+  return result;
+}
+
+/// The arguments of a column that reads `input`, if any.
+auto args_of(Option<std::vector<std::string>> const& input)
+  -> std::vector<ast::expression> {
+  if (not input) {
+    return {};
+  }
+  return {field_at(*input)};
+}
+
 auto parse(std::string_view source) -> ast::expression {
   auto dh = collecting_diagnostic_handler{};
   auto provider = session_provider::make(dh, test::builtin_registry());
@@ -132,7 +152,7 @@ auto aggregate(std::vector<ir::AggregateColumn> columns) -> ir::QueryStage {
 }
 
 auto key(std::vector<std::string> field) -> ir::AggregateColumn {
-  return {.output = field, .function = None{}, .input = field};
+  return {.output = field, .function = None{}, .args = {field_at(field)}};
 }
 
 auto call(std::string output, std::string function,
@@ -140,7 +160,7 @@ auto call(std::string output, std::string function,
   -> ir::AggregateColumn {
   return {.output = {std::move(output)},
           .function = std::move(function),
-          .input = std::move(input)};
+          .args = args_of(input)};
 }
 
 auto sort(std::vector<std::string> field, bool descending = false)
@@ -158,27 +178,25 @@ auto limit(uint64_t count) -> ir::QueryStage {
 auto bind_error(TableBinding const& table, ir::QueryPlan const& plan)
   -> std::string {
   auto result = bind_plan(table, plan);
-  if (result.is_ok()) {
-    return "ok";
-  }
-  auto const& error = result.unwrap_err();
-  auto const kind = error.kind == BindError::Kind::field   ? "field"
-                    : error.kind == BindError::Kind::stage ? "stage"
-                                                           : "sort";
-  return fmt::format("{} `{}`: {}", kind, error.subject, error.reason);
+  return result.is_ok() ? "ok" : result.unwrap_err();
 }
 
 /// Renders the query that reads `plan` from `tbl`.
 auto query(TableBinding const& table, ir::QueryPlan const& plan,
            std::string_view selection = "*") -> std::string {
-  auto bound = bind_plan(table, plan);
-  REQUIRE(bound.is_ok());
-  auto columns = std::vector<std::string>{"id", "x"};
-  auto read = make_table_read("tbl", selection, plan, columns, bound.unwrap());
+  REQUIRE(bind_plan(table, plan).is_ok());
+  auto const known = ClickHouseTable{
+    .table = {.from = "tbl",
+              .columns = {"id", "x"},
+              .selection = std::string{selection},
+              .window = None{}},
+    .binding = table,
+  };
+  auto read = planner(false, pushdown::SqlMode::table).plan(plan, &known);
   if (read.is_err()) {
     return fmt::format("error: {}", read.unwrap_err());
   }
-  return read.unwrap().sql;
+  return read.unwrap().read.sql;
 }
 
 } // namespace
@@ -242,21 +260,20 @@ TEST("fields spell from their syntax before binding") {
 
 TEST("aggregations and exclusions spell in ClickHouse SQL") {
   auto const dialect = ClickHouseDialect{};
-  CHECK_EQUAL(dialect.render_aggregate("count", None{}).value_or("<none>"),
-              "toInt64(count())");
-  CHECK_EQUAL(
-    dialect.render_aggregate("count", std::string{"`x`"}).value_or("<none>"),
-    "toInt64(count(`x`))");
-  CHECK_EQUAL(
-    dialect.render_aggregate("min", std::string{"`x`"}).value_or("<none>"),
-    "minOrNull(`x`)");
-  CHECK_EQUAL(
-    dialect.render_aggregate("max", std::string{"`x`"}).value_or("<none>"),
-    "maxOrNull(`x`)");
-  // A sum or a mean may yield `NaN`, which the operator reads as `null`.
-  CHECK(not dialect.render_aggregate("sum", std::string{"`x`"}));
-  CHECK(not dialect.render_aggregate("mean", std::string{"`x`"}));
-  CHECK(not dialect.render_aggregate("min", None{}));
+  auto const spelling = [&](std::string_view name, size_t arity) {
+    auto const* row = pushdown::find_row(dialect.aggregations(), name, arity);
+    return row ? std::string{row->spelling} : std::string{"<none>"};
+  };
+  CHECK_EQUAL(spelling("count", 0), "toInt64(count())");
+  CHECK_EQUAL(spelling("count", 1), "toInt64(count({0}))");
+  CHECK_EQUAL(spelling("min", 1), "minOrNull({0})");
+  CHECK_EQUAL(spelling("max", 1), "maxOrNull({0})");
+  CHECK_EQUAL(spelling("count_if", 2), "toInt64(countIf({0}, {1:pred}))");
+  CHECK_EQUAL(spelling("count_distinct", 1), "toInt64(uniqExact({0}))");
+  CHECK_EQUAL(spelling("sum", 1), "sumOrNull({0})");
+  CHECK_EQUAL(spelling("mean", 1), "avgOrNull({0})");
+  CHECK_EQUAL(spelling("median", 1), "<none>");
+  CHECK_EQUAL(spelling("min", 0), "<none>");
   auto columns = std::vector<std::string>{"a", "b`c"};
   CHECK_EQUAL(dialect.render_exclude(columns).value_or("<none>"),
               R"(* EXCEPT (`a`, `b\`c`))");
@@ -269,20 +286,28 @@ TEST("absorption takes over the stages that ClickHouse spells") {
                filter("x.capitalize() == \"A\"")},
     .end = "",
   };
-  auto absorption = absorb_stages(chain, "ClickHouse");
+  auto absorption
+    = pushdown::absorb(chain, planner(false, pushdown::SqlMode::table));
   CHECK_EQUAL(absorption.prefix, size_t{3});
   CHECK_EQUAL(absorption.declined, "ClickHouse cannot spell the stage");
   chain.stages = {aggregate({key({"y"}), call("n", "count")}), filter("n > 1")};
-  CHECK_EQUAL(absorb_stages(chain, "ClickHouse").prefix, size_t{2});
-  chain.stages = {aggregate({call("s", "sum", std::vector<std::string>{"x"})})};
-  CHECK_EQUAL(absorb_stages(chain, "ClickHouse").prefix, size_t{0});
+  CHECK_EQUAL(
+    pushdown::absorb(chain, planner(false, pushdown::SqlMode::table)).prefix,
+    size_t{2});
+  chain.stages
+    = {aggregate({call("s", "median", std::vector<std::string>{"x"})})};
+  CHECK_EQUAL(
+    pushdown::absorb(chain, planner(false, pushdown::SqlMode::table)).prefix,
+    size_t{0});
   // Names that start with `__tenzir_` belong to the query.
   chain.stages = {filter("__tenzir_x > 0")};
-  CHECK_EQUAL(absorb_stages(chain, "ClickHouse").prefix, size_t{0});
+  CHECK_EQUAL(
+    pushdown::absorb(chain, planner(false, pushdown::SqlMode::table)).prefix,
+    size_t{0});
   // Hydrolix takes over the same stages and names itself when it declines.
   chain.stages = {filter("x > 0"), sort({"x"}, true), limit(3),
                   filter("x.capitalize() == \"A\"")};
-  absorption = absorb_stages(chain, "Hydrolix");
+  absorption = pushdown::absorb(chain, planner(true, pushdown::SqlMode::table));
   CHECK_EQUAL(absorption.prefix, size_t{3});
   CHECK_EQUAL(absorption.declined, "Hydrolix cannot spell the stage");
 }
@@ -486,9 +511,9 @@ TEST("null checks of values below a JSON column consider objects") {
 TEST("sorts by values below a JSON column end the order") {
   auto const plain = make_binding(plain_table());
   auto const error
-    = std::string{"sort `j.k`: the query would return the order of the sort "
-                  "for the stages after it in a column of a dynamic type, "
-                  "which the operator cannot read"};
+    = std::string{"cannot sort by the JSON field `j.k` before further "
+                  "stages: the query would return the order in a column of a "
+                  "dynamic type, which the operator cannot read"};
   CHECK_EQUAL(bind_error(plain, {sort({"j", "k"}), limit(1)}), "ok");
   CHECK_EQUAL(bind_error(plain, {sort({"j", "k"}), filter("x > 0")}), "ok");
   CHECK_EQUAL(bind_error(plain, {sort({"j", "k"}), limit(1),
@@ -505,9 +530,9 @@ TEST("sorts by values below a JSON column end the order") {
   auto const catch_all = make_binding(catch_all_table());
   CHECK_EQUAL(bind_error(catch_all, {sort({"src_endpoint", "hostname"}),
                                      limit(1), sort({"time"})}),
-              "sort `src_endpoint.hostname`: the query would return the order "
-              "of the sort for the stages after it in a column of a dynamic "
-              "type, which the operator cannot read");
+              "cannot sort by the JSON field `src_endpoint.hostname` before "
+              "further stages: the query would return the order in a column "
+              "of a dynamic type, which the operator cannot read");
 }
 
 TEST("narrowed tuples read their elements unambiguously") {
@@ -536,17 +561,18 @@ TEST("plans bind the fields that they read from the table") {
   CHECK(bound.unwrap().sorts_dynamic);
   CHECK(not bound.unwrap().summarizes);
   CHECK_EQUAL(bind_error(plain, {select({{{"v"}, {"j", "k"}}})}),
-              "field `j.k`: the field lies below a `JSON` column and has a "
+              "cannot bind `j.k`: the field lies below a `JSON` column and has "
+              "a "
               "dynamic type, which the operator cannot read as a result "
               "column");
   CHECK_EQUAL(
     bind_error(plain, {aggregate({call("n", "count",
                                        std::vector<std::string>{"j", "k"})})}),
-    "field `j.k`: the field lies below a `JSON` column and has a "
+    "cannot bind `j.k`: the field lies below a `JSON` column and has a "
     "dynamic type, which the operator cannot read as a result "
     "column");
   CHECK_EQUAL(bind_error(plain, {filter("p == null")}),
-              "field `p`: the column `p` has the type `Point`, which the "
+              "cannot bind `p`: the column `p` has the type `Point`, which the "
               "operator cannot read");
   // The stages after a selection read its result.
   bound
@@ -560,13 +586,13 @@ TEST("plans bind the fields that they read from the table") {
                                      sort({"time"}), limit(1)}),
               "ok");
   CHECK_EQUAL(bind_error(catch_all, {select({{{"time"}, {"time"}}})}),
-              "field `time`: `select` on a table with the catch-all column "
+              "`select` on a table with the catch-all column "
               "`event` reads fields that may live in any of its columns");
   CHECK_EQUAL(bind_error(catch_all, {drop({{"time"}})}),
-              "field `time`: `drop` on a table with the catch-all column "
+              "`drop` on a table with the catch-all column "
               "`event` reads fields that may live in any of its columns");
   CHECK_EQUAL(bind_error(catch_all, {aggregate({call("n", "count")})}),
-              "stage `summarize`: `summarize` on a table with the catch-all "
+              "`summarize` on a table with the catch-all "
               "column `event` reads fields that may live in any of its "
               "columns");
 }

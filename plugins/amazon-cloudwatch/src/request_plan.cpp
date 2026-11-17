@@ -10,7 +10,7 @@
 
 #include "cloudwatch/operators.hpp"
 
-#include <tenzir/pushdown/sql_source.hpp>
+#include <tenzir/pushdown/time_window.hpp>
 #include <tenzir/tql2/ast.hpp>
 #include <tenzir/try.hpp>
 #include <tenzir/variant.hpp>
@@ -50,30 +50,10 @@ constexpr auto max_stream_name_length = size_t{512};
 /// beyond ASCII.
 constexpr auto max_pattern_length = size_t{1024};
 
-constexpr auto ns_per_ms = int64_t{1'000'000};
-
-auto floor_div(int64_t x, int64_t y) -> int64_t {
-  auto q = x / y;
-  return x % y < 0 ? q - 1 : q;
-}
-
-auto ceil_div(int64_t x, int64_t y) -> int64_t {
-  auto q = x / y;
-  return x % y > 0 ? q + 1 : q;
-}
-
-/// Returns the name of the top-level field that `expr` reads, if it is one.
-auto top_level_field(ast::expression const& expr) -> Option<std::string> {
-  TRY(auto path, ast::field_path::try_from(expr));
-  if (path.path().size() != 1 or path.path().front().has_question_mark) {
-    return None{};
-  }
-  return std::string{path.path().front().id.name};
-}
-
+/// Returns whether `expr` reads the top-level field `name`.
 auto is_field(ast::expression const& expr, std::string_view name) -> bool {
-  auto field = top_level_field(expr);
-  return field and *field == name;
+  auto path = ir::field_segments(expr);
+  return path and path->size() == 1 and path->front() == name;
 }
 
 auto string_constant(ast::expression const& expr) -> Option<std::string> {
@@ -148,64 +128,13 @@ auto message_term(ast::expression const& expr) -> Option<std::string> {
   return phrase;
 }
 
-/// Collects the operands of a chain of `op`.
-auto flatten(ast::expression const& expr, ast::binary_op op,
-             std::vector<ast::expression const*>& result) -> void {
-  if (auto const* binary = try_as<ast::binary_expr>(expr);
-      binary and binary->op == op) {
-    flatten(binary->left, op, result);
-    flatten(binary->right, op, result);
-    return;
-  }
-  result.push_back(&expr);
-}
-
 /// What the filters that a read took over add up to.
 struct CloudWatchFilters {
   std::vector<std::string> required;
   std::vector<std::string> excluded;
   std::vector<std::vector<std::string>> optional;
-  Option<int64_t> first_ms;
-  Option<int64_t> last_ms;
   Option<std::vector<std::string>> streams;
   bool empty = false;
-
-  /// Narrows the window to the events whose timestamp compares with `value`
-  /// as `op` does, for events with timestamps in whole milliseconds.
-  auto narrow(ast::binary_op op, time value) -> void {
-    auto const ns = value.time_since_epoch().count();
-    auto const lower = [&](int64_t ms) {
-      first_ms = first_ms ? std::max(*first_ms, ms) : ms;
-    };
-    auto const upper = [&](int64_t ms) {
-      last_ms = last_ms ? std::min(*last_ms, ms) : ms;
-    };
-    using enum ast::binary_op;
-    switch (op) {
-      case geq:
-        lower(ceil_div(ns, ns_per_ms));
-        return;
-      case gt:
-        lower(floor_div(ns, ns_per_ms) + 1);
-        return;
-      case leq:
-        upper(floor_div(ns, ns_per_ms));
-        return;
-      case lt:
-        upper(ceil_div(ns, ns_per_ms) - 1);
-        return;
-      case eq:
-        if (ns % ns_per_ms != 0) {
-          empty = true;
-          return;
-        }
-        lower(ns / ns_per_ms);
-        upper(ns / ns_per_ms);
-        return;
-      default:
-        TENZIR_UNREACHABLE();
-    }
-  }
 
   auto restrict_streams(std::vector<std::string> names) -> void {
     if (not streams) {
@@ -281,17 +210,22 @@ auto add_conjunct(FromCloudWatchArgs const& args, FromMode mode,
   }
   using enum ast::binary_op;
   if (binary->op == or_) {
-    auto operands = std::vector<ast::expression const*>{};
-    flatten(expr, or_, operands);
+    // Every operand of a chain of `or` is a term of the message.
     auto group = std::vector<std::string>{};
-    for (auto const* operand : operands) {
-      auto phrase = message_term(*operand);
+    auto const terms
+      = [&](this auto const& self, ast::expression const& x) -> bool {
+      auto const* inner = try_as<ast::binary_expr>(x);
+      if (inner and inner->op == or_) {
+        return self(inner->left) and self(inner->right);
+      }
+      auto phrase = message_term(x);
       if (not phrase) {
         return false;
       }
       group.push_back(std::move(*phrase));
-    }
-    if (not patterns) {
+      return true;
+    };
+    if (not terms(expr) or not patterns) {
       return false;
     }
     filters.optional.push_back(std::move(group));
@@ -314,42 +248,22 @@ auto add_conjunct(FromCloudWatchArgs const& args, FromMode mode,
     return false;
   }
   // Put the field on the left.
-  auto op = binary->op;
+  auto const op = binary->op;
   auto const* field = &binary->left;
   auto const* value = &binary->right;
-  if (not top_level_field(*field)) {
+  if (not ir::field_segments(*field)) {
     std::swap(field, value);
-    switch (op) {
-      case lt:
-        op = gt;
-        break;
-      case leq:
-        op = geq;
-        break;
-      case gt:
-        op = lt;
-        break;
-      case geq:
-        op = leq;
-        break;
-      default:
-        break;
-    }
   }
-  auto name = top_level_field(*field);
-  if (not name) {
-    return false;
-  }
-  if (*name == "timestamp") {
+  if (is_field(*field, "timestamp")) {
     auto const* constant = try_as<ast::constant>(*value);
     auto const* instant = constant ? try_as<time>(constant->value) : nullptr;
     if (not instant or mode == FromMode::live) {
       return false;
     }
-    filters.narrow(op, *instant);
+    // The window of the filters spans the timestamps that they compare with.
     return true;
   }
-  if (*name == "log_stream" and op == eq) {
+  if (is_field(*field, "log_stream") and op == eq) {
     if (mode != FromMode::search or args.stream or args.stream_prefix) {
       return false;
     }
@@ -380,162 +294,116 @@ auto from_mode(FromCloudWatchArgs const& args) -> FromMode {
   return FromMode::live;
 }
 
-namespace {
-
-/// Spells `stages` like `plan_cloudwatch_request`, but only checks the length
-/// of the filter pattern if `limit_pattern` is set.
-auto plan_request(FromCloudWatchArgs const& args,
-                  std::span<ir::QueryStage const> stages, bool limit_pattern)
-  -> Option<CloudWatchRequest> {
-  auto const mode = from_mode(args);
-  auto filters = CloudWatchFilters{};
-  auto limit = Option<uint64_t>{};
-  if (args.count) {
-    limit = args.count->inner;
-  }
-  auto limited = false;
-  for (auto const& stage : stages) {
-    // The user's `count` limits the events before the stages after the
-    // operator, and a limit those of the stages before it, so that only
-    // further limits follow either.
-    if ((args.count or limited) and not is<ir::QueryStage::Limit>(stage.kind)) {
-      return None{};
-    }
-    auto ok = match(
-      stage.kind,
-      [&](ir::QueryStage::Filter const& x) {
-        auto conjuncts = std::vector<ast::expression const*>{};
-        flatten(x.predicate, ast::binary_op::and_, conjuncts);
-        return std::ranges::all_of(conjuncts, [&](auto const* conjunct) {
-          return add_conjunct(args, mode, *conjunct, filters);
-        });
-      },
-      [&](ir::QueryStage::Limit const& x) {
-        if (mode == FromMode::live) {
-          return false;
-        }
-        limit = limit ? std::min(*limit, x.count) : x.count;
-        limited = true;
-        return true;
-      },
-      [](auto const&) {
-        return false;
-      });
-    if (not ok) {
-      return None{};
-    }
-  }
-  TRY(auto pattern, filters.pattern());
-  if (limit_pattern and pattern and pattern->size() > max_pattern_length) {
-    return None{};
-  }
-  auto result = CloudWatchRequest{};
-  result.pattern = std::move(pattern);
-  result.limit = limit;
-  result.empty = filters.empty;
-  if (filters.streams) {
-    if (filters.streams->size() > max_stream_names
-        or not std::ranges::all_of(*filters.streams, valid_stream_name)) {
-      return None{};
-    }
-    result.empty = result.empty or filters.streams->empty();
-    result.streams = std::move(filters.streams);
-  }
-  // Timestamps are not negative, which the requests reject anyway.
-  auto first_ms = Option<int64_t>{};
-  if (filters.first_ms and *filters.first_ms > 0) {
-    first_ms = filters.first_ms;
-  }
-  if (filters.last_ms and *filters.last_ms < 0) {
-    result.empty = true;
-  }
-  // The window of the filters narrows the user's bounds, which are inclusive
-  // except for the end of `GetLogEvents`.
-  auto const exclusive_end = mode == FromMode::replay;
-  if (args.start) {
-    result.start_time = epoch_ms(args.start->inner);
-  }
-  if (first_ms) {
-    result.start_time
-      = result.start_time ? std::max(*result.start_time, *first_ms) : *first_ms;
-  }
-  if (args.end) {
-    result.end_time = epoch_ms(args.end->inner);
-  }
-  if (filters.last_ms) {
-    auto const end = exclusive_end ? *filters.last_ms + 1 : *filters.last_ms;
-    result.end_time = result.end_time ? std::min(*result.end_time, end) : end;
-  }
-  if (first_ms or filters.last_ms) {
-    auto first = first_ms.value_or(0);
-    auto last = filters.last_ms.value_or(std::numeric_limits<int64_t>::max());
-    if (args.start) {
-      first = std::max(first, epoch_ms(args.start->inner));
-    }
-    if (args.end) {
-      auto const end = epoch_ms(args.end->inner);
-      last = std::min(last, exclusive_end ? end - 1 : end);
-    }
-    result.empty = result.empty or first > last;
-  }
-  return result;
-}
-
-} // namespace
-
-auto plan_cloudwatch_request(FromCloudWatchArgs const& args,
-                             std::span<ir::QueryStage const> stages)
-  -> Option<CloudWatchRequest> {
-  return plan_request(args, stages, true);
-}
-
-auto absorb_cloudwatch_stages(FromCloudWatchArgs const& args,
-                              ir::QueryChain const& chain) -> ir::Absorption {
-  auto const mode = from_mode(args);
-  auto result = pushdown::absorb_prefix(
-    chain,
-    [&](std::span<ir::QueryStage const> stages) {
-      return plan_cloudwatch_request(args, stages).is_some();
-    },
-    {
-      .target = "CloudWatch Logs",
-      .filters_only = false,
-      .veto = [&](ir::QueryStage const& stage) -> Option<std::string> {
+auto cloudwatch_planner(FromCloudWatchArgs args)
+  -> pushdown::Planner<CloudWatchRequest> {
+  return {
+    .target = "CloudWatch Logs",
+    .plan = [args = std::move(args)](
+              std::span<ir::QueryStage const> stages,
+              std::monostate const*) -> Result<CloudWatchRequest, std::string> {
+      auto const declined
+        = std::string{"CloudWatch Logs cannot spell the stage"};
+      auto const mode = from_mode(args);
+      auto filters = CloudWatchFilters{};
+      auto limit = args.count ? Option<uint64_t>{args.count->inner} : None{};
+      auto limited = false;
+      auto window = pushdown::TimeWindow{};
+      for (auto const& stage : stages) {
         auto const is_filter = is<ir::QueryStage::Filter>(stage.kind);
         auto const is_limit = is<ir::QueryStage::Limit>(stage.kind);
         if (mode == FromMode::live and not is_filter) {
-          return std::string{"a live read takes over filters only"};
+          return Err{std::string{"a live read takes over filters only"}};
         }
+        // The user's `count` limits the events before the stages after the
+        // operator, and a limit those of the stages before it, so that only
+        // further limits follow either.
         if (args.count and not is_limit) {
-          return std::string{"`count` limits the events before the stage"};
+          return Err{std::string{"`count` limits the events before the stage"}};
         }
-        if (is_filter or is_limit) {
-          return None{};
+        auto const after_limit = limited and not is_limit;
+        auto reason = match(
+          stage.kind,
+          [&](ir::QueryStage::Filter const& x) -> Option<std::string> {
+            window = pushdown::intersect(
+              window, pushdown::time_window(x.predicate, "timestamp"));
+            if (std::ranges::all_of(ir::split_conjunction(x.predicate),
+                                    [&](ast::expression const& conjunct) {
+                                      return add_conjunct(args, mode, conjunct,
+                                                          filters);
+                                    })) {
+              return None{};
+            }
+            return declined;
+          },
+          [&](ir::QueryStage::Limit const& x) -> Option<std::string> {
+            limit = limit ? std::min(*limit, x.count) : x.count;
+            limited = true;
+            return None{};
+          },
+          [](ir::QueryStage::Sort const&) -> Option<std::string> {
+            return "CloudWatch Logs returns events in its own order";
+          },
+          [](ir::QueryStage::Aggregate const&) -> Option<std::string> {
+            return "CloudWatch Logs reads events without aggregating them";
+          },
+          [](auto const&) -> Option<std::string> {
+            return "CloudWatch Logs returns a fixed set of fields";
+          });
+        if (reason or after_limit) {
+          return Err{reason.value_or(declined)};
         }
-        if (is<ir::QueryStage::Sort>(stage.kind)) {
-          return std::string{"CloudWatch Logs returns events in its own "
-                             "order"};
+      }
+      auto pattern = filters.pattern();
+      if (not pattern) {
+        return Err{declined};
+      }
+      if (*pattern and (*pattern)->size() > max_pattern_length) {
+        return Err{fmt::format("the filter pattern would exceed the limit of "
+                               "{} characters of CloudWatch Logs",
+                               max_pattern_length)};
+      }
+      auto result = CloudWatchRequest{};
+      result.pattern = std::move(*pattern);
+      result.limit = limit;
+      result.empty = filters.empty;
+      if (filters.streams) {
+        if (filters.streams->size() > max_stream_names
+            or not std::ranges::all_of(*filters.streams, valid_stream_name)) {
+          return Err{declined};
         }
-        if (is<ir::QueryStage::Aggregate>(stage.kind)) {
-          return std::string{"CloudWatch Logs reads events without "
-                             "aggregating them"};
-        }
-        return std::string{"CloudWatch Logs returns a fixed set of fields"};
-      },
-    });
-  // Name the length of the filter pattern if it is what rules out the next
-  // stage, which then stays in Tenzir together with the stages after it.
-  if (result.prefix < chain.stages.size()) {
-    auto const next = std::span{chain.stages}.first(result.prefix + 1);
-    if (not plan_request(args, next, true)
-        and plan_request(args, next, false)) {
-      result.declined
-        = fmt::format("the filter pattern would exceed the limit of {} "
-                      "characters of CloudWatch Logs",
-                      max_pattern_length);
-    }
-  }
-  return result;
+        result.empty = result.empty or filters.streams->empty();
+        result.streams = std::move(filters.streams);
+      }
+      // Events have timestamps in whole milliseconds, which are not negative,
+      // as the requests reject. The window of the filters narrows the user's
+      // bounds, which are inclusive except for the end of `GetLogEvents`.
+      auto const exclusive_end = mode == FromMode::replay;
+      auto [first, last] = pushdown::in_units(
+        window, std::chrono::milliseconds{1}, pushdown::Round::inward);
+      if (first and *first <= 0) {
+        first = None{};
+      }
+      if (args.start) {
+        first = std::max(first.value_or(std::numeric_limits<int64_t>::min()),
+                         epoch_ms(args.start->inner));
+      }
+      if (args.end) {
+        last = std::min(last.value_or(std::numeric_limits<int64_t>::max()),
+                        epoch_ms(args.end->inner) - (exclusive_end ? 1 : 0));
+      }
+      result.start_time = first;
+      result.end_time = last.transform([&](int64_t x) {
+        return exclusive_end ? x + 1 : x;
+      });
+      if (window.begin or window.end) {
+        result.empty
+          = result.empty
+            or std::max(first.value_or(0), int64_t{0})
+                 > last.value_or(std::numeric_limits<int64_t>::max());
+      }
+      return result;
+    },
+  };
 }
 
 } // namespace tenzir::plugins::cloudwatch

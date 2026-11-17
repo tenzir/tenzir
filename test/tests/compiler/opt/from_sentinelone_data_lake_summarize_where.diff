@@ -112,7 +112,6 @@
 -                {
 -                  id: `events` @ [1]:210..216 from 0,
 -                  has_question_mark: false
--                }
 +              has_question_mark: false,
 +              name: `type` @ [1]:169..173 from 0,
 +              location: [1]:163..173 from 0
@@ -129,9 +128,16 @@
 +                "src",
 +                "ip"
 +              ],
-+              input: [
-+                "src",
-+                "ip"
++              args: [
++                field_access {
++                  left: root_field {
++                    id: `src` @ [1]:202..205 from 0,
++                    has_question_mark: false
++                  },
++                  has_question_mark: false,
++                  name: `ip` @ [1]:206..208 from 0,
++                  location: [1]:202..208 from 0
+                 }
                ]
              },
 -            call: {
@@ -141,35 +147,19 @@
 -                ],
 -                ref: std::count/fn
 -              },
--              args: [
--                
 +            {
 +              output: [
 +                "events"
-               ],
++              ],
++              function: "count",
+               args: [
+                 
+-              ],
 -              method: false,
 -              location: [1]:217..224 from 0
-+              function: "count"
-             }
+-            }
 -          }
-+          ],
-+          schema_name: "tenzir.summarize"
-+        }
-+      ],
-+      declined: "`to_stdout` is no stage"
-+    },
-+    GenericIr {
-+      desc: "to_stdout",
-+      store: {
-+        op: {
-+          path: [
-+            `to_stdout` @ [1]:224..224 from 0
-+          ],
-+          ref: std::to_stdout/op
-+        },
-+        args: [
-+          
-         ],
+-        ],
 -        groups: [
 -          {
 -            expr: {
@@ -192,10 +182,27 @@
 -                  id: `ip` @ [1]:206..208 from 0,
 -                  has_question_mark: false
 -                }
--              ]
--            }
+               ]
+             }
 -          }
--        ],
++          ],
++          schema_name: "tenzir.summarize"
++        }
++      ],
++      declined: "`to_stdout` is no stage"
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:224..224 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
+         ],
 -        indices: [
 -          -1,
 -          0

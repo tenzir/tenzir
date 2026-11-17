@@ -2026,26 +2026,9 @@ auto input_projection(Config const& config) -> Option<ir::OptimizeProjection> {
   return projection;
 }
 
-/// Returns the segments of `path` if it names a field directly, without
-/// `this` or an optional access.
-auto plain_segments(ast::field_path const& path)
-  -> Option<std::vector<std::string>> {
-  if (path.has_this() or path.path().empty()) {
-    return None{};
-  }
-  auto result = std::vector<std::string>{};
-  for (auto const& segment : path.path()) {
-    if (segment.has_question_mark) {
-      return None{};
-    }
-    result.push_back(segment.id.name);
-  }
-  return result;
-}
-
 /// Describes the summary of `config` for a source that may compute it, or
-/// returns `None` if it is no plain aggregation of input fields.
-auto describe_aggregation(Config const& config)
+/// returns `None` if it is no plain aggregation.
+auto describe_aggregation(Config const& config, registry const& reg)
   -> Option<std::vector<ir::AggregateColumn>> {
   // As for the input projection, only a single summary after the input ends
   // is a plain aggregation.
@@ -2057,13 +2040,12 @@ auto describe_aggregation(Config const& config)
   for (auto index : config.indices) {
     if (index < 0) {
       auto const& group = config.groups[static_cast<size_t>(-index - 1)];
-      TRY(auto input, plain_segments(group.expr));
-      TRY(auto output, group.dest ? plain_segments(*group.dest)
-                                  : Option<std::vector<std::string>>{input});
+      TRY(auto output, ir::field_segments(group.dest ? group.dest->inner()
+                                                     : group.expr.inner()));
       columns.push_back({
         .output = std::move(output),
         .function = None{},
-        .input = std::move(input),
+        .args = {group.expr.inner()},
       });
       continue;
     }
@@ -2073,22 +2055,50 @@ auto describe_aggregation(Config const& config)
     // function of the standard library.
     if (call.method or not call.fn.ref.resolved()
         or call.fn.ref.pkg() != entity_pkg_std
-        or call.fn.ref.segments().size() != 1 or call.args.size() > 1) {
+        or call.fn.ref.segments().size() != 1) {
       return None{};
     }
-    auto input = Option<std::vector<std::string>>{};
-    if (not call.args.empty()) {
-      TRY(auto path, ast::field_path::try_from(call.args.front()));
-      TRY(input, plain_segments(path));
-    }
     TRY(auto output, aggregate.dest
-                       ? plain_segments(*aggregate.dest)
+                       ? ir::field_segments(aggregate.dest->inner())
                        : Option<std::vector<std::string>>{
                            std::vector{aggregate_name(aggregate)}});
+    // A lambda reads the values of the first argument that are not null, so
+    // that `count_if(x, v => v > 1)` becomes
+    // `count_if(x, x != null and x > 1)`.
+    auto args = call.args;
+    auto const* lambda
+      = args.size() == 2 ? try_as<ast::lambda_expr>(args[1]) : nullptr;
+    if (lambda and lambda->params.size() != 1) {
+      return None{};
+    }
+    if (lambda) {
+      auto const& param = lambda->params.front().name;
+      TRY(args[1],
+          ast::substitute_refs(
+            lambda->body, reg,
+            [&](ast::field_path const& field) -> Option<ast::expression> {
+              auto path = field.path();
+              if (field.has_this() or path.empty()
+                  or path.front().id.name != param) {
+                return field.inner();
+              }
+              auto result = args[0];
+              for (auto const& segment : path.subspan(1)) {
+                result
+                  = ast::field_access{std::move(result), location::unknown,
+                                      segment.has_question_mark, segment.id};
+              }
+              return result;
+            }));
+      args[1] = ast::binary_expr{
+        ast::binary_expr{args[0], ast::binary_op::neq,
+                         ast::constant{caf::none, location::unknown}},
+        ast::binary_op::and_, std::move(args[1])};
+    }
     columns.push_back({
       .output = std::move(output),
       .function = call.fn.ref.segments().front(),
-      .input = std::move(input),
+      .args = std::move(args),
     });
   }
   // A field that contains another one would merge or overwrite values in the
@@ -2219,9 +2229,9 @@ public:
     return result;
   }
 
-  auto query_stage(ir::OptimizeCtx const&) const
+  auto query_stage(ir::OptimizeCtx const& ctx) const
     -> Option<ir::QueryStage> override {
-    TRY(auto columns, describe_aggregation(config_));
+    TRY(auto columns, describe_aggregation(config_, *ctx.reg));
     return ir::QueryStage{ir::QueryStage::Aggregate{
       .columns = std::move(columns),
       .schema_name = "tenzir.summarize",

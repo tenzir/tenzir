@@ -1,0 +1,28 @@
+{
+  y: "bar",
+  big: 0,
+  kinds: 1,
+  total: 0,
+  avg: 0.0,
+}
+{
+  y: "baz",
+  big: 1,
+  kinds: 1,
+  total: 9,
+  avg: 9.0,
+}
+{
+  y: "foo",
+  big: 1,
+  kinds: 2,
+  total: 2,
+  avg: 1.0,
+}
+{
+  y: "qux",
+  big: 1,
+  kinds: 1,
+  total: 11,
+  avg: 11.0,
+}

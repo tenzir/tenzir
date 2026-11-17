@@ -40,7 +40,10 @@
 +              output: [
 +                "n"
 +              ],
-+              function: "count"
++              function: "count",
++              args: [
++                
++              ]
 +            }
 +          ],
 +          schema_name: "tenzir.summarize"

@@ -103,8 +103,6 @@
 -              path: [
 -                {
 -                  id: `events` @ [1]:139..145 from 0,
--                  has_question_mark: false
--                }
 +      plan: [
 +        Aggregate {
 +          columns: [
@@ -112,8 +110,11 @@
 +              output: [
 +                "ip"
 +              ],
-+              input: [
-+                "src_ip"
++              args: [
++                root_field {
++                  id: `src_ip` @ [1]:114..120 from 0,
+                   has_question_mark: false
+                 }
                ]
              },
 -            call: {
@@ -123,12 +124,14 @@
 -                ],
 -                ref: std::count/fn
 -              },
--              args: [
--                
 +            {
 +              output: [
 +                "events"
-               ],
++              ],
++              function: "count",
+               args: [
+                 
+-              ],
 -              method: false,
 -              location: [1]:146..153 from 0
 -            }
@@ -145,8 +148,7 @@
 -                  id: `first` @ [1]:155..160 from 0,
 -                  has_question_mark: false
 -                }
--              ]
-+              function: "count"
+               ]
              },
 -            call: {
 -              fn: {
@@ -155,15 +157,17 @@
 -                ],
 -                ref: std::min/fn
 -              },
--              args: [
--                root_field {
--                  id: `id` @ [1]:165..167 from 0,
--                  has_question_mark: false
--                }
 +            {
 +              output: [
 +                "first"
-               ],
++              ],
++              function: "min",
+               args: [
+                 root_field {
+-                  id: `id` @ [1]:165..167 from 0,
+-                  has_question_mark: false
+-                }
+-              ],
 -              method: false,
 -              location: [1]:161..168 from 0
 -            }
@@ -180,11 +184,9 @@
 -              path: [
 -                {
 -                  id: `ip` @ [1]:135..137 from 0,
--                  has_question_mark: false
--                }
-+              function: "min",
-+              input: [
-+                "id"
++                  id: `id` @ [1]:122..124 from 0,
+                   has_question_mark: false
+                 }
                ]
              }
 -          }

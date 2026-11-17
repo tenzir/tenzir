@@ -8,11 +8,11 @@ assertions:
     azure_log_analytics:
       queries: 1
       tokens: 1
-      appended: ""
+      appended: "\n| project ['Port'] = column_ifexists('Port', dynamic(null)), ['Name'] = column_ifexists('Name', dynamic(null))"
 ---
 
-// With `pushdown=false`, the query goes out unchanged and the stages run in
-// Tenzir, with the semantics of TQL.
+// With `pushdown=false`, the stages run in Tenzir, with the semantics of TQL.
+// The query only keeps the fields that they read.
 from_azure_log_analytics env("AZLOG_QUERY"),
   workspace_id=env("AZLOG_WORKSPACE"),
   azure_auth={

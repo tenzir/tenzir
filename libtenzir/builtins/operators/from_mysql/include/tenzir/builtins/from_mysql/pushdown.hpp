@@ -10,7 +10,7 @@
 
 #include <tenzir/ir.hpp>
 #include <tenzir/option.hpp>
-#include <tenzir/pushdown/plan.hpp>
+#include <tenzir/pushdown/redact.hpp>
 #include <tenzir/pushdown/sql.hpp>
 #include <tenzir/pushdown/sql_source.hpp>
 #include <tenzir/time.hpp>
@@ -25,7 +25,7 @@
 /// In `table` mode, `from_mysql` takes over the stages after it that MySQL
 /// spells, such as filters, projections, a summary, sorts, and limits, and
 /// computes them in its query with MySQL's semantics (see
-/// `pushdown::render_plan`). MySQL compares and orders text under the
+/// `pushdown::render_sql`). MySQL compares and orders text under the
 /// collation of its column, which often ignores case and accents, and with
 /// the `PAD SPACE` attribute also trailing spaces, and it sorts `NULL` first.
 /// The operators of the stages leave the pipeline.
@@ -74,12 +74,11 @@ struct Selection {
 /// `pushdown::select_projection` does over the visible columns, so that a
 /// projection keeps what `SELECT *` yields. `SELECT *` leaves out invisible
 /// columns, which a stage of a derived table above it may read, so the
-/// selection adds the invisible columns that the stages of `plan` read, which
-/// the result leaves out again.
+/// selection adds those that the `stages` read, which the result leaves out.
 auto select_columns(Option<ir::OptimizeProjection> const& projection,
                     std::span<TableColumn const> columns,
                     std::span<std::string const> required,
-                    std::span<ir::QueryStage const> plan,
+                    std::span<ir::QueryStage const> stages,
                     std::string_view table) -> Selection;
 
 /// Spells the stages of a plan in MySQL SQL.
@@ -105,9 +104,10 @@ public:
 
   auto render_ip(ip value) const -> Option<std::string> override;
 
-  auto
-  render_call(std::string_view name, std::span<std::string const> args) const
-    -> Option<std::string> override;
+  auto functions() const -> std::span<pushdown::Function const> override;
+
+  /// A time literal is a string that MySQL casts for a comparison only.
+  auto time_literal_arithmetic() const -> bool override;
 };
 
 /// How MySQL spells string literals and comments, for redacting the queries
@@ -123,8 +123,8 @@ inline constexpr auto mysql_lexicon = pushdown::SqlLexicon{
   .dollar_quoted_strings = false,
 };
 
-/// Returns the stages of `chain` that `from_mysql` takes over: the longest
-/// prefix that `MysqlDialect` spells. A live read takes over filters only.
-auto absorb_stages(ir::QueryChain const& chain, bool live) -> ir::Absorption;
+/// Returns the planner of `from_mysql`, as `pushdown::sql_planner` makes it.
+auto planner(pushdown::SqlMode mode)
+  -> pushdown::Planner<pushdown::TableRead, pushdown::SqlTable>;
 
 } // namespace tenzir::plugins::mysql

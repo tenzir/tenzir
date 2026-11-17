@@ -104,8 +104,6 @@
 -              path: [
 -                {
 -                  id: `events` @ [1]:167..173 from 0,
--                  has_question_mark: false
--                }
 +      plan: [
 +        Filter {
 +          predicate: binary_expr {
@@ -124,8 +122,11 @@
 +              output: [
 +                "src_ip"
 +              ],
-+              input: [
-+                "src_ip"
++              args: [
++                root_field {
++                  id: `src_ip` @ [1]:159..165 from 0,
+                   has_question_mark: false
+                 }
                ]
              },
 -            call: {
@@ -135,12 +136,14 @@
 -                ],
 -                ref: std::count/fn
 -              },
--              args: [
--                
 +            {
 +              output: [
 +                "events"
-               ],
++              ],
++              function: "count",
+               args: [
+                 
+-              ],
 -              method: false,
 -              location: [1]:174..181 from 0
 -            }
@@ -157,8 +160,7 @@
 -                  id: `first` @ [1]:183..188 from 0,
 -                  has_question_mark: false
 -                }
--              ]
-+              function: "count"
+               ]
              },
 -            call: {
 -              fn: {
@@ -167,15 +169,17 @@
 -                ],
 -                ref: std::min/fn
 -              },
--              args: [
--                root_field {
--                  id: `ts` @ [1]:193..195 from 0,
--                  has_question_mark: false
--                }
 +            {
 +              output: [
 +                "first"
-               ],
++              ],
++              function: "min",
+               args: [
+                 root_field {
+                   id: `ts` @ [1]:193..195 from 0,
+                   has_question_mark: false
+                 }
+-              ],
 -              method: false,
 -              location: [1]:189..196 from 0
 -            }
@@ -194,9 +198,6 @@
 -                  id: `src_ip` @ [1]:159..165 from 0,
 -                  has_question_mark: false
 -                }
-+              function: "min",
-+              input: [
-+                "ts"
                ]
              }
 -          }

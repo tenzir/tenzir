@@ -1,0 +1,10 @@
+// ClickHouse buckets times by multiples of two days since the epoch, with the
+// result of the same operators in the pipeline.
+from_clickhouse table="fc_ordering",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
+bucket = floor(time, 2d)
+summarize bucket, rows=count()
+sort bucket

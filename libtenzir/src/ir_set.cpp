@@ -1247,10 +1247,17 @@ public:
   auto resolve_meta(ast::meta const& meta) const -> Option<ast::expression> {
     for (auto const& entry : std::views::reverse(entries_)) {
       if (entry.meta == meta.kind) {
+        entry.reached = true;
         return assigned_meta(meta, entry.right);
       }
     }
     return ast::expression{meta};
+  }
+
+  /// Whether a resolution took its value from the assignment at `index`.
+  /// Assignments that a later one shadows are never reached.
+  auto reached(size_t index) const -> bool {
+    return entries_[index].reached;
   }
 
   auto resolve(ast::field_path const& field) const -> Option<ast::expression> {
@@ -1276,6 +1283,7 @@ public:
         if (not result or not substitutable(*result)) {
           return None{};
         }
+        entry.reached = true;
         return result;
       }
       if (is_prefix(path, target)) {
@@ -1307,6 +1315,7 @@ private:
     Option<ast::meta_kind> meta = None{};
     bool dynamic = false;
     ast::expression right = {};
+    mutable bool reached = false;
   };
 
   /// Returns the value of `meta` after assigning `right` to it, if both
@@ -1467,13 +1476,24 @@ auto ir::SetIr::optimize(ir::OptimizeRequest req,
 auto ir::SetIr::rewrite_aggregate(QueryStage::Aggregate aggregate,
                                   OptimizeCtx const& octx) const
   -> Option<QueryStage::Aggregate> {
-  for (auto const& assignment : assignments_) {
-    // The source skips the assignments, so none may fail the pipeline, also
-    // not one whose value the summary does not read. This includes targets
-    // that type inference rejects, such as `move this` with Nova events.
+  auto rewrite = SetRewrite{assignments_, octx.reg};
+  TRY(auto result, ir::rewrite_aggregate(
+                     std::move(aggregate), octx.reg,
+                     [&](ast::field_path const& field) {
+                       return rewrite.resolve(field);
+                     },
+                     [&](ast::meta const& meta) {
+                       return rewrite.resolve_meta(meta);
+                     }));
+  for (auto i = size_t{0}; i < assignments_.size(); ++i) {
+    auto const& assignment = assignments_[i];
+    // The source computes the assignments that the summary reads, with the
+    // semantics of its target. It skips the others, so none of them may fail
+    // the pipeline. This includes targets that type inference rejects, such
+    // as `move this` with Nova events.
     auto dh = null_diagnostic_handler{};
     if (not ir::is_infallible(assignment.left)
-        or not ir::is_infallible(assignment.right)
+        or not(rewrite.reached(i) or ir::is_infallible(assignment.right))
         or not validate_nova_target(assignment, dh)) {
       return None{};
     }
@@ -1492,30 +1512,8 @@ auto ir::SetIr::rewrite_aggregate(QueryStage::Aggregate aggregate,
       return None{};
     }
   }
-  auto rewrite = SetRewrite{assignments_, octx.reg};
-  return ir::rewrite_aggregate(std::move(aggregate),
-                               [&](ast::field_path const& field) {
-                                 return rewrite.resolve(field);
-                               });
-}
-
-namespace {
-
-/// Returns the segments of a plain field path without `?`, or `None`.
-auto plain_path(ast::expression const& expr)
-  -> Option<std::vector<std::string>> {
-  TRY(auto path, ast::field_path::try_from(expr));
-  auto result = std::vector<std::string>{};
-  for (auto const& segment : path.path()) {
-    if (segment.has_question_mark) {
-      return None{};
-    }
-    result.push_back(segment.id.name);
-  }
   return result;
 }
-
-} // namespace
 
 auto ir::SetIr::query_stage(OptimizeCtx const& octx) const
   -> Option<QueryStage> {
@@ -1533,11 +1531,8 @@ auto ir::SetIr::query_stage(OptimizeCtx const& octx) const
   }
   auto select = QueryStage::Select{};
   for (auto const& assignment : std::span{assignments_}.subspan(1)) {
-    TRY(auto output, plain_path(assignment.left));
-    TRY(auto input, plain_path(assignment.right));
-    if (output.empty() or input.empty()) {
-      return None{};
-    }
+    TRY(auto output, ir::field_segments(assignment.left));
+    TRY(auto input, ir::field_segments(assignment.right));
     // An output inside another one would merge into it or overwrite it.
     for (auto const& field : select.fields) {
       auto const n = std::min(field.output.size(), output.size());

@@ -12,6 +12,7 @@
 #include "tenzir/option.hpp"
 #include "tenzir/pushdown/expr_render.hpp"
 #include "tenzir/pushdown/layout.hpp"
+#include "tenzir/pushdown/time_window.hpp"
 #include "tenzir/time.hpp"
 
 #include <cstdint>
@@ -43,7 +44,7 @@
 /// (`PipeOptions::time_column`), in three ways:
 ///
 /// - Which result columns hold the target's own time, through every alias and
-///   group key, so that a source decodes them as times (`PipeQuery::times`).
+///   group key, so that they decode as times (`PipeQuery::layout`).
 /// - Whether a time literal may appear in a filter: only as an operand of a
 ///   comparison with the field named after the time column, and only while
 ///   that field still holds the target's own time. A select keeps that only
@@ -53,20 +54,24 @@
 ///   `PipeOptions::narrow` holds.
 namespace tenzir::pushdown {
 
-/// A column that a stage assigns from another column before it uses it, as
-/// in `eval name='input'`.
+/// A column that a stage assigns from another column or computes before it
+/// uses it, as in `eval name='input'`.
 struct PipeAlias {
   /// The name that the query introduces.
   std::string name;
-  /// The column that holds the value.
+  /// The column that holds the value, if the alias copies one.
   std::string input;
+  /// The spelling of the value that the alias computes, if any.
+  Option<std::string> value = None{};
 };
 
 /// An aggregation function of an aggregate stage.
 struct PipeFunction {
   /// The result column.
   std::string name;
-  /// The spelling of the function, from `PipeQueryDialect::render_aggregate`.
+  /// The spelling of the function, from `ExpressionDialect::aggregations`,
+  /// with each argument as `name_column` or else `bind_column` spells it.
+  /// Calls that spell the same compute the same column.
   std::string call;
 };
 
@@ -115,6 +120,10 @@ public:
   virtual auto base_term(ast::expression const& conjunct) const
     -> Option<std::string>;
 
+  /// Spells the value of `alias`: the one that it computes, or else the
+  /// column that it copies, as `bind_column` spells it.
+  auto alias_value(PipeAlias const& alias) const -> Option<std::string>;
+
   /// Spells the stage that keeps the rows where the rendered `predicate`
   /// holds.
   virtual auto filter_stage(std::string_view predicate) const
@@ -131,14 +140,6 @@ public:
   /// Spells the stage that removes the top-level `columns`, which are not
   /// empty, from rows whose columns are unknown.
   virtual auto drop_stage(std::span<std::string const> columns) const
-    -> Option<std::string>
-    = 0;
-
-  /// Spells the call of the TQL aggregation function `function` on `column`,
-  /// if any, or returns `None` if the target does not compute it. Calls that
-  /// spell the same compute the same column.
-  virtual auto render_aggregate(std::string_view function,
-                                Option<std::string_view> column) const
     -> Option<std::string>
     = 0;
 
@@ -181,13 +182,6 @@ struct PipeOptions {
   bool narrow = false;
 };
 
-/// The bounds of the time of the input events that pass the filters of a
-/// plan, both inclusive, as far as the filters tell.
-struct TimeWindow {
-  Option<time> begin = None{};
-  Option<time> end = None{};
-};
-
 /// The stages that compute a plan, and how their result becomes events.
 struct PipeQuery {
   /// Terms that extend the base query, from the leading filters.
@@ -195,15 +189,13 @@ struct PipeQuery {
   /// The stages to append to the base query, each with its separator.
   std::string stages;
   /// How the result rows become events. Without fields, the rows are the
-  /// events of the base query, possibly without some of their fields.
+  /// events of the base query, possibly without some of their fields. The
+  /// columns of aggregations decode as `Aggregation::decode` says, and those
+  /// that hold the target's own time, from the time column of the base query
+  /// through aliases and group keys, as times.
   Layout layout;
   /// Whether the plan contains an aggregation.
   bool aggregates = false;
-  /// The columns that hold the result of a `count`, which decode as integers.
-  std::vector<std::string> counts;
-  /// The result columns that hold the target's own time, from the time column
-  /// of the base query through aliases and group keys, which decode as times.
-  std::vector<std::string> times;
   /// The time window of the input events from the filters that precede every
   /// aggregation, sort, and limit, if `PipeOptions::narrow` holds. Within a
   /// filter, a conjunction intersects the windows of its operands, and a

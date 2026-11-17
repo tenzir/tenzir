@@ -1,6 +1,5 @@
-// The assignment overwrites the field that the `summarize` groups by. The query
-// takes the `select`, but the assignment is no stage, so the summary stays in
-// the pipeline.
+// The assignment overwrites the field that the `summarize` groups by, so the
+// query groups by the computed value, through the `select`.
 from_duckdb "events.duckdb", table="events"
 select src_ip, severity
 severity = severity + 1

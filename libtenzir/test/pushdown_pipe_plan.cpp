@@ -18,6 +18,7 @@
 #include <fmt/format.h>
 #include <fmt/ranges.h>
 
+#include <array>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -27,6 +28,17 @@ using namespace tenzir::pushdown;
 using namespace std::literals;
 
 namespace {
+
+/// The result columns of `layout` that decode as `decode`.
+auto decoded(Layout const& layout, Decode decode) -> std::vector<std::string> {
+  auto result = std::vector<std::string>{};
+  for (auto const& [column, x] : layout.decode) {
+    if (x == decode) {
+      result.push_back(column);
+    }
+  }
+  return result;
+}
 
 using Path = std::vector<std::string>;
 
@@ -69,8 +81,13 @@ auto summarize(std::vector<ir::AggregateColumn> columns) -> ir::QueryStage {
                                     .schema_name = "tenzir.summarize"}};
 }
 
-auto key(Path field) -> ir::AggregateColumn {
-  return {.output = field, .function = None{}, .input = field};
+/// The field at `path` as an expression.
+auto field(Path const& path) -> ast::expression {
+  return parse(fmt::to_string(fmt::join(path, ".")));
+}
+
+auto key(Path path) -> ir::AggregateColumn {
+  return {.output = path, .function = None{}, .args = {field(path)}};
 }
 
 auto limit(uint64_t count) -> ir::QueryStage {
@@ -228,13 +245,14 @@ public:
     return fmt::format(" | drop {}", fmt::join(columns, ", "));
   }
 
-  auto render_aggregate(std::string_view function,
-                        Option<std::string_view> column) const
-    -> Option<std::string> override {
-    if (function != "count" and function != "min" and function != "max") {
-      return None{};
-    }
-    return fmt::format("{}({})", function, column ? *column : "");
+  auto aggregations() const -> std::span<Aggregation const> override {
+    static constexpr auto rows = std::array{
+      Aggregation{"count", 0, "count()", Decode::integer},
+      Aggregation{"count", 1, "count({0})", Decode::integer},
+      Aggregation{"min", 1, "min({0})"},
+      Aggregation{"max", 1, "max({0})"},
+    };
+    return rows;
   }
 
   auto aggregate_stage(std::span<PipeAlias const> aliases,
@@ -264,7 +282,8 @@ private:
   static auto assign(std::span<PipeAlias const> aliases) -> std::string {
     auto result = std::string{};
     for (auto const& alias : aliases) {
-      result += fmt::format("let {}={} | ", alias.name, alias.input);
+      result += fmt::format("let {}={} | ", alias.name,
+                            alias.value ? *alias.value : alias.input);
     }
     return result;
   }
@@ -297,7 +316,7 @@ auto stages(std::vector<ir::QueryStage> stages, PipeOptions options = timed(),
 auto times(std::vector<ir::QueryStage> stages) -> std::vector<std::string> {
   auto query = plan(std::move(stages));
   REQUIRE(query);
-  return query->times;
+  return decoded(query->layout, Decode::time);
 }
 
 auto window(std::vector<ir::QueryStage> stages, PipeOptions options = timed())
@@ -342,10 +361,9 @@ TEST("pipe plans bind nested fields through the dialect") {
   CHECK_EQUAL(stages({summarize({key({"a", "b"}),
                                  {.output = {"n"},
                                   .function = "count",
-                                  .input = Path{"c", "d"}}})},
+                                  .args = {field({"c", "d"})}}})},
                      PipeOptions{}, true),
-              " | let _column0=a.b | let _column1=c.d | stats "
-              "_column2=count(_column1) by _column0");
+              " | let _column0=a.b | stats _column1=count(c.d) by _column0");
 }
 
 TEST("pipe plans track which columns hold the target's own time") {
@@ -366,15 +384,16 @@ TEST("pipe plans track which columns hold the target's own time") {
   // Group keys keep the time, while counts and extremes do not.
   CHECK_EQUAL(
     times({summarize(
-      {key({"ts"}), {.output = {"n"}, .function = "count", .input = None{}}})}),
+      {key({"ts"}), {.output = {"n"}, .function = "count", .args = {}}})}),
     std::vector{"ts"s});
-  CHECK_EQUAL(times({summarize(
-                {{.output = {"m"}, .function = "min", .input = Path{"ts"}}})}),
-              std::vector<std::string>{});
+  CHECK_EQUAL(
+    times({summarize(
+      {{.output = {"m"}, .function = "min", .args = {field({"ts"})}}})}),
+    std::vector<std::string>{});
   // A base query that may redefine its time holds none of the target's own.
   auto query = plan({filter("x > 1")}, timed(false));
   REQUIRE(query);
-  CHECK(query->times.empty());
+  CHECK(decoded(query->layout, Decode::time).empty());
 }
 
 TEST("pipe plans compare time literals only with the target's own time") {
@@ -406,20 +425,21 @@ TEST("pipe plans narrow the window of the leading filters") {
   auto const t3 = at("2025-01-01T00:03:00Z");
   auto both = window({filter("ts >= 2025-01-01T00:01:00Z and x > 1"),
                       filter("2025-01-01T00:03:00Z > ts")});
+  // A strict bound excludes its time.
   CHECK(both.begin == Option<tenzir::time>{t1});
-  CHECK(both.end == Option<tenzir::time>{t3});
+  CHECK(both.end == Option<tenzir::time>{t3 - duration{1}});
   // A disjunction encloses its operands, if they all bound a side.
   auto enclosed = window({filter("(ts >= 2025-01-01T00:02:00Z and ts < "
                                  "2025-01-01T00:03:00Z) or ts == "
                                  "2025-01-01T00:01:00Z")});
   CHECK(enclosed.begin == Option<tenzir::time>{t1});
-  CHECK(enclosed.end == Option<tenzir::time>{t3});
+  CHECK(enclosed.end == Option<tenzir::time>{t3 - duration{1}});
   auto open = window({filter("ts >= 2025-01-01T00:02:00Z or x > 1")});
   CHECK(not open.begin);
   CHECK(not open.end);
   auto half = window(
     {filter("ts >= 2025-01-01T00:02:00Z or ts > 2025-01-01T00:01:00Z")});
-  CHECK(half.begin == Option<tenzir::time>{t1});
+  CHECK(half.begin == Option<tenzir::time>{t1 + duration{1}});
   CHECK(not half.end);
   // Only the filters before a limit, and only with `narrow`.
   auto limited = window({limit(3), filter("ts >= 2025-01-01T00:02:00Z")});
@@ -431,4 +451,39 @@ TEST("pipe plans narrow the window of the leading filters") {
     {select({{{"ts"}, {"ts"}}}), filter("ts == 2025-01-01T00:02:00Z")});
   CHECK(selected.begin == Option<tenzir::time>{t2});
   CHECK(selected.end == Option<tenzir::time>{t2});
+}
+
+TEST("time windows bound the times that filters compare with") {
+  auto const w = [](std::string_view predicate) {
+    return time_window(parse(predicate), "a.ts");
+  };
+  auto const t = at("2025-01-01T00:00:00Z");
+  auto strict = w("a.ts > 2025-01-01 and 2025-01-02 >= a.ts");
+  CHECK(strict.begin == Option<tenzir::time>{t + duration{1}});
+  CHECK(strict.end == Option<tenzir::time>{t + std::chrono::days{1}});
+  CHECK(w("a.ts == 2025-01-01 and a.ts > 2025-01-01").empty());
+  CHECK(not w("ts > 2025-01-01").begin);
+  // A strict bound beyond either extreme of a time admits no time.
+  auto const extreme = [](ast::binary_op op, tenzir::time value) {
+    return time_window(ast::binary_expr{parse("a.ts"), op,
+                                        ast::constant::make(located{
+                                          data{value}, location::unknown})},
+                       "a.ts");
+  };
+  CHECK(extreme(ast::binary_op::gt, tenzir::time::max()).empty());
+  CHECK(extreme(ast::binary_op::lt, tenzir::time::min()).empty());
+  CHECK(extreme(ast::binary_op::geq, tenzir::time::max()).begin
+        == Option<tenzir::time>{tenzir::time::max()});
+  // Inward rounding keeps the whole units within the window, outward rounding
+  // the units that overlap it, also before the epoch.
+  auto const before = TimeWindow{.begin = tenzir::time{duration{-1'500}},
+                                 .end = tenzir::time{duration{-500}}};
+  using Units = std::pair<Option<int64_t>, Option<int64_t>>;
+  CHECK_EQUAL(in_units(before, duration{1'000}, Round::inward),
+              (Units{-1, -1}));
+  CHECK_EQUAL(in_units(before, duration{1'000}, Round::outward),
+              (Units{-2, -1}));
+  // An open side stays open.
+  CHECK_EQUAL(in_units(TimeWindow{}, duration{1}, Round::inward),
+              (Units{None{}, None{}}));
 }

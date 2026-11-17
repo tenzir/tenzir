@@ -27,6 +27,17 @@ namespace {
 
 using Path = std::vector<std::string>;
 
+/// The field at `path` as an expression.
+auto field_at(std::vector<std::string> const& path) -> ast::expression {
+  auto result = ast::expression{
+    ast::root_field{ast::identifier{path.front(), location::unknown}, false}};
+  for (auto i = size_t{1}; i < path.size(); ++i) {
+    result = ast::field_access{std::move(result), location::unknown, false,
+                               ast::identifier{path[i], location::unknown}};
+  }
+  return result;
+}
+
 auto parse(std::string_view source) -> ast::expression {
   auto dh = collecting_diagnostic_handler{};
   auto provider = session_provider::make(dh, test::builtin_registry());
@@ -94,6 +105,26 @@ auto limit(uint64_t count) -> ir::QueryStage {
 
 auto main_index() -> SplSource {
   return {.search = None{}, .indexes = {"main"}};
+}
+
+/// The search that reads `source` and computes `stages`, or `None` if Splunk
+/// does not spell them.
+auto plan_spl_query(SplSource const& source,
+                    std::span<ir::QueryStage const> stages,
+                    Option<ir::OptimizeProjection> const& projection)
+  -> Option<SplQuery> {
+  auto planned = spl_planner(source, None{}, projection).plan(stages, nullptr);
+  if (not planned) {
+    return None{};
+  }
+  return std::move(planned).unwrap();
+}
+
+/// Returns whether the planner of `source` takes over no stage.
+auto spl_declines(SplSource const& source) -> bool {
+  return spl_planner(source, None{}, None{})
+    .plan(std::vector{filter("n > 1")}, nullptr)
+    .is_err();
 }
 
 auto user(std::string_view search) -> SplSource {
@@ -315,7 +346,7 @@ TEST("spl narrows the time window of indexes") {
   REQUIRE(lower.begin);
   REQUIRE(lower.end);
   CHECK(*lower.begin == at("2025-01-01T00:01:00Z"));
-  CHECK(*lower.end == at("2025-01-01T00:02:00Z"));
+  CHECK(*lower.end == at("2025-01-01T00:02:00Z") - duration{1});
   // A disjunction encloses its operands, if they all bound a side.
   auto enclosed
     = window(main_index(), {filter("(_time >= 2025-01-01T00:01:00Z and _time < "
@@ -325,7 +356,7 @@ TEST("spl narrows the time window of indexes") {
   REQUIRE(enclosed.begin);
   REQUIRE(enclosed.end);
   CHECK(*enclosed.begin == at("2025-01-01T00:01:00Z"));
-  CHECK(*enclosed.end == at("2025-01-01T00:04:00Z"));
+  CHECK(*enclosed.end == at("2025-01-01T00:04:00Z") - duration{1});
   // A disjunction with an unbounded operand tells nothing, and neither does a
   // filter after a limit.
   auto none
@@ -367,15 +398,14 @@ TEST("spl narrows the time window of indexes") {
                                  select({{{"_time"}, {"_time"}}}),
                                  filter("_time >= 2025-01-01T00:01:00Z")}),
               "");
-  CHECK_EQUAL(
-    spl(main_index(),
-        {select({{{"_time"}, {"event_time"}}}),
-         ir::QueryStage{ir::QueryStage::Aggregate{
-           .columns
-           = {{.output = {"_time"}, .function = "min", .input = Path{"_time"}}},
-           .schema_name = "tenzir.summarize"}},
-         filter("_time >= 2025-01-01T00:01:00Z")}),
-    "");
+  CHECK_EQUAL(spl(main_index(), {select({{{"_time"}, {"event_time"}}}),
+                                 ir::QueryStage{ir::QueryStage::Aggregate{
+                                   .columns = {{.output = {"_time"},
+                                                .function = "min",
+                                                .args = {field_at({"_time"})}}},
+                                   .schema_name = "tenzir.summarize"}},
+                                 filter("_time >= 2025-01-01T00:01:00Z")}),
+              "");
   // A command after the first one of a user's search may redefine `_time`,
   // also without naming it, while a plain search keeps Splunk's own, also
   // with a subsearch.
@@ -436,12 +466,9 @@ TEST("spl appends stages only to searches that accept them") {
 TEST("spl sources take over the longest prefix that SPL spells") {
   auto const absorb
     = [](SplSource const& source, std::vector<ir::QueryStage> stages) {
-        return absorb_prefix(
-          ir::QueryChain{.stages = std::move(stages), .end = ""},
-          [&](std::span<ir::QueryStage const> prefix) {
-            return plan_spl_query(source, prefix, None{}).is_some();
-          },
-          {.target = "Splunk", .filters_only = false, .veto = {}});
+        return pushdown::absorb(ir::QueryChain{.stages = std::move(stages),
+                                               .end = ""},
+                                spl_planner(source, None{}, None{}));
       };
   auto all = absorb(main_index(), {filter("n > 1"), sort({"n"}), limit(3)});
   CHECK_EQUAL(all.prefix, size_t{3});

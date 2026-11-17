@@ -97,23 +97,32 @@
 +              output: [
 +                "src_ip"
 +              ],
-+              input: [
-+                "src_ip"
++              args: [
++                root_field {
++                  id: `src_ip` @ [1]:224..230 from 0,
++                  has_question_mark: false
++                }
 +              ]
 +            },
 +            {
 +              output: [
 +                "events"
 +              ],
-+              function: "count"
++              function: "count",
++              args: [
++                
++              ]
 +            },
 +            {
 +              output: [
 +                "worst"
 +              ],
 +              function: "max",
-+              input: [
-+                "severity"
++              args: [
++                root_field {
++                  id: `severity` @ [1]:258..266 from 0,
++                  has_question_mark: false
++                }
 +              ]
 +            }
 +          ],

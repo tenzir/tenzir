@@ -5,7 +5,7 @@ assertions:
       queries_cancelled: true
       expected_requests:
         - type: PQ
-          query: "| group __tenzir_column_2 = count(event.type) by __tenzir_column_0 = timestamp | sort __tenzir_column_0 | limit 3"
+          query: "| group __tenzir_column_1 = count(event.type) by __tenzir_column_0 = timestamp | sort __tenzir_column_0 | limit 3"
 ---
 // A group key of `timestamp` decodes as a time, and `count(x)` counts the
 // events where SentinelOne has the field.

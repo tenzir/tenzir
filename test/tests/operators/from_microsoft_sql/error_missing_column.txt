@@ -4,3 +4,5 @@ error: Microsoft SQL Server error 207: Invalid column name 'missing'.
 8 | from_microsoft_sql table="dbo.users",
   | ^^^^^^^^^^^^^^^^^^
   |
+  = note: SQL Server computes the stages that the operator took over with its own semantics
+  = hint: use `pushdown=false` to run them in Tenzir

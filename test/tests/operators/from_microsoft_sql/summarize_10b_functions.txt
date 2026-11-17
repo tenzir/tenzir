@@ -1,0 +1,6 @@
+{
+  big: 3,
+  kinds: 4,
+  total: 15,
+  avg: 3.0,
+}

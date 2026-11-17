@@ -1,0 +1,5 @@
+// A later assignment shadows the call, so the summary does not read it. The
+// call may still fail the pipeline, so the assignments and the summary stay.
+from_duckdb "events.duckdb", table="events"
+set level = file_contents(path), level = severity
+summarize level, events=count()

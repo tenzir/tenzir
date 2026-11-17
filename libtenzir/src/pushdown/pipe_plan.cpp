@@ -40,19 +40,22 @@ auto collect_names(std::span<ir::QueryStage const> stages)
       result.push_back(path.front());
     }
   };
+  auto const add_refs = [&](ast::expression const& expr) {
+    auto refs = ast::collect_refs(expr);
+    if (not refs) {
+      return;
+    }
+    for (auto const& path : refs->field_paths) {
+      if (not path.path().empty()) {
+        add(std::vector{std::string{path.path().front().id.name}});
+      }
+    }
+  };
   for (auto const& stage : stages) {
     match(
       stage.kind,
       [&](ir::QueryStage::Filter const& x) {
-        auto refs = ast::collect_refs(x.predicate);
-        if (not refs) {
-          return;
-        }
-        for (auto const& path : refs->field_paths) {
-          if (not path.path().empty()) {
-            add(std::vector{std::string{path.path().front().id.name}});
-          }
-        }
+        add_refs(x.predicate);
       },
       [&](ir::QueryStage::Select const& x) {
         for (auto const& field : x.fields) {
@@ -68,9 +71,7 @@ auto collect_names(std::span<ir::QueryStage const> stages)
       [&](ir::QueryStage::Aggregate const& x) {
         for (auto const& column : x.columns) {
           add(column.output);
-          if (column.input) {
-            add(*column.input);
-          }
+          std::ranges::for_each(column.args, add_refs);
         }
       },
       [&](ir::QueryStage::Sort const& x) {
@@ -83,26 +84,10 @@ auto collect_names(std::span<ir::QueryStage const> stages)
   return result;
 }
 
-/// Appends the operands of the conjunction `expr` to `result`.
-auto flatten_conjunction(ast::expression const& expr,
-                         std::vector<Ref<ast::expression const>>& result)
-  -> void {
-  if (auto const* x = try_as<ast::binary_expr>(expr);
-      x and x->op == ast::binary_op::and_) {
-    flatten_conjunction(x->left, result);
-    flatten_conjunction(x->right, result);
-    return;
-  }
-  result.emplace_back(expr);
-}
-
-/// Returns the single segment of the field path `expr` without `?`.
-auto top_level_field(ast::expression const& expr) -> Option<std::string> {
-  TRY(auto path, ast::field_path::try_from(expr));
-  if (path.path().size() != 1 or path.path().front().has_question_mark) {
-    return None{};
-  }
-  return std::string{path.path().front().id.name};
+/// Whether `expr` is the top-level field `name`.
+auto is_field(ast::expression const& expr, std::string_view name) -> bool {
+  auto path = ir::field_segments(expr);
+  return path and path->size() == 1 and path->front() == name;
 }
 
 /// Whether `expr` holds a time literal.
@@ -150,8 +135,7 @@ auto times_compare_with(ast::expression const& expr, std::string_view name)
   if (auto const* x = try_as<ast::binary_expr>(expr)) {
     using enum ast::binary_op;
     if (x->op == in and mentions_time(x->right)) {
-      auto const field = top_level_field(x->left);
-      return field and *field == name;
+      return is_field(x->left, name);
     }
     auto const comparison = x->op == eq or x->op == neq or x->op == lt
                             or x->op == leq or x->op == gt or x->op == geq;
@@ -161,8 +145,7 @@ auto times_compare_with(ast::expression const& expr, std::string_view name)
         continue;
       }
       auto const& other = side == &x->left ? x->right : x->left;
-      auto const field = top_level_field(other);
-      return comparison and field and *field == name;
+      return comparison and is_field(other, name);
     }
     return times_compare_with(x->left, name)
            and times_compare_with(x->right, name);
@@ -184,30 +167,6 @@ auto times_compare_with(ast::expression const& expr, std::string_view name)
   return true;
 }
 
-/// Returns the window that both `lhs` and `rhs` admit.
-auto intersect(TimeWindow lhs, TimeWindow const& rhs) -> TimeWindow {
-  if (rhs.begin and (not lhs.begin or *lhs.begin < *rhs.begin)) {
-    lhs.begin = rhs.begin;
-  }
-  if (rhs.end and (not lhs.end or *lhs.end > *rhs.end)) {
-    lhs.end = rhs.end;
-  }
-  return lhs;
-}
-
-/// Returns the smallest window that encloses `lhs` and `rhs`. A side is
-/// bounded only if both windows bound it.
-auto enclose(TimeWindow const& lhs, TimeWindow const& rhs) -> TimeWindow {
-  auto result = TimeWindow{};
-  if (lhs.begin and rhs.begin) {
-    result.begin = std::min(*lhs.begin, *rhs.begin);
-  }
-  if (lhs.end and rhs.end) {
-    result.end = std::max(*lhs.end, *rhs.end);
-  }
-  return result;
-}
-
 /// Builds a `PipeQuery` stage by stage.
 class PipeBuilder {
 public:
@@ -218,7 +177,7 @@ public:
       names_{std::move(names)},
       native_time_{options.time_column and options.native_time} {
     if (native_time_) {
-      times_.push_back(*options.time_column);
+      decode_.emplace_back(*options.time_column, Decode::time);
     }
   }
 
@@ -230,18 +189,12 @@ public:
 
   auto finish() && -> PipeQuery {
     auto fields = Option<LayoutFields>{};
-    auto times = std::vector<std::string>{};
     if (fields_) {
+      keep_decode(*fields_, {});
       fields.emplace();
       for (auto& entry : *fields_) {
-        if (std::ranges::contains(times_, entry.column)
-            and not std::ranges::contains(times, entry.column)) {
-          times.push_back(entry.column);
-        }
         fields->emplace_back(std::move(entry.path), std::move(entry.column));
       }
-    } else {
-      times = std::move(times_);
     }
     return PipeQuery{
       .base_terms = std::move(base_terms_),
@@ -250,10 +203,9 @@ public:
         .fields = std::move(fields),
         .hidden = {},
         .schema_name = std::move(schema_name_),
+        .decode = std::move(decode_),
       },
       .aggregates = aggregates_,
-      .counts = std::move(counts_),
-      .times = std::move(times),
       .window = window_,
       .names = std::move(names_),
     };
@@ -319,71 +271,29 @@ private:
       }
     }
     auto name = fresh("column");
-    aliases.push_back({.name = name, .input = column});
+    aliases.push_back({.name = name, .input = column, .value = None{}});
     return name;
   }
 
-  /// Returns the window of the time of the rows for which `expr` holds, as
-  /// far as its comparisons of the time column with time literals tell.
-  auto window_of(ast::expression const& expr) const -> TimeWindow {
-    auto const* x = try_as<ast::binary_expr>(expr);
-    if (not x) {
-      return {};
+  /// Returns the column that holds the field `expr`, or else an alias in
+  /// `aliases` that computes it, without time literals, which compare only
+  /// with the time column in a filter.
+  auto column_of(ast::expression const& expr, std::vector<PipeAlias>& aliases)
+    -> Option<std::string> {
+    if (auto path = ir::field_segments(expr)) {
+      return bind(*path);
     }
-    using enum ast::binary_op;
-    if (x->op == and_) {
-      return intersect(window_of(x->left), window_of(x->right));
+    if (mentions_time(expr)) {
+      return None{};
     }
-    if (x->op == or_) {
-      return enclose(window_of(x->left), window_of(x->right));
+    TRY(auto value, renderer().value(expr));
+    auto it = std::ranges::find(aliases, Option{value}, &PipeAlias::value);
+    if (it != aliases.end()) {
+      return it->name;
     }
-    auto op = x->op;
-    auto const* field = &x->left;
-    auto const* constant = try_as<ast::constant>(x->right);
-    if (not constant) {
-      constant = try_as<ast::constant>(x->left);
-      field = &x->right;
-      switch (op) {
-        case lt:
-          op = gt;
-          break;
-        case leq:
-          op = geq;
-          break;
-        case gt:
-          op = lt;
-          break;
-        case geq:
-          op = leq;
-          break;
-        default:
-          break;
-      }
-    }
-    auto const* instant = constant ? try_as<time>(constant->value) : nullptr;
-    if (not instant) {
-      return {};
-    }
-    auto name = top_level_field(*field);
-    if (not name or *name != *options_->time_column) {
-      return {};
-    }
-    auto column = bind(std::vector{std::move(*name)});
-    if (not column or not std::ranges::contains(times_, *column)) {
-      return {};
-    }
-    switch (op) {
-      case eq:
-        return {.begin = *instant, .end = *instant};
-      case gt:
-      case geq:
-        return {.begin = *instant, .end = None{}};
-      case lt:
-      case leq:
-        return {.begin = None{}, .end = *instant};
-      default:
-        return {};
-    }
+    auto name = fresh("column");
+    aliases.push_back({.name = name, .input = {}, .value = std::move(value)});
+    return name;
   }
 
   /// Updates whether the field named after the time column holds the
@@ -400,31 +310,23 @@ private:
     });
   }
 
-  /// Returns the columns of `output` that hold a column of `lineage`, either
-  /// themselves or as an alias of one in `aliases`.
-  static auto keep_lineage(std::span<std::string const> lineage,
-                           std::span<Entry const> output,
-                           std::span<PipeAlias const> aliases)
-    -> std::vector<std::string> {
-    auto result = std::vector<std::string>{};
+  /// Keeps the columns of `output` that hold a column that does not decode
+  /// natively, either themselves or as an alias of one in `aliases`.
+  auto keep_decode(std::span<Entry const> output,
+                   std::span<PipeAlias const> aliases) -> void {
+    auto result = std::vector<Decoded>{};
     for (auto const& entry : output) {
       auto const alias
         = std::ranges::find(aliases, entry.column, &PipeAlias::name);
       auto const& source = alias != aliases.end() ? alias->input : entry.column;
-      if (std::ranges::contains(lineage, source)
-          and not std::ranges::contains(result, entry.column)) {
-        result.push_back(entry.column);
+      auto const it = std::ranges::find(decode_, source, &Decoded::first);
+      if (it != decode_.end()
+          and not std::ranges::contains(result, entry.column,
+                                        &Decoded::first)) {
+        result.emplace_back(entry.column, it->second);
       }
     }
-    return result;
-  }
-
-  /// Keeps the columns of `output` that hold the target's own time or a
-  /// count, either themselves or as an alias of one in `aliases`.
-  auto keep_times(std::span<Entry const> output,
-                  std::span<PipeAlias const> aliases) -> void {
-    times_ = keep_lineage(times_, output, aliases);
-    counts_ = keep_lineage(counts_, output, aliases);
+    decode_ = std::move(result);
   }
 
   auto apply(ir::QueryStage::Filter const& x) -> bool {
@@ -434,12 +336,15 @@ private:
           or (not native_time_ and mentions_time(x.predicate))) {
         return false;
       }
-      if (narrowing_ and options_->narrow and native_time_) {
-        window_ = intersect(window_, window_of(x.predicate));
+      // The comparisons narrow the window while the field named after the
+      // time column holds the target's own time.
+      auto const column = bind(std::vector{*options_->time_column});
+      if (narrowing_ and options_->narrow and native_time_ and column
+          and std::ranges::contains(decode_, Decoded{*column, Decode::time})) {
+        window_ = intersect(window_,
+                            time_window(x.predicate, *options_->time_column));
       }
     }
-    auto conjuncts = std::vector<Ref<ast::expression const>>{};
-    flatten_conjunction(x.predicate, conjuncts);
     auto predicate = Option<std::string>{};
     if (leading_ and options_->extend_base) {
       // Each conjunct either extends the base query or stays in the filter
@@ -448,12 +353,12 @@ private:
       if (not and_) {
         return false;
       }
-      for (auto const& conjunct : conjuncts) {
-        if (auto term = dialect_->base_term(*conjunct)) {
+      for (auto const& conjunct : ir::split_conjunction(x.predicate)) {
+        if (auto term = dialect_->base_term(conjunct)) {
           base_terms_.push_back(std::move(*term));
           continue;
         }
-        auto rendered = renderer().predicate(*conjunct);
+        auto rendered = renderer().predicate(conjunct);
         if (not rendered) {
           return false;
         }
@@ -515,7 +420,7 @@ private:
       }
       keep_native_time(pairs);
     }
-    keep_times(output, aliases);
+    keep_decode(output, aliases);
     fields_ = std::move(output);
     excluded_.clear();
     return true;
@@ -545,9 +450,6 @@ private:
                    path, std::span{entry.path}.first(path.size()));
         });
       }
-      std::erase_if(times_, [&](std::string const& column) {
-        return not std::ranges::contains(*fields_, column, &Entry::column);
-      });
       // A row without fields may vanish.
       return not fields_->empty();
     }
@@ -569,8 +471,8 @@ private:
       return false;
     }
     stages_ += *text;
-    std::erase_if(times_, [&](std::string const& column) {
-      return std::ranges::contains(columns, column);
+    std::erase_if(decode_, [&](Decoded const& x) {
+      return std::ranges::contains(columns, x.first);
     });
     excluded_.append_range(std::move(columns));
     return true;
@@ -583,15 +485,26 @@ private:
     auto functions = std::vector<PipeFunction>{};
     auto keys = std::vector<std::string>{};
     auto output = std::vector<Entry>{};
-    auto counts = std::vector<std::string>{};
+    auto decode = std::vector<Decoded>{};
     // The group keys, whose columns may hold the target's own time.
     auto key_output = std::vector<Entry>{};
     for (auto const& column : x.columns) {
-      if (not column.function) {
-        if (not column.input) {
-          return false;
+      // A target computes on columns, so a key and a value argument read a
+      // column or an alias. A predicate argument renders as for a filter, but
+      // without time literals, which compare only with the time column there.
+      auto const fill = [&](size_t i, bool predicate) -> Option<std::string> {
+        auto const& arg = column.args[i];
+        if (predicate) {
+          return mentions_time(arg) ? Option<std::string>{}
+                                    : renderer().predicate(arg);
         }
-        auto input = bind(*column.input);
+        TRY(auto input, column_of(arg, aliases));
+        return dialect_->name_column(input).or_else([&] {
+          return dialect_->bind_column(input);
+        });
+      };
+      if (not column.function) {
+        auto input = column_of(column.args.front(), aliases);
         if (not input) {
           return false;
         }
@@ -603,16 +516,10 @@ private:
         output.push_back({.path = column.output, .column = std::move(key)});
         continue;
       }
-      auto arg = Option<std::string>{};
-      if (column.input) {
-        auto input = bind(*column.input);
-        if (not input) {
-          return false;
-        }
-        arg = nameable(*input, aliases);
-      }
-      auto call = dialect_->render_aggregate(
-        *column.function, arg ? Option<std::string_view>{*arg} : None{});
+      auto const* row = find_row(dialect_->aggregations(), *column.function,
+                                 column.args.size());
+      auto call
+        = row ? spell(row->spelling, column.args, fill) : Option<std::string>{};
       if (not call) {
         return false;
       }
@@ -624,19 +531,20 @@ private:
       } else {
         name = fresh("column");
         functions.push_back({.name = name, .call = std::move(*call)});
-        if (*column.function == "count") {
-          counts.push_back(name);
+        if (row->decode != Decode::native) {
+          decode.emplace_back(name, row->decode);
         }
       }
       output.push_back({.path = column.output, .column = std::move(name)});
     }
     if (functions.empty()) {
       // A summary of group keys only, or of nothing, still needs a function.
-      auto call = dialect_->render_aggregate("count", None{});
-      if (not call) {
+      auto const* row = find_row(dialect_->aggregations(), "count", 0);
+      if (not row) {
         return false;
       }
-      functions.push_back({.name = fresh("count"), .call = std::move(*call)});
+      functions.push_back(
+        {.name = fresh("count"), .call = std::string{row->spelling}});
     }
     auto text = dialect_->aggregate_stage(aliases, functions, keys);
     if (not text) {
@@ -648,18 +556,21 @@ private:
       auto pairs = std::vector<
         std::pair<std::vector<std::string>, std::vector<std::string>>>{};
       for (auto const& column : x.columns) {
-        if (column.input
+        auto input = column.args.empty()
+                       ? None{}
+                       : ir::field_segments(column.args.front());
+        if (input
             and (not column.function or *column.function == "min"
                  or *column.function == "max")) {
-          pairs.emplace_back(column.output, *column.input);
+          pairs.emplace_back(column.output, std::move(*input));
         }
       }
       keep_native_time(pairs);
     }
-    keep_times(key_output, aliases);
+    keep_decode(key_output, aliases);
     fields_ = std::move(output);
     excluded_.clear();
-    counts_.append_range(std::move(counts));
+    decode_.append_range(std::move(decode));
     schema_name_ = x.schema_name;
     aggregates_ = true;
     return true;
@@ -716,12 +627,12 @@ private:
   std::vector<std::string> base_terms_;
   std::string stages_;
   bool aggregates_ = false;
-  std::vector<std::string> counts_;
   /// Whether the field named after the time column holds the target's own
   /// time, as far as the syntax of the stages tells.
   bool native_time_ = false;
-  /// The columns of the current output that hold the target's own time.
-  std::vector<std::string> times_;
+  /// The columns of the current output that do not decode natively, such as
+  /// those that hold the target's own time.
+  std::vector<Decoded> decode_;
   TimeWindow window_;
   Option<std::string> schema_name_;
 };
@@ -734,6 +645,11 @@ auto PipeQueryDialect::bind_path(std::span<std::string const> path) const
     return None{};
   }
   return path.front();
+}
+
+auto PipeQueryDialect::alias_value(PipeAlias const& alias) const
+  -> Option<std::string> {
+  return alias.value ? alias.value : bind_column(alias.input);
 }
 
 auto PipeQueryDialect::base_term(ast::expression const& conjunct) const

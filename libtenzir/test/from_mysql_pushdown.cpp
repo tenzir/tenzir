@@ -78,8 +78,9 @@ auto limit(uint64_t count) -> ir::QueryStage {
 auto try_read(std::vector<ir::QueryStage> stages,
               std::vector<std::string> columns = {"id", "s"})
   -> Result<std::string, std::string> {
-  TRY(auto read, pushdown::make_table_read("`t`", "*", {}, stages, columns,
-                                           MysqlDialect{}));
+  auto const table
+    = pushdown::SqlTable{.from = "`t`", .columns = std::move(columns)};
+  TRY(auto read, planner(pushdown::SqlMode::table).plan(stages, &table));
   return std::move(read.sql);
 }
 
@@ -89,10 +90,11 @@ auto read(std::vector<ir::QueryStage> stages) -> std::string {
   return std::move(result).unwrap();
 }
 
-auto prefix(std::vector<ir::QueryStage> stages, bool live = false)
+auto prefix(std::vector<ir::QueryStage> stages, pushdown::SqlMode mode
+                                                = pushdown::SqlMode::table)
   -> ir::Absorption {
-  return absorb_stages(ir::QueryChain{.stages = std::move(stages), .end = ""},
-                       live);
+  return pushdown::absorb(
+    ir::QueryChain{.stages = std::move(stages), .end = ""}, planner(mode));
 }
 
 } // namespace
@@ -171,7 +173,7 @@ TEST("mysql leaves what it cannot spell in the pipeline") {
               size_t{0});
   CHECK_EQUAL(prefix({filter("d > 1s")}).prefix, size_t{0});
   CHECK_EQUAL(prefix({filter("ts - 2024-01-01 > 1")}).declined,
-              std::string{"MySQL cannot compute with a time literal"});
+              std::string{"MySQL cannot spell the stage"});
   // Nested fields, subnets, other functions, and a drop of columns that the
   // plan does not know stay, too.
   CHECK_EQUAL(prefix({filter("a.b == 1")}).prefix, size_t{0});
@@ -187,7 +189,8 @@ TEST("mysql leaves what it cannot spell in the pipeline") {
     prefix({select({{{"a"}, {"id"}}, {{"b"}, {"s"}}}), drop({{"b"}})}).prefix,
     size_t{2});
   // A live read takes over filters only.
-  auto live = prefix({filter("id > 1"), sort({"id"}), limit(1)}, true);
+  auto live = prefix({filter("id > 1"), sort({"id"}), limit(1)},
+                     pushdown::SqlMode::live);
   CHECK_EQUAL(live.prefix, size_t{1});
   CHECK_EQUAL(live.declined,
               std::string{"a live read takes over filters only"});
@@ -196,11 +199,17 @@ TEST("mysql leaves what it cannot spell in the pipeline") {
 }
 
 TEST("mysql reads windows of live reads") {
-  auto sql = pushdown::make_window_read(
-    "`t`", "`s`", std::vector<std::string>{"`id` <= 9", "`id` > 3"},
-    std::vector{filter("s != \"x\"")}, "id", MysqlDialect{});
+  auto const table = pushdown::SqlTable{
+    .from = "`t`",
+    .columns = {},
+    .selection = "`s`",
+    .window = pushdown::SqlWindow{.bounds = {"`id` <= 9", "`id` > 3"},
+                                  .tracking = "id"},
+  };
+  auto sql = planner(pushdown::SqlMode::live)
+               .plan(std::vector{filter("s != \"x\"")}, &table);
   REQUIRE(sql);
-  CHECK_EQUAL(sql.unwrap(),
+  CHECK_EQUAL(sql.unwrap().sql,
               std::string{"SELECT `s` FROM `t` WHERE `id` <= 9 AND `id` > 3 "
                           "AND (`s` <> 'x') ORDER BY `id` ASC"});
 }

@@ -12,11 +12,21 @@
 #include "tenzir/nova/events.hpp"
 #include "tenzir/option.hpp"
 
+#include <algorithm>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
 namespace tenzir::pushdown {
+
+/// How a result column decodes. `integer` and `number` also parse text, for
+/// targets whose results arrive as strings, and `time` reads the target's own
+/// time.
+enum class Decode { native, integer, number, time };
+
+/// A result column with how it decodes.
+using Decoded = std::pair<std::string, Decode>;
 
 /// Output fields, each with the result column that holds it.
 using LayoutFields
@@ -31,6 +41,14 @@ struct Layout {
   std::vector<std::string> hidden;
   /// The schema name of the output events, if the query changes it.
   Option<std::string> schema_name;
+  /// The result columns that do not decode natively, and how they decode.
+  std::vector<Decoded> decode = {};
+
+  /// Returns how the result column `column` decodes.
+  auto decode_of(std::string_view column) const -> Decode {
+    auto it = std::ranges::find(decode, column, &Decoded::first);
+    return it == decode.end() ? Decode::native : it->second;
+  }
 };
 
 /// Arranges `events`, whose fields are the result columns of a query, as

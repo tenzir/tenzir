@@ -77,15 +77,21 @@
 +              output: [
 +                "src"
 +              ],
-+              input: [
-+                "src"
++              args: [
++                root_field {
++                  id: `src` @ [1]:237..240 from 0,
++                  has_question_mark: false
++                }
 +              ]
 +            },
 +            {
 +              output: [
 +                "n"
 +              ],
-+              function: "count"
++              function: "count",
++              args: [
++                
++              ]
 +            }
 +          ],
 +          schema_name: "tenzir.summarize"

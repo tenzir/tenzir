@@ -1,0 +1,169 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "from_duckdb",
+       store: {
+         op: {
+           path: [
+             `from_duckdb` @ [1]:155..166 from 0
+           ],
+           ref: std::from_duckdb/op
+         },
+         args: [
+           located "events.duckdb" @ [1]:167..182 from 0
+         ],
+         named_args: [
+           {
+             index: 2,
+             value: located "events" @ [1]:190..198 from 0
+           }
+         ]
+       },
+       filter: [
+         
+       ],
+-      order: "ordered"
++      order: "ordered",
++      projection: [
++        {
++          expr: root_field {
++            id: `severity` @ [1]:240..248 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `severity` @ [1]:240..248 from 0,
++              has_question_mark: false
++            }
++          ]
++        }
++      ],
++      declined: "`set` is no stage"
+     },
+     SetIr {
+       assignments: [
+         {
+           left: root_field {
+             id: `level` @ [1]:203..208 from 0,
+             has_question_mark: false
+           },
+           right: function_call {
+             fn: {
+               path: [
+                 `file_contents` @ [1]:211..224 from 0
+               ],
+               ref: std::file_contents/fn
+             },
+             args: [
+               root_field {
+                 id: `path` @ [1]:225..229 from 0,
+                 has_question_mark: false
+               }
+             ],
+             method: false,
+             location: [1]:211..230 from 0
+           },
+           location: [1]:203..230 from 0
+         },
+         {
+           left: root_field {
+             id: `level` @ [1]:232..237 from 0,
+             has_question_mark: false
+           },
+           right: root_field {
+             id: `severity` @ [1]:240..248 from 0,
+             has_question_mark: false
+           },
+           location: [1]:232..248 from 0
+         }
+       ],
+       order: "ordered"
+     },
+     summarize {
+       self: [1]:249..258 from 0,
+       cfg: {
+         aggregates: [
+           {
+             dest: {
+               expr: root_field {
+                 id: `events` @ [1]:266..272 from 0,
+                 has_question_mark: false
+               },
+               has_this: false,
+               path: [
+                 {
+                   id: `events` @ [1]:266..272 from 0,
+                   has_question_mark: false
+                 }
+               ]
+             },
+             call: {
+               fn: {
+                 path: [
+                   `count` @ [1]:273..278 from 0
+                 ],
+                 ref: std::count/fn
+               },
+               args: [
+                 
+               ],
+               method: false,
+               location: [1]:273..280 from 0
+             }
+           }
+         ],
+         groups: [
+           {
+             expr: {
+               expr: root_field {
+                 id: `level` @ [1]:259..264 from 0,
+                 has_question_mark: false
+               },
+               has_this: false,
+               path: [
+                 {
+                   id: `level` @ [1]:259..264 from 0,
+                   has_question_mark: false
+                 }
+               ]
+             }
+           }
+         ],
+         indices: [
+           -1,
+           0
+         ],
+         emission: "final",
+         mode: "reset",
+         output: "summary",
+         emit_every: 1
+       }
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:280..280 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ],
+   definition_location: [1]:155..280 from 0
+ }
