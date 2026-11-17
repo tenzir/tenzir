@@ -400,10 +400,20 @@ TEST("kql spells summaries with summarize") {
                                .function = "count_if",
                                .args = {field_at({"x"}), parse("x > 1")}}})}),
               "\n| summarize ['__tenzir_column_0'] = countif((['x'] > 1))");
+  // `count_distinct` counts the distinct values that are not empty, also of
+  // a computed argument.
+  CHECK_EQUAL(
+    kql({aggregate({key({"k"}), call({"m"}, "count_distinct", Path{"x"})})}),
+    "\n| summarize ['__tenzir_column_0'] = "
+    "count_distinctif(['x'], isnotempty(['x'])) by ['k']");
+  CHECK_EQUAL(kql({aggregate({{.output = {"m"},
+                               .function = "count_distinct",
+                               .args = {parse("x.to_lower()")}}})}),
+              "\n| extend ['__tenzir_column_0'] = tolower(['x'])\n| summarize "
+              "['__tenzir_column_1'] = count_distinctif(['__tenzir_column_0'], "
+              "isnotempty(['__tenzir_column_0']))");
   // `avg` yields `NaN` for no values, and other functions have no spelling.
   CHECK_EQUAL(kql({aggregate({call({"m"}, "mean", Path{"x"})})}), "-");
-  CHECK_EQUAL(kql({aggregate({call({"m"}, "count_distinct", Path{"x"})})}),
-              "-");
   CHECK_EQUAL(kql({aggregate({call({"m"}, "min")})}), "-");
   CHECK_EQUAL(kql({aggregate({key({"x", "y"})})}), "-");
   CHECK_EQUAL(kql({aggregate({key({"a*"}), call({"n"}, "count")})}), "-");

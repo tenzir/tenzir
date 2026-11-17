@@ -421,14 +421,16 @@ public:
     return fmt::format("bin({}, {})", subject, spelled);
   }
 
-  /// `count(x)` counts the values that are not empty: KQL has no `null`
-  /// string, but an empty one. `mean` has no spelling: `avg` yields a `NaN`
-  /// for no values. Neither has `count_distinct`: whether Defender and Log
-  /// Analytics accept the exact `count_distinct()` is not verified.
+  /// `count(x)` and `count_distinct(x)` count the values that are not empty:
+  /// KQL has no `null` string, but an empty one. `count_distinct` is exact,
+  /// unlike `dcount`, and fails the query beyond 100 million values. `mean`
+  /// has no spelling: `avg` yields a `NaN` for no values.
   auto aggregations() const -> std::span<Aggregation const> override {
     static constexpr auto rows = std::array{
       Aggregation{"count", 0, "count()"},
       Aggregation{"count", 1, "countif(isnotempty({0}))"},
+      Aggregation{"count_distinct", 1,
+                  "count_distinctif({0}, isnotempty({0}))"},
       Aggregation{"min", 1, "min({0})"},
       Aggregation{"max", 1, "max({0})"},
       Aggregation{"sum", 1, "sum({0})"},

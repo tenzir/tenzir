@@ -1,0 +1,27 @@
+---
+fixtures:
+  - microsoft_defender:
+      schema: [{"name": "__tenzir_column_0", "type": "Int64"}]
+      results: [{"__tenzir_column_0": 4}]
+timeout: 60
+assertions:
+  fixtures:
+    microsoft_defender:
+      appended: |-
+
+        | where (['RemotePort'] == 443)
+        | summarize ['__tenzir_column_0'] = count_distinctif(['RemoteIP'], isnotempty(['RemoteIP']))
+---
+
+// Advanced hunting counts the distinct remote addresses exactly.
+from_microsoft_defender "custom",
+  azure_auth={
+    tenant_id: env("DEFENDER_TENANT"),
+    client_id: env("DEFENDER_CLIENT"),
+    client_secret: env("DEFENDER_SECRET"),
+    authority: env("DEFENDER_AUTHORITY"),
+  },
+  _base_url=env("DEFENDER_URL"),
+  tls=false
+where RemotePort == 443
+summarize remotes=count_distinct(RemoteIP)
