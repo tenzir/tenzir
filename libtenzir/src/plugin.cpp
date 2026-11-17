@@ -33,6 +33,7 @@
 #include <algorithm>
 #include <dlfcn.h>
 #include <memory>
+#include <ranges>
 #include <string_view>
 
 #ifndef __has_feature
@@ -376,8 +377,12 @@ auto initialize(caf::actor_system_config& cfg) -> caf::error {
     }
     // Initialize the plugin with the merged configuration.
     if (plugin.type() != plugin_ptr::type::builtin) {
-      TENZIR_VERBOSE("initializing the {} plugin with options: {}",
-                     plugin->name(), merged_config);
+      // Plugin options regularly hold credentials, such as API keys or
+      // passwords, so we only log which options are set and never their
+      // values.
+      TENZIR_VERBOSE("initializing the {} plugin with options: [{}]",
+                     plugin->name(),
+                     fmt::join(std::views::keys(flatten(merged_config)), ", "));
     }
     if (auto err = plugin->initialize(merged_config, global_config);
         err.valid()) {
