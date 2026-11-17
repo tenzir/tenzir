@@ -218,9 +218,9 @@ public:
     options["sasl.username"] = nova::String{std::move(attachment->username)};
     options["sasl.password"] = nova::String{std::move(attachment->password)};
     options["group.id"] = nova::String{std::move(attachment->group)};
-    // A new group reads what the endpoint buffered before the pipeline
-    // started, rather than only what arrives after.
-    options["auto.offset.reset"] = nova::String{"earliest"};
+    // A new group reads only what arrives after the pipeline started, rather
+    // than everything the endpoint still buffers.
+    options["auto.offset.reset"] = nova::String{"latest"};
     // An ad-hoc pipeline reads in a new group every time it runs, so nothing
     // would ever resume from what it commits.
     auto pipeline = ctx.pipeline();
