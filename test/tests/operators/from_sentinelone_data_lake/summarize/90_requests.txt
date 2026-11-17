@@ -166,3 +166,17 @@
   query: "| group __tenzir_column_1 = count() by __tenzir_column_0 = event.type | sort __tenzir_column_0 | limit 1600000",
   filter: null,
 }
+{
+  scope: "aggregate",
+  status: 200,
+  type: "PQ",
+  query: "| group __tenzir_column_1 = count() by __tenzir_column_0 = timebucket(timestamp, \"2s\") | sort __tenzir_column_0 | limit 1600000",
+  filter: null,
+}
+{
+  scope: "aggregate",
+  status: 200,
+  type: "LOG",
+  query: null,
+  filter: "",
+}

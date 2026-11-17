@@ -1,0 +1,34 @@
+---
+fixtures:
+  - azure_log_analytics:
+      case: "custom"
+      columns: [{"name": "__tenzir_column_0", "type": "datetime"}, {"name": "__tenzir_column_1", "type": "long"}]
+      results: [["2024-01-01T00:00:00Z", 2], ["1969-12-31T23:00:00Z", 1]]
+timeout: 60
+assertions:
+  fixtures:
+    azure_log_analytics:
+      queries: 1
+      tokens: 1
+      appended: |-
+
+        | extend ['__tenzir_column_0'] = bin(['TimeGenerated'], timespan(36000000000tick))
+        | summarize ['__tenzir_column_1'] = count() by ['__tenzir_column_0']
+        | sort by ['__tenzir_column_0'] desc
+---
+
+// Log Analytics buckets times with `bin`, which counts from the epoch for an
+// hour, also before it. The bucket keeps the type of the time.
+from_azure_log_analytics env("AZLOG_QUERY"),
+  workspace_id=env("AZLOG_WORKSPACE"),
+  azure_auth={
+    tenant_id: "fixture-tenant",
+    client_id: "fixture-client",
+    client_secret: "fixture-secret",
+    authority: env("AZLOG_AUTHORITY"),
+  },
+  _base_url=env("AZLOG_URL"),
+  tls=false
+hour = floor(TimeGenerated, 1h)
+summarize hour, events=count()
+sort -hour

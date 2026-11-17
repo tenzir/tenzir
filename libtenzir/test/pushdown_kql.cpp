@@ -224,6 +224,12 @@ TEST("kql spells literals") {
   CHECK_EQUAL(where("x > 1h"), "(['x'] > timespan(36000000000tick))");
   CHECK_EQUAL(where("x > 100ns"), "(['x'] > timespan(1tick))");
   CHECK_EQUAL(where("x > 1ns"), "");
+  // KQL reads the ticks of a `timespan` as a `double`.
+  CHECK_EQUAL(where("x > 900719925474099200ns"),
+              "(['x'] > timespan(9007199254740992tick))");
+  CHECK_EQUAL(where("x > -900719925474099200ns"),
+              "(['x'] > (-timespan(9007199254740992tick)))");
+  CHECK_EQUAL(where("x > 900719925474099300ns"), "");
   CHECK_EQUAL(where("x - 2026-01-01 > 1d"),
               "((['x'] - datetime(2026-01-01T00:00:00.0000000Z)) > "
               "timespan(864000000000tick))");
@@ -401,6 +407,46 @@ TEST("kql spells summaries with summarize") {
   CHECK_EQUAL(kql({aggregate({call({"m"}, "min")})}), "-");
   CHECK_EQUAL(kql({aggregate({key({"x", "y"})})}), "-");
   CHECK_EQUAL(kql({aggregate({key({"a*"}), call({"n"}, "count")})}), "-");
+}
+
+TEST("kql buckets times with bin") {
+  auto const bucket = [](std::string_view expr) {
+    return kql({aggregate(
+      {{.output = {"k"}, .function = None{}, .args = {parse(expr)}}})});
+  };
+  // `bin` counts from 0001-01-01, which agrees with TQL's epoch for widths
+  // that divide the 719,162 days in between, such as those of two days.
+  CHECK_EQUAL(bucket("floor(ts, 1h)"),
+              "\n| extend ['__tenzir_column_0'] = bin(['ts'], "
+              "timespan(36000000000tick))\n| summarize ['__tenzir_count_1'] = "
+              "count() by ['__tenzir_column_0']");
+  CHECK_EQUAL(bucket("ts.floor(2d)"),
+              "\n| extend ['__tenzir_column_0'] = bin(['ts'], "
+              "timespan(1728000000000tick))\n| summarize ['__tenzir_count_1'] "
+              "= count() by ['__tenzir_column_0']");
+  CHECK_EQUAL(bucket("floor(ts, 100ns)"),
+              "\n| extend ['__tenzir_column_0'] = bin(['ts'], "
+              "timespan(1tick))\n| summarize ['__tenzir_count_1'] = count() "
+              "by ['__tenzir_column_0']");
+  // Other widths, finer ones than a tick, and those of the calendar have no
+  // spelling.
+  for (auto expr : {"floor(ts, 7h)", "floor(ts, 3d)", "floor(ts, 50ns)",
+                    "floor(ts, 1w)", "floor(ts, 1mo)", "floor(ts, 0s)",
+                    "floor(ts, -1h)", "floor(ts)", "floor(ts, w)"}) {
+    CHECK_EQUAL(bucket(expr), "-");
+  }
+  // The result keeps the type of `ts`, so it decodes natively.
+  auto query = plan_kql_query(
+    "T",
+    std::vector{aggregate(
+      {{.output = {"k"}, .function = None{}, .args = {parse("floor(ts, 1h)")}},
+       call({"n"}, "count")})},
+    None{});
+  REQUIRE(query);
+  CHECK(query->layout.decode.empty());
+  // Filters compare buckets, too.
+  CHECK_EQUAL(where("floor(ts, 1m) == ts"),
+              "(bin(['ts'], timespan(600000000tick)) == ['ts'])");
 }
 
 TEST("kql sorts with explicit directions and limits with take") {

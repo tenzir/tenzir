@@ -259,10 +259,12 @@ private:
   }
 
   /// Returns a column that a command can name for the value of `column`,
-  /// which is `column` itself or an alias in `aliases`.
+  /// which is `column` itself or an alias in `aliases`. The stage assigns its
+  /// aliases, so it names them, too.
   auto nameable(std::string const& column, std::vector<PipeAlias>& aliases)
     -> std::string {
-    if (dialect_->name_column(column)) {
+    if (dialect_->name_column(column)
+        or std::ranges::contains(aliases, column, &PipeAlias::name)) {
       return column;
     }
     for (auto const& alias : aliases) {
@@ -294,6 +296,21 @@ private:
     auto name = fresh("column");
     aliases.push_back({.name = name, .input = {}, .value = std::move(value)});
     return name;
+  }
+
+  /// How a group key that `expr` computes decodes: as the row of
+  /// `PipeQueryDialect::functions` of a call says, and natively otherwise.
+  auto computed_decode(ast::expression const& expr) const -> Decode {
+    auto const* call = try_as<ast::function_call>(expr);
+    if (not call or not call->fn.ref.resolved()
+        or call->fn.ref.pkg() != entity_pkg_std
+        or call->fn.ref.segments().size() != 1) {
+      return Decode::native;
+    }
+    auto const* row
+      = find_row(dialect_->functions(), call->fn.ref.segments().front(),
+                 call->args.size());
+    return row ? row->decode : Decode::native;
   }
 
   /// Updates whether the field named after the time column holds the
@@ -511,6 +528,10 @@ private:
         auto key = nameable(*input, aliases);
         if (not std::ranges::contains(keys, key)) {
           keys.push_back(key);
+          if (auto kind = computed_decode(column.args.front());
+              kind != Decode::native) {
+            decode.emplace_back(key, kind);
+          }
         }
         key_output.push_back({.path = column.output, .column = key});
         output.push_back({.path = column.output, .column = std::move(key)});

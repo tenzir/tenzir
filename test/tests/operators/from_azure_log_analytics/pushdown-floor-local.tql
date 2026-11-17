@@ -1,0 +1,32 @@
+---
+fixtures:
+  - azure_log_analytics:
+      case: "custom"
+      columns: [{"name": "TimeGenerated", "type": "datetime"}]
+      results: [["2024-01-01T05:30:00Z"], ["2024-01-01T06:59:59Z"], ["2024-01-01T13:00:00Z"]]
+timeout: 60
+assertions:
+  fixtures:
+    azure_log_analytics:
+      queries: 1
+      tokens: 1
+      appended: |-
+
+        | project ['TimeGenerated'] = column_ifexists('TimeGenerated', dynamic(null))
+---
+
+// `bin` counts from 0001-01-01, which disagrees with TQL's epoch for buckets
+// of seven hours, so they run in Tenzir.
+from_azure_log_analytics env("AZLOG_QUERY"),
+  workspace_id=env("AZLOG_WORKSPACE"),
+  azure_auth={
+    tenant_id: "fixture-tenant",
+    client_id: "fixture-client",
+    client_secret: "fixture-secret",
+    authority: env("AZLOG_AUTHORITY"),
+  },
+  _base_url=env("AZLOG_URL"),
+  tls=false
+hour = floor(TimeGenerated, 7h)
+summarize hour, events=count()
+sort hour

@@ -40,6 +40,11 @@ constexpr auto max_take
 /// The duration of a KQL tick, the resolution of `datetime` and `timespan`.
 constexpr auto tick = std::chrono::nanoseconds{100};
 
+/// The ticks from the start of `datetime`, 0001-01-01, to the epoch: 719,162
+/// days. KQL's `bin` buckets a `datetime` by multiples of the width since the
+/// former, and a `timespan` by multiples since zero.
+constexpr auto epoch_ticks = int64_t{621'355'968'000'000'000};
+
 /// The bare words that make a query unfit for trailing stages: `render` must
 /// end a query, `fork` and `facet` return several tables, and a `set`
 /// statement may change how the service limits a result, for example with
@@ -267,8 +272,12 @@ public:
                        clock.subseconds() / tick);
   }
 
+  /// KQL reads the count of ticks of a `timespan` literal as a `double`, so
+  /// counts beyond 2^53, some 28 years, have no exact spelling.
   auto render_duration(duration value) const -> Option<std::string> override {
-    if (value % tick != duration::zero()) {
+    constexpr auto max_exact = int64_t{1} << 53;
+    if (value % tick != duration::zero() or value / tick > max_exact
+        or value / tick < -max_exact) {
       return None{};
     }
     return fmt::format("timespan({}tick)", value / tick);
@@ -390,6 +399,26 @@ public:
       Function{"abs", 1, "abs({0})"},
     };
     return rows;
+  }
+
+  /// TQL buckets times by multiples of the width since the epoch, also before
+  /// it, which `bin` does for widths that divide the time from the start of
+  /// `datetime` to the epoch, such as those that divide two days. `bin_at`
+  /// would align other widths, but only for a `datetime`, not for a
+  /// `timespan`.
+  auto render_call(ast::function_call const& call,
+                   ExpressionRenderer const& renderer) const
+    -> Option<std::string> override {
+    if (call.fn.ref.segments().front() != "floor" or call.args.size() != 2) {
+      return PipeQueryDialect::render_call(call, renderer);
+    }
+    TRY(auto width, bucket_width(call.args[1]));
+    if (width % tick != duration::zero() or epoch_ticks % (width / tick) != 0) {
+      return None{};
+    }
+    TRY(auto subject, renderer.value(call.args[0]));
+    TRY(auto spelled, render_duration(width));
+    return fmt::format("bin({}, {})", subject, spelled);
   }
 
   /// `count(x)` counts the values that are not empty: KQL has no `null`

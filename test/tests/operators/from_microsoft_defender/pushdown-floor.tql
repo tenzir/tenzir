@@ -1,0 +1,30 @@
+---
+fixtures:
+  - microsoft_defender:
+      schema: [{"name": "__tenzir_column_0", "type": "DateTime"}, {"name": "__tenzir_column_1", "type": "Int64"}]
+      results: [{"__tenzir_column_0": "2024-01-01T00:00:00Z", "__tenzir_column_1": 3}, {"__tenzir_column_0": "2024-01-01T00:05:00Z", "__tenzir_column_1": 1}]
+timeout: 60
+assertions:
+  fixtures:
+    microsoft_defender:
+      appended: |-
+
+        | extend ['__tenzir_column_0'] = bin(['Timestamp'], timespan(3000000000tick))
+        | summarize ['__tenzir_column_1'] = count() by ['__tenzir_column_0']
+        | sort by ['__tenzir_column_0'] asc
+---
+
+// Advanced hunting buckets times with `bin`, which counts from the epoch for
+// five minutes. The bucket keeps the type of the time.
+from_microsoft_defender "custom",
+  azure_auth={
+    tenant_id: env("DEFENDER_TENANT"),
+    client_id: env("DEFENDER_CLIENT"),
+    client_secret: env("DEFENDER_SECRET"),
+    authority: env("DEFENDER_AUTHORITY"),
+  },
+  _base_url=env("DEFENDER_URL"),
+  tls=false
+bucket = floor(Timestamp, 5min)
+summarize bucket, events=count()
+sort bucket

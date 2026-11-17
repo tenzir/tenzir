@@ -357,6 +357,7 @@ class _Parser:
         return self.i == len(self.tokens)
 
     # Expressions are tuples: ("field", name), ("literal", value),
+    # ("timebucket", subject, width in nanoseconds),
     # ("cmp", op, lhs, rhs), ("in", lhs, values), ("present", field),
     # ("match", kind, lhs, needle), ("and"|"or", lhs, rhs), ("not", operand).
     def expression(self) -> tuple:
@@ -425,6 +426,16 @@ class _Parser:
             return ("literal", _unquote(text))
         if kind == "number":
             return ("literal", _number(text))
+        if kind == "name" and text == "timebucket" and self.accept("("):
+            subject = self.primary()
+            self.take(",")
+            width = self.take()
+            self.take(")")
+            match = re.fullmatch(r"(\d+)([smhd])", _unquote(width[1]))
+            if subject[0] != "field" or width[0] != "string" or match is None:
+                raise QueryError("Don't understand [timebucket]")
+            unit = {"s": 1, "m": 60, "h": 3600, "d": 86400}[match[2]]
+            return ("timebucket", subject, int(match[1]) * unit * 1_000_000_000)
         if kind == "name":
             if text == "true":
                 return ("literal", True)
@@ -449,6 +460,13 @@ def _value(node: tuple, row: dict) -> object:
         return row.get(node[1])
     if node[0] == "literal":
         return node[1]
+    if node[0] == "timebucket":
+        # Buckets of nanoseconds count from the epoch, in UTC, as a live tenant
+        # showed for widths such as `90s`, `7h`, and `2d`.
+        value = _value(node[1], row)
+        if not _is_number(value):
+            return None
+        return int(value) // node[2] * node[2]
     raise QueryError("Don't understand [predicate as value]")
 
 

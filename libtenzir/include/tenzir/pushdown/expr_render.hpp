@@ -51,7 +51,14 @@ struct Function {
   std::string_view spelling;
   /// Whether the spelling is a predicate rather than a value.
   bool predicate = false;
+  /// How a group key that the function computes decodes.
+  Decode decode = Decode::native;
 };
+
+/// Returns the width of a time bucket that `expr` is: a constant, positive
+/// duration, but no multiple of a week or a month, which TQL buckets by the
+/// calendar.
+auto bucket_width(ast::expression const& expr) -> Option<duration>;
 
 /// The spelling of a TQL aggregation function, with holes as for `Function`.
 struct Aggregation {

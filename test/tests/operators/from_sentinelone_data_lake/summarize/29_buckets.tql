@@ -1,0 +1,10 @@
+// SentinelOne buckets the times of the events with `timebucket`, whose
+// buckets decode as times. The result equals that of `30_buckets_local.tql`,
+// which buckets the same events in Tenzir.
+from_sentinelone_data_lake env("S1_FIXTURE_URL"),
+  token=env("S1_FIXTURE_TOKEN"),
+  start=2024-01-01, end=2024-01-02,
+  account_ids=["aggregate"]
+bucket = floor(timestamp, 2s)
+summarize bucket, n=count()
+sort bucket

@@ -77,6 +77,18 @@ auto ExpressionDialect::time_literal_arithmetic() const -> bool {
   return true;
 }
 
+auto bucket_width(ast::expression const& expr) -> Option<duration> {
+  auto const* constant = try_as<ast::constant>(expr);
+  auto const* width = constant ? try_as<duration>(constant->value) : nullptr;
+  using std::chrono::months, std::chrono::weeks;
+  if (not width or *width <= duration::zero()
+      or *width % weeks{1} == duration::zero()
+      or *width % months{1} == duration::zero()) {
+    return None{};
+  }
+  return *width;
+}
+
 auto spell(std::string_view spelling, std::span<ast::expression const> args,
            folly::FunctionRef<auto(size_t, bool)->Option<std::string>> fill)
   -> Option<std::string> {
@@ -97,23 +109,17 @@ auto spell(std::string_view spelling, std::span<ast::expression const> args,
       TRY(auto text, fill(index, hole.size() >= 2));
       result += text;
     } else {
-      // A count of a unit, from a constant duration that is a whole, positive
-      // multiple of it. TQL aligns multiples of weeks and months to the
-      // calendar, so they have no count.
-      auto const* constant = try_as<ast::constant>(args[index]);
-      auto const* width
-        = constant ? try_as<duration>(constant->value) : nullptr;
+      // A count of a unit, from the width of a time bucket that is a whole
+      // multiple of it.
       auto const ticks = unit == "s"    ? duration{std::chrono::seconds{1}}
                          : unit == "ms" ? duration{std::chrono::milliseconds{1}}
                          : unit == "us" ? duration{std::chrono::microseconds{1}}
                                         : duration{1};
-      using std::chrono::months, std::chrono::weeks;
-      if (not width or *width <= duration::zero()
-          or *width % ticks != duration{} or *width % weeks{1} == duration{}
-          or *width % months{1} == duration{}) {
+      TRY(auto width, bucket_width(args[index]));
+      if (width % ticks != duration::zero()) {
         return None{};
       }
-      result += fmt::to_string(*width / ticks);
+      result += fmt::to_string(width / ticks);
     }
     spelling.remove_prefix(close + 1);
   }
