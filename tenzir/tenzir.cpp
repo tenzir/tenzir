@@ -21,6 +21,7 @@
 #include "tenzir/logger.hpp"
 #include "tenzir/module.hpp"
 #include "tenzir/modules.hpp"
+#include "tenzir/operator_plugin.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/proxy_settings.hpp"
 #include "tenzir/scope_linked.hpp"
@@ -159,6 +160,8 @@ auto tenzir::engine_main(int argc, char** argv) -> int try {
     fmt::print(stderr, "{}\n", loaded_plugin_paths.error());
     return EXIT_FAILURE;
   }
+  // This process runs no deployment, whether as a node or for `tenzir run`.
+  remove_deployment_only_operators();
   // Make sure to deinitialize all plugins at the end. This guard has to be
   // created before the call to `make_application`, as the return value of that
   // can reference dynamically loaded command plugins, which must not be

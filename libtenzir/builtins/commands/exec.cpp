@@ -81,6 +81,7 @@ auto exec_command(const invocation& inv, caf::actor_system& sys) -> bool {
     // The process runs one pipeline, so its reporter is this run's alone.
     auto reporter = PlatformReporter{PlatformConnection{
       std::move(platform), std::move(deployment), std::move(key_file)}};
+    cfg.pipeline = PipelineIdentity{.id = pipeline};
     cfg.platform_profile.emplace(reporter, std::move(pipeline), run);
   }
   auto color_mode = caf::get_or(inv.options, "tenzir.exec.color", "auto");

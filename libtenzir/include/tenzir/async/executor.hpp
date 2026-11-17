@@ -193,6 +193,11 @@ public:
     return None{};
   }
 
+  /// Returns who the host says the pipeline is, if it says.
+  virtual auto pipeline() const -> Option<PipelineIdentity const&> {
+    return None{};
+  }
+
 protected:
   virtual auto make_void(ChannelId id) -> PushPull<OperatorMsg<void>> = 0;
 

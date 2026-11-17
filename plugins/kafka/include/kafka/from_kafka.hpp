@@ -39,6 +39,9 @@ public:
     /// librdkafka options. The `kafka.yaml` defaults do not apply, because
     /// they describe the user's own cluster.
     nova::Record options;
+    /// Whether to commit the offsets of what was read, so that the group
+    /// resumes there.
+    bool commit_offsets = true;
   };
 
   virtual ~KafkaConnector() = default;
@@ -98,25 +101,10 @@ struct FromKafkaArgs {
   std::string infer_under;
   /// The operator the read metrics are labeled with.
   std::string operator_name = "from_kafka";
-  // An operator that turns the events into other events counts those instead.
-  bool count_events = true;
-  // Holds back the offsets of each delivered batch until the operator built on
-  // this one releases the batch, rather than committing them right away.
-  bool hold_offsets = false;
 };
 
-// The `from_kafka` that operators built on it drive.
-class KafkaEventsSource : public Operator<void, nova::Events> {
-public:
-  // Returns how many batches `process_task` delivered with `hold_offsets`,
-  // including those without events.
-  virtual auto delivered_batches() const -> uint64_t = 0;
-
-  // Commits the offsets of the first `count` delivered batches. Once the
-  // stream ended and no batch is held anymore, it also leaves the group.
-  virtual auto release_batches(uint64_t count, OpCtx& ctx) -> Task<void> = 0;
-};
-
-auto make_from_kafka_events(FromKafkaArgs args) -> Box<KafkaEventsSource>;
+/// The `from_kafka` that produces events, for operators built on it.
+auto make_from_kafka_events(FromKafkaArgs args)
+  -> Box<Operator<void, nova::Events>>;
 
 } // namespace tenzir::plugins::kafka

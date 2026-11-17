@@ -1,0 +1,8 @@
+error: operator `ingest` not found
+ --> tests/operators/ingest/unavailable_outside_a_deployment.tql:5:1
+  |
+5 | ingest "app-events"
+  | ^^^^^^
+  |
+  = hint: did you mean `assert`?
+  = docs: https://tenzir.com/docs/reference/operators

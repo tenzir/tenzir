@@ -19,6 +19,7 @@
 #include <iterator>
 #include <regex>
 #include <simdjson.h>
+#include <string_view>
 #include <utility>
 
 namespace tenzir {
@@ -544,11 +545,13 @@ auto parse_user_principal(simdjson::dom::element value)
 }
 
 auto DeploymentId::make(std::string value) -> Result<DeploymentId, ParseError> {
-  static auto const pattern = std::regex{
+  static constexpr auto source = std::string_view{
     R"(^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$)"};
+  static auto const pattern = std::regex{source.begin(), source.end()};
   if (not std::regex_match(value, pattern)) {
-    return Err{ParseError{
-      "DeploymentId", fmt::format("`{}` does not match the pattern", value)}};
+    return Err{ParseError{"DeploymentId",
+                          fmt::format("`{}` does not match the pattern `{}`",
+                                      value, source)}};
   }
   return DeploymentId{std::move(value)};
 }
@@ -560,11 +563,13 @@ auto parse_deployment_id(simdjson::dom::element value)
 }
 
 auto WorkspaceId::make(std::string value) -> Result<WorkspaceId, ParseError> {
-  static auto const pattern = std::regex{
+  static constexpr auto source = std::string_view{
     R"(^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$)"};
+  static auto const pattern = std::regex{source.begin(), source.end()};
   if (not std::regex_match(value, pattern)) {
-    return Err{ParseError{
-      "WorkspaceId", fmt::format("`{}` does not match the pattern", value)}};
+    return Err{ParseError{"WorkspaceId",
+                          fmt::format("`{}` does not match the pattern `{}`",
+                                      value, source)}};
   }
   return WorkspaceId{std::move(value)};
 }
@@ -609,11 +614,13 @@ auto parse_deployment_info(simdjson::dom::element value)
 
 auto OrganizationId::make(std::string value)
   -> Result<OrganizationId, ParseError> {
-  static auto const pattern = std::regex{
+  static constexpr auto source = std::string_view{
     R"(^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$)"};
+  static auto const pattern = std::regex{source.begin(), source.end()};
   if (not std::regex_match(value, pattern)) {
-    return Err{ParseError{
-      "OrganizationId", fmt::format("`{}` does not match the pattern", value)}};
+    return Err{ParseError{"OrganizationId",
+                          fmt::format("`{}` does not match the pattern `{}`",
+                                      value, source)}};
   }
   return OrganizationId{std::move(value)};
 }
@@ -689,11 +696,13 @@ auto parse_deployment_path(simdjson::dom::element value)
 }
 
 auto Uuid::make(std::string value) -> Result<Uuid, ParseError> {
-  static auto const pattern = std::regex{
+  static constexpr auto source = std::string_view{
     R"(^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$)"};
+  static auto const pattern = std::regex{source.begin(), source.end()};
   if (not std::regex_match(value, pattern)) {
-    return Err{ParseError{"Uuid", fmt::format("`{}` does not match the pattern",
-                                              value)}};
+    return Err{
+      ParseError{"Uuid", fmt::format("`{}` does not match the pattern `{}`",
+                                     value, source)}};
   }
   return Uuid{std::move(value)};
 }
@@ -722,11 +731,13 @@ auto parse_telemetry_count(simdjson::dom::element value)
 }
 
 auto PipelineId::make(std::string value) -> Result<PipelineId, ParseError> {
-  static auto const pattern = std::regex{
+  static constexpr auto source = std::string_view{
     R"(^[A-Za-z0-9_-][A-Za-z0-9._-]*(\/[A-Za-z0-9_-][A-Za-z0-9._-]*)*$)"};
+  static auto const pattern = std::regex{source.begin(), source.end()};
   if (not std::regex_match(value, pattern)) {
-    return Err{ParseError{
-      "PipelineId", fmt::format("`{}` does not match the pattern", value)}};
+    return Err{ParseError{"PipelineId",
+                          fmt::format("`{}` does not match the pattern `{}`",
+                                      value, source)}};
   }
   return PipelineId{std::move(value)};
 }
@@ -1124,11 +1135,13 @@ auto Traceparent::make(std::string value) -> Result<Traceparent, ParseError> {
   if (value.size() > 55) {
     return Err{ParseError{"Traceparent", "must be at most 55 characters long"}};
   }
-  static auto const pattern
-    = std::regex{R"(^[0-9a-f]{2}-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$)"};
+  static constexpr auto source = std::string_view{
+    R"(^[0-9a-f]{2}-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$)"};
+  static auto const pattern = std::regex{source.begin(), source.end()};
   if (not std::regex_match(value, pattern)) {
-    return Err{ParseError{
-      "Traceparent", fmt::format("`{}` does not match the pattern", value)}};
+    return Err{ParseError{"Traceparent",
+                          fmt::format("`{}` does not match the pattern `{}`",
+                                      value, source)}};
   }
   return Traceparent{std::move(value)};
 }
@@ -1264,11 +1277,13 @@ auto IngestEndpointName::make(std::string value)
     return Err{
       ParseError{"IngestEndpointName", "must be at most 21 characters long"}};
   }
-  static auto const pattern = std::regex{R"(^[a-z0-9]+(?:-[a-z0-9]+)*$)"};
+  static constexpr auto source
+    = std::string_view{R"(^[a-z0-9]+(?:-[a-z0-9]+)*$)"};
+  static auto const pattern = std::regex{source.begin(), source.end()};
   if (not std::regex_match(value, pattern)) {
-    return Err{
-      ParseError{"IngestEndpointName",
-                 fmt::format("`{}` does not match the pattern", value)}};
+    return Err{ParseError{"IngestEndpointName",
+                          fmt::format("`{}` does not match the pattern `{}`",
+                                      value, source)}};
   }
   return IngestEndpointName{std::move(value)};
 }
@@ -1306,15 +1321,17 @@ auto parse_attach_ingest_endpoint_path(simdjson::dom::element value)
 
 auto IngestEndpointGroupName::make(std::string value)
   -> Result<IngestEndpointGroupName, ParseError> {
-  if (value.size() > 100) {
+  if (value.size() > 255) {
     return Err{ParseError{"IngestEndpointGroupName",
-                          "must be at most 100 characters long"}};
+                          "must be at most 255 characters long"}};
   }
-  static auto const pattern = std::regex{R"(^[A-Za-z0-9][A-Za-z0-9_-]*$)"};
+  static constexpr auto source = std::string_view{
+    R"(^[A-Za-z0-9_-][A-Za-z0-9._-]*(\/[A-Za-z0-9_-][A-Za-z0-9._-]*)*$)"};
+  static auto const pattern = std::regex{source.begin(), source.end()};
   if (not std::regex_match(value, pattern)) {
-    return Err{
-      ParseError{"IngestEndpointGroupName",
-                 fmt::format("`{}` does not match the pattern", value)}};
+    return Err{ParseError{"IngestEndpointGroupName",
+                          fmt::format("`{}` does not match the pattern `{}`",
+                                      value, source)}};
   }
   return IngestEndpointGroupName{std::move(value)};
 }
@@ -1400,10 +1417,13 @@ auto SecretName::make(std::string value) -> Result<SecretName, ParseError> {
   if (value.size() > 255) {
     return Err{ParseError{"SecretName", "must be at most 255 characters long"}};
   }
-  static auto const pattern = std::regex{R"(^[A-Za-z0-9][A-Za-z0-9_-]*$)"};
+  static constexpr auto source
+    = std::string_view{R"(^[A-Za-z0-9][A-Za-z0-9_-]*$)"};
+  static auto const pattern = std::regex{source.begin(), source.end()};
   if (not std::regex_match(value, pattern)) {
-    return Err{ParseError{
-      "SecretName", fmt::format("`{}` does not match the pattern", value)}};
+    return Err{ParseError{"SecretName",
+                          fmt::format("`{}` does not match the pattern `{}`",
+                                      value, source)}};
   }
   return SecretName{std::move(value)};
 }
@@ -2198,12 +2218,13 @@ auto parse_stop_pipeline_options(simdjson::dom::element value)
 
 auto AdhocPipelineId::make(std::string value)
   -> Result<AdhocPipelineId, ParseError> {
-  static auto const pattern = std::regex{
+  static constexpr auto source = std::string_view{
     R"(^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$)"};
+  static auto const pattern = std::regex{source.begin(), source.end()};
   if (not std::regex_match(value, pattern)) {
-    return Err{
-      ParseError{"AdhocPipelineId",
-                 fmt::format("`{}` does not match the pattern", value)}};
+    return Err{ParseError{"AdhocPipelineId",
+                          fmt::format("`{}` does not match the pattern `{}`",
+                                      value, source)}};
   }
   return AdhocPipelineId{std::move(value)};
 }

@@ -55,6 +55,7 @@
 #include "tenzir/hash/hash.hpp"
 #include "tenzir/ir.hpp"
 #include "tenzir/nova/events.hpp"
+#include "tenzir/pipeline_identity.hpp"
 #include "tenzir/pipeline_metrics.hpp"
 #include "tenzir/ref.hpp"
 #include "tenzir/result.hpp"
@@ -163,6 +164,11 @@ public:
 
   /// The contexts the host provides for this pipeline, if any.
   virtual auto contexts() -> Option<ContextHandles const&> {
+    return None{};
+  }
+
+  /// Who the host says this pipeline is, if it says.
+  virtual auto pipeline() -> Option<PipelineIdentity const&> {
     return None{};
   }
 

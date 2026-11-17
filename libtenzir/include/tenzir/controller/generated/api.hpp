@@ -1149,7 +1149,8 @@ struct std::hash<tenzir::AttachIngestEndpointPath> {
 namespace tenzir {
 
 /// A consumer group that readers of an endpoint share, so that each event
-/// reaches only one of them Values must match `^[A-Za-z0-9][A-Za-z0-9_-]*$`.
+/// reaches only one of them Values must match
+/// `^[A-Za-z0-9_-][A-Za-z0-9._-]*(\/[A-Za-z0-9_-][A-Za-z0-9._-]*)*$`.
 class IngestEndpointGroupName {
 public:
   static auto make(std::string value)

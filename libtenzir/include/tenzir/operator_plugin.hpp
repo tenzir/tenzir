@@ -276,6 +276,12 @@ class OperatorPlugin : public virtual operator_compiler_plugin {
 public:
   virtual auto describe() const -> Description = 0;
 
+  /// Whether only a deployment offers the operator, because it needs what a
+  /// deployment provides. Other processes, such as a node, remove it.
+  virtual auto deployment_only() const -> bool {
+    return false;
+  }
+
   auto describe_shared() const -> std::shared_ptr<const Description>;
 
   auto compile(ast::invocation inv, compile_ctx ctx) const
@@ -1700,5 +1706,9 @@ using _::operator_plugin::Spawn;
 using _::operator_plugin::SpawnFn;
 using _::operator_plugin::SpawnWith;
 using _::operator_plugin::SubOptimize;
+
+/// Removes the operators that only a deployment offers, for a process that
+/// does not run one.
+auto remove_deployment_only_operators() -> void;
 
 } // namespace tenzir

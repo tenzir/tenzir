@@ -43,7 +43,6 @@
 #include <array>
 #include <atomic>
 #include <chrono>
-#include <deque>
 #include <limits>
 #include <memory>
 #include <mutex>
@@ -2365,12 +2364,9 @@ private:
   bool done_ = false;
 };
 
-class FromKafkaEvents final : public KafkaEventsSource {
+class FromKafkaEvents final : public Operator<void, nova::Events> {
 public:
   explicit FromKafkaEvents(FromKafkaArgs args) : args_{std::move(args)} {
-    // Avro batches commit under an assignment generation that held batches do
-    // not keep.
-    TENZIR_ASSERT(not args_.hold_offsets or not args_.schema_registry);
   }
   FromKafkaEvents(FromKafkaEvents&& other) noexcept
     : args_{std::move(other.args_)},
@@ -2379,11 +2375,10 @@ public:
       emitted_messages_{other.emitted_messages_},
       pending_commit_offsets_{std::move(other.pending_commit_offsets_)},
       pending_commit_generation_{other.pending_commit_generation_},
-      held_offsets_{std::move(other.held_offsets_)},
-      released_batches_{other.released_batches_},
       consumer_closed_{other.consumer_closed_},
       eof_tracker_{std::move(other.eof_tracker_)},
       connected_options_{std::move(other.connected_options_)},
+      commit_offsets_{other.commit_offsets_},
       done_{other.done_} {
     runtime_.sources = std::move(other.runtime_.sources);
     runtime_.message_queue = std::move(other.runtime_.message_queue);
@@ -2427,6 +2422,7 @@ public:
       }
       args_.topic = std::move(connection->topic);
       connected_options_ = std::move(connection->options);
+      commit_offsets_ = connection->commit_offsets;
     }
     auto aws_region = args_.aws_region
                         ? Option<located<std::string>>{*args_.aws_region}
@@ -2597,10 +2593,7 @@ public:
     if (task_result.end_of_stream) {
       done_ = true;
       request_pipeline_stop();
-      // Otherwise, releasing the last held batch leaves the group.
-      if (held_offsets_.empty()) {
-        co_await close_source_consumer(ctx.dh());
-      }
+      co_await close_source_consumer(ctx.dh());
       co_return;
     }
     TENZIR_ASSERT(task_result.frame);
@@ -2631,13 +2624,9 @@ public:
     for (auto& slice : frame.events) {
       auto const rows = slice.active_count();
       co_await push(std::move(slice));
-      if (args_.count_events) {
-        read_events_counter_.add(rows);
-      }
+      read_events_counter_.add(rows);
     }
-    if (args_.hold_offsets) {
-      held_offsets_.push_back(std::move(frame.max_offsets));
-    } else if (frame.message_count > 0) {
+    if (frame.message_count > 0) {
       if (frame.assignment_generation
           and *frame.assignment_generation
                 != runtime_.sources[0]
@@ -2665,10 +2654,8 @@ public:
       }
     }
     if (frame.message_count > 0) {
-      if (not args_.hold_offsets) {
-        pending_commit_generation_ = frame.assignment_generation;
-        co_await commit_pending_offsets(&ctx.dh());
-      }
+      pending_commit_generation_ = frame.assignment_generation;
+      co_await commit_pending_offsets(&ctx.dh());
       emitted_messages_ += frame.message_count;
     }
     for (auto const& partition : frame.eof_partitions) {
@@ -2689,26 +2676,6 @@ public:
       // Don't set done_ here; let the pipeline drain so the build_loop
       // can finalize and flush any buffered data from the builder.
       request_pipeline_stop();
-    }
-  }
-
-  auto delivered_batches() const -> uint64_t override {
-    return released_batches_ + held_offsets_.size();
-  }
-
-  auto release_batches(uint64_t count, OpCtx& ctx) -> Task<void> override {
-    TENZIR_ASSERT(count <= delivered_batches());
-    if (count <= released_batches_) {
-      co_return;
-    }
-    while (released_batches_ < count) {
-      record_pending_offsets(held_offsets_.front());
-      held_offsets_.pop_front();
-      ++released_batches_;
-    }
-    co_await commit_pending_offsets(&ctx.dh());
-    if (done_ and held_offsets_.empty()) {
-      co_await close_source_consumer(ctx.dh());
     }
   }
 
@@ -4082,6 +4049,9 @@ private:
 
   /// Moves per-partition offsets from one emitted batch into commit state.
   auto record_pending_offsets(TopicPartitionOffsets const& offsets) -> void {
+    if (not commit_offsets_) {
+      return;
+    }
     for (auto const& [partition, offset] : offsets) {
       pending_commit_offsets_[partition] = offset + 1;
     }
@@ -4182,11 +4152,6 @@ private:
       it = pending_commit_offsets_.erase(it);
       ++dropped;
     }
-    for (auto& held : held_offsets_) {
-      std::erase_if(held, [&](auto const& entry) {
-        return not assigned.contains(entry.first);
-      });
-    }
     if (dropped > 0) {
       // Routine during a rebalance, so this is not worth a diagnostic.
       TENZIR_VERBOSE("from_kafka: dropped uncommitted offsets for {} partition "
@@ -4222,10 +4187,6 @@ private:
   TopicPartitionOffsets pending_commit_offsets_;
   // Runtime-only: generations belong to one consumer instance, not snapshots.
   Option<uint64_t> pending_commit_generation_;
-  // The offsets of the batches that `hold_offsets` keeps, oldest first. Left
-  // out of snapshots, so a restored run reads their messages again.
-  std::deque<TopicPartitionOffsets> held_offsets_;
-  uint64_t released_batches_ = 0;
   // Set once the group membership was closed; commits are impossible after.
   bool consumer_closed_ = false;
   // Decides when every partition this instance owns reached its end. Only
@@ -4234,6 +4195,8 @@ private:
   EofTracker eof_tracker_;
   // What the connector said to connect with, if there is one.
   Option<nova::Record> connected_options_;
+  // Whether the connector wants the offsets committed.
+  bool commit_offsets_ = true;
   mutable MetricsCounter read_bytes_counter_;
   mutable MetricsCounter read_events_counter_;
   bool done_ = false;
@@ -4440,8 +4403,9 @@ public:
 
 } // namespace
 
-auto make_from_kafka_events(FromKafkaArgs args) -> Box<KafkaEventsSource> {
-  return Box<KafkaEventsSource>{FromKafkaEvents{std::move(args)}};
+auto make_from_kafka_events(FromKafkaArgs args)
+  -> Box<Operator<void, nova::Events>> {
+  return Box<Operator<void, nova::Events>>{FromKafkaEvents{std::move(args)}};
 }
 
 } // namespace tenzir::plugins::kafka

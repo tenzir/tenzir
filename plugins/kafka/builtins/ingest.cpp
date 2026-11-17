@@ -9,13 +9,8 @@
 #include "kafka/from_kafka.hpp"
 
 #include <tenzir/async/mutex.hpp>
-#include <tenzir/async/semaphore.hpp>
-#include <tenzir/chunk.hpp>
 #include <tenzir/controller/generated/api.hpp>
 #include <tenzir/diagnostics.hpp>
-#include <tenzir/ir.hpp>
-#include <tenzir/nova/bitmap_iteration.hpp>
-#include <tenzir/nova/materialize.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/platform_connection.hpp>
 #include <tenzir/plugin.hpp>
@@ -24,12 +19,10 @@
 #include <fmt/format.h>
 #include <librdkafka/rdkafka.h>
 
-#include <deque>
 #include <map>
 #include <memory>
 #include <mutex>
 #include <string>
-#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -39,10 +32,6 @@ namespace {
 
 struct IngestArgs {
   located<std::string> name;
-  Option<located<std::string>> group;
-  Option<located<ir::pipeline>> parser;
-  let_id request;
-  location operator_location = location::unknown;
 };
 
 auto describe(variant<AttachIngestEndpointError, CallError> const& error)
@@ -232,9 +221,13 @@ public:
     // A new group reads what the endpoint buffered before the pipeline
     // started, rather than only what arrives after.
     options["auto.offset.reset"] = nova::String{"earliest"};
+    // An ad-hoc pipeline reads in a new group every time it runs, so nothing
+    // would ever resume from what it commits.
+    auto pipeline = ctx.pipeline();
     co_return Connection{
       .topic = std::move(attachment->topic),
       .options = std::move(options),
+      .commit_offsets = not pipeline or not pipeline->adhoc,
     };
   }
 
@@ -274,10 +267,21 @@ private:
     // Validated when the pipeline was parsed.
     auto name = IngestEndpointName::make(args_.name.inner);
     TENZIR_ASSERT(name.is_ok());
+    // Each pipeline reads in a group of its own, so that the pipelines of a
+    // deployment do not split the events between them.
     auto group = Option<IngestEndpointGroupName>{};
-    if (args_.group) {
-      auto made = IngestEndpointGroupName::make(args_.group->inner);
-      TENZIR_ASSERT(made.is_ok());
+    if (auto pipeline = ctx.pipeline()) {
+      auto made = IngestEndpointGroupName::make(
+        fmt::format("{}/{}", deployment.deployment_id, pipeline->id));
+      if (made.is_err()) {
+        diagnostic::error("cannot derive a consumer group from pipeline "
+                          "`{}`: {}",
+                          pipeline->id, std::move(made).unwrap_err().reason)
+          .primary(args_.name)
+          .hint("give the pipeline a shorter path")
+          .emit(ctx);
+        co_return failure::promise();
+      }
       group = std::move(made).unwrap();
     }
     auto attached = co_await call(
@@ -301,38 +305,12 @@ private:
   bool acquired_ = false;
 };
 
-// Bounds how many parser pipelines run at once.
-constexpr auto max_parsers = size_t{32};
-
-auto demote_errors(diagnostic d) -> diagnostic {
-  if (d.severity == severity::error) {
-    d.severity = severity::warning;
-  }
-  return d;
-}
-
-// Keeps what `from_kafka` delivers, so that the parser pipelines get it.
-class Collect final : public Push<nova::Events> {
-public:
-  auto operator()(nova::Events events) -> Task<void> override {
-    collected.push_back(std::move(events));
-    co_return;
-  }
-
-  std::vector<nova::Events> collected;
-};
-
 /// `from_kafka` on the endpoint's topic, with the credentials of an attach.
 class Ingest final : public Operator<void, nova::Events> {
 public:
   explicit Ingest(IngestArgs args)
-    : parser_{std::exchange(args.parser, None{})},
-      request_{args.request},
-      operator_location_{args.operator_location},
-      inner_{make_from_kafka_events([&] {
+    : inner_{make_from_kafka_events([&] {
         auto result = FromKafkaArgs{};
-        result.count_events = not parser_;
-        result.hold_offsets = static_cast<bool>(parser_);
         result.connector = std::make_shared<IngestConnector>(std::move(args));
         result._json = true;
         result.schema_name = "tenzir.ingest";
@@ -343,85 +321,20 @@ public:
   }
 
   auto start(OpCtx& ctx) -> Task<void> override {
-    co_await inner_->start(ctx);
-    if (parser_) {
-      events_read_
-        = ctx.make_counter(MetricsLabel{"operator", "ingest"},
-                           MetricsDirection::read, MetricsVisibility::external_,
-                           MetricsUnit::events);
-    }
+    return inner_->start(ctx);
   }
 
   auto snapshot(Serde& serde) -> void override {
-    if (parser_) {
-      // A restored operator would not have the parser pipelines that were
-      // still running.
-      diagnostic::error("`ingest` with a parser pipeline does not support "
-                        "checkpoints yet")
-        .primary(operator_location_)
-        .throw_();
-    }
     inner_->snapshot(serde);
   }
 
   auto await_task(diagnostic_handler& dh) const -> Task<Any> override {
-    if (not parser_) {
-      return inner_->await_task(dh);
-    }
-    return await_admitted(dh);
+    return inner_->await_task(dh);
   }
 
   auto process_task(Any result, Push<nova::Events>& push, OpCtx& ctx)
     -> Task<void> override {
-    if (not parser_) {
-      co_await inner_->process_task(std::move(result), push, ctx);
-      co_return;
-    }
-    auto admitted = std::move(result).as<Admitted>();
-    auto collect = Collect{};
-    auto delivered = inner_->delivered_batches();
-    co_await inner_->process_task(std::move(admitted.result), collect, ctx);
-    if (inner_->delivered_batches() == delivered) {
-      TENZIR_ASSERT(collect.collected.empty());
-      co_return;
-    }
-    auto& batch = batches_.emplace_back(Batch{.id = delivered + 1});
-    for (auto& events : collect.collected) {
-      nova::storage::for_each_true(events.mask, [&](nova::storage::Index row) {
-        if (auto request = make_request(events, row, batch.id, ctx)) {
-          backlog_.push_back(std::move(*request));
-          ++batch.pending;
-        }
-      });
-    }
-    co_await spawn_parsers(ctx);
-    if (not backlog_.empty()) {
-      admission_ = std::move(admitted.permit);
-    }
-    co_await release_finished_batches(ctx);
-  }
-
-  auto process_sub(SubKeyView key, nova::Events events,
-                   Push<nova::Events>& push, OpCtx& ctx)
-    -> Task<void> override {
-    TENZIR_UNUSED(key, ctx);
-    auto const rows = events.active_count();
-    co_await push(std::move(events));
-    events_read_.add(rows);
-  }
-
-  auto finish_sub(SubKeyView key, Push<nova::Events>& push, OpCtx& ctx)
-    -> Task<void> override {
-    TENZIR_UNUSED(push);
-    auto parser = running_.find(as<uint64_t>(key));
-    TENZIR_ASSERT(parser != running_.end());
-    finish_request(parser->second);
-    running_.erase(parser);
-    co_await spawn_parsers(ctx);
-    if (backlog_.empty()) {
-      admission_ = None{};
-    }
-    co_await release_finished_batches(ctx);
+    return inner_->process_task(std::move(result), push, ctx);
   }
 
   auto post_commit(OpCtx& ctx) -> Task<void> override {
@@ -443,123 +356,11 @@ public:
   }
 
   auto state() -> OperatorState override {
-    // The stream may end while the requests it delivered are still parsed.
-    if (not batches_.empty()) {
-      return OperatorState::normal;
-    }
     return inner_->state();
   }
 
 private:
-  // The result of `await_task` while it holds back further batches.
-  struct Admitted {
-    SemaphorePermit permit;
-    Any result;
-  };
-
-  // A request that waits for a parser pipeline.
-  struct Request {
-    uint64_t batch;
-    record metadata;
-    chunk_ptr body;
-  };
-
-  // A batch that `from_kafka` delivered, with the number of its requests that
-  // are not parsed yet.
-  struct Batch {
-    uint64_t id = 0;
-    size_t pending = 0;
-  };
-
-  auto await_admitted(diagnostic_handler& dh) const -> Task<Any> {
-    auto permit = co_await admissions_->acquire();
-    auto result = co_await inner_->await_task(dh);
-    co_return Admitted{std::move(permit), std::move(result)};
-  }
-
-  auto make_request(nova::Events const& events, nova::storage::Index row,
-                    uint64_t batch, OpCtx& ctx) const -> Option<Request> {
-    auto value = nova::materialize_legacy(events.data.get(row));
-    auto* metadata = try_as<record>(value);
-    TENZIR_ASSERT(metadata);
-    auto body = metadata->find("body");
-    if (body == metadata->end() or not is<std::string>(body->second)) {
-      diagnostic::warning("skipping a request without a body")
-        .primary(operator_location_)
-        .emit(ctx);
-      return None{};
-    }
-    auto chunk = chunk::make(std::move(as<std::string>(body->second)));
-    metadata->erase(body);
-    return Request{
-      .batch = batch,
-      .metadata = std::move(*metadata),
-      .body = std::move(chunk),
-    };
-  }
-
-  auto spawn_parsers(OpCtx& ctx) -> Task<void> {
-    while (running_.size() < max_parsers and not backlog_.empty()) {
-      auto request = std::move(backlog_.front());
-      backlog_.pop_front();
-      auto pipeline = parser_->inner;
-      pipeline.bind(request_, std::move(request.metadata));
-      // A request that the parser cannot handle must not stop the others.
-      auto dh = transforming_diagnostic_handler{ctx.dh(), demote_errors};
-      auto plan = ir::make_plan(std::move(pipeline), tag_v<chunk_ptr>,
-                                base_ctx{dh, ctx.reg()});
-      if (not plan) {
-        finish_request(request.batch);
-        continue;
-      }
-      auto key = next_key_++;
-      running_.emplace(key, request.batch);
-      auto& sub = co_await ctx.spawn_sub(data{key}, std::move(*plan),
-                                         DiagnosticBehavior::ErrorToWarning);
-      auto& parser = as<SubHandle<chunk_ptr>>(sub);
-      if (request.body->size() > 0) {
-        // Fails only when the parser already stopped, which it reports itself.
-        std::ignore = co_await parser.push(std::move(request.body));
-      }
-      co_await parser.close();
-    }
-  }
-
-  auto finish_request(uint64_t batch) -> void {
-    TENZIR_ASSERT(not batches_.empty());
-    TENZIR_ASSERT(batch >= batches_.front().id);
-    auto& pending = batches_[batch - batches_.front().id].pending;
-    TENZIR_ASSERT(pending > 0);
-    --pending;
-  }
-
-  // Commits the batches whose requests are all parsed, up to the first one
-  // that is not, so that the committed offset never skips a request.
-  auto release_finished_batches(OpCtx& ctx) -> Task<void> {
-    auto released = Option<uint64_t>{};
-    while (not batches_.empty() and batches_.front().pending == 0) {
-      released = batches_.front().id;
-      batches_.pop_front();
-    }
-    if (released) {
-      co_await inner_->release_batches(*released, ctx);
-    }
-  }
-
-  Option<located<ir::pipeline>> parser_;
-  let_id request_;
-  location operator_location_;
-  Box<KafkaEventsSource> inner_;
-  // Holds back the next batch while requests of the current one still wait
-  // for a parser pipeline.
-  mutable Arc<Semaphore> admissions_{std::in_place, size_t{1}};
-  Option<SemaphorePermit> admission_;
-  std::deque<Request> backlog_;
-  std::deque<Batch> batches_;
-  // The batch of each running parser pipeline, by its key.
-  std::unordered_map<uint64_t, uint64_t> running_;
-  uint64_t next_key_ = 0;
-  MetricsCounter events_read_;
+  Box<Operator<void, nova::Events>> inner_;
 };
 
 class IngestPlugin final : public virtual OperatorPlugin {
@@ -568,40 +369,19 @@ public:
     return "ingest";
   }
 
+  auto deployment_only() const -> bool override {
+    return true;
+  }
+
   auto describe() const -> Description override {
     auto d = Describer<IngestArgs, Ingest>{};
-    d.concurrent_output();
     auto name = d.positional("name", &IngestArgs::name);
-    auto group = d.named("group", &IngestArgs::group);
-    auto parser = d.pipeline(&IngestArgs::parser, SubOptimize::from_downstream,
-                             {{"request", &IngestArgs::request}});
-    d.operator_location(&IngestArgs::operator_location);
     d.validate([=](DescribeCtx& ctx) -> Empty {
       if (auto value = ctx.get(name)) {
         if (auto made = IngestEndpointName::make(value->inner); made.is_err()) {
           diagnostic::error("invalid ingest endpoint name: {}",
                             std::move(made).unwrap_err().reason)
             .primary(value->source)
-            .emit(ctx);
-        }
-      }
-      if (auto value = ctx.get(group)) {
-        if (auto made = IngestEndpointGroupName::make(value->inner);
-            made.is_err()) {
-          diagnostic::error("invalid consumer group: {}",
-                            std::move(made).unwrap_err().reason)
-            .primary(value->source)
-            .emit(ctx);
-        }
-      }
-      if (auto value = ctx.get(parser)) {
-        auto output = value->inner.infer_type(tag_v<chunk_ptr>, ctx);
-        if (output.is_error()) {
-          return {};
-        }
-        if (output->is_not<nova::Events>()) {
-          diagnostic::error("pipeline must return events")
-            .primary(value->source.subloc(0, 1))
             .emit(ctx);
         }
       }

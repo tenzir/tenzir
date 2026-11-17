@@ -628,7 +628,8 @@ public:
                        bool has_terminal = false, bool is_hidden = false,
                        Option<Ref<PipelineObserver>> observer = None{},
                        Option<SecretStore&> secrets = None{},
-                       Option<Ref<ContextHandles const>> contexts = None{})
+                       Option<Ref<ContextHandles const>> contexts = None{},
+                       Option<PipelineIdentity> pipeline = None{})
     : reg_{std::move(reg)},
       profiling_{is<NodeProfiler>(profiler) or is<PerfettoProfiler>(profiler)
                  or is<PlatformProfiler>(profiler)},
@@ -640,7 +641,8 @@ public:
       is_hidden_{is_hidden},
       observer_{std::move(observer)},
       secrets_{secrets},
-      contexts_{contexts} {
+      contexts_{contexts},
+      pipeline_{std::move(pipeline)} {
   }
 
   auto inspection() const -> Option<Ref<PipelineObserver>> override {
@@ -765,6 +767,13 @@ public:
 
   auto contexts() const -> Option<Ref<ContextHandles const>> override {
     return contexts_;
+  }
+
+  auto pipeline() const -> Option<PipelineIdentity const&> override {
+    if (pipeline_) {
+      return *pipeline_;
+    }
+    return None{};
   }
 
 protected:
@@ -947,6 +956,7 @@ private:
   Option<Ref<PipelineObserver>> observer_;
   Option<SecretStore&> secrets_;
   Option<Ref<ContextHandles const>> contexts_;
+  Option<PipelineIdentity> pipeline_;
   std::mutex mutex_;
   std::vector<ChannelProfile> channels_;
   /// The CPU time of each operator at the previous `take_resources`.
@@ -1732,13 +1742,14 @@ auto run_plan_impl(ir::Plan plan, Arc<registry const> reg,
                    bool has_terminal, bool is_hidden, Notify* graceful_stop,
                    Option<Ref<PipelineObserver>> observer = None{},
                    Option<SecretStore&> secrets = None{},
-                   Option<Ref<ContextHandles const>> contexts = None{})
+                   Option<Ref<ContextHandles const>> contexts = None{},
+                   Option<PipelineIdentity> pipeline = None{})
   -> Task<failure_or<PlanCompletion>> {
   auto num_ops = plan.size();
   LOGW("spawning plan with {} operators", num_ops);
-  auto exec_ctx
-    = TestExecCtx{std::move(reg),      profiler, has_terminal, is_hidden,
-                  std::move(observer), secrets,  contexts};
+  auto exec_ctx = TestExecCtx{
+    std::move(reg),      profiler, has_terminal, is_hidden,
+    std::move(observer), secrets,  contexts,     std::move(pipeline)};
   // The side task may never start for a sub-second pipeline. Sample after all
   // its tasks join, even when execution unwinds through cancellation.
   auto final_sample = detail::scope_guard{[&]() noexcept {
@@ -1771,8 +1782,8 @@ auto run_plan(ir::Plan plan, Arc<registry const> reg, caf::actor_system& sys,
               Notify* graceful_stop, Option<Ref<PipelineObserver>> observer,
               Option<Ref<SourceMap const>> sources,
               Option<SecretStore&> secrets,
-              Option<Ref<ContextHandles const>> contexts)
-  -> Task<failure_or<void>> {
+              Option<Ref<ContextHandles const>> contexts,
+              Option<PipelineIdentity> pipeline) -> Task<failure_or<void>> {
   auto finish = detail::scope_guard{[&]() noexcept {
     if (observer) {
       (*observer)->finish(ExecutionOutcome::cancelled);
@@ -1782,9 +1793,10 @@ auto run_plan(ir::Plan plan, Arc<registry const> reg, caf::actor_system& sys,
   if (observer and sources) {
     (*observer)->publish_sources(**sources);
   }
-  auto execution = run_plan_impl(std::move(plan), std::move(reg), sys, dh,
-                                 std::move(profiler), false, is_hidden,
-                                 graceful_stop, observer, secrets, contexts);
+  auto execution
+    = run_plan_impl(std::move(plan), std::move(reg), sys, dh,
+                    std::move(profiler), false, is_hidden, graceful_stop,
+                    observer, secrets, contexts, std::move(pipeline));
   if (not observer) {
     CO_TRY(co_await std::move(execution));
     co_return {};
@@ -1892,6 +1904,7 @@ auto run_plan_blocking(ir::Plan plan, Arc<registry const> reg,
                        caf::actor_system& sys, diagnostic_handler& dh,
                        Option<std::string> const& profile_path,
                        Option<PlatformProfiler> const& platform_profile,
+                       Option<PipelineIdentity> pipeline,
                        SourceMap const& sources,
                        PlatformDiagnosticHandler* compile_reporting)
   -> failure_or<void> {
@@ -1920,14 +1933,14 @@ auto run_plan_blocking(ir::Plan plan, Arc<registry const> reg,
   auto signal_guard = detail::SignalGuard{
     graceful_stop, cancel_source,
     std::chrono::duration_cast<std::chrono::milliseconds>(grace)};
-  auto task
-    = folly::coro::co_invoke([&] -> Task<Option<failure_or<PlanCompletion>>> {
-        co_return co_await catch_cancellation(folly::coro::co_withCancellation(
-          cancel_source.getToken(),
-          run_plan_impl(std::move(plan), std::move(reg), sys, diag_handler,
-                        std::move(profiler), has_terminal, false,
-                        &graceful_stop)));
-      });
+  auto task = folly::coro::co_invoke(
+    [&] -> Task<Option<failure_or<PlanCompletion>>> {
+      co_return co_await catch_cancellation(folly::coro::co_withCancellation(
+        cancel_source.getToken(),
+        run_plan_impl(std::move(plan), std::move(reg), sys, diag_handler,
+                      std::move(profiler), has_terminal, false, &graceful_stop,
+                      None{}, None{}, None{}, std::move(pipeline))));
+    });
 #if 0
   TENZIR_DEBUG("running pipeline on a single thread");
   auto result = folly::coro::blockingWait(std::move(task));
@@ -2150,7 +2163,8 @@ auto exec_with_ir(ast::pipeline ast, const exec_config& cfg,
   }
   // Start the actual execution.
   TRY(run_plan_blocking(std::move(*plan), std::move(reg), sys, ctx, cfg.profile,
-                        cfg.platform_profile, source_map, reporting));
+                        cfg.platform_profile, cfg.pipeline, source_map,
+                        reporting));
   return true;
 }
 

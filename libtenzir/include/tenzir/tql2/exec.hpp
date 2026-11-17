@@ -13,6 +13,7 @@
 #include "tenzir/async/executor.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/option.hpp"
+#include "tenzir/pipeline_identity.hpp"
 #include "tenzir/platform_profiler.hpp"
 #include "tenzir/profiler_snapshot.hpp"
 #include "tenzir/table_slice.hpp"
@@ -41,6 +42,8 @@ struct exec_config {
   bool dump_ir_plan = false;
   Option<std::string> profile;
   Option<PlatformProfiler> platform_profile;
+  /// Who operators see as their `OpCtx::pipeline()`.
+  Option<PipelineIdentity> pipeline;
   Option<std::string> parallelism;
 };
 
@@ -83,14 +86,16 @@ auto exec2(Arc<const Source> source, diagnostic_handler& dh,
 /// destroyed. When supplied, sources must remain alive until the task starts,
 /// when they are copied into the observer. Discarding an unstarted task leaves
 /// inspection unstarted as well. Operators see `contexts` as their
-/// `OpCtx::contexts()`; the caller keeps it alive until the task ends.
+/// `OpCtx::contexts()`; the caller keeps it alive until the task ends. They see
+/// `pipeline` as their `OpCtx::pipeline()`.
 auto run_plan(ir::Plan plan, Arc<registry const> reg, caf::actor_system& sys,
               DiagHandler& dh, Profiler profiler, bool is_hidden,
               Notify* graceful_stop = nullptr,
               Option<Ref<PipelineObserver>> observer = None{},
               Option<Ref<SourceMap const>> sources = None{},
               Option<SecretStore&> secrets = None{},
-              Option<Ref<ContextHandles const>> contexts = None{})
+              Option<Ref<ContextHandles const>> contexts = None{},
+              Option<PipelineIdentity> pipeline = None{})
   -> Task<failure_or<void>>;
 
 /// Run a `T -> T` chain with caller-provided IO, where `T` is either

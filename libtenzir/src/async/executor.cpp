@@ -670,6 +670,10 @@ private:
     return None{};
   }
 
+  auto pipeline() -> Option<PipelineIdentity const&> override {
+    return exec_ctx_.pipeline();
+  }
+
   auto register_secret(nova::Secret const& value) -> void override {
     censor_.add(value.data);
   }

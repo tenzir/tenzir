@@ -1056,6 +1056,17 @@ auto OperatorPlugin::describe_shared() const
 
 } // namespace tenzir::_::operator_plugin
 
+namespace tenzir {
+
+auto remove_deployment_only_operators() -> void {
+  std::erase_if(plugins::get_mutable(), [](auto const& plugin) {
+    auto const* op = plugin.template as<OperatorPlugin>();
+    return op and op->deployment_only();
+  });
+}
+
+} // namespace tenzir
+
 TENZIR_REGISTER_PLUGIN(
   tenzir::inspection_plugin<tenzir::ir::Operator,
                             tenzir::_::operator_plugin::GenericIr>)
