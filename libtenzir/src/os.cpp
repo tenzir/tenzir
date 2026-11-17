@@ -184,6 +184,13 @@ auto linux_os::current_pid() -> int {
 auto linux_os::fetch_processes(Option<int> pid_filter) -> std::vector<process> {
   auto result = std::vector<process>{};
   try {
+    // A process's start comes in clock ticks since boot.
+    auto boot = time::clock::now()
+                - std::chrono::duration_cast<duration>(
+                  state_->procfs.get_uptime().system_time);
+    auto ticks = [&](unsigned long long count) {
+      return std::chrono::milliseconds{count * 1000 / state_->clock_tick};
+    };
     auto tasks = state_->procfs.get_processes();
     result.reserve(tasks.size());
     for (const auto& task : tasks) {
@@ -205,14 +212,17 @@ auto linux_os::fetch_processes(Option<int> pid_filter) -> std::vector<process> {
           .ruid = detail::narrow_cast<uid_t>(status.uid.real),
           .rgid = detail::narrow_cast<gid_t>(status.gid.real),
           .priority = std::to_string(stat.priority),
-          .startup = {},
+          .startup = boot + ticks(stat.starttime),
           .vsize = static_cast<uint64_t>(stat.vsize),
           .rsize = static_cast<uint64_t>(stat.rss * getpagesize()),
-          .peak_mem = static_cast<uint64_t>(status.vm_hwm),
-          .swap = static_cast<uint64_t>(status.vm_swap),
+          // The kernel counts both in kB.
+          .peak_mem = static_cast<uint64_t>(status.vm_hwm) * 1024,
+          .swap = static_cast<uint64_t>(status.vm_swap) * 1024,
           .open_fds = open_fds,
-          .utime = std::chrono::seconds{stat.utime / state_->clock_tick},
-          .stime = std::chrono::seconds{stat.stime / state_->clock_tick},
+          // In milliseconds, as whole seconds would hide what a mostly idle
+          // process uses.
+          .utime = ticks(stat.utime),
+          .stime = ticks(stat.stime),
         };
         result.push_back(std::move(proc));
       } catch (std::system_error&) {

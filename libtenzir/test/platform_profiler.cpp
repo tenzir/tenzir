@@ -395,6 +395,24 @@ TEST("platform reporter sends the runs of a process in one batch") {
   CHECK_EQUAL(pipelines.size(), 300u);
 }
 
+TEST("platform reporter samples what the process uses") {
+  auto sent = std::make_shared<Sent>();
+  auto reporter = recording(sent);
+  flush(reporter);
+  // A process with nothing else to report still reports itself.
+  REQUIRE_EQUAL(sent->batches.size(), 1u);
+  REQUIRE_EQUAL(sent->batches[0].deployment.size(), 1u);
+  auto const& sample = sent->batches[0].deployment[0];
+  // Running totals, which the platform takes the rate of, and the memory
+  // resident now, which any process has some of.
+  CHECK_GREATER(sample.cpu_seconds.value(), 0.0);
+  CHECK_GREATER(sample.memory_bytes.value(), 0);
+  CHECK_GREATER_EQUAL(sample.uptime_ms.value(), 0);
+  // Not again within the interval.
+  flush(reporter);
+  CHECK_EQUAL(sent->batches.size(), 1u);
+}
+
 TEST("platform reporter splits batches only at the platform's limits") {
   auto sent = std::make_shared<Sent>();
   auto reporter = recording(sent);

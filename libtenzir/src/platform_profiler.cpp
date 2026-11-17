@@ -9,6 +9,7 @@
 #include <tenzir/controller/http_transport.hpp>
 #include <tenzir/detail/scope_guard.hpp>
 #include <tenzir/logger.hpp>
+#include <tenzir/os.hpp>
 #include <tenzir/platform_profiler.hpp>
 #include <tenzir/time.hpp>
 #include <tenzir/tunnel/platform.hpp>
@@ -48,6 +49,9 @@ constexpr auto max_pending_requests = std::size_t{1000};
 // one pending with the same fingerprint, and take no room of their own.
 constexpr auto max_pending_diagnostics = std::size_t{256};
 constexpr auto max_pending_transitions = std::size_t{8};
+// How often the process reports what it uses. The platform takes the rate of
+// CPU time between two samples at most a minute apart.
+constexpr auto process_sample_interval = std::chrono::seconds{10};
 
 // One sequence across all senders in the process, including retries.
 auto next_sequence() -> uint64_t {
@@ -343,7 +347,7 @@ class Draft {
 public:
   auto empty() const -> bool {
     return pipelines_.empty() and diagnostics_.empty() and runs_.empty()
-           and requests_.empty();
+           and deployment_.empty() and requests_.empty();
   }
 
   /// Takes `sample` if it fits, and leaves it as it is otherwise.
@@ -370,6 +374,10 @@ public:
     return add_to(requests_, request);
   }
 
+  auto add(DeploymentSample& sample) -> bool {
+    return add_to(deployment_, sample);
+  }
+
   /// The batch, as the next in the process's sequence, reporting `lost`.
   auto finish(uint64_t lost) && -> Batch {
     return Batch{boot(),
@@ -378,7 +386,7 @@ public:
                  std::move(pipelines_),
                  std::move(diagnostics_),
                  std::move(runs_),
-                 {},
+                 std::move(deployment_),
                  std::move(requests_)};
   }
 
@@ -411,6 +419,7 @@ private:
   std::vector<PipelineSample> pipelines_;
   std::vector<DiagnosticSample> diagnostics_;
   std::vector<RunTransition> runs_;
+  std::vector<DeploymentSample> deployment_;
   std::vector<ServedRequest> requests_;
   std::string scratch_;
 };
@@ -699,6 +708,22 @@ public:
       uplink.enqueue(std::exchange(draft, Draft{}).finish(lost), lost);
       return not uplink.full();
     };
+    // The process sample goes first, before the runs can take every slot
+    // there is, which would otherwise starve it while telemetry flows. A
+    // batch sealed below carries it. One that found no room stays until a
+    // batch takes it, and no new one is taken meanwhile, so the queue filling
+    // up loses none.
+    if (not unsent_sample) {
+      unsent_sample = process_sample();
+    }
+    if (unsent_sample) {
+      while (not draft.add(*unsent_sample)) {
+        if (not seal()) {
+          return;
+        }
+      }
+      unsent_sample = None{};
+    }
     auto pending = [&] {
       auto lock = std::scoped_lock{runs_mutex};
       return runs;
@@ -782,6 +807,46 @@ public:
   Uplink uplink;
 
 private:
+  /// What the process uses, once every `process_sample_interval`: its CPU
+  /// time and uptime as running totals, which the platform takes the rate
+  /// of between two samples, and the memory it has resident at the sample.
+  auto process_sample() const -> Option<DeploymentSample> {
+    auto now = std::chrono::steady_clock::now();
+    if (last_process_sample
+        and now - *last_process_sample < process_sample_interval) {
+      return None{};
+    }
+    last_process_sample = now;
+    if (not host) {
+      return None{};
+    }
+    // What the `processes` operator reports of this process.
+    auto self = Option<process>{};
+    try {
+      self = host->current_process();
+    } catch (std::exception const&) {
+      return None{};
+    }
+    if (not self->utime or not self->stime or not self->rsize) {
+      return None{};
+    }
+    auto window = floor(time::clock::now(), std::chrono::milliseconds{1});
+    auto uptime = std::chrono::duration_cast<std::chrono::milliseconds>(
+      std::max(window - self->startup, duration::zero()));
+    return DeploymentSample{
+      window,
+      TelemetrySeconds::make(seconds_of(*self->utime + *self->stime))
+        .expect("finite CPU time"),
+      count<TelemetryCount>(*self->rsize),
+      count<TelemetryCount>(static_cast<uint64_t>(uptime.count()))};
+  }
+
+  // The system that tells what the process uses, where there is one.
+  std::unique_ptr<os> host = os::make();
+  // Only `prepare` uses it, which runs one at a time.
+  mutable Option<std::chrono::steady_clock::time_point> last_process_sample;
+  // A sample that no batch had room for yet. Only `prepare` uses it.
+  mutable Option<DeploymentSample> unsent_sample;
   mutable std::mutex requests_mutex;
   mutable std::deque<ServedRequest> requests;
   mutable std::mutex runs_mutex;

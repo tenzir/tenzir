@@ -11,7 +11,6 @@
 #include "tenzir/detail/posix.hpp"
 #include "tenzir/error.hpp"
 #include "tenzir/logger.hpp"
-#include "tenzir/status.hpp"
 
 #include <caf/expected.hpp>
 
@@ -19,109 +18,10 @@
 #include <string_view>
 
 #if TENZIR_LINUX
-#  include "tenzir/concept/parseable/core/operators.hpp"
-#  include "tenzir/concept/parseable/string/any.hpp"
-#  include "tenzir/concept/parseable/string/char_class.hpp"
-#  include "tenzir/concept/parseable/tenzir/si.hpp"
-#  include "tenzir/detail/line_range.hpp"
-
 #  include <sys/stat.h>
 
-#  include <fstream>
 #  include <limits.h>
 #  include <unistd.h>
-#elif TENZIR_MACOS
-#  include <mach/mach_init.h>
-#  include <mach/task.h>
-#  include <sys/types.h>
-
-#  include <unistd.h>
-#endif
-
-#if TENZIR_POSIX && ! TENZIR_LINUX
-#  include <sys/resource.h>
-#  include <sys/sysctl.h>
-#  include <sys/time.h>
-#  include <sys/types.h>
-#endif
-
-#if TENZIR_LINUX
-
-namespace tenzir::detail {
-
-static record get_status_proc() {
-  using namespace parser_literals;
-  auto is = std::ifstream{"/proc/self/status"};
-  auto lines = detail::line_range{is};
-  record result;
-  auto skip = ignore(+parsers::any);
-  auto ws = ignore(+parsers::space);
-  auto kvp = [&](const char* k, const std::string_view human_friendly) {
-    // The output says "kB", but the unit is actually "kiB".
-    return (k >> ws >> parsers::u64 >> ws >> "kB")->*[=, &result](uint64_t x) {
-      result[human_friendly] = uint64_t{x * 1024};
-    };
-  };
-  auto rss = kvp("VmRSS:", "current-memory-usage");
-  auto size = kvp("VmHWM:", "peak-memory-usage");
-  auto swap = kvp("VmSwap:", "swap-space-usage");
-  auto p = rss | size | swap | skip;
-  while (true) {
-    lines.next();
-    if (lines.done()) {
-      break;
-    }
-    auto line = lines.get();
-    if (not p(line)) {
-      TENZIR_WARN("failed to parse /proc/self/status: {}", line);
-    }
-  }
-  return result;
-}
-
-} // namespace tenzir::detail
-#endif
-
-#if TENZIR_MACOS
-
-namespace tenzir::detail {
-
-static record get_settings_mach() {
-  record result;
-  task_t task = MACH_PORT_NULL;
-  if (task_for_pid(current_task(), getpid(), &task) != KERN_SUCCESS) {
-    return {};
-  }
-  struct task_basic_info t_info;
-  mach_msg_type_number_t t_info_count = TASK_BASIC_INFO_COUNT;
-  task_info(task, TASK_BASIC_INFO, (task_info_t)&t_info, &t_info_count);
-  // http://web.mit.edu/darwin/src/modules/xnu/osfmk/man/task_basic_info.html
-  // says the resident set size is counted in pages, so we multiply accordingly.
-  result["current-memory-usage"] = uint64_t{t_info.resident_size * PAGE_SIZE};
-  return result;
-}
-
-} // namespace tenzir::detail
-
-#endif
-
-#if TENZIR_POSIX && ! TENZIR_LINUX
-
-namespace tenzir::detail {
-
-static record get_status_rusage() {
-  record result;
-  struct rusage ru;
-  if (getrusage(RUSAGE_SELF, &ru) != 0) {
-    TENZIR_WARN("{} failed to obtain rusage: {}", __func__,
-                detail::describe_errno());
-    return result;
-  }
-  result["peak-memory-usage"] = uint64_t{ru.ru_maxrss * 1024ull};
-  return result;
-}
-
-} // namespace tenzir::detail
 #endif
 
 namespace tenzir::detail {
@@ -170,22 +70,6 @@ caf::expected<std::filesystem::path> objectpath(const void* addr) {
     return result;
   }
   return objectpath_static();
-}
-
-record get_status() {
-#if TENZIR_LINUX
-  return get_status_proc();
-#elif TENZIR_MACOS
-  auto result = get_status_rusage();
-  merge(get_settings_mach(), result, policy::merge_lists::no);
-  return result;
-#elif TENZIR_POSIX
-  return get_status_rusage();
-#else
-  TENZIR_DEBUG("getting process information not supported");
-  // Not implemented.
-  return record{};
-#endif
 }
 
 caf::expected<std::string> execute_blocking(const std::string& command) {
