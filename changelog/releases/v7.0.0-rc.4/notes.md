@@ -40,6 +40,39 @@ Installing Tenzir with `brew install --cask tenzir/tenzir/tenzir` now links the 
 
 *By @mavam.*
 
+### Run SPL2 searches with from_splunk
+
+`from_splunk` now runs SPL2 searches with the new `spl2` argument, as an alternative to `search` for SPL and `index`. SPL2 searches need Splunk Enterprise 10.2 or Splunk Cloud Platform 10.2.2510 or later.
+
+As for SPL, `from_splunk` hands Splunk the operators that follow it: `where`, `select`, `drop`, `summarize`, `sort`, and `head` run in Splunk with Splunk's semantics. For example, this pipeline:
+
+```tql
+from_splunk "https://splunk.example.com:8089",
+  spl2=r#"from main where sourcetype == "linux_secure""#,
+  earliest="-1h",
+  latest="now",
+  headers={Authorization: secret("splunk-rest-authorization")}
+where user != "root"
+summarize user, attempts=count()
+sort -attempts
+head 20
+```
+
+dispatches the SPL2 search below as the statement `$main` of a module, and exports its results once the search job is done:
+
+```
+from main where sourcetype == "linux_secure"
+| where ('user' != "root")
+| stats count() as tenzir_column_0 by 'user'
+| sort 20 -'tenzir_column_0'
+| head 20
+| appendpipe [stats count() as tenzir_groups_0]
+```
+
+Filters that compare `_time` with a time, and the operators after them, stay in the pipeline, since an SPL2 search may redefine `_time`. The `options` argument does not apply to `spl2`. Use `pushdown=false` to keep every operator in the pipeline with TQL semantics.
+
+*By @mavam.*
+
 ## 🔧 Changes
 
 ### Content-skipping filters and limits after from_microsoft_365_activity
@@ -61,6 +94,33 @@ head 1000
 ```
 
 This pipeline lists only `Audit.Exchange` content from 12:00 on, and stops after 1,000 events. The filters keep TQL semantics, so the results stay the same. Use `pushdown=false` to download every blob.
+
+*By @mavam.*
+
+### KQL sources project fields also without pushdown
+
+With `pushdown=false`, `from_microsoft_defender` and `from_azure_log_analytics` now keep only the fields that the operators after them read, as other sources do. For example:
+
+```tql
+from_microsoft_defender "DeviceEvents", azure_auth={…}, pushdown=false
+where DeviceName == "host-a"
+select DeviceName, Id
+```
+
+The query now ends in `| project ['Id'] = column_ifexists('Id', dynamic(null)), ['DeviceName'] = column_ifexists('DeviceName', dynamic(null))`, while the `where` and the `select` still run in Tenzir. Before, the query went out unchanged.
+
+*By @mavam.*
+
+### More aggregation functions run in the source
+
+Sources now hand their targets more aggregation functions of a `summarize`: `count_if`, `count_distinct`, `sum`, and `mean`, where the target has an exact equivalent. For example:
+
+```tql
+from_microsoft_sql table="events", host="db", user="u", password=secret("p"), database="d"
+summarize big=count_if(n, v => v > 0), kinds=count_distinct(n), total=sum(id), avg=mean(id)
+```
+
+SQL Server computes this as `COUNT_BIG(CASE WHEN (([n] IS NOT NULL) AND ([n] > 0)) THEN [n] END)`, `COUNT_BIG(DISTINCT [n])`, `SUM([id])`, and `AVG(CAST([id] AS float))`. DuckDB and MySQL compute all but `sum`, ClickHouse and Hydrolix all four, Splunk all four with `count(eval(...))`, `dc`, `sum`, and `avg`, and Microsoft Defender and Azure Log Analytics `count_if` with `countif`. SentinelOne computes `count_distinct` with the approximate `estimate_distinct`, since PowerQuery has no exact distinct count.
 
 *By @mavam.*
 
@@ -156,11 +216,59 @@ Graph may silently ignore filters that it does not support, so `where` becomes `
 
 *By @mavam.*
 
+### Pipe sources compute the values that a summary reads
+
+`from_splunk`, `from_microsoft_defender`, and `from_azure_log_analytics` now also take over a `summarize` that groups by or aggregates computed values, such as values that a `set` before it assigns:
+
+```tql
+from_splunk "https://splunk:8089", index="main", earliest="-1h", latest="now"
+kind = action.to_upper()
+summarize kind, events=count()
+```
+
+Splunk computes the key with `| eval tenzir_column_0=upper('action')` before its `stats`, and KQL with `| extend` before its `summarize`.
+
+*By @mavam.*
+
 ### Sink byte metrics count the delivered payload
 
 Sink operators now report the bytes they write consistently: the payload before any compression they apply, counted once it was delivered, and once however many retries it took. Together with sources, which report the bytes they read, this makes the bytes going into and out of a pipeline comparable.
 
 For example, `to_splunk`, `to_hydrolix`, `to_opensearch`, `to_prometheus`, `to_google_secops`, `to_azure_log_analytics`, and `to_sentinelone_data_lake` now count the request body before compressing it, and only once the destination accepted it. `to_google_secops` counts nothing in `dry_run` mode. `to_google_cloud_logging` counts entries once Cloud Logging accepted them, `to_http` with `buffer_all` counts the body once the request succeeded, and `to_kafka` counts a message once the brokers acknowledged it.
+
+*By @mavam.*
+
+### SQL sources compute the values that a summary reads
+
+SQL sources now take over a `summarize` that reads computed values, including values that a `set` before it assigns. `from_duckdb`, `from_mysql`, `from_microsoft_sql`, `from_clickhouse`, and `from_hydrolix` then compute those values with the semantics of the database:
+
+```tql
+from_duckdb "events.duckdb", table="events"
+level = severity * 2
+summarize src_ip, worst=max(level)
+```
+
+DuckDB computes `worst` as `MAX(("severity" * 2))`. An assignment that the summary does not read keeps the operators in the pipeline if it may fail, such as a function call.
+
+*By @mavam.*
+
+### Tighter time ranges from filters
+
+Sources that narrow the time range of their requests to the filters after them now share one reading of those filters. A strict bound now excludes its time, so `from_splunk` requests `latest_time=1735689720` instead of `1735689721` for `where _time < 2025-01-01T00:02:00Z`. `from_microsoft_365_activity` now also narrows the listing to the range that encloses an `or`, such as for `where microsoft_365_activity.content_created >= 2024-01-02 or microsoft_365_activity.content_created == 2024-01-01`, and narrows the side of an `==` that it can represent.
+
+*By @mavam.*
+
+### Time buckets run in SQL sources
+
+`from_duckdb`, `from_microsoft_sql`, `from_clickhouse`, and `from_hydrolix` now compute time buckets with `floor` in the database, such as for the groups of a `summarize`:
+
+```tql
+from_clickhouse table="events", host="localhost"
+hour = floor(time, 1h)
+summarize hour, events=count()
+```
+
+The buckets count from the epoch, as in TQL, also before 1970. ClickHouse computes `hour` with flooring division of `toUnixTimestamp64Nano`, and SQL Server with `DATE_BUCKET(second, 3600, …, CAST('1970-01-01' AS datetime2(7)))`, which needs SQL Server 2022. Widths that are multiples of a week or a month stay in the pipeline, since TQL aligns them to the calendar, and so do widths below a second in SQL Server.
 
 *By @mavam.*
 
@@ -182,6 +290,12 @@ Results with more than about two million values no longer fail with "result exce
 
 ## 🐞 Bug fixes
 
+### Accurate CPU times, start times, and memory sizes from processes on Linux
+
+On Linux, the `processes` operator reported `utime` and `stime` in whole seconds, which showed a mostly idle process as using no CPU at all, and left `startup` empty. It also reported `peak_mem` and `swap` in kilobytes rather than bytes, unlike `rsize` and `vsize`. The operator now reports CPU times to the millisecond, the time each process started, and all memory sizes in bytes.
+
+*By @mavam.*
+
 ### Package hints name the tenzir command
 
 When a workspace's lock is unreadable, misses a dependency, or names a package that is not fetched yet, the hint now tells you to run `tenzir package lock` or `tenzir package fetch` instead of the `tenzir-platform` variants, matching the unified `tenzir` command of Tenzir 7.
@@ -193,3 +307,19 @@ When a workspace's lock is unreadable, misses a dependency, or names a package t
 A degree of parallelism of `max` now respects the CPU limit of a container. Previously, it used the number of CPUs of the host, so a container limited to 2 CPUs on a 64-core host ran 64 instances of every parallelizable operator. Now `max` is the number of CPUs that the process may run on, capped by the CPU quota of its cgroup and rounded up.
 
 *By @jachris.*
+
+### Platform connection drops behind load balancers and under load
+
+Nodes no longer lose their connection to the Tenzir Platform every few minutes when a load balancer or proxy with an idle timeout sits between the two. The node now sends a WebSocket ping every 20 seconds. Previously, it could stay silent for a full minute, so a load balancer with a 60-second idle timeout dropped the connection again and again, and the node logged `platform plugin received an unexpected error: End of file`.
+
+Nodes also keep the connection while they answer many requests at once, for example when a dashboard loads. Previously, this could corrupt the encrypted connection. The node then logged `unexpected error: unspecified system error` or `stream truncated` and briefly appeared as disconnected in the app.
+
+*By @tobim.*
+
+### Zeek TSV round trip with write_zeek_tsv and read_zeek_tsv
+
+The output of `write_zeek_tsv` now reads back with `read_zeek_tsv`. Previously, reading a log with a `time` or `interval` column failed, because `write_zeek_tsv` did not write these values as Zeek does. It now writes times and intervals as seconds, as in `1794812400.123456`, omits the `zeek.` prefix of the schema name in `#path`, and ends the log with a `#close` line.
+
+Numbers that round up to the next whole number, such as `0.99999999996`, no longer print as `0.1` in `write_lines`, and intervals such as `0.9999996s` no longer print as `0.100000` in `write_zeek_tsv`.
+
+*By @mavam.*
