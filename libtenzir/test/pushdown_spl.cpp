@@ -131,6 +131,10 @@ auto user(std::string_view search) -> SplSource {
   return {.search = std::string{search}, .indexes = {}};
 }
 
+auto spl2(std::string_view search) -> SplSource {
+  return {.search = std::string{search}, .indexes = {}, .spl2 = true};
+}
+
 /// The search that reads `source` and computes `stages`, or the empty string
 /// if Splunk does not spell them.
 auto spl(SplSource const& source, std::vector<ir::QueryStage> stages,
@@ -572,4 +576,76 @@ TEST("spl generates searches for indexes") {
   CHECK(not spl_index_search(empty));
   auto control = std::vector<std::string>{"a\nb"};
   CHECK(not spl_index_search(control));
+}
+
+// The spellings of SPL2 below compile and run on Splunk Enterprise 10.4.3.
+TEST("spl2 appends the stages in the syntax of SPL2") {
+  // Without a projection, SPL2 returns every field, and has no `fields *`.
+  CHECK_EQUAL(spl(spl2("from main"), {}), "from main");
+  CHECK_EQUAL(spl(spl2("from main"), {filter(R"(user == "a" and x != null)")}),
+              "from main\n| where (('user' == \"a\") AND isnotnull('x'))");
+  CHECK_EQUAL(spl(spl2("from main"), {filter("n in [1, 2]")}),
+              "from main\n| where in('n', 1, 2)");
+  CHECK_EQUAL(spl(spl2("from main"), {filter(R"(user.starts_with("al"))")}),
+              "from main\n| where (substr('user', 1, len(\"al\"))==\"al\")");
+  // Commands name fields in single quotes, as expressions do.
+  CHECK_EQUAL(spl(spl2("from main"), {},
+                  std::vector{"user"sv, R"(this["a b"])"sv}),
+              "from main\n| fields 'user', 'a b'");
+  CHECK_EQUAL(spl(spl2("from main"),
+                  {select({{{"u"}, {"user"}}, {{"t"}, {"tags{}"}}})}),
+              "from main\n| fields 'user', 'tags{}'");
+  CHECK_EQUAL(spl(spl2("from main"), {select({{{"u"}, {"a|b"}}})}), "");
+  CHECK_EQUAL(spl(spl2("from main"), {drop({{"a"}, {"b c"}})}),
+              "from main\n| fields - 'a', 'b c'");
+  CHECK_EQUAL(spl(spl2("from main"), {sort({"-n", "user"}, 3), limit(3)}),
+              "from main\n| sort 3 -'n', 'user'\n| head 3");
+  // `stats` calls `count` with parentheses, also for the sentinel row.
+  auto summary = ir::QueryStage{ir::QueryStage::Aggregate{
+    .columns
+    = {{.output = {"user"}, .function = None{}, .args = {field_at({"user"})}},
+       {.output = {"n"}, .function = "count", .args = {}}},
+    .schema_name = "tenzir.summarize"}};
+  auto query = plan_spl_query(spl2("from main"), std::vector{summary}, None{});
+  REQUIRE(query);
+  CHECK_EQUAL(query->search,
+              "from main\n| stats count() as tenzir_column_0 by 'user'\n| "
+              "appendpipe [stats count() as tenzir_groups_0]");
+  CHECK_EQUAL(query->sentinel, Option<std::string>{"tenzir_groups_0"});
+  // The clauses of `from` may redefine `_time`, which then holds no time.
+  CHECK_EQUAL(spl(spl2("from main"), {filter("_time > 2025-01-01T00:01:00Z")}),
+              "");
+}
+
+TEST("spl2 lexes searches before appending stages") {
+  for (auto search : {
+         "from main",
+         "from main where user == \"a|b\" // a | comment",
+         "from main /* a | comment */ | where x == 1",
+         R"(from main | where path == @"C:\" | where 'it\'s' == 1)",
+         R"(from main | where x == @"a""b" | where `x` == 1)",
+       }) {
+    auto stages = spl_stages(search, true);
+    CHECK(stages.accepted);
+    CHECK(stages.limitable);
+    CHECK(not stages.formatted);
+    CHECK(not stages.plain);
+  }
+  for (auto search : {
+         "",
+         "// only a comment",
+         "from main |",
+         "from main;",
+         "$a = from main; $main = from $a",
+         "from main /* unterminated",
+         R"(from main | where x == @"a"")",
+         R"(from main | where 'it\'s == 1)",
+         "from main | where x IN [1, 2",
+       }) {
+    CHECK(not spl_stages(search, true).accepted);
+  }
+  // SPL2 searches go out as they are, without the `search` command.
+  CHECK_EQUAL(spl(spl2("| from main"), {limit(1)}), "| from main\n| head 1");
+  CHECK_EQUAL(spl(spl2("from main;"), {}), "from main;");
+  CHECK_EQUAL(spl(spl2("from main;"), {limit(1)}), "");
 }

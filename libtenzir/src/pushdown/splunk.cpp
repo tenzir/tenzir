@@ -33,6 +33,8 @@ namespace tenzir::pushdown {
 
 namespace {
 
+using namespace std::literals;
+
 /// The largest count that `head` and `sort` accept.
 constexpr auto max_count
   = static_cast<uint64_t>(std::numeric_limits<int64_t>::max());
@@ -437,12 +439,16 @@ auto has_side_effects(std::string_view command) -> bool {
   });
 }
 
-/// The stages of SPL. Expressions spell for `where`, whose comparisons are
-/// exact and case-sensitive, and whose fields are single-quoted.
+/// The stages of SPL, or with `spl2`, of SPL2, which compiles them to the same
+/// SPL commands. Expressions spell for `where`, whose comparisons are exact and
+/// case-sensitive, and whose fields are single-quoted.
 class SplQueryDialect final : public PipeQueryDialect {
 public:
+  explicit SplQueryDialect(bool spl2) : spl2_{spl2} {
+  }
+
   auto render_null() const -> Option<std::string> override {
-    return "null()";
+    return spl2_ ? "null" : "null()";
   }
 
   /// Splunk returns every value as a string, so a boolean is the text that
@@ -552,8 +558,23 @@ public:
 
   /// Splunk returns every value as a string, so counts and sums decode as
   /// numbers. `count(eval(...))` counts the events for which the predicate
-  /// holds, and `dc` counts exactly, unlike `estdc`.
+  /// holds, and `dc` counts exactly, unlike `estdc`. SPL2 calls `count` with
+  /// parentheses and has no `eval` in `stats`.
   auto aggregations() const -> std::span<Aggregation const> override {
+    static constexpr auto spl2_rows = std::array{
+      Aggregation{"count", 0, "count()", Decode::integer},
+      Aggregation{"count", 1, "count({0})", Decode::integer},
+      Aggregation{"min", 1, "min({0})"},
+      Aggregation{"max", 1, "max({0})"},
+      Aggregation{"count_if", 2, "count(if({1:pred}, 1, null))",
+                  Decode::integer},
+      Aggregation{"count_distinct", 1, "dc({0})", Decode::integer},
+      Aggregation{"sum", 1, "sum({0})", Decode::number},
+      Aggregation{"mean", 1, "avg({0})", Decode::number},
+    };
+    if (spl2_) {
+      return spl2_rows;
+    }
     static constexpr auto rows = std::array{
       Aggregation{"count", 0, "count", Decode::integer},
       Aggregation{"count", 1, "count({0})", Decode::integer},
@@ -580,9 +601,10 @@ public:
     return fmt::format("'{}'", column);
   }
 
+  /// SPL2 names fields in commands as in expressions.
   auto name_column(std::string_view column) const
     -> Option<std::string> override {
-    return quote_field(column);
+    return spl2_ ? bind_column(column) : quote_field(column);
   }
 
   /// Splunk leaves fields whose names start with `__` out of its results.
@@ -682,13 +704,17 @@ private:
     }
     return result;
   }
+
+  bool spl2_;
 };
 
 /// Spells the `fields` stage that keeps the top-level fields of `projection`,
 /// or every field without a projection or a spelling of one of its fields.
-auto fields_stage(Option<ir::OptimizeProjection> const& projection)
+/// SPL2 returns every field without one, and has no `fields *`.
+auto fields_stage(Option<ir::OptimizeProjection> const& projection, bool spl2)
   -> std::string {
-  constexpr auto all = std::string_view{"\n| fields *"};
+  auto const dialect = SplQueryDialect{spl2};
+  auto const all = std::string{spl2 ? "" : "\n| fields *"};
   if (not projection) {
     return std::string{all};
   }
@@ -705,7 +731,7 @@ auto fields_stage(Option<ir::OptimizeProjection> const& projection)
   }
   auto spelled = std::vector<std::string>{};
   for (auto const& name : names) {
-    auto field = quote_field(name);
+    auto field = dialect.name_column(name);
     if (not field) {
       return std::string{all};
     }
@@ -755,7 +781,7 @@ auto spl_search_command(std::string_view search) -> std::string {
   return fmt::format("search {}", search);
 }
 
-auto spl_stages(std::string_view search) -> SplStages {
+auto spl_stages(std::string_view search, bool spl2) -> SplStages {
   auto result = SplStages{};
   auto side_effects = false;
   auto macro = false;
@@ -776,12 +802,18 @@ auto spl_stages(std::string_view search) -> SplStages {
   };
   while (i < search.size()) {
     auto c = search[i];
-    if (search.substr(i).starts_with("```")) {
-      auto end = search.find("```", i + 3);
-      if (end == std::string_view::npos) {
+    // SPL comments with three backticks, SPL2 with `/* */`, or with `//` up
+    // to the end of the line.
+    auto [open, close] = not spl2 ? std::pair{"```"sv, "```"sv}
+                         : search.substr(i).starts_with("//")
+                           ? std::pair{"//"sv, "\n"sv}
+                           : std::pair{"/*"sv, "*/"sv};
+    if (search.substr(i).starts_with(open)) {
+      auto end = search.find(close, i + open.size());
+      if (end == std::string_view::npos and close != "\n") {
         return result;
       }
-      i = end + 3;
+      i = end == std::string_view::npos ? search.size() : end + close.size();
       continue;
     }
     if (is_space(c)) {
@@ -800,30 +832,35 @@ auto spl_stages(std::string_view search) -> SplStages {
       at_command = false;
     }
     last = c;
-    switch (c) {
-      case '"': {
-        // Strings escape with a backslash.
-        ++i;
-        while (i < search.size() and search[i] != '"') {
-          i += search[i] == '\\' ? 2 : 1;
+    // SPL2 has raw strings, which double a quote to hold it.
+    auto raw = spl2 and search.substr(i).starts_with("@\"");
+    switch (raw ? '"' : c) {
+      case '"':
+      case '\'':
+      case '`': {
+        // Strings, and in SPL2 also field names, escape with a backslash.
+        // Other quotes, such as of SPL macros, end at the next equal one.
+        auto quote = raw ? '"' : c;
+        auto escapes = not raw and (c == '"' or (spl2 and c == '\''));
+        i += raw ? 2 : 1;
+        while (i < search.size()
+               and (search[i] != quote
+                    or (raw and search.substr(i).starts_with("\"\"")))) {
+          i += (escapes and search[i] == '\\') or search[i] == quote ? 2 : 1;
         }
         if (i >= search.size()) {
           return result;
         }
+        macro = macro or (c == '`' and not spl2);
         ++i;
         continue;
       }
-      case '\'':
-      case '`': {
-        // Quoted field names and macros end at the next equal quote.
-        auto end = search.find(c, i + 1);
-        if (end == std::string_view::npos) {
+      case ';':
+        // SPL2 ends a statement with `;`, after which no stage may follow.
+        if (spl2) {
           return result;
         }
-        macro = macro or c == '`';
-        i = end + 1;
-        continue;
-      }
+        break;
       case '[':
         ++depth;
         break;
@@ -848,7 +885,9 @@ auto spl_stages(std::string_view search) -> SplStages {
   result.accepted = true;
   result.limitable = not side_effects and not macro;
   result.formatted = formatted or macro;
-  result.plain = not piped and not macro;
+  // In SPL2, also the clauses of `from` may redefine a field, as
+  // `from main select x as _time` does.
+  result.plain = not spl2 and not piped and not macro;
   return result;
 }
 
@@ -878,8 +917,8 @@ auto spl_planner(SplSource source, Option<std::string> gate,
   auto base = std::string{};
   auto guard = SplStages{.accepted = true, .limitable = true, .plain = true};
   if (source.search) {
-    base = spl_search_command(*source.search);
-    guard = spl_stages(base);
+    base = source.spl2 ? *source.search : spl_search_command(*source.search);
+    guard = spl_stages(base, source.spl2);
     if (not guard.accepted) {
       gate = gate.value_or("the search does not end where stages may follow");
     } else if (guard.formatted) {
@@ -894,8 +933,9 @@ auto spl_planner(SplSource source, Option<std::string> gate,
   }
   return {
     .target = "Splunk",
-    .plan = [user = source.search.has_value(), base = std::move(base), guard,
-             gate = std::move(gate), projection = std::move(projection)](
+    .plan = [user = source.search.has_value(), spl2 = source.spl2,
+             base = std::move(base), guard, gate = std::move(gate),
+             projection = std::move(projection)](
               std::span<ir::QueryStage const> stages,
               std::monostate const*) -> Result<SplQuery, std::string> {
       if (gate and not stages.empty()) {
@@ -924,7 +964,7 @@ auto spl_planner(SplSource source, Option<std::string> gate,
       // spelling. So may any command of a user's search after the first one,
       // as `| rename event* AS _*` does, so only a plain search keeps
       // Splunk's own.
-      auto const dialect = SplQueryDialect{};
+      auto const dialect = SplQueryDialect{spl2};
       auto query = render_pipe(stages, dialect,
                                PipeOptions{
                                  .extend_base = not user,
@@ -942,13 +982,13 @@ auto spl_planner(SplSource source, Option<std::string> gate,
       }
       generated += query->stages;
       if (not query->layout.fields) {
-        generated += fields_stage(projection);
+        generated += fields_stage(projection, spl2);
       }
       auto sentinel = Option<std::string>{};
       if (query->aggregates) {
         sentinel = fresh_name(*query, dialect, "groups");
-        generated
-          += fmt::format("\n| appendpipe [stats count as {}]", *sentinel);
+        generated += fmt::format("\n| appendpipe [stats count{} as {}]",
+                                 spl2 ? "()" : "", *sentinel);
       }
       auto search = base + generated;
       return SplQuery{

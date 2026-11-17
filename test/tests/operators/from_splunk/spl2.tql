@@ -1,0 +1,22 @@
+---
+error: true
+fixtures:
+- http_server:
+    expected:
+    - method: POST
+      path: /services/orchestrator/v1/spl2/modules/dispatch
+      body: '{"module":"$main = from main\n| where (''user'' == \"alice\")\n| head 2","queryParameters":{"main":{"earliest":"-15m","latest":"2026-07-14T09:00:00Z","extractFields":"all"}}}'
+      header_name: Content-Type
+      header_value: application/json
+---
+
+// `from_splunk` dispatches the SPL2 search with the stages after it as a
+// module. The fixture answers without a search job.
+from_splunk env("HTTP_FIXTURE_URL"),
+  spl2="from main",
+  earliest="-15m",
+  latest=2026-07-14T09:00:00Z,
+  headers={Authorization: "Splunk test-token"},
+  tls=false
+where user == "alice"
+head 2

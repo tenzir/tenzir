@@ -256,6 +256,15 @@ TEST("conditional counts skip null values in every dialect") {
               "search index=\"main\"\n| stats count(eval((isnotnull('x') AND "
               "isnull('x')))) as tenzir_column_0\n| appendpipe [stats count as "
               "tenzir_groups_0]");
+  auto const spl2
+    = pushdown::spl_planner(
+        {.search = "from main", .indexes = {}, .spl2 = true}, None{}, None{})
+        .plan(plan, nullptr);
+  REQUIRE(spl2);
+  CHECK_EQUAL(spl2.unwrap().search,
+              "from main\n| stats count(if((isnotnull('x') AND isnull('x')), "
+              "1, null)) as tenzir_column_0\n| appendpipe [stats count() as "
+              "tenzir_groups_0]");
 }
 
 TEST("the chain ends where a source could not compute it") {

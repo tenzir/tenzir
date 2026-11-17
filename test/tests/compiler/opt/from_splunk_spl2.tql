@@ -1,0 +1,7 @@
+// `from_splunk` appends the stages to an SPL2 search, which runs them with
+// Splunk's semantics.
+from_splunk "https://splunk.example.com", spl2="from main", earliest="-15m",
+  latest="-5m", headers={Authorization: "Splunk t"}
+where user == "alice"
+select user, n
+head 3

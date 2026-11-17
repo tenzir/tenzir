@@ -1,0 +1,10 @@
+---
+error: true
+---
+
+from_splunk "https://splunk.example.com",
+  search="index=main",
+  spl2="from main",
+  earliest="-15m",
+  latest="-5m",
+  headers={Authorization: "Splunk test-token"}

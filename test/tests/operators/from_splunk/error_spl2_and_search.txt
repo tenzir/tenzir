@@ -1,0 +1,9 @@
+error: `search` and `spl2` are mutually exclusive
+ --> tests/operators/from_splunk/error_spl2_and_search.tql:6:10
+  |
+6 |   search="index=main",
+  |          ^^^^^^^^^^^^
+  ⋮
+7 |   spl2="from main",
+  |        ^^^^^^^^^^^
+  |

@@ -1,0 +1,6 @@
+error: `options` does not apply to `spl2`
+ --> tests/operators/from_splunk/error_spl2_options.tql:9:11
+  |
+9 |   options={maxTime: 60},
+  |           ^^^^^^^^^^^^^
+  |

@@ -39,6 +39,9 @@
 /// - A sort becomes `sort` with an explicit count, and a limit `head`.
 ///
 /// Splunk returns every value as a string, which `from_splunk` decodes.
+///
+/// A user's search in SPL2 gets the same stages, in the syntax of SPL2, which
+/// compiles them to the same SPL commands.
 namespace tenzir::pushdown {
 
 /// How SPL delimits string literals and comments, for `redact_query`. Single
@@ -68,7 +71,7 @@ struct SplStages {
   /// Whether the search consists of a single `search` command without macros,
   /// whose results are events with Splunk's own fields, such as `_time`. A
   /// command after it, or a macro, may rewrite any field, as
-  /// `| rename event* AS _*` does.
+  /// `| rename event* AS _*` does. No SPL2 search is plain.
   bool plain = false;
   /// Whether the search formats the values of its results with `fieldformat`,
   /// or has a macro, which may hide it. The results then show the formatted
@@ -82,12 +85,14 @@ struct SplStages {
 /// runs through the REST API as well. Other searches stay unchanged.
 auto spl_search_command(std::string_view search) -> std::string;
 
-/// Checks whether stages can be appended to the SPL `search`.
+/// Checks whether stages can be appended to the SPL `search`, or with `spl2`,
+/// to the SPL2 `search`.
 ///
 /// The check lexes the search without parsing it. It rejects a search that it
 /// cannot lex, such as one with an unterminated string, comment, or subsearch,
-/// and a search that is empty or ends in `|`.
-auto spl_stages(std::string_view search) -> SplStages;
+/// a search that is empty or ends in `|`, and an SPL2 search with a `;`, which
+/// ends its statement.
+auto spl_stages(std::string_view search, bool spl2 = false) -> SplStages;
 
 /// Spells the search for the events of `indexes`, which must not be empty, or
 /// returns `None` if an index name has no spelling.
@@ -101,6 +106,8 @@ struct SplSource {
   Option<std::string> search;
   /// The indexes whose events to search, if there is no search.
   std::vector<std::string> indexes;
+  /// Whether `search` is in SPL2.
+  bool spl2 = false;
 };
 
 /// The search that `from_splunk` sends, and how its results become events.
@@ -130,9 +137,10 @@ struct SplQuery {
 /// Without stages that enumerate their output, the search ends with `fields`,
 /// which keeps the top-level fields of the projection, or every field without
 /// one, since Splunk's export endpoint returns only the fields that a search
-/// references. A search with an aggregation ends with the sentinel row. A
-/// user's search that gets no stages goes out unchanged if it does not accept
-/// them.
+/// references. An SPL2 search, which `from_splunk` runs with every field
+/// extracted, needs no `fields` stage for that. A search with an aggregation
+/// ends with the sentinel row. A user's search that gets no stages goes out
+/// unchanged if it does not accept them.
 auto spl_planner(SplSource source, Option<std::string> gate,
                  Option<ir::OptimizeProjection> projection)
   -> Planner<SplQuery>;

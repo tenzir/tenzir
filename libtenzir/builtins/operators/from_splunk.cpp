@@ -63,10 +63,14 @@ namespace {
 constexpr auto export_path
   = std::string_view{"/services/search/v2/jobs/export"};
 
+constexpr auto spl2_dispatch_path
+  = std::string_view{"/services/orchestrator/v1/spl2/modules/dispatch"};
+
 struct FromSplunkArgs {
   located<std::string> url;
-  // Exactly one of `search` and `index` is set.
+  // Exactly one of `search`, `spl2`, and `index` is set.
   Option<located<std::string>> search;
+  Option<located<std::string>> spl2;
   Option<located<data>> index;
   located<data> earliest;
   located<data> latest;
@@ -309,6 +313,12 @@ auto response_body_text(std::string_view text) -> std::string {
         }
         return result;
       }
+      // Splunk's SPL2 service answers errors with a message.
+      if (auto it = envelope->find("message"); it != envelope->end()) {
+        if (auto const* message = try_as<std::string>(it->second)) {
+          return *message;
+        }
+      }
     }
   }
   constexpr auto max_body_size = size_t{2048};
@@ -319,11 +329,11 @@ auto response_body_text(std::string_view text) -> std::string {
   return fmt::format("{}...", text.substr(0, max_body_size));
 }
 
-auto make_export_url(std::string url) -> std::string {
+auto make_url(std::string url, std::string_view path) -> std::string {
   if (url.ends_with('/')) {
     url.pop_back();
   }
-  url += export_path;
+  url += path;
   return url;
 }
 
@@ -366,6 +376,9 @@ auto search_source(FromSplunkArgs const& args) -> location {
   if (args.search) {
     return args.search->source;
   }
+  if (args.spl2) {
+    return args.spl2->source;
+  }
   TENZIR_ASSERT(args.index);
   return args.index->source;
 }
@@ -374,6 +387,9 @@ auto search_source(FromSplunkArgs const& args) -> location {
 auto spl_source(FromSplunkArgs const& args) -> pushdown::SplSource {
   if (args.search) {
     return {.search = args.search->inner, .indexes = {}};
+  }
+  if (args.spl2) {
+    return {.search = args.spl2->inner, .indexes = {}, .spl2 = true};
   }
   TENZIR_ASSERT(args.index);
   auto names = index_names(args.index->inner);
@@ -387,8 +403,10 @@ auto spl_source(FromSplunkArgs const& args) -> pushdown::SplSource {
 auto make_planner(FromSplunkArgs const& args)
   -> pushdown::Planner<pushdown::SplQuery> {
   auto const names = args.index ? index_names(args.index->inner) : None{};
+  auto const sources
+    = args.search.is_some() + args.spl2.is_some() + args.index.is_some();
   auto const valid
-    = args.search.is_some() ? not args.index : names and not names->empty();
+    = sources == 1 and (not args.index or (names and not names->empty()));
   return pushdown::spl_planner(
     valid ? spl_source(args) : pushdown::SplSource{},
     args.options ? Option<std::string>{"`options` may change how Splunk runs "
@@ -494,13 +512,32 @@ auto make_form_body(FromSplunkArgs const& args, std::string search,
   return curl::escape(flatten(body));
 }
 
+/// The JSON body that dispatches the SPL2 `search` as the statement `main` of
+/// a module, within the time bounds `earliest` and `latest`, and with every
+/// field extracted: by default, SPL2 extracts only indexed fields.
+auto make_spl2_body(std::string_view search, data earliest, data latest)
+  -> std::string {
+  auto parameters = record{};
+  parameters.emplace("earliest", std::move(earliest));
+  parameters.emplace("latest", std::move(latest));
+  parameters.emplace("extractFields", std::string{"all"});
+  auto statements = record{};
+  statements.emplace("main", std::move(parameters));
+  auto body = record{};
+  body.emplace("module", fmt::format("$main = {}", search));
+  body.emplace("queryParameters", std::move(statements));
+  auto json = to_json(body, {.style = no_style(), .oneline = true});
+  TENZIR_ASSERT(json);
+  return std::move(*json);
+}
+
 /// Logs the search that the operator sends, without its literals. A user's
 /// search shows only as `<search>`, followed by the generated stages.
 auto log_query(FromSplunkArgs const& args, pushdown::SplQuery const& query)
   -> void {
   auto const generated
     = pushdown::redact_query(query.generated, pushdown::spl_lexicon);
-  if (args.search) {
+  if (args.search or args.spl2) {
     TENZIR_DEBUG("from_splunk sends <search>{}", generated);
   } else {
     TENZIR_DEBUG("from_splunk sends {}", generated);
@@ -555,6 +592,106 @@ using EventStreamMessage = variant<EventResultBatch, FlushTick, StreamWarning,
 using EventStreamQueue
   = folly::coro::BoundedQueue<EventStreamMessage, false, true>;
 
+/// Forwards the `messages` of a search to `queue`. Returns whether one of them
+/// ends the search.
+auto forward_messages(std::vector<SplunkMessage> messages,
+                      EventStreamQueue& queue) -> Task<bool> {
+  for (auto& message : messages) {
+    auto text = message.text.empty() ? std::string{"no details provided"}
+                                     : std::move(message.text);
+    if (detail::ascii_icase_equal(message.type, "ERROR")
+        or detail::ascii_icase_equal(message.type, "FATAL")) {
+      co_await queue.enqueue(SearchFailed{std::move(text)});
+      co_return true;
+    }
+    auto type = message.type.empty() ? std::string{"message"} : message.type;
+    if (detail::ascii_icase_equal(message.type, "WARN")) {
+      co_await queue.enqueue(StreamWarning{std::move(type), std::move(text)});
+      continue;
+    }
+    TENZIR_DEBUG("from_splunk: search returned {}: {}", type, text);
+  }
+  co_return false;
+}
+
+/// Returns the field `name` of `value`, if it is a record with one.
+auto field_of(data const* value, std::string_view name) -> data const* {
+  auto const* fields = value ? try_as<record>(*value) : nullptr;
+  if (not fields) {
+    return nullptr;
+  }
+  auto it = fields->find(name);
+  return it == fields->end() ? nullptr : &it->second;
+}
+
+/// Dispatches the SPL2 module `body` through `pool`, whose URL has the path
+/// `prefix`, and waits for its search job to finish, since Splunk exports the
+/// results of a job only then. Returns the path that exports the results, or
+/// `None` after enqueueing why there are none.
+auto run_spl2_job(HttpPool& pool, std::string_view prefix, std::string body,
+                  std::vector<http::Header> const& headers,
+                  EventStreamQueue& queue) -> Task<Option<std::string>> {
+  // The JSON of a successful response, which is `null` if it has none, or
+  // `None` after enqueueing the error.
+  auto parse
+    = [&](Result<http::Response, std::string> result) -> Task<Option<data>> {
+    if (result.is_err()) {
+      co_await queue.enqueue(RequestFailed{std::move(result).unwrap_err()});
+      co_return None{};
+    }
+    auto response = std::move(result).unwrap();
+    if (not response.is_status_success()) {
+      co_await queue.enqueue(SearchRejected{response_body_text(response.body)});
+      co_return None{};
+    }
+    auto parsed = from_json(response.body);
+    co_return parsed ? std::move(*parsed) : data{};
+  };
+  auto dispatched = co_await parse(co_await pool.post(
+    fmt::format("{}{}", prefix, spl2_dispatch_path), std::move(body), headers));
+  if (not dispatched) {
+    co_return None{};
+  }
+  auto const* sid = field_of(
+    field_of(field_of(&*dispatched, "queryParameters"), "main"), "sid");
+  if (not sid or not is<std::string>(*sid)) {
+    co_await queue.enqueue(
+      ParseFailed{"expected a search ID in the Splunk response", None{}});
+    co_return None{};
+  }
+  auto const job = fmt::format("{}/services/search/v2/jobs/{}", prefix,
+                               curl::escape(as<std::string>(*sid)));
+  auto delay = std::chrono::milliseconds{100};
+  while (true) {
+    auto status
+      = co_await parse(co_await pool.get(job + "?output_mode=json", headers));
+    if (not status) {
+      co_return None{};
+    }
+    auto const* entries = field_of(&*status, "entry");
+    auto const* entry
+      = entries and is<list>(*entries) and not as<list>(*entries).empty()
+          ? &as<list>(*entries).front()
+          : nullptr;
+    auto const* content = field_of(entry, "content");
+    auto const* done = field_of(content, "isDone");
+    if (not done or not is<bool>(*done)) {
+      co_await queue.enqueue(ParseFailed{
+        "expected the status of a search job in the Splunk response", None{}});
+      co_return None{};
+    }
+    if (as<bool>(*done)) {
+      if (co_await forward_messages(extract_messages(as<record>(*content)),
+                                    queue)) {
+        co_return None{};
+      }
+      co_return job + "/results/export?output_mode=json";
+    }
+    co_await sleep_for(delay);
+    delay = std::min(2 * delay, std::chrono::milliseconds{1000});
+  }
+}
+
 // Streams the Splunk export response and forwards results through the queue.
 // Runs detached from the operator, so it must not touch the operator or its
 // diagnostic handler.
@@ -562,7 +699,7 @@ auto run_export_request_events(
   std::string url, std::string target, std::string body,
   std::vector<http::Header> headers, HttpPoolConfig config,
   Arc<EventStreamQueue> queue,
-  folly::Executor::KeepAlive<folly::IOExecutor> executor, bool raw)
+  folly::Executor::KeepAlive<folly::IOExecutor> executor, bool raw, bool spl2)
   -> Task<void> {
   auto success = false;
   auto stopped = false;
@@ -609,21 +746,9 @@ auto run_export_request_events(
         ParseFailed{"expected Splunk response to be a JSON object", {}});
       co_return true;
     }
-    for (auto const& message : extract_messages(envelope->data.get(0))) {
-      auto text = message.text.empty() ? std::string{"no details provided"}
-                                       : message.text;
-      if (detail::ascii_icase_equal(message.type, "ERROR")
-          or detail::ascii_icase_equal(message.type, "FATAL")) {
-        co_await queue->enqueue(SearchFailed{std::move(text)});
-        co_return true;
-      }
-      auto type = message.type.empty() ? std::string{"message"} : message.type;
-      if (detail::ascii_icase_equal(message.type, "WARN")) {
-        co_await queue->enqueue(
-          StreamWarning{std::move(type), std::move(text)});
-        continue;
-      }
-      TENZIR_DEBUG("from_splunk: search returned {}: {}", type, text);
+    if (co_await forward_messages(extract_messages(envelope->data.get(0)),
+                                  *queue)) {
+      co_return true;
     }
     auto result = envelope->data.field("result");
     if (result) {
@@ -668,9 +793,28 @@ auto run_export_request_events(
     co_await queue->enqueue(StreamDone{});
     co_return;
   }
-  auto result = co_await std::move(pool).unwrap()->stream_post(
-    std::move(target), std::move(body), std::move(headers),
-    std::move(callbacks));
+  auto client = std::move(pool).unwrap();
+  // An SPL2 search runs as a job, whose results the operator exports after it
+  // finished.
+  auto results = Option<std::string>{};
+  if (spl2) {
+    TENZIR_ASSERT(target.ends_with(spl2_dispatch_path));
+    auto prefix = std::string_view{target}.substr(
+      0, target.size() - spl2_dispatch_path.size());
+    results = co_await run_spl2_job(*client, prefix, std::move(body), headers,
+                                    *queue);
+    if (not results) {
+      co_await queue->enqueue(StreamDone{});
+      co_return;
+    }
+  }
+  auto result
+    = results
+        ? co_await client->stream_get(std::move(*results), std::move(headers),
+                                      std::move(callbacks))
+        : co_await client->stream_post(std::move(target), std::move(body),
+                                       std::move(headers),
+                                       std::move(callbacks));
   if (stopped) {
     co_await queue->enqueue(StreamDone{});
     co_return;
@@ -719,7 +863,8 @@ public:
       co_return;
     }
     auto resolved_headers = std::move(*headers);
-    auto url = make_export_url(args_.url.inner);
+    auto url = make_url(args_.url.inner,
+                        args_.spl2 ? spl2_dispatch_path : export_path);
     auto const request_timeout
       = args_.timeout ? std::chrono::duration_cast<std::chrono::milliseconds>(
                           args_.timeout->inner)
@@ -751,8 +896,9 @@ public:
       co_return;
     }
     if (not http::find(resolved_headers, "content-type")) {
-      resolved_headers.emplace_back("Content-Type",
-                                    "application/x-www-form-urlencoded");
+      resolved_headers.emplace_back(
+        "Content-Type",
+        args_.spl2 ? "application/json" : "application/x-www-form-urlencoded");
     }
     if (not http::find(resolved_headers, "accept")) {
       resolved_headers.emplace_back("Accept", "application/json");
@@ -767,13 +913,17 @@ public:
     // The filters of a search for indexes may narrow its time bounds.
     auto [earliest, latest]
       = narrow_bounds(args_.earliest.inner, args_.latest.inner, query_->window);
-    auto body = make_form_body(args_, query_->search, std::move(earliest),
-                               std::move(latest));
+    auto body = args_.spl2
+                  ? make_spl2_body(query_->search, std::move(earliest),
+                                   std::move(latest))
+                  : make_form_body(args_, query_->search, std::move(earliest),
+                                   std::move(latest));
     ctx.spawn_task([url = std::move(url), target = std::move(*target),
                     body = std::move(body),
                     headers = std::move(resolved_headers),
                     config = std::move(*config), queue = std::move(queue),
                     executor = ctx.io_executor(), raw = args_.raw.is_some(),
+                    spl2 = args_.spl2.is_some(),
                     cancel = cancel_.getToken()]() mutable -> Task<void> {
       auto token = folly::cancellation_token_merge(
         co_await folly::coro::co_current_cancellation_token, cancel);
@@ -781,7 +931,7 @@ public:
         token, run_export_request_events(std::move(url), std::move(target),
                                          std::move(body), std::move(headers),
                                          std::move(config), std::move(queue),
-                                         std::move(executor), raw));
+                                         std::move(executor), raw, spl2));
     });
   }
 
@@ -1027,33 +1177,53 @@ public:
     d.operator_location(&FromSplunkArgs::operator_location);
     d.optimization(&FromSplunkArgs::optimization);
     pushdown::add_pushdown(d, &FromSplunkArgs::pushdown, make_planner);
+    // Last, so that the other arguments keep their indices.
+    auto spl2 = d.named("spl2", &FromSplunkArgs::spl2, "string");
     d.validate([=](DescribeCtx& ctx) -> Empty {
       // Fail fast so that one invalid argument yields one diagnostic.
       auto run = [&]() -> failure_or<void> {
         if (auto value = ctx.get(url)) {
           TRY(check_non_empty("url", *value, ctx));
         }
-        auto search_location = ctx.get_location(search);
-        auto index_location = ctx.get_location(index);
-        if (search_location and index_location) {
-          diagnostic::error("`search` and `index` are mutually exclusive")
-            .primary(*search_location)
-            .primary(*index_location)
+        auto sources = std::vector<std::pair<std::string_view, location>>{};
+        for (auto [name, at] : {std::pair{"search", ctx.get_location(search)},
+                                std::pair{"spl2", ctx.get_location(spl2)},
+                                std::pair{"index", ctx.get_location(index)}}) {
+          if (at) {
+            sources.emplace_back(name, *at);
+          }
+        }
+        if (sources.size() > 1) {
+          diagnostic::error("`{}` and `{}` are mutually exclusive",
+                            sources[0].first, sources[1].first)
+            .primary(sources[0].second)
+            .primary(sources[1].second)
             .emit(ctx);
           return failure::promise();
         }
-        if (not search_location and not index_location) {
-          diagnostic::error("either `search` or `index` is required")
+        if (sources.empty()) {
+          diagnostic::error("one of `index`, `search`, or `spl2` is required")
             .primary(ctx.operator_location())
-            .hint("use `index` to read events, or `search` to run SPL")
+            .hint("use `index` to read events, `search` to run SPL, or `spl2` "
+                  "to run SPL2")
             .emit(ctx);
           return failure::promise();
         }
-        if (auto value = ctx.get(search)) {
-          TRY(check_non_empty("search",
-                              located{std::string{detail::trim(value->inner)},
-                                      value->source},
-                              ctx));
+        for (auto [name, arg] :
+             {std::pair{"search", search}, std::pair{"spl2", spl2}}) {
+          if (auto value = ctx.get(arg)) {
+            TRY(check_non_empty(name,
+                                located{std::string{detail::trim(value->inner)},
+                                        value->source},
+                                ctx));
+          }
+        }
+        if (auto at = ctx.get_location(options);
+            at and sources[0].first == "spl2") {
+          diagnostic::error("`options` does not apply to `spl2`")
+            .primary(*at)
+            .emit(ctx);
+          return failure::promise();
         }
         if (auto value = ctx.get(index)) {
           auto names = index_names(value->inner);

@@ -1,0 +1,6 @@
+error: expected a search ID in the Splunk response
+  --> tests/operators/from_splunk/spl2.tql:15:13
+   |
+15 | from_splunk env("HTTP_FIXTURE_URL"),
+   |             ^^^^^^^^^^^^^^^^^^^^^^^
+   |
