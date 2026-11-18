@@ -145,6 +145,17 @@ companion PR against `tenzir/content`.
 Skip this process for internal refactorings that do not affect the user-facing
 behavior.
 
+### Add a changelog entry
+
+Changelog entries describe the current major version. Changes that exist only
+in v6 get no entry. These include changes to the `tenzir-node` command, to the
+previous command interface, and to the node's services and packages.
+
+Tenzir Node v6 releases are cut from main and carry fixed release notes instead
+of a changelog. A v6-only fix ships with a v6 release dispatched with
+`bump=patch`. See
+[Prepare a v6 release](../tools/release/README.md#prepare-a-v6-release).
+
 ## C++ development
 
 Read the relevant references below before writing, reviewing, or reasoning
