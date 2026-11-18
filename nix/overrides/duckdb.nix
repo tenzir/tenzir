@@ -84,6 +84,10 @@ duckdb.overrideAttrs (orig: {
     (lib.cmakeFeature "GIT_COMMIT_HASH" rev)
     (lib.cmakeBool "BUILD_UNITTESTS" false)
     (lib.cmakeFeature "DUCKDB_EXTENSION_CONFIGS" "${extensions}")
+    # The default CLI profile compiles Release builds with -march=x86-64-v3,
+    # which requires AVX2. Keep the generic target of the package set so that
+    # release builds run on CPUs without AVX2, such as Intel Ivy Bridge.
+    (lib.cmakeFeature "DUCKDB_OPTIMIZATION_PROFILE" "NONE")
   ];
   postPatch =
     (orig.postPatch or "")

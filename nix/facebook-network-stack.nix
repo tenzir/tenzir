@@ -1,6 +1,12 @@
 {
   release = "2026.06.29.00";
   cxxStandard = "23";
+  # x86 SIMD level for the Facebook libraries. It must match the engine's
+  # TENZIR_ENABLE_*_INSTRUCTIONS options: folly's F14 hash tables check at link
+  # time that every translation unit agrees on SSE4.2 availability. AVX and
+  # AVX2 stay off so that release builds run on CPUs without them, such as
+  # Intel Ivy Bridge.
+  x86CxxFlags = "-msse -msse2 -msse3 -mssse3 -msse4.1 -msse4.2";
   folly = {
     owner = "tenzir";
     repo = "folly";
