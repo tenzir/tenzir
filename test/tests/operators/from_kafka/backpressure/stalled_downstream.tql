@@ -1,0 +1,18 @@
+// Stall downstream for longer than `max.poll.interval.ms` while the tiny
+// prefetch queue is full and the delay buffers are saturated. The consumer
+// must keep its group membership, commit its offsets, and deliver every
+// message.
+from_kafka env("KAFKA_TOPIC"),
+           count=200000,
+           offset="beginning",
+           _prefetch_batches=1,
+           options={
+             "bootstrap.servers": env("KAFKA_BOOTSTRAP_SERVERS"),
+             "group.id": "tenzir-test-from-kafka-backpressure",
+             "max.poll.interval.ms": 6000,
+             "session.timeout.ms": 6000,
+             "heartbeat.interval.ms": 1000,
+           }
+ts = 2020-01-01T00:00:00 if message == "message-0001" else 2020-01-01T00:00:08
+delay ts
+summarize total=count()

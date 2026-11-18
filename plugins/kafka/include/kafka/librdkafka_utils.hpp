@@ -86,6 +86,18 @@ struct consumer_configuration {
   /// further ordering. Two rebalances between two reads collapse into the most
   /// recent kind, which is the one a reader wants.
   std::shared_ptr<Atomic<AssignmentChange>> last_assignment_change;
+  /// The generation that the most recent revoke produced, or 0.
+  ///
+  /// Messages fetched under an earlier generation may belong to a partition
+  /// that another member owned in the meantime, even if it is assigned to
+  /// this member again now.
+  std::shared_ptr<Atomic<uint64_t>> revoke_generation;
+  /// Whether the consumer holds its assignment paused under backpressure.
+  ///
+  /// The rebalance callback pauses newly assigned partitions while this is
+  /// set, so that they cannot deliver data before the consumer resumes. Writers
+  /// hold `assignment_mutex`, just like the callback.
+  std::shared_ptr<Atomic<bool>> pause_requested;
   std::shared_ptr<committed_partition_set> committed_partitions;
   // `enable_sasl_queue(true)` is configured on `Conf` before consumer
   // creation. This is required to later attach OAUTH callback servicing to

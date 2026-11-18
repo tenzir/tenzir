@@ -42,6 +42,7 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <charconv>
 #include <chrono>
 #include <limits>
 #include <memory>
@@ -460,6 +461,8 @@ auto can_replicate(FromKafkaArgs const& args) -> bool {
 /// Represents one polled Kafka message batch plus control metadata.
 struct MessageBatch {
   Option<uint64_t> assignment_generation;
+  /// The assignment generation before the first message was polled.
+  uint64_t fetch_generation = 0;
   std::vector<AsyncConsumerQueue::Message> messages;
   std::vector<Option<Arc<AvroDecoder>>> avro_decoders;
   std::vector<size_t> avro_payload_offsets;
@@ -474,6 +477,7 @@ struct MessageBatch {
 /// Represents one built table-slice frame plus commit metadata.
 struct TableSliceFrame {
   Option<uint64_t> assignment_generation;
+  uint64_t fetch_generation = 0;
   std::vector<table_slice> slices;
   TopicPartitionOffsets max_offsets;
   size_t message_count = 0;
@@ -492,6 +496,7 @@ struct TableSliceResult {
 
 struct EventsFrame {
   Option<uint64_t> assignment_generation;
+  uint64_t fetch_generation = 0;
   std::vector<nova::Events> events;
   TopicPartitionOffsets max_offsets;
   size_t message_count = 0;
@@ -532,6 +537,7 @@ template <typename F>
 auto build_table_slice(MessageBatch& batch, multi_series_builder& builder,
                        bool flush, F&& process_payload) -> TableSliceFrame {
   auto frame = TableSliceFrame{};
+  frame.fetch_generation = batch.fetch_generation;
   frame.eof_partitions = std::move(batch.eof_partitions);
   frame.fatal_error = std::move(batch.fatal_error);
   frame.assignment_change = batch.assignment_change;
@@ -562,6 +568,7 @@ auto build_table_slice(MessageBatch& batch, multi_series_builder& builder,
 auto build_avro_slice(MessageBatch& batch) -> TableSliceFrame {
   auto frame = TableSliceFrame{};
   frame.assignment_generation = batch.assignment_generation;
+  frame.fetch_generation = batch.fetch_generation;
   frame.eof_partitions = std::move(batch.eof_partitions);
   frame.fatal_error = std::move(batch.fatal_error);
   frame.assignment_change = batch.assignment_change;
@@ -624,6 +631,7 @@ public:
       emitted_messages_{other.emitted_messages_},
       pending_commit_offsets_{std::move(other.pending_commit_offsets_)},
       pending_commit_generation_{other.pending_commit_generation_},
+      pending_fetch_generation_{other.pending_fetch_generation_},
       consumer_closed_{other.consumer_closed_},
       eof_tracker_{std::move(other.eof_tracker_)},
       done_{other.done_} {
@@ -876,7 +884,7 @@ public:
         request_pipeline_stop();
         co_return;
       }
-      record_pending_offsets(frame.max_offsets);
+      record_pending_offsets(frame.max_offsets, frame.fetch_generation);
     }
     // Between recording this frame's offsets and committing them, because the
     // frame that reports a rebalance also carries the messages fetched before
@@ -933,22 +941,26 @@ public:
       partitions;
     /// Whether the assignment changed underneath a generation-checked commit.
     bool assignment_changed = false;
+    /// Whether a revoke preceded the submission of any other commit.
+    bool revoked = false;
   };
 
   /// Submits one commit of `offsets` and collects the per-partition verdicts.
   ///
-  /// Without a pending generation this is a plain synchronous commit, which
-  /// writes each partition's result back into the list it was handed.
-  ///
-  /// With one — the Avro path, whose decoded batches are only valid for the
-  /// assignment that produced them — the commit goes through a private queue
-  /// so that submission can happen under the assignment mutex, after
-  /// re-checking the generation. A rebalance therefore either precedes the
-  /// commit, which then reports `assignment_changed`, or follows it.
+  /// The commit goes through a private queue so that submission can happen
+  /// under the assignment mutex, serialized with the rebalance callback. With
+  /// a pending generation — the Avro path, whose decoded batches are only
+  /// valid for the assignment that produced them — any rebalance since then
+  /// reports `assignment_changed`. Otherwise, a revoke after `revoked`, the
+  /// generation of the latest revoke when the caller dropped stale offsets,
+  /// reports `revoked`: the offsets may belong to a partition that is moving
+  /// to another member, and the broker does not check ownership on commits.
+  /// A rebalance therefore either precedes the commit, which then reports it,
+  /// or follows its submission.
   auto commit_offsets_once(
     RdKafka::KafkaConsumer& consumer, consumer_configuration& config,
-    std::vector<std::unique_ptr<RdKafka::TopicPartition>> const& offsets) const
-    -> Task<CommitAttempt> {
+    std::vector<std::unique_ptr<RdKafka::TopicPartition>> const& offsets,
+    uint64_t revoked) const -> Task<CommitAttempt> {
     auto raw_offsets = std::vector<RdKafka::TopicPartition*>{};
     raw_offsets.reserve(offsets.size());
     for (auto const& offset : offsets) {
@@ -956,104 +968,104 @@ public:
     }
     auto generation = pending_commit_generation_;
     auto token = co_await folly::coro::co_current_cancellation_token;
-    // Both paths block: `commitSync` waits for the coordinator's reply, and the
-    // queue path polls until its callback runs. Neither may occupy an executor
-    // thread, because a slow or unreachable coordinator would stall unrelated
+    // This blocks until the callback runs, so it must not occupy an executor
+    // thread: a slow or unreachable coordinator would stall unrelated
     // pipelines for the duration of the request timeout.
-    co_return co_await spawn_blocking([&consumer, &config, &raw_offsets,
-                                       generation, token] {
-      if (not generation) {
-        auto result = CommitAttempt{};
-        // Writes each partition's result back into the list entries.
-        result.error = consumer.commitSync(raw_offsets);
-        for (auto const* offset : raw_offsets) {
-          if (offset->err() != RdKafka::ERR_NO_ERROR) {
-            result.partitions.emplace(TopicPartition{offset->topic(),
-                                                     offset->partition()},
-                                      offset->err());
+    co_return co_await spawn_blocking(
+      [&consumer, &config, &raw_offsets, generation, revoked, token] {
+        // The callback only runs when this worker polls its private queue.
+        // Destroy the queue before its callback state, including on cancel.
+        struct CommitResult {
+          bool complete = false;
+          RdKafka::ErrorCode error = RdKafka::ERR_NO_ERROR;
+          std::unordered_map<TopicPartition, RdKafka::ErrorCode,
+                             TopicPartitionHash>
+            partitions;
+        };
+        auto completed = CommitResult{};
+        auto queue = detail::QueueHandle{rd_kafka_queue_new(consumer.c_ptr())};
+        auto* offsets = rd_kafka_topic_partition_list_new(
+          static_cast<int>(raw_offsets.size()));
+        auto destroy_offsets = tenzir::detail::scope_guard{[&]() noexcept {
+          rd_kafka_topic_partition_list_destroy(offsets);
+        }};
+        for (auto* partition : raw_offsets) {
+          auto* entry = rd_kafka_topic_partition_list_add(
+            offsets, partition->topic().c_str(), partition->partition());
+          entry->offset = partition->offset();
+        }
+        auto callback
+          = +[](rd_kafka_t*, rd_kafka_resp_err_t error,
+                rd_kafka_topic_partition_list_t* partitions, void* opaque) {
+              auto& result = *static_cast<CommitResult*>(opaque);
+              result.error = static_cast<RdKafka::ErrorCode>(error);
+              if (partitions) {
+                for (auto i = 0; i < partitions->cnt; ++i) {
+                  auto const& partition = partitions->elems[i];
+                  if (partition.err == RD_KAFKA_RESP_ERR_NO_ERROR) {
+                    continue;
+                  }
+                  result.partitions.emplace(
+                    TopicPartition{partition.topic, partition.partition},
+                    static_cast<RdKafka::ErrorCode>(partition.err));
+                }
+              }
+              result.complete = true;
+            };
+        {
+          auto guard = std::scoped_lock{*config.assignment_mutex};
+          if (token.isCancellationRequested()) {
+            throw folly::OperationCancelled{};
+          }
+          if (generation
+              and *generation
+                    != config.assignment_generation->load(
+                      std::memory_order_acquire)) {
+            return CommitAttempt{
+              .error = RdKafka::ERR__STATE,
+              .partitions = {},
+              .assignment_changed = true,
+            };
+          }
+          if (not generation and config.revoke_generation
+              and config.revoke_generation->load(std::memory_order_acquire)
+                    != revoked) {
+            return CommitAttempt{
+              .error = RdKafka::ERR__STATE,
+              .partitions = {},
+              .revoked = true,
+            };
+          }
+          // Only submission is serialized with assignment callbacks. A commit
+          // submitted before a revoke reaches the coordinator ahead of the
+          // rejoin and carries the generation it was sent under, which the
+          // broker fences, so it cannot land on top of a new owner's progress.
+          auto error = rd_kafka_commit_queue(consumer.c_ptr(), offsets,
+                                             queue.get(), callback, &completed);
+          if (error != RD_KAFKA_RESP_ERR_NO_ERROR) {
+            return CommitAttempt{
+              .error = static_cast<RdKafka::ErrorCode>(error),
+              .partitions = {},
+              .assignment_changed = false,
+            };
           }
         }
-        return result;
-      }
-      // The callback only runs when this worker polls its private queue.
-      // Destroy the queue before its callback state, including on cancel.
-      struct CommitResult {
-        bool complete = false;
-        RdKafka::ErrorCode error = RdKafka::ERR_NO_ERROR;
-        std::unordered_map<TopicPartition, RdKafka::ErrorCode,
-                           TopicPartitionHash>
-          partitions;
-      };
-      auto completed = CommitResult{};
-      auto queue = detail::QueueHandle{rd_kafka_queue_new(consumer.c_ptr())};
-      auto* offsets = rd_kafka_topic_partition_list_new(
-        static_cast<int>(raw_offsets.size()));
-      auto destroy_offsets = tenzir::detail::scope_guard{[&]() noexcept {
-        rd_kafka_topic_partition_list_destroy(offsets);
-      }};
-      for (auto* partition : raw_offsets) {
-        auto* entry = rd_kafka_topic_partition_list_add(
-          offsets, partition->topic().c_str(), partition->partition());
-        entry->offset = partition->offset();
-      }
-      auto callback
-        = +[](rd_kafka_t*, rd_kafka_resp_err_t error,
-              rd_kafka_topic_partition_list_t* partitions, void* opaque) {
-            auto& result = *static_cast<CommitResult*>(opaque);
-            result.error = static_cast<RdKafka::ErrorCode>(error);
-            if (partitions) {
-              for (auto i = 0; i < partitions->cnt; ++i) {
-                auto const& partition = partitions->elems[i];
-                if (partition.err == RD_KAFKA_RESP_ERR_NO_ERROR) {
-                  continue;
-                }
-                result.partitions.emplace(
-                  TopicPartition{partition.topic, partition.partition},
-                  static_cast<RdKafka::ErrorCode>(partition.err));
-              }
-            }
-            result.complete = true;
-          };
-      {
-        auto guard = std::scoped_lock{*config.assignment_mutex};
-        if (token.isCancellationRequested()) {
-          throw folly::OperationCancelled{};
+        while (not completed.complete) {
+          if (token.isCancellationRequested()) {
+            throw folly::OperationCancelled{};
+          }
+          rd_kafka_queue_poll_callback(queue.get(), 100);
         }
-        if (*generation
-            != config.assignment_generation->load(std::memory_order_acquire)) {
-          return CommitAttempt{
-            .error = RdKafka::ERR__STATE,
-            .partitions = {},
-            .assignment_changed = true,
-          };
-        }
-        // Only submission is serialized with assignment callbacks. An
-        // already submitted commit may still succeed after reassignment.
-        auto error = rd_kafka_commit_queue(consumer.c_ptr(), offsets,
-                                           queue.get(), callback, &completed);
-        if (error != RD_KAFKA_RESP_ERR_NO_ERROR) {
-          return CommitAttempt{
-            .error = static_cast<RdKafka::ErrorCode>(error),
-            .partitions = {},
-            .assignment_changed = false,
-          };
-        }
-      }
-      while (not completed.complete) {
-        if (token.isCancellationRequested()) {
-          throw folly::OperationCancelled{};
-        }
-        rd_kafka_queue_poll_callback(queue.get(), 100);
-      }
-      auto changed
-        = *generation
-          != config.assignment_generation->load(std::memory_order_acquire);
-      return CommitAttempt{
-        .error = completed.error,
-        .partitions = std::move(completed.partitions),
-        .assignment_changed = changed,
-      };
-    });
+        auto changed = generation
+                       and *generation
+                             != config.assignment_generation->load(
+                               std::memory_order_acquire);
+        return CommitAttempt{
+          .error = completed.error,
+          .partitions = std::move(completed.partitions),
+          .assignment_changed = changed,
+        };
+      });
   }
 
   /// Commits the offsets of every emitted message, partition by partition.
@@ -1064,6 +1076,7 @@ public:
   /// their messages get reprocessed by whichever member owns the partition
   /// next, which is the at-least-once guarantee the operator already gives.
   auto commit_pending_offsets(diagnostic_handler* dh = nullptr) -> Task<void> {
+    auto const revoked = drop_stale_pending_offsets();
     if (consumer_closed_ or pending_commit_offsets_.empty()
         or runtime_.sources.empty()
         or not runtime_.sources[0].source_consumer) {
@@ -1094,12 +1107,20 @@ public:
           pending_commit_offsets_.at(partition)));
       }
       auto result = co_await commit_offsets_once(
-        consumer, source_consumer.consumer_cfg, offsets);
+        consumer, source_consumer.consumer_cfg, offsets, revoked);
+      if (result.revoked) {
+        // Every pending offset predates that revoke, see
+        // `record_pending_offsets`, so none of them may commit.
+        drop_stale_pending_offsets();
+        outstanding.clear();
+        break;
+      }
       if (result.assignment_changed) {
         // The generation-checked path must not commit across a reassignment:
         // the offsets describe messages this instance no longer owns.
         pending_commit_offsets_.clear();
         pending_commit_generation_.reset();
+        pending_fetch_generation_.reset();
         if (dh) {
           diagnostic::error(
             "Kafka assignment changed while committing Avro offsets")
@@ -1157,6 +1178,12 @@ public:
     }
     if (outstanding.empty()) {
       pending_commit_generation_.reset();
+    }
+    if (pending_commit_offsets_.empty()) {
+      // Offsets of currently unowned partitions remain pending after a
+      // successful commit, and the generation must outlive them so that
+      // `record_pending_offsets` can still discard them after a revoke.
+      pending_fetch_generation_.reset();
     }
     if (not dropped.empty()) {
       // Warned once, because the offsets are gone rather than carried into the
@@ -1259,6 +1286,7 @@ private:
     Option<SourceConsumer> source_consumer;
     Option<Box<AsyncConsumerQueue>> queue;
     uint64_t observed_assignment_generation = 0;
+    bool paused = false;
   };
 
   /// Owns mutable runtime state for source/build/emit stages.
@@ -1581,6 +1609,19 @@ private:
     co_await runtime_.message_queue->enqueue(None{});
   }
 
+  /// Describes a consumer error delivered in place of a message.
+  static auto kafka_error_message(AsyncConsumerQueue::Message const& message)
+    -> std::string {
+    if (message.err() == RD_KAFKA_RESP_ERR__MAX_POLL_EXCEEDED) {
+      // librdkafka has already left the group, so the partitions this member
+      // held go to another member and its pending offsets can never commit.
+      return fmt::format("Kafka consumer left its group because it did not "
+                         "poll within `max.poll.interval.ms`: `{}`",
+                         message.errstr());
+    }
+    return fmt::format("unexpected kafka error: `{}`", message.errstr());
+  }
+
   /// Converts polled Kafka messages into one source payload batch.
   auto
   to_fetched_batch(std::vector<AsyncConsumerQueue::Message> fetched_messages,
@@ -1609,8 +1650,7 @@ private:
           break;
         }
         default: {
-          batch.fatal_error
-            = fmt::format("unexpected kafka error: `{}`", message.errstr());
+          batch.fatal_error = kafka_error_message(message);
           request_pipeline_stop();
           break;
         }
@@ -1642,6 +1682,16 @@ private:
       return None{};
     }
     return generation->load(std::memory_order_acquire);
+  }
+
+  /// Returns the generation that the most recent revoke produced, or 0.
+  auto last_revoke_generation() const -> uint64_t {
+    if (runtime_.sources.empty() or not runtime_.sources[0].source_consumer) {
+      return 0;
+    }
+    auto const& revoke
+      = runtime_.sources[0].source_consumer->consumer_cfg.revoke_generation;
+    return revoke ? revoke->load(std::memory_order_acquire) : 0;
   }
 
   /// Returns the rebalance event that changed the source assignment, if any.
@@ -1765,10 +1815,22 @@ private:
   auto set_consumer_paused(SubscriptionSource& source, bool paused) const
     -> Option<std::string> {
     auto& consumer = *source.source_consumer->consumer;
+    auto& config = source.source_consumer->consumer_cfg;
     auto partitions = std::vector<RdKafka::TopicPartition*>{};
     auto cleanup = tenzir::detail::scope_guard{[&]() noexcept {
       RdKafka::TopicPartition::destroy(partitions);
     }};
+    // The rebalance callback pauses partitions it assigns while the flag is
+    // set. Only this source polls the consumer, so the callback cannot run
+    // concurrently today; the lock keeps the flag and the assignment it covers
+    // consistent should that ever change.
+    auto guard = std::unique_lock<std::mutex>{};
+    if (config.assignment_mutex) {
+      guard = std::unique_lock{*config.assignment_mutex};
+    }
+    if (config.pause_requested) {
+      config.pause_requested->store(paused, std::memory_order_relaxed);
+    }
     auto error = consumer.assignment(partitions);
     if (error == RdKafka::ERR_NO_ERROR and not partitions.empty()) {
       error = paused ? consumer.pause(partitions) : consumer.resume(partitions);
@@ -1785,13 +1847,22 @@ private:
       return fmt::format("failed to {} Kafka partitions: {}",
                          paused ? "pause" : "resume", RdKafka::err2str(error));
     }
+    source.paused = paused;
     return None{};
   }
 
   /// Service group callbacks without collecting more data under backpressure.
+  ///
+  /// Data is fatal: the pause discards what librdkafka fetched before it, and
+  /// the rebalance callback pauses partitions that it assigns meanwhile, so
+  /// data only arrives if pausing failed. A change of the assignment is fatal
+  /// unless `allow_rebalance` is set, because decoded Avro batches are only
+  /// valid for the assignment that produced them. Otherwise, the rebalance
+  /// surfaces through the next fetch window as usual.
   auto poll_paused(SubscriptionSource& source,
                    std::vector<TopicPartition>& eof_partitions,
-                   std::chrono::milliseconds wait = 100ms) const
+                   std::chrono::milliseconds wait = 100ms,
+                   bool allow_rebalance = false) const
     -> Task<Option<std::string>> {
     co_await folly::coro::co_safe_point;
     auto& generation
@@ -1800,10 +1871,11 @@ private:
     auto pause_error = set_consumer_paused(source, true);
     auto polled = co_await (*source.queue)->next_batch(1, wait);
     co_await folly::coro::co_reschedule_on_current_executor;
-    if (generation.load(std::memory_order_acquire) != before) {
+    if (not allow_rebalance
+        and generation.load(std::memory_order_acquire) != before) {
       co_return "Kafka assignment changed while resolving Avro schemas";
     }
-    for (auto const& message : polled.messages) {
+    for (auto& message : polled.messages) {
       if (message.err() == RD_KAFKA_RESP_ERR__PARTITION_EOF) {
         if (args_.exit) {
           auto partition = TopicPartition{message.topic(), message.partition()};
@@ -1815,20 +1887,76 @@ private:
         continue;
       }
       if (message.err() != RD_KAFKA_RESP_ERR_NO_ERROR) {
-        co_return fmt::format("unexpected kafka error: `{}`", message.errstr());
+        co_return kafka_error_message(message);
       }
-      // A newly assigned partition may deliver data before it can be paused.
-      // Stop instead of committing any records held from a revoked assignment.
+      // A newly assigned partition may deliver data if pausing it failed.
+      // Stop instead of committing offsets past data never delivered.
       co_return "received Kafka data while partitions were paused";
     }
     co_return pause_error;
   }
 
+  /// How long the fetcher waits for capacity before it pauses and polls.
+  ///
+  /// Pausing discards the data that librdkafka prefetched for the paused
+  /// partitions, which it fetches again after resuming. Under sustained
+  /// backpressure, capacity often frees up within moments, and pausing on
+  /// every such wait would fetch most data several times. The grace period
+  /// stays well within `max.poll.interval.ms`, so that the consumer still
+  /// polls in time.
+  auto pause_grace(SubscriptionSource const& source) const
+    -> std::chrono::milliseconds {
+    auto interval = std::chrono::milliseconds{300'000};
+    auto const& conf = source.source_consumer->consumer_cfg.conf;
+    auto value = std::string{};
+    if (conf
+        and conf->get("max.poll.interval.ms", value)
+              == RdKafka::Conf::CONF_OK) {
+      auto ms = int64_t{0};
+      auto const* end = value.data() + value.size();
+      if (auto [ptr, ec] = std::from_chars(value.data(), end, ms);
+          ec == std::errc{} and ptr == end and ms > 0) {
+        interval = std::chrono::milliseconds{ms};
+      }
+    }
+    return std::min(std::chrono::milliseconds{1'000}, interval / 4);
+  }
+
+  /// Waits a moment for budget or queue space to free up.
+  ///
+  /// Until `grace_deadline`, this only sleeps briefly. After it, the wait
+  /// pauses the assignment and polls, see `poll_paused`.
+  auto wait_for_capacity(SubscriptionSource& source,
+                         std::chrono::steady_clock::time_point grace_deadline,
+                         std::vector<TopicPartition>& eof_partitions,
+                         bool allow_rebalance) const
+    -> Task<Option<std::string>> {
+    // A stopped queue returns from polls right away, which would spin while
+    // a batch that carries an error waits for downstream to deliver it.
+    if (std::chrono::steady_clock::now() < grace_deadline
+        or (*source.queue)->is_stopped()) {
+      co_await folly::coro::sleep(5ms);
+      co_return None{};
+    }
+    co_return co_await poll_paused(source, eof_partitions, 100ms,
+                                   allow_rebalance);
+  }
+
   /// Enqueues one source batch while honoring prefetch-byte budget.
+  ///
+  /// With a `paused_source`, waiting for budget or queue space pauses the
+  /// assignment and keeps polling, so that the consumer stays in its group
+  /// for as long as downstream backpressure lasts. Waits shorter than
+  /// `pause_grace` do neither, see there. See `poll_paused` for
+  /// `allow_rebalance`.
   auto enqueue_fetched_batch(MessageBatch fetched,
-                             SubscriptionSource* paused_source = nullptr) const
-    -> Task<bool> {
+                             SubscriptionSource* paused_source = nullptr,
+                             bool allow_rebalance = false) const -> Task<bool> {
     read_bytes_counter_.add(static_cast<uint64_t>(fetched.payload_bytes));
+    auto const grace_deadline
+      = paused_source
+          ? std::chrono::steady_clock::now() + pause_grace(*paused_source)
+          : std::chrono::steady_clock::time_point{};
     auto reserved_bytes = fetched.payload_bytes;
     if (reserved_bytes > 0 or args_.schema_registry) {
       auto acquired = false;
@@ -1838,8 +1966,9 @@ private:
             acquired = true;
             break;
           }
-          if (auto error
-              = co_await poll_paused(*paused_source, fetched.eof_partitions)) {
+          if (auto error = co_await wait_for_capacity(
+                *paused_source, grace_deadline, fetched.eof_partitions,
+                allow_rebalance)) {
             fetched.fatal_error = std::move(error);
           }
         }
@@ -1863,8 +1992,9 @@ private:
     auto reached_count = fetched.reached_count;
     if (paused_source) {
       while (not runtime_.message_queue->try_enqueue(std::move(fetched))) {
-        if (auto error
-            = co_await poll_paused(*paused_source, fetched.eof_partitions)) {
+        if (auto error = co_await wait_for_capacity(
+              *paused_source, grace_deadline, fetched.eof_partitions,
+              allow_rebalance)) {
           fetched.fatal_error = std::move(error);
           has_fatal = true;
         }
@@ -1983,6 +2113,7 @@ private:
         if (not fetched) {
           continue;
         }
+        fetched->fetch_generation = generation_before;
         if (avro_queues) {
           auto generation
             = source.source_consumer->consumer_cfg.assignment_generation->load(
@@ -1997,7 +2128,7 @@ private:
           }
         }
         auto resume = tenzir::detail::scope_guard{[&]() noexcept {
-          if (avro_queues) {
+          if (avro_queues or source.paused) {
             std::ignore = set_consumer_paused(source, false);
           }
         }};
@@ -2038,15 +2169,15 @@ private:
           }
         }
         auto keep_fetching = co_await enqueue_fetched_batch(
-          std::move(*fetched), avro_queues ? &source : nullptr);
-        if (keep_fetching and avro_queues) {
+          std::move(*fetched), &source, not avro_queues);
+        if (keep_fetching and (avro_queues or source.paused)) {
           auto error = set_consumer_paused(source, false);
           resume.disable();
           if (error) {
             auto failed = MessageBatch{};
             failed.fatal_error = std::move(error);
-            std::ignore
-              = co_await enqueue_fetched_batch(std::move(failed), &source);
+            std::ignore = co_await enqueue_fetched_batch(
+              std::move(failed), &source, not avro_queues);
             break;
           }
         }
@@ -2216,10 +2347,39 @@ private:
     }
   }
 
+  /// Drops pending offsets fetched before the most recent revoke.
+  ///
+  /// Returns the generation of that revoke. Commits run this too, because a
+  /// checkpoint or the end of the stream can commit without a new batch.
+  auto drop_stale_pending_offsets() -> uint64_t {
+    auto const revoked = last_revoke_generation();
+    if (pending_fetch_generation_ and *pending_fetch_generation_ < revoked) {
+      pending_commit_offsets_.clear();
+      pending_fetch_generation_.reset();
+    }
+    return revoked;
+  }
+
   /// Moves per-partition offsets from one emitted batch into commit state.
-  auto record_pending_offsets(TopicPartitionOffsets const& offsets) -> void {
+  ///
+  /// Offsets fetched before the most recent revoke are dropped, also when the
+  /// partition came back since: another member may have owned it in between
+  /// and committed further, and committing these would move the group's
+  /// position backwards. Their messages get reprocessed instead.
+  auto record_pending_offsets(TopicPartitionOffsets const& offsets,
+                              uint64_t fetch_generation) -> void {
+    auto const revoked = drop_stale_pending_offsets();
+    if (fetch_generation < revoked) {
+      // Routine after a rebalance, so this is not worth a diagnostic.
+      TENZIR_VERBOSE("from_kafka: dropped offsets of a batch fetched before "
+                     "the latest revoke");
+      return;
+    }
     for (auto const& [partition, offset] : offsets) {
       pending_commit_offsets_[partition] = offset + 1;
+    }
+    if (not pending_fetch_generation_) {
+      pending_fetch_generation_ = fetch_generation;
     }
   }
 
@@ -2353,6 +2513,8 @@ private:
   TopicPartitionOffsets pending_commit_offsets_;
   // Runtime-only: generations belong to one consumer instance, not snapshots.
   Option<uint64_t> pending_commit_generation_;
+  // The fetch generation of the oldest offset in `pending_commit_offsets_`.
+  Option<uint64_t> pending_fetch_generation_;
   // Set once the group membership was closed; commits are impossible after.
   bool consumer_closed_ = false;
   // Decides when every partition this instance owns reached its end. Only
@@ -2375,6 +2537,7 @@ public:
       emitted_messages_{other.emitted_messages_},
       pending_commit_offsets_{std::move(other.pending_commit_offsets_)},
       pending_commit_generation_{other.pending_commit_generation_},
+      pending_fetch_generation_{other.pending_fetch_generation_},
       consumer_closed_{other.consumer_closed_},
       eof_tracker_{std::move(other.eof_tracker_)},
       connected_options_{std::move(other.connected_options_)},
@@ -2639,7 +2802,7 @@ public:
         request_pipeline_stop();
         co_return;
       }
-      record_pending_offsets(frame.max_offsets);
+      record_pending_offsets(frame.max_offsets, frame.fetch_generation);
     }
     // Between recording this frame's offsets and committing them, because the
     // frame that reports a rebalance also carries the messages fetched before
@@ -2696,22 +2859,26 @@ public:
       partitions;
     /// Whether the assignment changed underneath a generation-checked commit.
     bool assignment_changed = false;
+    /// Whether a revoke preceded the submission of any other commit.
+    bool revoked = false;
   };
 
   /// Submits one commit of `offsets` and collects the per-partition verdicts.
   ///
-  /// Without a pending generation this is a plain synchronous commit, which
-  /// writes each partition's result back into the list it was handed.
-  ///
-  /// With one — the Avro path, whose decoded batches are only valid for the
-  /// assignment that produced them — the commit goes through a private queue
-  /// so that submission can happen under the assignment mutex, after
-  /// re-checking the generation. A rebalance therefore either precedes the
-  /// commit, which then reports `assignment_changed`, or follows it.
+  /// The commit goes through a private queue so that submission can happen
+  /// under the assignment mutex, serialized with the rebalance callback. With
+  /// a pending generation — the Avro path, whose decoded batches are only
+  /// valid for the assignment that produced them — any rebalance since then
+  /// reports `assignment_changed`. Otherwise, a revoke after `revoked`, the
+  /// generation of the latest revoke when the caller dropped stale offsets,
+  /// reports `revoked`: the offsets may belong to a partition that is moving
+  /// to another member, and the broker does not check ownership on commits.
+  /// A rebalance therefore either precedes the commit, which then reports it,
+  /// or follows its submission.
   auto commit_offsets_once(
     RdKafka::KafkaConsumer& consumer, consumer_configuration& config,
-    std::vector<std::unique_ptr<RdKafka::TopicPartition>> const& offsets) const
-    -> Task<CommitAttempt> {
+    std::vector<std::unique_ptr<RdKafka::TopicPartition>> const& offsets,
+    uint64_t revoked) const -> Task<CommitAttempt> {
     auto raw_offsets = std::vector<RdKafka::TopicPartition*>{};
     raw_offsets.reserve(offsets.size());
     for (auto const& offset : offsets) {
@@ -2719,104 +2886,104 @@ public:
     }
     auto generation = pending_commit_generation_;
     auto token = co_await folly::coro::co_current_cancellation_token;
-    // Both paths block: `commitSync` waits for the coordinator's reply, and the
-    // queue path polls until its callback runs. Neither may occupy an executor
-    // thread, because a slow or unreachable coordinator would stall unrelated
+    // This blocks until the callback runs, so it must not occupy an executor
+    // thread: a slow or unreachable coordinator would stall unrelated
     // pipelines for the duration of the request timeout.
-    co_return co_await spawn_blocking([&consumer, &config, &raw_offsets,
-                                       generation, token] {
-      if (not generation) {
-        auto result = CommitAttempt{};
-        // Writes each partition's result back into the list entries.
-        result.error = consumer.commitSync(raw_offsets);
-        for (auto const* offset : raw_offsets) {
-          if (offset->err() != RdKafka::ERR_NO_ERROR) {
-            result.partitions.emplace(TopicPartition{offset->topic(),
-                                                     offset->partition()},
-                                      offset->err());
+    co_return co_await spawn_blocking(
+      [&consumer, &config, &raw_offsets, generation, revoked, token] {
+        // The callback only runs when this worker polls its private queue.
+        // Destroy the queue before its callback state, including on cancel.
+        struct CommitResult {
+          bool complete = false;
+          RdKafka::ErrorCode error = RdKafka::ERR_NO_ERROR;
+          std::unordered_map<TopicPartition, RdKafka::ErrorCode,
+                             TopicPartitionHash>
+            partitions;
+        };
+        auto completed = CommitResult{};
+        auto queue = detail::QueueHandle{rd_kafka_queue_new(consumer.c_ptr())};
+        auto* offsets = rd_kafka_topic_partition_list_new(
+          static_cast<int>(raw_offsets.size()));
+        auto destroy_offsets = tenzir::detail::scope_guard{[&]() noexcept {
+          rd_kafka_topic_partition_list_destroy(offsets);
+        }};
+        for (auto* partition : raw_offsets) {
+          auto* entry = rd_kafka_topic_partition_list_add(
+            offsets, partition->topic().c_str(), partition->partition());
+          entry->offset = partition->offset();
+        }
+        auto callback
+          = +[](rd_kafka_t*, rd_kafka_resp_err_t error,
+                rd_kafka_topic_partition_list_t* partitions, void* opaque) {
+              auto& result = *static_cast<CommitResult*>(opaque);
+              result.error = static_cast<RdKafka::ErrorCode>(error);
+              if (partitions) {
+                for (auto i = 0; i < partitions->cnt; ++i) {
+                  auto const& partition = partitions->elems[i];
+                  if (partition.err == RD_KAFKA_RESP_ERR_NO_ERROR) {
+                    continue;
+                  }
+                  result.partitions.emplace(
+                    TopicPartition{partition.topic, partition.partition},
+                    static_cast<RdKafka::ErrorCode>(partition.err));
+                }
+              }
+              result.complete = true;
+            };
+        {
+          auto guard = std::scoped_lock{*config.assignment_mutex};
+          if (token.isCancellationRequested()) {
+            throw folly::OperationCancelled{};
+          }
+          if (generation
+              and *generation
+                    != config.assignment_generation->load(
+                      std::memory_order_acquire)) {
+            return CommitAttempt{
+              .error = RdKafka::ERR__STATE,
+              .partitions = {},
+              .assignment_changed = true,
+            };
+          }
+          if (not generation and config.revoke_generation
+              and config.revoke_generation->load(std::memory_order_acquire)
+                    != revoked) {
+            return CommitAttempt{
+              .error = RdKafka::ERR__STATE,
+              .partitions = {},
+              .revoked = true,
+            };
+          }
+          // Only submission is serialized with assignment callbacks. A commit
+          // submitted before a revoke reaches the coordinator ahead of the
+          // rejoin and carries the generation it was sent under, which the
+          // broker fences, so it cannot land on top of a new owner's progress.
+          auto error = rd_kafka_commit_queue(consumer.c_ptr(), offsets,
+                                             queue.get(), callback, &completed);
+          if (error != RD_KAFKA_RESP_ERR_NO_ERROR) {
+            return CommitAttempt{
+              .error = static_cast<RdKafka::ErrorCode>(error),
+              .partitions = {},
+              .assignment_changed = false,
+            };
           }
         }
-        return result;
-      }
-      // The callback only runs when this worker polls its private queue.
-      // Destroy the queue before its callback state, including on cancel.
-      struct CommitResult {
-        bool complete = false;
-        RdKafka::ErrorCode error = RdKafka::ERR_NO_ERROR;
-        std::unordered_map<TopicPartition, RdKafka::ErrorCode,
-                           TopicPartitionHash>
-          partitions;
-      };
-      auto completed = CommitResult{};
-      auto queue = detail::QueueHandle{rd_kafka_queue_new(consumer.c_ptr())};
-      auto* offsets = rd_kafka_topic_partition_list_new(
-        static_cast<int>(raw_offsets.size()));
-      auto destroy_offsets = tenzir::detail::scope_guard{[&]() noexcept {
-        rd_kafka_topic_partition_list_destroy(offsets);
-      }};
-      for (auto* partition : raw_offsets) {
-        auto* entry = rd_kafka_topic_partition_list_add(
-          offsets, partition->topic().c_str(), partition->partition());
-        entry->offset = partition->offset();
-      }
-      auto callback
-        = +[](rd_kafka_t*, rd_kafka_resp_err_t error,
-              rd_kafka_topic_partition_list_t* partitions, void* opaque) {
-            auto& result = *static_cast<CommitResult*>(opaque);
-            result.error = static_cast<RdKafka::ErrorCode>(error);
-            if (partitions) {
-              for (auto i = 0; i < partitions->cnt; ++i) {
-                auto const& partition = partitions->elems[i];
-                if (partition.err == RD_KAFKA_RESP_ERR_NO_ERROR) {
-                  continue;
-                }
-                result.partitions.emplace(
-                  TopicPartition{partition.topic, partition.partition},
-                  static_cast<RdKafka::ErrorCode>(partition.err));
-              }
-            }
-            result.complete = true;
-          };
-      {
-        auto guard = std::scoped_lock{*config.assignment_mutex};
-        if (token.isCancellationRequested()) {
-          throw folly::OperationCancelled{};
+        while (not completed.complete) {
+          if (token.isCancellationRequested()) {
+            throw folly::OperationCancelled{};
+          }
+          rd_kafka_queue_poll_callback(queue.get(), 100);
         }
-        if (*generation
-            != config.assignment_generation->load(std::memory_order_acquire)) {
-          return CommitAttempt{
-            .error = RdKafka::ERR__STATE,
-            .partitions = {},
-            .assignment_changed = true,
-          };
-        }
-        // Only submission is serialized with assignment callbacks. An
-        // already submitted commit may still succeed after reassignment.
-        auto error = rd_kafka_commit_queue(consumer.c_ptr(), offsets,
-                                           queue.get(), callback, &completed);
-        if (error != RD_KAFKA_RESP_ERR_NO_ERROR) {
-          return CommitAttempt{
-            .error = static_cast<RdKafka::ErrorCode>(error),
-            .partitions = {},
-            .assignment_changed = false,
-          };
-        }
-      }
-      while (not completed.complete) {
-        if (token.isCancellationRequested()) {
-          throw folly::OperationCancelled{};
-        }
-        rd_kafka_queue_poll_callback(queue.get(), 100);
-      }
-      auto changed
-        = *generation
-          != config.assignment_generation->load(std::memory_order_acquire);
-      return CommitAttempt{
-        .error = completed.error,
-        .partitions = std::move(completed.partitions),
-        .assignment_changed = changed,
-      };
-    });
+        auto changed = generation
+                       and *generation
+                             != config.assignment_generation->load(
+                               std::memory_order_acquire);
+        return CommitAttempt{
+          .error = completed.error,
+          .partitions = std::move(completed.partitions),
+          .assignment_changed = changed,
+        };
+      });
   }
 
   /// Commits the offsets of every emitted message, partition by partition.
@@ -2827,6 +2994,7 @@ public:
   /// their messages get reprocessed by whichever member owns the partition
   /// next, which is the at-least-once guarantee the operator already gives.
   auto commit_pending_offsets(diagnostic_handler* dh = nullptr) -> Task<void> {
+    auto const revoked = drop_stale_pending_offsets();
     if (consumer_closed_ or pending_commit_offsets_.empty()
         or runtime_.sources.empty()
         or not runtime_.sources[0].source_consumer) {
@@ -2857,12 +3025,20 @@ public:
           pending_commit_offsets_.at(partition)));
       }
       auto result = co_await commit_offsets_once(
-        consumer, source_consumer.consumer_cfg, offsets);
+        consumer, source_consumer.consumer_cfg, offsets, revoked);
+      if (result.revoked) {
+        // Every pending offset predates that revoke, see
+        // `record_pending_offsets`, so none of them may commit.
+        drop_stale_pending_offsets();
+        outstanding.clear();
+        break;
+      }
       if (result.assignment_changed) {
         // The generation-checked path must not commit across a reassignment:
         // the offsets describe messages this instance no longer owns.
         pending_commit_offsets_.clear();
         pending_commit_generation_.reset();
+        pending_fetch_generation_.reset();
         if (dh) {
           diagnostic::error(
             "Kafka assignment changed while committing Avro offsets")
@@ -2920,6 +3096,12 @@ public:
     }
     if (outstanding.empty()) {
       pending_commit_generation_.reset();
+    }
+    if (pending_commit_offsets_.empty()) {
+      // Offsets of currently unowned partitions remain pending after a
+      // successful commit, and the generation must outlive them so that
+      // `record_pending_offsets` can still discard them after a revoke.
+      pending_fetch_generation_.reset();
     }
     if (not dropped.empty()) {
       // Warned once, because the offsets are gone rather than carried into the
@@ -3024,6 +3206,7 @@ private:
     Option<SourceConsumer> source_consumer;
     Option<Box<AsyncConsumerQueue>> queue;
     uint64_t observed_assignment_generation = 0;
+    bool paused = false;
   };
 
   /// Owns mutable runtime state for source/build/emit stages.
@@ -3356,6 +3539,19 @@ private:
     co_await runtime_.message_queue->enqueue(None{});
   }
 
+  /// Describes a consumer error delivered in place of a message.
+  static auto kafka_error_message(AsyncConsumerQueue::Message const& message)
+    -> std::string {
+    if (message.err() == RD_KAFKA_RESP_ERR__MAX_POLL_EXCEEDED) {
+      // librdkafka has already left the group, so the partitions this member
+      // held go to another member and its pending offsets can never commit.
+      return fmt::format("Kafka consumer left its group because it did not "
+                         "poll within `max.poll.interval.ms`: `{}`",
+                         message.errstr());
+    }
+    return fmt::format("unexpected kafka error: `{}`", message.errstr());
+  }
+
   /// Converts polled Kafka messages into one source payload batch.
   auto
   to_fetched_batch(std::vector<AsyncConsumerQueue::Message> fetched_messages,
@@ -3384,8 +3580,7 @@ private:
           break;
         }
         default: {
-          batch.fatal_error
-            = fmt::format("unexpected kafka error: `{}`", message.errstr());
+          batch.fatal_error = kafka_error_message(message);
           request_pipeline_stop();
           break;
         }
@@ -3417,6 +3612,16 @@ private:
       return None{};
     }
     return generation->load(std::memory_order_acquire);
+  }
+
+  /// Returns the generation that the most recent revoke produced, or 0.
+  auto last_revoke_generation() const -> uint64_t {
+    if (runtime_.sources.empty() or not runtime_.sources[0].source_consumer) {
+      return 0;
+    }
+    auto const& revoke
+      = runtime_.sources[0].source_consumer->consumer_cfg.revoke_generation;
+    return revoke ? revoke->load(std::memory_order_acquire) : 0;
   }
 
   /// Returns the rebalance event that changed the source assignment, if any.
@@ -3540,10 +3745,22 @@ private:
   auto set_consumer_paused(SubscriptionSource& source, bool paused) const
     -> Option<std::string> {
     auto& consumer = *source.source_consumer->consumer;
+    auto& config = source.source_consumer->consumer_cfg;
     auto partitions = std::vector<RdKafka::TopicPartition*>{};
     auto cleanup = tenzir::detail::scope_guard{[&]() noexcept {
       RdKafka::TopicPartition::destroy(partitions);
     }};
+    // The rebalance callback pauses partitions it assigns while the flag is
+    // set. Only this source polls the consumer, so the callback cannot run
+    // concurrently today; the lock keeps the flag and the assignment it covers
+    // consistent should that ever change.
+    auto guard = std::unique_lock<std::mutex>{};
+    if (config.assignment_mutex) {
+      guard = std::unique_lock{*config.assignment_mutex};
+    }
+    if (config.pause_requested) {
+      config.pause_requested->store(paused, std::memory_order_relaxed);
+    }
     auto error = consumer.assignment(partitions);
     if (error == RdKafka::ERR_NO_ERROR and not partitions.empty()) {
       error = paused ? consumer.pause(partitions) : consumer.resume(partitions);
@@ -3560,13 +3777,22 @@ private:
       return fmt::format("failed to {} Kafka partitions: {}",
                          paused ? "pause" : "resume", RdKafka::err2str(error));
     }
+    source.paused = paused;
     return None{};
   }
 
   /// Service group callbacks without collecting more data under backpressure.
+  ///
+  /// Data is fatal: the pause discards what librdkafka fetched before it, and
+  /// the rebalance callback pauses partitions that it assigns meanwhile, so
+  /// data only arrives if pausing failed. A change of the assignment is fatal
+  /// unless `allow_rebalance` is set, because decoded Avro batches are only
+  /// valid for the assignment that produced them. Otherwise, the rebalance
+  /// surfaces through the next fetch window as usual.
   auto poll_paused(SubscriptionSource& source,
                    std::vector<TopicPartition>& eof_partitions,
-                   std::chrono::milliseconds wait = 100ms) const
+                   std::chrono::milliseconds wait = 100ms,
+                   bool allow_rebalance = false) const
     -> Task<Option<std::string>> {
     co_await folly::coro::co_safe_point;
     auto& generation
@@ -3575,10 +3801,11 @@ private:
     auto pause_error = set_consumer_paused(source, true);
     auto polled = co_await (*source.queue)->next_batch(1, wait);
     co_await folly::coro::co_reschedule_on_current_executor;
-    if (generation.load(std::memory_order_acquire) != before) {
+    if (not allow_rebalance
+        and generation.load(std::memory_order_acquire) != before) {
       co_return "Kafka assignment changed while resolving Avro schemas";
     }
-    for (auto const& message : polled.messages) {
+    for (auto& message : polled.messages) {
       if (message.err() == RD_KAFKA_RESP_ERR__PARTITION_EOF) {
         if (args_.exit) {
           auto partition = TopicPartition{message.topic(), message.partition()};
@@ -3590,20 +3817,76 @@ private:
         continue;
       }
       if (message.err() != RD_KAFKA_RESP_ERR_NO_ERROR) {
-        co_return fmt::format("unexpected kafka error: `{}`", message.errstr());
+        co_return kafka_error_message(message);
       }
-      // A newly assigned partition may deliver data before it can be paused.
-      // Stop instead of committing any records held from a revoked assignment.
+      // A newly assigned partition may deliver data if pausing it failed.
+      // Stop instead of committing offsets past data never delivered.
       co_return "received Kafka data while partitions were paused";
     }
     co_return pause_error;
   }
 
+  /// How long the fetcher waits for capacity before it pauses and polls.
+  ///
+  /// Pausing discards the data that librdkafka prefetched for the paused
+  /// partitions, which it fetches again after resuming. Under sustained
+  /// backpressure, capacity often frees up within moments, and pausing on
+  /// every such wait would fetch most data several times. The grace period
+  /// stays well within `max.poll.interval.ms`, so that the consumer still
+  /// polls in time.
+  auto pause_grace(SubscriptionSource const& source) const
+    -> std::chrono::milliseconds {
+    auto interval = std::chrono::milliseconds{300'000};
+    auto const& conf = source.source_consumer->consumer_cfg.conf;
+    auto value = std::string{};
+    if (conf
+        and conf->get("max.poll.interval.ms", value)
+              == RdKafka::Conf::CONF_OK) {
+      auto ms = int64_t{0};
+      auto const* end = value.data() + value.size();
+      if (auto [ptr, ec] = std::from_chars(value.data(), end, ms);
+          ec == std::errc{} and ptr == end and ms > 0) {
+        interval = std::chrono::milliseconds{ms};
+      }
+    }
+    return std::min(std::chrono::milliseconds{1'000}, interval / 4);
+  }
+
+  /// Waits a moment for budget or queue space to free up.
+  ///
+  /// Until `grace_deadline`, this only sleeps briefly. After it, the wait
+  /// pauses the assignment and polls, see `poll_paused`.
+  auto wait_for_capacity(SubscriptionSource& source,
+                         std::chrono::steady_clock::time_point grace_deadline,
+                         std::vector<TopicPartition>& eof_partitions,
+                         bool allow_rebalance) const
+    -> Task<Option<std::string>> {
+    // A stopped queue returns from polls right away, which would spin while
+    // a batch that carries an error waits for downstream to deliver it.
+    if (std::chrono::steady_clock::now() < grace_deadline
+        or (*source.queue)->is_stopped()) {
+      co_await folly::coro::sleep(5ms);
+      co_return None{};
+    }
+    co_return co_await poll_paused(source, eof_partitions, 100ms,
+                                   allow_rebalance);
+  }
+
   /// Enqueues one source batch while honoring prefetch-byte budget.
+  ///
+  /// With a `paused_source`, waiting for budget or queue space pauses the
+  /// assignment and keeps polling, so that the consumer stays in its group
+  /// for as long as downstream backpressure lasts. Waits shorter than
+  /// `pause_grace` do neither, see there. See `poll_paused` for
+  /// `allow_rebalance`.
   auto enqueue_fetched_batch(MessageBatch fetched,
-                             SubscriptionSource* paused_source = nullptr) const
-    -> Task<bool> {
+                             SubscriptionSource* paused_source = nullptr,
+                             bool allow_rebalance = false) const -> Task<bool> {
     read_bytes_counter_.add(static_cast<uint64_t>(fetched.payload_bytes));
+    auto const grace_deadline
+      = paused_source
+          ? std::chrono::steady_clock::now() + pause_grace(*paused_source)
+          : std::chrono::steady_clock::time_point{};
     auto reserved_bytes = fetched.payload_bytes;
     if (reserved_bytes > 0 or args_.schema_registry) {
       auto acquired = false;
@@ -3613,8 +3896,9 @@ private:
             acquired = true;
             break;
           }
-          if (auto error
-              = co_await poll_paused(*paused_source, fetched.eof_partitions)) {
+          if (auto error = co_await wait_for_capacity(
+                *paused_source, grace_deadline, fetched.eof_partitions,
+                allow_rebalance)) {
             fetched.fatal_error = std::move(error);
           }
         }
@@ -3638,8 +3922,9 @@ private:
     auto reached_count = fetched.reached_count;
     if (paused_source) {
       while (not runtime_.message_queue->try_enqueue(std::move(fetched))) {
-        if (auto error
-            = co_await poll_paused(*paused_source, fetched.eof_partitions)) {
+        if (auto error = co_await wait_for_capacity(
+              *paused_source, grace_deadline, fetched.eof_partitions,
+              allow_rebalance)) {
           fetched.fatal_error = std::move(error);
           has_fatal = true;
         }
@@ -3769,6 +4054,7 @@ private:
         if (not fetched) {
           continue;
         }
+        fetched->fetch_generation = generation_before;
         if (avro_queues) {
           auto generation
             = source.source_consumer->consumer_cfg.assignment_generation->load(
@@ -3783,7 +4069,7 @@ private:
           }
         }
         auto resume = tenzir::detail::scope_guard{[&]() noexcept {
-          if (avro_queues) {
+          if (avro_queues or source.paused) {
             std::ignore = set_consumer_paused(source, false);
           }
         }};
@@ -3824,15 +4110,15 @@ private:
           }
         }
         auto keep_fetching = co_await enqueue_fetched_batch(
-          std::move(*fetched), avro_queues ? &source : nullptr);
-        if (keep_fetching and avro_queues) {
+          std::move(*fetched), &source, not avro_queues);
+        if (keep_fetching and (avro_queues or source.paused)) {
           auto error = set_consumer_paused(source, false);
           resume.disable();
           if (error) {
             auto failed = MessageBatch{};
             failed.fatal_error = std::move(error);
-            std::ignore
-              = co_await enqueue_fetched_batch(std::move(failed), &source);
+            std::ignore = co_await enqueue_fetched_batch(
+              std::move(failed), &source, not avro_queues);
             break;
           }
         }
@@ -3910,6 +4196,7 @@ private:
         auto frame = EventsFrame{};
         frame.diagnostics = std::move(fetched.diagnostics);
         frame.assignment_generation = fetched.assignment_generation;
+        frame.fetch_generation = fetched.fetch_generation;
         frame.eof_partitions = std::move(fetched.eof_partitions);
         frame.fatal_error = std::move(fetched.fatal_error);
         frame.assignment_change = fetched.assignment_change;
@@ -4047,13 +4334,42 @@ private:
     }
   }
 
+  /// Drops pending offsets fetched before the most recent revoke.
+  ///
+  /// Returns the generation of that revoke. Commits run this too, because a
+  /// checkpoint or the end of the stream can commit without a new batch.
+  auto drop_stale_pending_offsets() -> uint64_t {
+    auto const revoked = last_revoke_generation();
+    if (pending_fetch_generation_ and *pending_fetch_generation_ < revoked) {
+      pending_commit_offsets_.clear();
+      pending_fetch_generation_.reset();
+    }
+    return revoked;
+  }
+
   /// Moves per-partition offsets from one emitted batch into commit state.
-  auto record_pending_offsets(TopicPartitionOffsets const& offsets) -> void {
+  ///
+  /// Offsets fetched before the most recent revoke are dropped, also when the
+  /// partition came back since: another member may have owned it in between
+  /// and committed further, and committing these would move the group's
+  /// position backwards. Their messages get reprocessed instead.
+  auto record_pending_offsets(TopicPartitionOffsets const& offsets,
+                              uint64_t fetch_generation) -> void {
     if (not commit_offsets_) {
+      return;
+    }
+    auto const revoked = drop_stale_pending_offsets();
+    if (fetch_generation < revoked) {
+      // Routine after a rebalance, so this is not worth a diagnostic.
+      TENZIR_VERBOSE("from_kafka: dropped offsets of a batch fetched before "
+                     "the latest revoke");
       return;
     }
     for (auto const& [partition, offset] : offsets) {
       pending_commit_offsets_[partition] = offset + 1;
+    }
+    if (not pending_fetch_generation_) {
+      pending_fetch_generation_ = fetch_generation;
     }
   }
 
@@ -4187,6 +4503,8 @@ private:
   TopicPartitionOffsets pending_commit_offsets_;
   // Runtime-only: generations belong to one consumer instance, not snapshots.
   Option<uint64_t> pending_commit_generation_;
+  // The fetch generation of the oldest offset in `pending_commit_offsets_`.
+  Option<uint64_t> pending_fetch_generation_;
   // Set once the group membership was closed; commits are impossible after.
   bool consumer_closed_ = false;
   // Decides when every partition this instance owns reached its end. Only

@@ -102,9 +102,10 @@ constexpr auto commit_outcome(RdKafka::ErrorCode overall,
 ///
 /// Unowned partitions are omitted, not erased. Under the eager rebalance
 /// protocol the assignment is transiently empty while a rebalance is in
-/// flight, and a partition that comes back is still this member's to commit.
-/// Whatever does not come back is discarded once the next authoritative
-/// assignment arrives.
+/// flight. Whatever does not come back is discarded once the next
+/// authoritative assignment arrives. Whether the offsets of a partition that
+/// comes back may still commit is up to the caller: another member may have
+/// owned it in between.
 inline auto committable_partitions(TopicPartitionOffsets const& pending,
                                    Option<TopicPartitionSet> const& owned)
   -> TopicPartitionSet {

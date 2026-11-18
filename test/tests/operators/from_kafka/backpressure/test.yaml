@@ -1,0 +1,9 @@
+timeout: 180
+skip:
+  on: fixture-unavailable
+suite: from-kafka-backpressure
+fixtures:
+  - kafka:
+      topic: from_kafka_backpressure_test
+      partitions: 1
+      messages: 200000

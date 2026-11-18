@@ -449,6 +449,12 @@ public:
     disable_events();
   }
 
+  /// Returns whether a stop was requested.
+  auto is_stopped() const -> bool {
+    auto guard = std::scoped_lock{state_mutex_};
+    return stopped_;
+  }
+
 private:
   AsyncConsumerQueue(folly::EventBase& event_base, rd_kafka_queue_t* queue,
                      detail::WakeupFd wakeup_fd)
@@ -508,12 +514,6 @@ private:
       }
       co_return NotificationWaitResult::notified;
     }
-  }
-
-  /// Returns whether a stop was requested.
-  auto is_stopped() const -> bool {
-    auto guard = std::scoped_lock{state_mutex_};
-    return stopped_;
   }
 
   /// Outcome of one `rd_kafka_consume_batch_queue` attempt.

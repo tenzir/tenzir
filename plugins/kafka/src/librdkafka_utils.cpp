@@ -312,11 +312,15 @@ public:
     int64_t offset, std::shared_ptr<Atomic<uint64_t>> assignment_generation,
     std::shared_ptr<std::mutex> assignment_mutex,
     std::shared_ptr<Atomic<AssignmentChange>> last_assignment_change,
+    std::shared_ptr<Atomic<uint64_t>> revoke_generation,
+    std::shared_ptr<Atomic<bool>> pause_requested,
     std::shared_ptr<committed_partition_set> committed_partitions)
     : offset_{offset},
       assignment_generation_{std::move(assignment_generation)},
       assignment_mutex_{std::move(assignment_mutex)},
       last_assignment_change_{std::move(last_assignment_change)},
+      revoke_generation_{std::move(revoke_generation)},
+      pause_requested_{std::move(pause_requested)},
       committed_partitions_{std::move(committed_partitions)} {
   }
 
@@ -327,17 +331,23 @@ public:
     auto guard = std::scoped_lock{*assignment_mutex_};
     if (err == RdKafka::ERR__ASSIGN_PARTITIONS) {
       apply_start_offsets(partitions);
+      auto assigned = true;
       if (consumer->rebalance_protocol() == "COOPERATIVE") {
         if (auto* e = consumer->incremental_assign(partitions)) {
           auto err_guard = std::unique_ptr<RdKafka::Error>{e};
           TENZIR_ERROR("failed to assign incrementally: {}", err_guard->str());
+          assigned = false;
         }
       } else {
         if (auto assign_err = consumer->assign(partitions);
             assign_err != RdKafka::ERR_NO_ERROR) {
           TENZIR_ERROR("failed to assign partitions: {}",
                        RdKafka::err2str(assign_err));
+          assigned = false;
         }
+      }
+      if (assigned) {
+        apply_requested_pause(consumer, partitions);
       }
       mark_assignment_changed(AssignmentChange::assigned);
       return;
@@ -390,6 +400,45 @@ private:
     }
   }
 
+  /// Brings newly assigned partitions in line with the consumer's pause state.
+  ///
+  /// Eager rebalancing passes the whole assignment and cooperative rebalancing
+  /// only the added partitions, and either way they are exactly the ones that
+  /// the consumer's own pause and resume have not covered. Under backpressure
+  /// they get paused so that they cannot deliver data. Otherwise they get
+  /// resumed: librdkafka keeps a pause across unassign and assign, so a
+  /// partition that was revoked while paused would never fetch again.
+  auto apply_requested_pause(RdKafka::KafkaConsumer* consumer,
+                             std::vector<RdKafka::TopicPartition*>& partitions)
+    -> void {
+    if (not pause_requested_ or partitions.empty()) {
+      return;
+    }
+    auto const paused = pause_requested_->load(std::memory_order_relaxed);
+    auto error
+      = paused ? consumer->pause(partitions) : consumer->resume(partitions);
+    if (error == RdKafka::ERR_NO_ERROR) {
+      // librdkafka reports failures per partition.
+      for (auto const* partition : partitions) {
+        if (partition and partition->err() != RdKafka::ERR_NO_ERROR) {
+          error = partition->err();
+          break;
+        }
+      }
+    }
+    if (error != RdKafka::ERR_NO_ERROR) {
+      // A failed pause lets data reach the consumer's paused polls, which then
+      // stop the pipeline rather than commit past it.
+      TENZIR_WARN("failed to {} newly assigned partitions: {}",
+                  paused ? "pause" : "resume", RdKafka::err2str(error));
+      return;
+    }
+    if (paused) {
+      TENZIR_VERBOSE("paused {} newly assigned partitions under backpressure",
+                     partitions.size());
+    }
+  }
+
   auto mark_assignment_changed(AssignmentChange kind) const -> void {
     // Publish the kind before the generation: readers load the generation with
     // acquire ordering and only then read the kind, so the release below makes
@@ -398,6 +447,13 @@ private:
       last_assignment_change_->store(kind, std::memory_order_relaxed);
     }
     if (assignment_generation_) {
+      if (kind == AssignmentChange::revoked and revoke_generation_) {
+        // librdkafka runs this callback on one thread at a time, so the
+        // generation cannot move between this load and the increment.
+        revoke_generation_->store(
+          assignment_generation_->load(std::memory_order_relaxed) + 1,
+          std::memory_order_release);
+      }
       assignment_generation_->fetch_add(1, std::memory_order_release);
     }
   }
@@ -406,6 +462,8 @@ private:
   std::shared_ptr<Atomic<uint64_t>> assignment_generation_;
   std::shared_ptr<std::mutex> assignment_mutex_;
   std::shared_ptr<Atomic<AssignmentChange>> last_assignment_change_;
+  std::shared_ptr<Atomic<uint64_t>> revoke_generation_;
+  std::shared_ptr<Atomic<bool>> pause_requested_;
   std::shared_ptr<committed_partition_set> committed_partitions_;
 };
 
@@ -547,10 +605,13 @@ auto make_consumer_configuration(record const& options,
   cfg.assignment_mutex = std::make_shared<std::mutex>();
   cfg.last_assignment_change
     = std::make_shared<Atomic<AssignmentChange>>(AssignmentChange::assigned);
+  cfg.revoke_generation = std::make_shared<Atomic<uint64_t>>(0);
+  cfg.pause_requested = std::make_shared<Atomic<bool>>(false);
   cfg.committed_partitions = std::make_shared<committed_partition_set>();
   cfg.rebalance_callback = std::make_shared<rebalance_callback>(
     offset, cfg.assignment_generation, cfg.assignment_mutex,
-    cfg.last_assignment_change, cfg.committed_partitions);
+    cfg.last_assignment_change, cfg.revoke_generation, cfg.pause_requested,
+    cfg.committed_partitions);
   if (auto err = set_conf_callback(*cfg.conf, "rebalance_cb",
                                    cfg.rebalance_callback.get());
       err) {
