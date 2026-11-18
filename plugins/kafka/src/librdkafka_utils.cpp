@@ -16,6 +16,7 @@
 #include <tenzir/data.hpp>
 #include <tenzir/detail/overload.hpp>
 #include <tenzir/error.hpp>
+#include <tenzir/logger.hpp>
 #include <tenzir/nova/materialize.hpp>
 #include <tenzir/time.hpp>
 #include <tenzir/try.hpp>
@@ -289,14 +290,34 @@ public:
     };
     auto error_code = event.err();
     auto error_msg = event.str();
+    // Only log events carry a meaningful severity. librdkafka uses syslog
+    // severities, where a lower value is more severe.
+    auto is_log = event.type() == RdKafka::Event::EVENT_LOG;
     if (event.type() == RdKafka::Event::EVENT_ERROR
-        or event.severity() >= RdKafka::Event::EVENT_SEVERITY_WARNING) {
+        or (is_log
+            and event.severity() <= RdKafka::Event::EVENT_SEVERITY_WARNING)) {
       diagnostic::warning("librdkafka {}: {} ({})", severity_name(),
                           error_msg.empty() ? RdKafka::err2str(error_code)
                                             : error_msg,
                           std::to_underlying(error_code))
         .severity(event.fatal() ? severity::error : severity::warning)
         .emit(dh_);
+      return;
+    }
+    if (event.type() == RdKafka::Event::EVENT_THROTTLE) {
+      TENZIR_VERBOSE("librdkafka: broker {} throttled requests for {}ms",
+                     event.broker_name(), event.throttle_time());
+      return;
+    }
+    if (not is_log) {
+      return;
+    }
+    // Less severe log events, such as the output of the `debug` option, are
+    // not diagnostics; they go to the log instead.
+    if (event.severity() == RdKafka::Event::EVENT_SEVERITY_DEBUG) {
+      TENZIR_DEBUG("librdkafka {}: {}", severity_name(), error_msg);
+    } else {
+      TENZIR_VERBOSE("librdkafka {}: {}", severity_name(), error_msg);
     }
   }
 

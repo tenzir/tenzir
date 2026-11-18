@@ -1,0 +1,10 @@
+// Enabling librdkafka debug logging must not turn its log lines into
+// diagnostics, and the consumer must shut down cleanly while it still logs.
+from_kafka env("KAFKA_TOPIC"),
+           count=2,
+           offset="beginning",
+           options={
+             "bootstrap.servers": env("KAFKA_BOOTSTRAP_SERVERS"),
+             "group.id": "tenzir-test-from-kafka-debug-option",
+             "debug": "generic"
+           }

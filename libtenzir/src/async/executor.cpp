@@ -539,8 +539,7 @@ public:
          OpId id, ExecCtx& exec_ctx, caf::actor_system& sys, DiagHandler& dh,
          Option<Ref<PlanRegistration>> plan_registration,
          size_t planned_operator)
-    : op_{std::move(op)},
-      job_{job},
+    : job_{job},
       pull_upstream_{std::move(pull_upstream)},
       push_downstream_{std::move(push_downstream)},
       from_control_{std::move(from_control)},
@@ -552,6 +551,7 @@ public:
       dh_{Arc<DiagHandler>::from_non_null(
         std::make_shared<CensoringDiagHandler>(dh, censor_))},
       sys_{sys},
+      op_{std::move(op)},
       input_is_void_{
         match(op_,
               []<class In, class Out, bool MultipleOutputPorts>(
@@ -1828,7 +1828,6 @@ private:
     phase_ = Phase::stopped;
   }
 
-  AnyOperator op_;
   JobId job_;
   std::vector<AnyOpPull> pull_upstream_;
   std::vector<OutputPort> push_downstream_;
@@ -1841,6 +1840,10 @@ private:
   secret_censor censor_;
   Arc<DiagHandler> dh_;
   caf::actor_system& sys_;
+  /// Declared after `dh_` and `censor_` so that it is destroyed before them:
+  /// operators may hold `OpCtx::dh()` in objects that still emit diagnostics
+  /// while the operator is destroyed, such as client library callbacks.
+  AnyOperator op_;
   bool input_is_void_;
   bool output_is_void_;
   folly::Executor::KeepAlive<folly::IOExecutor> io_executor_;

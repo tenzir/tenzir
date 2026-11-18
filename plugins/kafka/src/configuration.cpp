@@ -206,8 +206,11 @@ auto configuration::error_callback::event_cb(RdKafka::Event& event) -> void {
   };
   const auto error_code = event.err();
   const auto error_msg = event.str();
+  // Only log events carry a meaningful severity. librdkafka uses syslog
+  // severities, where a lower value is more severe.
   if (event.type() == RdKafka::Event::EVENT_ERROR
-      or event.severity() >= RdKafka::Event::EVENT_SEVERITY_WARNING) {
+      or (event.type() == RdKafka::Event::EVENT_LOG
+          and event.severity() <= RdKafka::Event::EVENT_SEVERITY_WARNING)) {
     diagnostic::warning("librdkafka {}: {} ({})", get_severity(),
                         error_msg.empty() ? RdKafka::err2str(error_code)
                                           : error_msg,
