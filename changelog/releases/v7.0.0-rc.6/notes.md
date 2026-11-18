@@ -345,6 +345,30 @@ On Linux, the `processes` operator reported `utime` and `stime` in whole seconds
 
 *By @mavam.*
 
+### Kafka consumers stay in their group under backpressure
+
+The `from_kafka` operator now stays in its consumer group when downstream operators block for longer than `max.poll.interval.ms`. Previously, the consumer left the group after the poll interval, offset commits failed with `Unknown member`, and the pipeline stopped with `unexpected kafka error`.
+
+When the operator gets partitions back after a rebalance, it no longer commits offsets of records it read before the rebalance. Those offsets could move the group's position behind the progress of another consumer. Records whose offsets are skipped are delivered again, in line with at-least-once delivery.
+
+If the poll interval is still exceeded, the error now says that the consumer left its group because it did not poll within `max.poll.interval.ms`.
+
+*By @zedoraps.*
+
+### Kafka operators no longer crash at shutdown with `debug` logging
+
+Pipelines using `from_kafka` or `to_kafka` no longer crash with a segmentation fault when they shut down while the librdkafka `debug` option is set, as in `options={"debug": "generic"}`. The pipeline finished its work, but the process then crashed while it tore down the Kafka client.
+
+Setting `debug` also no longer floods the pipeline with warnings. Previously, every librdkafka log line, including debug output, became a warning diagnostic such as `warning: librdkafka debug: ...`. Now only librdkafka warnings and errors become diagnostics. Less severe log lines go to the Tenzir log instead: debug output at the `debug` level, and notices and informational messages at the `verbose` level. The log also reports at the `verbose` level when a broker throttles the client. To see the output of the `debug` option, raise the log verbosity accordingly, for example with `--console-verbosity=debug`.
+
+*By @zedoraps.*
+
+### Lower CPU usage for subscribe
+
+The `subscribe` operator uses less CPU. Its `schema_id` metrics values now match those reported by `measure events` and `type_id(this)` instead of legacy schema fingerprints.
+
+*By @IyeOnline.*
+
 ### Package hints name the tenzir command
 
 When a workspace's lock is unreadable, misses a dependency, or names a package that is not fetched yet, the hint now tells you to run `tenzir package lock` or `tenzir package fetch` instead of the `tenzir-platform` variants, matching the unified `tenzir` command of Tenzir 7.
@@ -362,6 +386,22 @@ A degree of parallelism of `max` now respects the CPU limit of a container. Prev
 Nodes no longer lose their connection to the Tenzir Platform every few minutes when a load balancer or proxy with an idle timeout sits between the two. The node now sends a WebSocket ping every 20 seconds. Previously, it could stay silent for a full minute, so a load balancer with a 60-second idle timeout dropped the connection again and again, and the node logged `platform plugin received an unexpected error: End of file`.
 
 Nodes also keep the connection while they answer many requests at once, for example when a dashboard loads. Previously, this could corrupt the encrypted connection. The node then logged `unexpected error: unspecified system error` or `stream truncated` and briefly appeared as disconnected in the app.
+
+*By @tobim.*
+
+### Stalled connections no longer block other connections in accept_tcp
+
+The `accept_tcp` and `accept_unix_socket` operators keep reading from all other connections when the subpipeline of one connection stops taking data. Previously, a single stalled connection made the operator stop reading from every connection and stop accepting new ones, so clients saw the listener hang even though most of the pipeline had capacity left.
+
+Each connection now applies backpressure only to its own socket. When the entire pipeline after the operator falls behind, all connections still slow down together, as before.
+
+*By @tobim.*
+
+### Support for x86-64 CPUs without AVX2
+
+Tenzir now runs on x86-64 CPUs that lack AVX2, such as Intel Ivy Bridge. Previously, the static Linux release and the container images aborted with an `Illegal instruction` error at startup on these machines.
+
+Tenzir still requires SSE4.2, which Intel CPUs support since Nehalem (2008) and AMD CPUs since Bulldozer (2011). On CPUs that support AVX2, performance-critical code paths still detect and use it at runtime.
 
 *By @tobim.*
 
