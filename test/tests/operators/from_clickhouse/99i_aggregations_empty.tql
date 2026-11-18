@@ -1,0 +1,9 @@
+// Without values, the deviation and the variance are `null`, `all` holds, and
+// `any` does not.
+from_clickhouse table="fc_functions",
+              host=env("CLICKHOUSE_HOST"),
+              port=int(env("CLICKHOUSE_PORT")),
+              password=env("CLICKHOUSE_PASSWORD"),
+              tls=false
+where id > 10
+summarize deviation=stddev(f), variance=variance(f), all=all(b), any=any(b)

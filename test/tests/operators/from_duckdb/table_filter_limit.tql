@@ -1,8 +1,8 @@
-// `id > 1` goes into the query, but `score.round() < 0` has no translation and
-// stays in the pipeline. The limit counts events after both, so it stays, too:
+// `id > 1` goes into the query, but `name.to_title() == "Gamma"` has no
+// translation and stays in the pipeline. The limit counts events after both, so it stays, too:
 // with `LIMIT 1` in the query, only row 2 would arrive, which the remaining
 // filter then drops.
 from_duckdb env("DUCKDB_SEED"), table="events"
-where id > 1 and score.round() < 0
+where id > 1 and name.to_title() == "Gamma"
 head 1
 select id

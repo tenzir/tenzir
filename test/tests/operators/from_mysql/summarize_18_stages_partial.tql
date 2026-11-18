@@ -7,6 +7,6 @@ from_mysql table="hits",
            password=env("MYSQL_PASSWORD"),
            database=env("MYSQL_DATABASE")
 summarize src, n=count()
-where n >= 2 and src.capitalize() != "B"
+where n >= 2 and src.to_title() != "B"
 sort -n
 head 2

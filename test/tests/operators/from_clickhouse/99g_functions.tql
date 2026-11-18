@@ -1,0 +1,31 @@
+// ClickHouse computes the functions of strings, numbers, and times, as group
+// keys of the summary.
+from_clickhouse table="fc_functions",
+              host=env("CLICKHOUSE_HOST"),
+              port=int(env("CLICKHOUSE_PORT")),
+              password=env("CLICKHOUSE_PASSWORD"),
+              tls=false
+ceil = f.ceil()
+floor = f.floor()
+round = f.round()
+sqrt = f.sqrt()
+exp = f.exp()
+log = f.log()
+log10 = log(f, 10)
+year = ts.year()
+month = ts.month()
+day = ts.day()
+hour = ts.hour()
+minute = ts.minute()
+second = ts.second()
+capitalize = s.capitalize()
+trim_start = s.trim_start()
+trim_end = s.trim_end()
+replace = s.replace("l", "L")
+empty = s.is_empty()
+head = s.slice(end=3)
+tail = s.slice(begin=3)
+middle = s.slice(begin=1, end=4)
+md5 = s.hash_md5()
+summarize id, ceil, floor, round, sqrt, exp, log, log10, year, month, day, hour, minute, second, capitalize, trim_start, trim_end, replace, empty, head, tail, middle, md5
+sort id

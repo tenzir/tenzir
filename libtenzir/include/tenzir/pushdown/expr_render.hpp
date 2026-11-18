@@ -19,11 +19,14 @@
 #include <folly/Function.h>
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <functional>
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
+#include <vector>
 
 /// Spelling of TQL expressions in the language of a target, with the
 /// semantics of the target.
@@ -38,13 +41,29 @@ namespace tenzir::pushdown {
 
 class ExpressionRenderer;
 
-/// The spelling of a TQL function in a target, with holes for its arguments:
-/// `{i}` is argument `i` as a value, and `{i:pred}` as a predicate. With
-/// `{i:s}`, `{i:ms}`, `{i:us}`, or `{i:ns}`, it is a constant duration as a
-/// whole, positive count of the unit, but no multiple of a week or a month,
-/// which TQL buckets by the calendar. A hole may repeat, as in
-/// `(LEFT({0}, LEN({1})) = {1})`. A call whose argument does not fit its hole
-/// has no spelling.
+/// The spelling of a TQL function in a target, with holes for its arguments.
+///
+/// A hole names a positional argument by its index, as in `{0}`, or a named
+/// argument by its name, as in `{end}`, and spells it as a value. A kind after
+/// a colon changes that:
+///
+/// - `{0:pred}` spells the argument as a predicate.
+/// - `{0:nat}` requires a constant integer that is not negative, and spells
+///   it as a decimal number.
+/// - `{0:s}`, `{0:ms}`, `{0:us}`, and `{0:ns}` require a constant duration
+///   that is a whole, positive count of the unit, but no multiple of a week or
+///   a month, which TQL buckets by the calendar, and spell the count.
+///
+/// A hole may repeat, as in `(LEFT({0}, LEN({1})) = {1})`. A row applies to a
+/// call with `arity` positional arguments whose named arguments are exactly
+/// those that its holes name, so a function with optional named arguments has
+/// a row for each combination that the target spells. A call whose argument
+/// does not fit its hole has no spelling.
+///
+/// A spelling computes with the semantics of the target. It must yield what
+/// TQL yields in kind: the same type, `null` where TQL yields `null`, and the
+/// same result for no input. Within that, the target's own arithmetic holds,
+/// such as how it rounds floating-point numbers, compares text, or maps case.
 struct Function {
   std::string_view tql;
   uint8_t arity = 0;
@@ -54,6 +73,66 @@ struct Function {
   /// How a group key that the function computes decodes.
   Decode decode = Decode::native;
 };
+
+/// Whether `spelling` is well-formed for a row with `arity` positional
+/// arguments: every hole closes, names a positional argument below `arity` or
+/// a named argument, and has a known kind. Rows check this at compile time, as
+/// in `static_assert(valid_rows(rows))`.
+constexpr auto valid_spelling(std::string_view spelling, size_t arity) -> bool {
+  constexpr auto npos = std::string_view::npos;
+  constexpr auto kinds = std::array<std::string_view, 7>{
+    "", "pred", "nat", "s", "ms", "us", "ns",
+  };
+  auto const digit = [](char c) {
+    return c >= '0' and c <= '9';
+  };
+  auto const word = [&](char c) {
+    return digit(c) or c == '_' or (c >= 'a' and c <= 'z')
+           or (c >= 'A' and c <= 'Z');
+  };
+  while (true) {
+    auto const open = spelling.find('{');
+    if (spelling.substr(0, open).find('}') != npos) {
+      return false;
+    }
+    if (open == npos) {
+      return true;
+    }
+    auto const close = spelling.find('}', open);
+    if (close == npos) {
+      return false;
+    }
+    auto const inner = spelling.substr(open + 1, close - open - 1);
+    auto const colon = inner.find(':');
+    auto const argument = inner.substr(0, colon);
+    auto const kind
+      = colon == npos ? std::string_view{} : inner.substr(colon + 1);
+    if (argument.empty() or not std::ranges::all_of(argument, word)
+        or std::ranges::find(kinds, kind) == kinds.end()) {
+      return false;
+    }
+    if (std::ranges::all_of(argument, digit)) {
+      auto index = size_t{0};
+      for (auto c : argument) {
+        index = index * 10 + static_cast<size_t>(c - '0');
+      }
+      if (index >= arity) {
+        return false;
+      }
+    } else if (digit(argument.front())) {
+      return false;
+    }
+    spelling.remove_prefix(close + 1);
+  }
+}
+
+/// Whether every row of `rows` has a well-formed spelling.
+template <class Row, size_t N>
+consteval auto valid_rows(std::array<Row, N> const& rows) -> bool {
+  return std::ranges::all_of(rows, [](Row const& row) {
+    return valid_spelling(row.spelling, row.arity);
+  });
+}
 
 /// Returns the width of a time bucket that `expr` is: a constant, positive
 /// duration, but no multiple of a week or a month, which TQL buckets by the
@@ -68,22 +147,58 @@ struct Aggregation {
   Decode decode = Decode::native;
 };
 
-/// Returns the row of `rows` for `name` with `arity` arguments, if any.
+/// The arguments of a call: the positional ones in order, and the named ones,
+/// which are assignments to a plain name, by their name.
+struct CallArguments {
+  std::vector<Ref<ast::expression const>> positional;
+  std::vector<std::pair<std::string, Ref<ast::expression const>>> named;
+};
+
+/// Splits `args` into positional and named arguments.
+auto call_arguments(std::span<ast::expression const> args) -> CallArguments;
+
+/// Whether a row with `spelling` and `arity` applies to a call with
+/// `positional` positional arguments and the `named` ones, which must be
+/// exactly the named arguments that its holes name.
+auto spelling_fits(std::string_view spelling, size_t arity, size_t positional,
+                   std::span<std::string const> named) -> bool;
+
+/// Returns the row of `rows` for `name` that applies to `args`, if any.
 template <class Row>
-auto find_row(std::span<Row const> rows, std::string_view name, size_t arity)
-  -> Row const* {
+auto find_row(std::span<Row const> rows, std::string_view name,
+              std::span<ast::expression const> args) -> Row const* {
+  auto const split = call_arguments(args);
+  auto names = std::vector<std::string>{};
+  for (auto const& [arg_name, _] : split.named) {
+    names.push_back(arg_name);
+  }
   auto it = std::ranges::find_if(rows, [&](Row const& row) {
-    return row.tql == name and row.arity == arity;
+    return row.tql == name
+           and spelling_fits(row.spelling, row.arity, split.positional.size(),
+                             names);
   });
   return it == rows.end() ? nullptr : &*it;
 }
 
-/// Fills the holes of `spelling` for `args` with `fill`, which receives the
-/// index of an argument and whether its hole is a predicate. Returns `None` if
-/// `fill` does.
-auto spell(std::string_view spelling, std::span<ast::expression const> args,
-           folly::FunctionRef<auto(size_t, bool)->Option<std::string>> fill)
-  -> Option<std::string>;
+/// Returns the row of `rows` for `name` with `arity` positional arguments and
+/// no named ones, if any.
+template <class Row>
+auto find_row(std::span<Row const> rows, std::string_view name, size_t arity)
+  -> Row const* {
+  auto it = std::ranges::find_if(rows, [&](Row const& row) {
+    return row.tql == name
+           and spelling_fits(row.spelling, row.arity, arity, {});
+  });
+  return it == rows.end() ? nullptr : &*it;
+}
+
+/// Fills the holes of `spelling` for `args` with `fill`, which receives an
+/// argument and whether its hole is a predicate. Returns `None` if an argument
+/// does not fit its hole, or if `fill` does.
+auto spell(
+  std::string_view spelling, std::span<ast::expression const> args,
+  folly::FunctionRef<auto(ast::expression const&, bool)->Option<std::string>>
+    fill) -> Option<std::string>;
 
 /// The spelling of expressions in the language of a target.
 ///
@@ -198,6 +313,11 @@ public:
   virtual auto boolean_values() const -> bool = 0;
 };
 
+/// How the value of `expr` decodes when `dialect` computes it: as the row of
+/// `ExpressionDialect::functions` of a call says, and natively otherwise.
+auto call_decode(ExpressionDialect const& dialect, ast::expression const& expr)
+  -> Decode;
+
 /// Spells expressions of TQL in an `ExpressionDialect`, with the semantics of
 /// the target, as far as their syntax allows. Fields bind through `bind`,
 /// which receives the segments of a field path without `?`.
@@ -221,9 +341,10 @@ public:
   template <class Row>
   auto spell(Row const& row, std::span<ast::expression const> args) const
     -> Option<std::string> {
-    return pushdown::spell(row.spelling, args, [&](size_t i, bool predicate) {
-      return predicate ? this->predicate(args[i]) : value(args[i]);
-    });
+    return pushdown::spell(
+      row.spelling, args, [&](ast::expression const& arg, bool predicate) {
+        return predicate ? this->predicate(arg) : value(arg);
+      });
   }
 
 private:

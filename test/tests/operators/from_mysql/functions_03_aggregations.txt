@@ -1,0 +1,4 @@
+{
+  deviation: 3.25,
+  variance: 10.5625,
+}

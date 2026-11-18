@@ -22,8 +22,11 @@ namespace tenzir::pushdown {
 
 /// How a result column decodes. `integer` and `number` also parse text, for
 /// targets whose results arrive as strings, and `time` reads the target's own
-/// time.
-enum class Decode { native, integer, number, time };
+/// time, also from text. `exact` is a number that the target may widen beyond
+/// 64 bits, such as a sum of integers: integral text decodes as an integer,
+/// or as `null` with a warning if it does not fit, while other values keep
+/// how they decode.
+enum class Decode { native, integer, number, time, exact };
 
 /// A result column with how it decodes.
 using Decoded = std::pair<std::string, Decode>;
@@ -54,7 +57,8 @@ struct Layout {
 /// Arranges `events`, whose fields are the result columns of a query, as
 /// `layout` describes. Output fields nest along their paths. A column that is
 /// missing, as when a reader drops a column that it cannot decode, leaves its
-/// field missing.
+/// field missing. Text in an `exact` column decodes as an integer, and text in
+/// a `time` column as a time, where it reads as one.
 auto apply_layout(nova::Events events, Layout const& layout,
                   diagnostic_handler& dh) -> nova::Events;
 

@@ -157,23 +157,72 @@ auto MysqlDialect::render_ip(ip value) const -> Option<std::string> {
 }
 
 /// `LIKE` would need escaping of a pattern that is no literal, and
-/// `REGEXP_LIKE` matches with the case sensitivity of RE2.
+/// `REGEXP_LIKE` matches with the case sensitivity of RE2. The time functions
+/// read `DATETIME` and `DATE` values as UTC, as comparisons do.
 auto MysqlDialect::functions() const -> std::span<pushdown::Function const> {
   static constexpr auto rows = std::array{
-    pushdown::Function{"starts_with", 2, "(LEFT({0}, CHAR_LENGTH({1})) = {1})"},
-    pushdown::Function{"ends_with", 2, "(RIGHT({0}, CHAR_LENGTH({1})) = {1})"},
-    pushdown::Function{"match_regex", 2, "REGEXP_LIKE({0}, {1}, 'c')"},
+    pushdown::Function{"starts_with", 2, "(LEFT({0}, CHAR_LENGTH({1})) = {1})",
+                       true},
+    pushdown::Function{"ends_with", 2, "(RIGHT({0}, CHAR_LENGTH({1})) = {1})",
+                       true},
+    pushdown::Function{"match_regex", 2, "REGEXP_LIKE({0}, {1}, 'c')", true},
     pushdown::Function{"length_bytes", 1, "LENGTH({0})"},
     pushdown::Function{"length_chars", 1, "CHAR_LENGTH({0})"},
     pushdown::Function{"to_lower", 1, "LOWER({0})"},
     pushdown::Function{"to_upper", 1, "UPPER({0})"},
+    pushdown::Function{"capitalize", 1,
+                       "CONCAT(UPPER(LEFT({0}, 1)), LOWER(SUBSTRING({0}, 2)))"},
     pushdown::Function{"trim", 1, "TRIM({0})"},
+    pushdown::Function{"trim_start", 1, "LTRIM({0})"},
+    pushdown::Function{"trim_end", 1, "RTRIM({0})"},
+    pushdown::Function{"replace", 3, "REPLACE({0}, {1}, {2})"},
+    pushdown::Function{"is_empty", 1, "(CHAR_LENGTH({0}) = 0)", true},
+    // Negative bounds of `slice` stay in the pipeline.
+    pushdown::Function{"slice", 1, "SUBSTRING({0}, {begin:nat} + 1)"},
+    pushdown::Function{"slice", 1, "LEFT({0}, {end:nat})"},
+    pushdown::Function{"slice", 1,
+                       "SUBSTRING({0}, {begin:nat} + 1, GREATEST({end:nat} - "
+                       "{begin:nat}, 0))"},
+    pushdown::Function{"hash_md5", 1, "MD5({0})"},
+    pushdown::Function{"hash_sha1", 1, "SHA1({0})"},
+    pushdown::Function{"hash_sha256", 1, "SHA2({0}, 256)"},
     pushdown::Function{"abs", 1, "ABS({0})"},
+    pushdown::Function{"ceil", 1, "CAST(CEIL({0}) AS SIGNED)"},
+    pushdown::Function{"floor", 1, "CAST(FLOOR({0}) AS SIGNED)"},
+    pushdown::Function{"round", 1, "CAST(ROUND({0}) AS SIGNED)"},
+    pushdown::Function{"sqrt", 1, "SQRT({0})"},
+    pushdown::Function{"exp", 1, "EXP({0})"},
+    pushdown::Function{"log", 1, "LN({0})"},
+    pushdown::Function{"log", 2, "LOG({1}, {0})"},
+    pushdown::Function{"year", 1, "YEAR({0})"},
+    pushdown::Function{"month", 1, "MONTH({0})"},
+    pushdown::Function{"day", 1, "DAY({0})"},
+    pushdown::Function{"hour", 1, "HOUR({0})"},
+    pushdown::Function{"minute", 1, "MINUTE({0})"},
+    pushdown::Function{"second", 1, "(SECOND({0}) + MICROSECOND({0}) / 1e6)"},
+    // TQL buckets times by multiples of the width since the epoch, also
+    // before it, which flooring the microseconds since then reproduces. The
+    // result arrives as text.
+    pushdown::Function{"floor", 2,
+                       "TIMESTAMPADD(MICROSECOND, "
+                       "TIMESTAMPDIFF(MICROSECOND, '1970-01-01', {0}) - "
+                       "MOD(TIMESTAMPDIFF(MICROSECOND, '1970-01-01', {0}), "
+                       "{1:us}) - CASE WHEN "
+                       "MOD(TIMESTAMPDIFF(MICROSECOND, '1970-01-01', {0}), "
+                       "{1:us}) < 0 THEN {1:us} ELSE 0 END, '1970-01-01')",
+                       false, pushdown::Decode::time},
   };
+  static_assert(pushdown::valid_rows(rows));
   return rows;
 }
 
 auto MysqlDialect::time_literal_arithmetic() const -> bool {
+  return false;
+}
+
+/// MySQL has no booleans: a predicate as a value is an integer, and a value
+/// as a predicate tests a number.
+auto MysqlDialect::boolean_values() const -> bool {
   return false;
 }
 

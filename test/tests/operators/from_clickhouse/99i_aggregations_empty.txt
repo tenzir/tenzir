@@ -1,0 +1,6 @@
+{
+  deviation: null,
+  variance: null,
+  all: true,
+  any: false,
+}

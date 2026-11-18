@@ -270,7 +270,10 @@ struct ymdhms_parser : tenzir::parser_base<ymdhms_parser> {
       auto zone_offset = (hours{zhrs} + minutes{zmins}) * zsign;
       auto delta
         = hours{hrs} + minutes{mins} - zone_offset + double_seconds{secs};
-      x = time{ymd} + duration_cast<tenzir::duration>(delta);
+      // The seconds parse as a `double`, which holds a fraction such as
+      // `.000001` only approximately, but closely enough to round it to the
+      // nanosecond it means. Truncating would lose a nanosecond.
+      x = time{ymd} + round<tenzir::duration>(delta);
       return true;
     }
   }

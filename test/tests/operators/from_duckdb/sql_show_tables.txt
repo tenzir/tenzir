@@ -8,6 +8,10 @@
 }
 {
   table_schema: "main",
+  table_name: "fns",
+}
+{
+  table_schema: "main",
   table_name: "hits",
 }
 {

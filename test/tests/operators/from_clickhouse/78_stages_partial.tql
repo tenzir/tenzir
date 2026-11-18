@@ -6,6 +6,6 @@ from_clickhouse table="fc_stages",
                 password=env("CLICKHOUSE_PASSWORD"),
                 tls=false
 summarize src, n=count()
-where n >= 2 and src.capitalize() != "B"
+where n >= 2 and src.to_title() != "B"
 sort -n
 head 2

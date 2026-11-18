@@ -76,6 +76,11 @@ INSERT INTO hits VALUES
     (NULL, 1), (NULL, 2), (NULL, 3),
     ('c', NULL), ('c', NULL),
     ('É', 9);
+CREATE TABLE fns (id INTEGER, f DOUBLE, s VARCHAR, ts TIMESTAMP, b BOOLEAN);
+INSERT INTO fns VALUES
+    (1, -2.5, '  hello WORLD ', '1969-12-31 23:59:59.5', true),
+    (2, 4.0, '', '2024-02-29 12:34:56.25', false),
+    (3, NULL, NULL, NULL, NULL);
 """
 
 

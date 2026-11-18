@@ -550,9 +550,23 @@ public:
       Function{"to_lower", 1, "lower({0})"},
       Function{"to_upper", 1, "upper({0})"},
       Function{"trim", 1, "trim({0})"},
+      Function{"trim_start", 1, "ltrim({0})"},
+      Function{"trim_end", 1, "rtrim({0})"},
+      Function{"is_empty", 1, "(len({0})==0)", true},
       Function{"length_chars", 1, "len({0})"},
+      Function{"hash_md5", 1, "md5({0})"},
+      Function{"hash_sha1", 1, "sha1({0})"},
+      Function{"hash_sha256", 1, "sha256({0})"},
       Function{"abs", 1, "abs({0})"},
+      Function{"ceil", 1, "ceiling({0})"},
+      Function{"floor", 1, "floor({0})"},
+      Function{"round", 1, "round({0})"},
+      Function{"sqrt", 1, "sqrt({0})"},
+      Function{"exp", 1, "exp({0})"},
+      Function{"log", 1, "ln({0})"},
+      Function{"log", 2, "log({0}, {1})"},
     };
+    static_assert(valid_rows(rows));
     return rows;
   }
 
@@ -571,7 +585,10 @@ public:
       Aggregation{"count_distinct", 1, "dc({0})", Decode::integer},
       Aggregation{"sum", 1, "sum({0})", Decode::number},
       Aggregation{"mean", 1, "avg({0})", Decode::number},
+      Aggregation{"stddev", 1, "stdevp({0})", Decode::number},
+      Aggregation{"variance", 1, "varp({0})", Decode::number},
     };
+    static_assert(valid_rows(spl2_rows));
     if (spl2_) {
       return spl2_rows;
     }
@@ -584,7 +601,10 @@ public:
       Aggregation{"count_distinct", 1, "dc({0})", Decode::integer},
       Aggregation{"sum", 1, "sum({0})", Decode::number},
       Aggregation{"mean", 1, "avg({0})", Decode::number},
+      Aggregation{"stddev", 1, "stdevp({0})", Decode::number},
+      Aggregation{"variance", 1, "varp({0})", Decode::number},
     };
+    static_assert(valid_rows(rows));
     return rows;
   }
 

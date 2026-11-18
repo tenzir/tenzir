@@ -189,6 +189,8 @@ struct column_info {
   mysql_type type = mysql_type::null;
   uint16_t flags = 0;
   uint8_t decimals = 0;
+  /// Whether a fixed-point value stays text, for the layout to decode.
+  bool textual = false;
 };
 
 /// MySQL-specific error type.
@@ -1070,6 +1072,9 @@ struct query_config {
   std::string sql;
   std::string schema_name = "mysql.query";
   int64_t batch_size = 10000;
+  /// The columns whose fixed-point values without a fraction stay text, as
+  /// a sum of integers, which the layout decodes exactly.
+  std::vector<std::string> exact = {};
 };
 
 using result_row = std::vector<Option<std::string>>;
@@ -1468,6 +1473,12 @@ void parse_row_into_builder(std::span<std::byte const> data,
       case mysql_type::double_:
       case mysql_type::decimal:
       case mysql_type::newdecimal: {
+        if (col.textual
+            and (col.type == mysql_type::decimal
+                 or col.type == mysql_type::newdecimal)) {
+          field.data(std::string_view{str});
+          break;
+        }
         auto value = double{};
         if (parsers::real(str, value)) {
           field.data(value);
@@ -1533,6 +1544,10 @@ public:
     auto columns = std::move(columns_result).unwrap();
     if (columns.empty()) {
       co_return;
+    }
+    for (auto& column : columns) {
+      column.textual = column.decimals == 0
+                       and std::ranges::contains(cfg.exact, column.name);
     }
     // Stream rows, building batches.
     auto builder = nova::ArrayBuilder<nova::Record>{};
@@ -1795,9 +1810,16 @@ private:
   auto query_generated(std::string sql) {
     TENZIR_DEBUG("from_mysql runs `{}`",
                  pushdown::redact_query(sql, mysql_lexicon));
+    auto exact = std::vector<std::string>{};
+    for (auto const& [column, decode] : layout_.decode) {
+      if (decode == pushdown::Decode::exact) {
+        exact.push_back(column);
+      }
+    }
     return client_->query({
       .sql = std::move(sql),
       .schema_name = schema_name_,
+      .exact = std::move(exact),
     });
   }
 

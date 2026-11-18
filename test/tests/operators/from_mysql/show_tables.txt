@@ -4,6 +4,10 @@
 }
 {
   database: "tenzir_test",
+  table: "fns",
+}
+{
+  database: "tenzir_test",
   table: "invisible",
 }
 {

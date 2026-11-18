@@ -2,6 +2,6 @@
 // after it, which counts the groups that the filter keeps.
 from_duckdb env("DUCKDB_SEED"), table="hits"
 summarize src, n=count()
-where n >= 2 and src.capitalize() != "B"
+where n >= 2 and src.to_title() != "B"
 sort -n
 head 2

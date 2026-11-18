@@ -106,6 +106,8 @@ public:
 
   auto functions() const -> std::span<pushdown::Function const> override;
 
+  auto boolean_values() const -> bool override;
+
   /// A time literal is a string that MySQL casts for a comparison only.
   auto time_literal_arithmetic() const -> bool override;
 };

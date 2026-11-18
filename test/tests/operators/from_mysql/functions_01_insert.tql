@@ -1,0 +1,6 @@
+from_mysql sql="INSERT INTO fns VALUES (1, -2.5, '  hello WORLD ', '1969-12-31 23:59:59.5'), (2, 4.0, '', '2024-02-29 12:34:56.25'), (3, NULL, NULL, NULL)",
+           host=env("MYSQL_HOST"),
+           port=int(env("MYSQL_PORT")),
+           user=env("MYSQL_USER"),
+           password=env("MYSQL_PASSWORD"),
+           database=env("MYSQL_DATABASE")

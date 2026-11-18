@@ -1,0 +1,17 @@
+// Splunk computes functions of strings and numbers with `eval`, as group keys
+// of the summary.
+from_splunk env("SPLUNK_MGMT_URL"),
+  index="main",
+  earliest="1735689599",
+  latest="1735689780",
+  headers={
+    Authorization: env("SPLUNK_AUTHORIZATION"),
+  },
+  tls={skip_peer_verification: true}
+where action == "login"
+md5 = user.hash_md5()
+root = sqrt(user.length_chars())
+half = (user.length_chars() / 2).ceil()
+digits = log(user.length_chars(), 10)
+summarize user, md5, root, half, digits
+sort user

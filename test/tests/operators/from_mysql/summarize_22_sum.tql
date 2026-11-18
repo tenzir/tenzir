@@ -1,0 +1,11 @@
+// MySQL sums integers as a `DECIMAL`, which decodes as an integer, and warns
+// with `null` for a sum beyond 64 bits, as TQL does. It sums floating-point
+// numbers as a `DOUBLE`.
+from_mysql table="agg",
+           host=env("MYSQL_HOST"),
+           port=int(env("MYSQL_PORT")),
+           user=env("MYSQL_USER"),
+           password=env("MYSQL_PASSWORD"),
+           database=env("MYSQL_DATABASE")
+summarize s, total=sum(n), fractions=sum(d)
+sort s.string()

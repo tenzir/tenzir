@@ -14,7 +14,9 @@
 
 #include <fmt/format.h>
 
+#include <charconv>
 #include <cmath>
+#include <limits>
 #include <utility>
 #include <vector>
 
@@ -65,8 +67,8 @@ auto ExpressionDialect::aggregations() const -> std::span<Aggregation const> {
 auto ExpressionDialect::render_call(ast::function_call const& call,
                                     ExpressionRenderer const& renderer) const
   -> Option<std::string> {
-  auto const* row
-    = find_row(functions(), call.fn.ref.segments().front(), call.args.size());
+  auto const* row = find_row(functions(), call.fn.ref.segments().front(),
+                             std::span{call.args});
   if (not row) {
     return None{};
   }
@@ -89,39 +91,159 @@ auto bucket_width(ast::expression const& expr) -> Option<duration> {
   return *width;
 }
 
-auto spell(std::string_view spelling, std::span<ast::expression const> args,
-           folly::FunctionRef<auto(size_t, bool)->Option<std::string>> fill)
-  -> Option<std::string> {
-  auto result = std::string{};
+auto call_decode(ExpressionDialect const& dialect, ast::expression const& expr)
+  -> Decode {
+  auto const* call = try_as<ast::function_call>(expr);
+  if (not call or not call->fn.ref.resolved()
+      or call->fn.ref.pkg() != entity_pkg_std
+      or call->fn.ref.segments().size() != 1) {
+    return Decode::native;
+  }
+  auto const* row
+    = find_row(dialect.functions(), call->fn.ref.segments().front(),
+               std::span{call->args});
+  return row ? row->decode : Decode::native;
+}
+
+auto call_arguments(std::span<ast::expression const> args) -> CallArguments {
+  auto result = CallArguments{};
+  for (auto const& arg : args) {
+    if (auto const* assignment = try_as<ast::assignment>(arg)) {
+      auto const* field = try_as<ast::root_field>(assignment->left);
+      result.named.emplace_back(field ? field->id.name : std::string{},
+                                Ref{assignment->right});
+      continue;
+    }
+    result.positional.emplace_back(arg);
+  }
+  return result;
+}
+
+namespace {
+
+/// A hole of a spelling: its argument, by index or by name, and its kind.
+struct Hole {
+  std::string_view argument;
+  std::string_view kind;
+};
+
+/// Calls `f` with each hole of `spelling`, and with the text before it.
+template <class F>
+auto for_each_hole(std::string_view spelling, F f) -> void {
   while (not spelling.empty()) {
     auto const open = spelling.find('{');
-    result += spelling.substr(0, open);
     if (open == std::string_view::npos) {
-      break;
+      f(spelling, Option<Hole>{});
+      return;
     }
     auto const close = spelling.find('}', open);
     TENZIR_ASSERT(close != std::string_view::npos);
-    auto hole = spelling.substr(open + 1, close - open - 1);
-    auto const index = static_cast<size_t>(hole.front() - '0');
-    TENZIR_ASSERT(index < args.size());
-    auto const unit = hole.substr(hole.find(':') + 1);
-    if (hole.size() < 2 or unit == "pred") {
-      TRY(auto text, fill(index, hole.size() >= 2));
-      result += text;
-    } else {
-      // A count of a unit, from the width of a time bucket that is a whole
-      // multiple of it.
-      auto const ticks = unit == "s"    ? duration{std::chrono::seconds{1}}
-                         : unit == "ms" ? duration{std::chrono::milliseconds{1}}
-                         : unit == "us" ? duration{std::chrono::microseconds{1}}
-                                        : duration{1};
-      TRY(auto width, bucket_width(args[index]));
-      if (width % ticks != duration::zero()) {
-        return None{};
-      }
-      result += fmt::to_string(width / ticks);
-    }
+    auto const inner = spelling.substr(open + 1, close - open - 1);
+    auto const colon = inner.find(':');
+    auto hole = Hole{
+      .argument = inner.substr(0, colon),
+      .kind = colon == std::string_view::npos ? std::string_view{}
+                                              : inner.substr(colon + 1),
+    };
+    TENZIR_ASSERT(not hole.argument.empty());
+    f(spelling.substr(0, open), Option{hole});
     spelling.remove_prefix(close + 1);
+  }
+}
+
+auto is_index(std::string_view argument) -> bool {
+  return std::ranges::all_of(argument, [](char c) {
+    return c >= '0' and c <= '9';
+  });
+}
+
+} // namespace
+
+auto spelling_fits(std::string_view spelling, size_t arity, size_t positional,
+                   std::span<std::string const> named) -> bool {
+  if (arity != positional) {
+    return false;
+  }
+  auto holes = std::vector<std::string_view>{};
+  for_each_hole(spelling, [&](std::string_view, Option<Hole> hole) {
+    if (hole and not is_index(hole->argument)
+        and not std::ranges::contains(holes, hole->argument)) {
+      holes.push_back(hole->argument);
+    }
+  });
+  return holes.size() == named.size()
+         and std::ranges::all_of(named, [&](std::string const& name) {
+               return std::ranges::contains(holes, std::string_view{name});
+             });
+}
+
+auto spell(
+  std::string_view spelling, std::span<ast::expression const> args,
+  folly::FunctionRef<auto(ast::expression const&, bool)->Option<std::string>>
+    fill) -> Option<std::string> {
+  auto const split = call_arguments(args);
+  auto const argument = [&](std::string_view name) -> ast::expression const* {
+    if (is_index(name)) {
+      auto index = size_t{};
+      std::from_chars(name.data(), name.data() + name.size(), index);
+      return index < split.positional.size() ? &*split.positional[index]
+                                             : nullptr;
+    }
+    for (auto const& [arg_name, value] : split.named) {
+      if (arg_name == name) {
+        return &*value;
+      }
+    }
+    return nullptr;
+  };
+  auto result = std::string{};
+  auto failed = false;
+  for_each_hole(spelling, [&](std::string_view text, Option<Hole> hole) {
+    if (failed) {
+      return;
+    }
+    result += text;
+    if (not hole) {
+      return;
+    }
+    auto const* arg = argument(hole->argument);
+    TENZIR_ASSERT(arg);
+    auto const& kind = hole->kind;
+    if (kind.empty() or kind == "pred") {
+      auto text = fill(*arg, kind == "pred");
+      if (not text) {
+        failed = true;
+        return;
+      }
+      result += *text;
+      return;
+    }
+    if (kind == "nat") {
+      auto const* constant = try_as<ast::constant>(*arg);
+      auto const* value = constant ? try_as<int64_t>(constant->value) : nullptr;
+      if (not value or *value < 0) {
+        failed = true;
+        return;
+      }
+      result += fmt::to_string(*value);
+      return;
+    }
+    // A count of a unit, from the width of a time bucket that is a whole
+    // multiple of it.
+    auto const ticks = kind == "s"    ? duration{std::chrono::seconds{1}}
+                       : kind == "ms" ? duration{std::chrono::milliseconds{1}}
+                       : kind == "us" ? duration{std::chrono::microseconds{1}}
+                                      : duration{1};
+    TENZIR_ASSERT(kind == "s" or kind == "ms" or kind == "us" or kind == "ns");
+    auto width = bucket_width(*arg);
+    if (not width or *width % ticks != duration::zero()) {
+      failed = true;
+      return;
+    }
+    result += fmt::to_string(*width / ticks);
+  });
+  if (failed) {
+    return None{};
   }
   return result;
 }
@@ -336,10 +458,9 @@ auto ExpressionRenderer::call(ast::function_call const& x) const
       or ref.segments().size() != 1) {
     return None{};
   }
-  // Named arguments are assignments, which have no spelling as a value.
   TRY(auto text, dialect_->render_call(x, *this));
-  auto const* row
-    = find_row(dialect_->functions(), ref.segments().front(), x.args.size());
+  auto const* row = find_row(dialect_->functions(), ref.segments().front(),
+                             std::span{x.args});
   return Fragment{std::move(text), row and row->predicate};
 }
 
