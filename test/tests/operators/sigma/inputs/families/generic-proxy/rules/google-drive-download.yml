@@ -1,0 +1,23 @@
+title: Google Drive Direct Download
+logsource:
+  category: proxy
+detection:
+  selection:
+    c-uri|contains|all:
+      - 'drive.google.com'
+      - 'uc?id'
+      - 'export=download'
+    c-uri-stem: '/uc'
+    c-uri-query|contains: 'export=download'
+    cs-host|endswith: '.google.com'
+    r-dns: 'drive.google.com'
+    cs-method: 'GET'
+    cs-referrer|startswith: 'https://mail.'
+    cs-version: '1.1'
+    sc-status: 200
+    cs-bytes|lt: 1000
+    sc-bytes|gt: 10000
+    c-ip|cidr: 10.0.0.0/8
+    src_ip: 10.0.0.42
+    dst_ip: 203.0.113.10
+  condition: selection

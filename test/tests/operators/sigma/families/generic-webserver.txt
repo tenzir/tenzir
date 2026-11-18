@@ -1,0 +1,25 @@
+warning: sigma operator skips rule 'tests/operators/sigma/inputs/families/generic-webserver/rules/content-type.yml' for OCSF input
+ --> tests/operators/sigma/families/generic-webserver.tql:7:12
+  |
+7 | sigma path=f"{env("TENZIR_INPUTS")}/families/generic-webserver/rules", format="plain"
+  |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+  = note: unresolved Sigma fields: `cs-content-type`
+  = note: field `cs-content-type` is unmapped: The OCSF HTTP request has no content type attribute.
+  = note: use `mapping="direct"` only when the rule fields exist literally
+{
+  rule: "Keyword In Web Server Access Log",
+  id: "path-only",
+}
+{
+  rule: "Keyword In Web Server Access Log",
+  id: "traversal",
+}
+{
+  rule: "Path Traversal In Query",
+  id: "traversal",
+}
+{
+  rule: "WebDAV Copy Into Web Root",
+  id: "webdav-copy",
+}

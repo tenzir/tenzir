@@ -85,3 +85,44 @@ TEST("layouts nest output fields and drop hidden columns") {
   CHECK_EQUAL(rows(empty), std::vector<std::string>{"<>"});
   CHECK(std::move(dh).collect().empty());
 }
+
+TEST("layouts decode exact numbers and times from text") {
+  auto builder = nova::ArrayBuilder<nova::Record>{};
+  auto add = [&](auto sum, auto bucket) {
+    auto row = builder.record();
+    row.field("s").data(sum);
+    row.field("b").data(bucket);
+  };
+  add(std::string_view{"-9223372036854775807"},
+      std::string_view{"1969-12-31 23:00:00"});
+  add(std::string_view{"9223372036854775808"},
+      std::string_view{"2024-01-01 00:00:00.000001"});
+  add(std::string_view{"12.50"}, std::string_view{"no time"});
+  add(2.5, int64_t{7});
+  builder.record().field("s").null();
+  auto events = nova::Events{builder.finish(), nova::storage::BitMap{5, true},
+                             nova::Events::Meta::make_empty(5, "test.results")};
+  auto dh = collecting_diagnostic_handler{};
+  auto decoded = pushdown::apply_layout(
+    std::move(events),
+    pushdown::Layout{
+      .fields = pushdown::LayoutFields{{{"sum"}, "s"}, {{"bucket"}, "b"}},
+      .hidden = {},
+      .schema_name = None{},
+      .decode = {{"s", pushdown::Decode::exact}, {"b", pushdown::Decode::time}},
+    },
+    dh);
+  // Integral text becomes an integer, and `null` beyond 64 bits. Other text
+  // and other values stay as they are.
+  CHECK_EQUAL(rows(decoded),
+              (std::vector<std::string>{
+                "<sum: -9223372036854775807, bucket: 1969-12-31T23:00:00Z>",
+                "<sum: null, bucket: 2024-01-01T00:00:00.000001Z>",
+                "<sum: \"12.50\", bucket: \"no time\">",
+                "<sum: 2.5, bucket: 7>",
+                "<sum: null>",
+              }));
+  auto diagnostics = std::move(dh).collect();
+  REQUIRE_EQUAL(diagnostics.size(), size_t{1});
+  CHECK_EQUAL(diagnostics.front().message, "integer overflow");
+}

@@ -159,9 +159,11 @@ struct FieldDescriptor {
   std::string notes;
 };
 
-/// Matches one exact default-taxonomy logsource. An empty category requires
-/// the rule to omit it. `optional_service` lets a service-specific mapping
-/// also cover the category-only form used by many stock Sigma rules.
+/// Matches one exact default-taxonomy logsource. An empty category or product
+/// requires the rule to omit it; the latter selects Sigma's generic
+/// categories such as `proxy`, `webserver`, or `dns`. `optional_service` lets a
+/// service-specific mapping also cover the category-only form used by many
+/// stock Sigma rules.
 struct LogsourceSelector {
   std::string category;
   std::string product;

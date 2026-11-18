@@ -298,21 +298,6 @@ private:
     return name;
   }
 
-  /// How a group key that `expr` computes decodes: as the row of
-  /// `PipeQueryDialect::functions` of a call says, and natively otherwise.
-  auto computed_decode(ast::expression const& expr) const -> Decode {
-    auto const* call = try_as<ast::function_call>(expr);
-    if (not call or not call->fn.ref.resolved()
-        or call->fn.ref.pkg() != entity_pkg_std
-        or call->fn.ref.segments().size() != 1) {
-      return Decode::native;
-    }
-    auto const* row
-      = find_row(dialect_->functions(), call->fn.ref.segments().front(),
-                 call->args.size());
-    return row ? row->decode : Decode::native;
-  }
-
   /// Updates whether the field named after the time column holds the
   /// target's own time, after a stage that enumerates its output. It does so
   /// only if one of `fields`, as pairs of output and input paths, keeps it.
@@ -509,8 +494,8 @@ private:
       // A target computes on columns, so a key and a value argument read a
       // column or an alias. A predicate argument renders as for a filter, but
       // without time literals, which compare only with the time column there.
-      auto const fill = [&](size_t i, bool predicate) -> Option<std::string> {
-        auto const& arg = column.args[i];
+      auto const fill = [&](ast::expression const& arg,
+                            bool predicate) -> Option<std::string> {
         if (predicate) {
           return mentions_time(arg) ? Option<std::string>{}
                                     : renderer().predicate(arg);
@@ -528,7 +513,7 @@ private:
         auto key = nameable(*input, aliases);
         if (not std::ranges::contains(keys, key)) {
           keys.push_back(key);
-          if (auto kind = computed_decode(column.args.front());
+          if (auto kind = call_decode(*dialect_, column.args.front());
               kind != Decode::native) {
             decode.emplace_back(key, kind);
           }

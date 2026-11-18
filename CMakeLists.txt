@@ -24,9 +24,9 @@ set(TENZIR_EDITION_NAME
     "Tenzir"
     CACHE STRING "Set the edition name")
 
-# From v7 on, Tenzir installs no `tenzir-node` and no service that runs one.
-# Every build still contains the node, and the build tree keeps a `tenzir-node`
-# for the integration tests.
+# From v7 on, Tenzir installs no `tenzir-node`, no service that runs one, and
+# none of the node's tools, `tenzir-ctl` and `tenzir-rebuild`. Every build still
+# contains them, and the build tree keeps their names for the integration tests.
 if (Tenzir_VERSION_MAJOR LESS 7)
   set(TENZIR_INSTALL_NODE ON)
 else ()

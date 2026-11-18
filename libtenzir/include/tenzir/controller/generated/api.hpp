@@ -2309,6 +2309,18 @@ public:
   static constexpr auto status = std::uint16_t{503};
 };
 
+class IngestUnavailable {
+public:
+  IngestUnavailable(std::string message, std::string region)
+    : message{std::move(message)}, region{std::move(region)} {
+  }
+
+  static constexpr auto status = std::uint16_t{400};
+
+  std::string message;
+  std::string region;
+};
+
 class InvalidConfiguration {
 public:
   explicit InvalidConfiguration(std::string message)
@@ -2453,12 +2465,12 @@ auto call(Transport& transport, ReadDeployment request)
 
 /// `POST
 /// /api/organizations/:org/workspaces/:workspace/deployments/:deploymentId/telemetry`
-/// Stores one batch of pipeline metrics, diagnostics and run transitions from
-/// the deployment that sends it, and passes it on to anyone watching live. An
-/// error may follow partial table writes. Retry the identical batch promptly
-/// with the same boot and seq: each table and rollup retains up to 100,000
-/// block IDs for deduplication. Live publication is best effort and may repeat
-/// after a backend restart.
+/// Stores one batch of pipeline metrics, diagnostics and run transitions for
+/// the specified deployment, and passes it on to anyone watching live. An error
+/// may follow partial table writes. Retry the identical batch promptly with the
+/// same boot and seq: each table and rollup retains up to 100,000 block IDs for
+/// deduplication. Live publication is best effort and may repeat after a
+/// backend restart.
 class PushTelemetry {
 public:
   PushTelemetry(DeploymentPath path, Batch payload)
@@ -2480,12 +2492,15 @@ auto call(Transport& transport, PushTelemetry request)
 
 /// `POST
 /// /api/organizations/:org/workspaces/:workspace/deployments/:deploymentId/ingest-endpoints/:name/attach`
-/// Answers where the deployment that sends it reads the events of an ingest
-/// endpoint of its organization that it may read, with Kafka credentials of its
-/// own that may read only that topic in the endpoint's consumer groups.
-/// Attaching again replaces only this deployment's password. Without `group`,
-/// the deployment reads in a group of its own and sees every event; deployments
-/// that name the same group share it, and each event reaches one of them.
+/// Returns Kafka read credentials for the deployment named in the path to read
+/// an eligible ingest endpoint in its organization. Requires
+/// IngestEndpointAttachment.attach on the named deployment/endpoint pair. The
+/// credentials may read only that topic in the endpoint's consumer groups.
+/// Attaching again replaces only the named deployment's password. Without
+/// `group`, the deployment reads in a group of its own and sees every event;
+/// deployments that name the same group share it, and each event reaches one of
+/// them. A deployment requesting its own attachment receives 400
+/// `IngestUnavailable` if it is not hosted in the required reader region.
 class AttachIngestEndpoint {
 public:
   AttachIngestEndpoint(AttachIngestEndpointPath path,
@@ -2499,7 +2514,7 @@ public:
 
 using AttachIngestEndpointError
   = variant<InternalServerError, NotFound, ServiceUnavailable, Unauthorized,
-            Unauthenticated, CredentialConflict, Validation>;
+            IngestUnavailable, Unauthenticated, CredentialConflict, Validation>;
 
 auto call(Transport& transport, AttachIngestEndpoint request)
   -> Task<Result<IngestEndpointAttachment,

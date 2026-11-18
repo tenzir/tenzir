@@ -380,7 +380,7 @@ TEST("plans aggregate and filter, sort, and limit the groups") {
                           "schema=tenzir.summarize"});
   // Functions that the dialect does not spell veto the aggregation.
   CHECK(not plan({aggregate(
-    {{.output = {"s"}, .function = "sum", .args = {field_at({"v"})}}})}));
+    {{.output = {"s"}, .function = "mode", .args = {field_at({"v"})}}})}));
   // Keys and arguments may be computed. A key must read a field, since a
   // target may read a constant as the position of a result column.
   CHECK_EQUAL(
@@ -554,7 +554,7 @@ TEST("spellings take counts of units from constant durations") {
   auto const count = [](std::string_view hole, std::string_view width) {
     auto args = std::vector{parse("x"), parse(width)};
     return spell(hole, args,
-                 [](size_t, bool) -> Option<std::string> {
+                 [](ast::expression const&, bool) -> Option<std::string> {
                    return std::string{"x"};
                  })
       .value_or("-");
@@ -569,6 +569,55 @@ TEST("spellings take counts of units from constant durations") {
   CHECK_EQUAL(count("{1:s}", "14d"), "-");
   CHECK_EQUAL(count("{1:s}", "1mo"), "-");
   CHECK_EQUAL(count("{1:s}", "6d"), "518400");
+}
+
+TEST("spellings name arguments and take constant integers") {
+  auto const spelled = [](std::string_view spelling, std::string_view call) {
+    auto const expr = parse(call);
+    auto const* x = try_as<ast::function_call>(expr);
+    REQUIRE(x);
+    return spell(spelling, x->args,
+                 [](ast::expression const& arg, bool) -> Option<std::string> {
+                   return fmt::to_string(
+                     ir::field_segments(arg)
+                       .value_or(std::vector<std::string>{"?"})
+                       .front());
+                 })
+      .value_or("-");
+  };
+  CHECK_EQUAL(spelled("sub({0}, {begin:nat}, {end:nat})",
+                      "s.slice(begin=1, end=2)"),
+              "sub(s, 1, 2)");
+  CHECK_EQUAL(spelled("{0:nat}", "abs(0)"), "0");
+  CHECK_EQUAL(spelled("{0:nat}", "abs(-3)"), "-");
+  CHECK_EQUAL(spelled("{0:nat}", "abs(x)"), "-");
+  CHECK_EQUAL(spelled("{0:nat}", "abs(1.5)"), "-");
+  // A row applies only to the named arguments that its holes name.
+  auto const fits
+    = [](std::string_view spelling, size_t arity, std::string_view call) {
+        auto const expr = parse(call);
+        auto const* x = try_as<ast::function_call>(expr);
+        REQUIRE(x);
+        auto const args = call_arguments(x->args);
+        auto names = std::vector<std::string>{};
+        for (auto const& [name, _] : args.named) {
+          names.push_back(name);
+        }
+        return spelling_fits(spelling, arity, args.positional.size(), names);
+      };
+  CHECK(fits("sub({0}, {begin:nat})", 1, "s.slice(begin=1)"));
+  CHECK(not fits("sub({0}, {begin:nat})", 1, "s.slice(end=1)"));
+  CHECK(not fits("sub({0}, {begin:nat})", 1, "s.slice(begin=1, end=2)"));
+  CHECK(not fits("sub({0})", 1, "s.slice(begin=1)"));
+  CHECK(fits("sub({0})", 1, "s.slice()"));
+  CHECK(not fits("sub({0})", 1, "s.slice(1)"));
+  // Malformed spellings fail to compile in a table of rows.
+  static_assert(valid_spelling("f({0}, {1:pred}, {end:nat}, {2:ns})", 3));
+  static_assert(not valid_spelling("f({1})", 1));
+  static_assert(not valid_spelling("f({0:bogus})", 1));
+  static_assert(not valid_spelling("f({0)", 1));
+  static_assert(not valid_spelling("f(0})", 1));
+  static_assert(not valid_spelling("f({})", 1));
 }
 
 TEST("sources find the final limit of a read") {

@@ -291,9 +291,23 @@ private:
                 std::move(deployment.deployment_id), std::move(name).unwrap()},
               AttachIngestEndpointQuery{std::move(group)}});
     if (attached.is_err()) {
+      auto error = std::move(attached).unwrap_err();
+      if (auto const* declared = try_as<AttachIngestEndpointError>(&error)) {
+        if (auto const* unavailable = try_as<IngestUnavailable>(declared)) {
+          diagnostic::error("ingest endpoints are only available on "
+                            "deployments that Tenzir hosts")
+            .primary(args_.name)
+            .note("this deployment is self-hosted or runs outside `{}`",
+                  unavailable->region)
+            .hint("run the pipeline on a Tenzir-hosted deployment in `{}`",
+                  unavailable->region)
+            .docs("https://tenzir.com/docs/explanations/ingest-endpoints")
+            .emit(ctx);
+          co_return failure::promise();
+        }
+      }
       diagnostic::error("failed to attach to ingest endpoint `{}`: {}",
-                        args_.name.inner,
-                        describe(std::move(attached).unwrap_err()))
+                        args_.name.inner, describe(error))
         .primary(args_.name)
         .emit(ctx);
       co_return failure::promise();

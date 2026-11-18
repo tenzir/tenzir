@@ -16,6 +16,7 @@
 #include <tenzir/concept/parseable/to.hpp>
 #include <tenzir/defaults.hpp>
 #include <tenzir/detail/narrow.hpp>
+#include <tenzir/detail/posix.hpp>
 #include <tenzir/endpoint.hpp>
 #include <tenzir/ir.hpp>
 #include <tenzir/nova/events.hpp>
@@ -35,13 +36,18 @@
 #include <folly/OperationCancelled.h>
 #include <folly/SocketAddress.h>
 #include <folly/io/async/AsyncServerSocket.h>
+#include <folly/io/async/AsyncSocket.h>
 #include <folly/io/async/AsyncSocketException.h>
 #include <folly/io/coro/ServerSocket.h>
 #include <folly/io/coro/Transport.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+#include <sys/socket.h>
 
 #include <cstring>
 #include <limits>
 #include <memory>
+#include <string_view>
 
 namespace tenzir::plugins::accept_tcp {
 
@@ -49,6 +55,40 @@ namespace {
 
 constexpr auto listen_backlog = uint32_t{128};
 constexpr auto tls_probe_timeout = std::chrono::seconds{5};
+
+// TCP keepalive closes connections to peers that vanished without closing
+// them, e.g., behind a NAT or firewall that dropped the connection state.
+// Without it, such connections hold a connection slot forever. With these
+// settings, a dead peer is detected after about 5 minutes of silence.
+constexpr auto keepalive_idle_seconds = 120;
+constexpr auto keepalive_interval_seconds = 30;
+constexpr auto keepalive_probe_count = 6;
+
+auto enable_keepalive(folly::coro::Transport& transport) -> void {
+  auto* socket
+    = transport.getTransport()->getUnderlyingTransport<folly::AsyncSocket>();
+  if (not socket) {
+    return;
+  }
+  auto set = [&](int level, int option, int value, std::string_view name) {
+    if (socket->setSockOpt(level, option, &value) != 0) {
+      TENZIR_DEBUG("failed to set {} on accepted socket: {}", name,
+                   detail::describe_errno());
+    }
+  };
+  set(SOL_SOCKET, SO_KEEPALIVE, 1, "SO_KEEPALIVE");
+#if defined(TCP_KEEPIDLE)
+  set(IPPROTO_TCP, TCP_KEEPIDLE, keepalive_idle_seconds, "TCP_KEEPIDLE");
+#elif defined(TCP_KEEPALIVE)
+  set(IPPROTO_TCP, TCP_KEEPALIVE, keepalive_idle_seconds, "TCP_KEEPALIVE");
+#endif
+#if defined(TCP_KEEPINTVL)
+  set(IPPROTO_TCP, TCP_KEEPINTVL, keepalive_interval_seconds, "TCP_KEEPINTVL");
+#endif
+#if defined(TCP_KEEPCNT)
+  set(IPPROTO_TCP, TCP_KEEPCNT, keepalive_probe_count, "TCP_KEEPCNT");
+#endif
+}
 
 struct AcceptTcpArgs {
   located<std::string> endpoint;
@@ -255,6 +295,7 @@ struct TcpAccept {
     TENZIR_ASSERT(server_);
     auto transport
       = co_await folly::coro::co_withExecutor(evb, server_->accept());
+    enable_keepalive(*transport);
     co_return Box<folly::coro::Transport>::from_non_null(std::move(transport));
   }
 
@@ -389,6 +430,17 @@ struct TcpAccept {
       .primary(args_.endpoint.source)
       .note("connection id: {}", conn_id)
       .note("reason: {}", error)
+      .emit(dh);
+  }
+
+  auto emit_connection_limit_warning(uint64_t max_connections,
+                                     diagnostic_handler& dh) const -> void {
+    diagnostic::warning("reached the connection limit of {}", max_connections)
+      .primary(args_.max_connections ? args_.max_connections->source
+                                     : args_.endpoint.source)
+      .note("endpoint: {}", address_.describe())
+      .note("new connections wait until an open connection closes")
+      .hint("increase `max_connections` to accept more concurrent clients")
       .emit(dh);
   }
 

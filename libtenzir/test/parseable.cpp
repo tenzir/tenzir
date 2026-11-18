@@ -1214,6 +1214,20 @@ TEST("time - YMD") {
   CHECK_EQUAL(ts.time_since_epoch(), utc_secs);
 }
 
+TEST("time - fractional seconds") {
+  using namespace std::chrono;
+  tenzir::time ts;
+  auto const base = seconds{1502658642};
+  // A fraction means the nanosecond it spells, although it parses through a
+  // `double` that holds it only approximately.
+  CHECK(parsers::time("2017-08-13 21:10:42.000001", ts));
+  CHECK_EQUAL(ts.time_since_epoch(), base + microseconds{1});
+  CHECK(parsers::time("2017-08-13T21:10:42.123456789Z", ts));
+  CHECK_EQUAL(ts.time_since_epoch(), base + nanoseconds{123456789});
+  CHECK(parsers::time("1969-12-31 23:59:59.999999", ts));
+  CHECK_EQUAL(ts.time_since_epoch(), -microseconds{1});
+}
+
 TEST("time - zero-offset zone names") {
   using namespace std::chrono;
   tenzir::time ts;

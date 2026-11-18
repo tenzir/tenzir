@@ -8,21 +8,21 @@
        store: {
          op: {
            path: [
-             `from_hydrolix` @ [1]:133..146 from 0
+             `from_hydrolix` @ [1]:131..144 from 0
            ],
            ref: std::from_hydrolix/op
          },
          args: [
-           expression constant string "https://acme.hydrolix.live" @ [1]:147..175 from 0
+           expression constant string "https://acme.hydrolix.live" @ [1]:145..173 from 0
          ],
          named_args: [
            {
              index: 0,
-             value: expression constant string "t" @ [1]:183..186 from 0
+             value: expression constant string "t" @ [1]:181..184 from 0
            },
            {
              index: 1,
-             value: located "db.tbl" @ [1]:194..202 from 0
+             value: located "db.tbl" @ [1]:192..200 from 0
            }
          ]
        },
@@ -34,26 +34,26 @@
 +      projection: [
 +        {
 +          expr: root_field {
-+            id: `src` @ [1]:237..240 from 0,
++            id: `src` @ [1]:235..238 from 0,
 +            has_question_mark: false
 +          },
 +          has_this: false,
 +          path: [
 +            {
-+              id: `src` @ [1]:237..240 from 0,
++              id: `src` @ [1]:235..238 from 0,
 +              has_question_mark: false
 +            }
 +          ]
 +        },
 +        {
 +          expr: root_field {
-+            id: `time` @ [1]:209..213 from 0,
++            id: `time` @ [1]:207..211 from 0,
 +            has_question_mark: false
 +          },
 +          has_this: false,
 +          path: [
 +            {
-+              id: `time` @ [1]:209..213 from 0,
++              id: `time` @ [1]:207..211 from 0,
 +              has_question_mark: false
 +            }
 +          ]
@@ -63,12 +63,12 @@
 +        Filter {
 +          predicate: binary_expr {
 +            left: root_field {
-+              id: `time` @ [1]:209..213 from 0,
++              id: `time` @ [1]:207..211 from 0,
 +              has_question_mark: false
 +            },
 +            op: "gt",
-+            right: constant time 2026-01-01T00:00:00Z @ [1]:216..226 from 0,
-+            location: [1]:209..226 from 0
++            right: constant time 2026-01-01T00:00:00Z @ [1]:214..224 from 0,
++            location: [1]:207..224 from 0
 +          }
 +        },
 +        Aggregate {
@@ -79,7 +79,7 @@
 +              ],
 +              args: [
 +                root_field {
-+                  id: `src` @ [1]:237..240 from 0,
++                  id: `src` @ [1]:235..238 from 0,
 +                  has_question_mark: false
 +                }
 +              ]
@@ -102,7 +102,7 @@
      where_ir {
        op: {
          path: [
--          `where` @ [1]:203..208 from 0
+-          `where` @ [1]:201..206 from 0
 +          
          ],
 -        ref: std::where/op
@@ -111,12 +111,12 @@
        args: [
 -        expression binary_expr {
 -          left: root_field {
--            id: `time` @ [1]:209..213 from 0,
+-            id: `time` @ [1]:207..211 from 0,
 -            has_question_mark: false
 -          },
 -          op: "gt",
--          right: constant time 2026-01-01T00:00:00Z @ [1]:216..226 from 0,
--          location: [1]:209..226 from 0
+-          right: constant time 2026-01-01T00:00:00Z @ [1]:214..224 from 0,
+-          location: [1]:207..224 from 0
 -        }
 -      ],
 -      named_args: [
@@ -124,19 +124,19 @@
 -      ]
 -    },
 -    summarize {
--      self: [1]:227..236 from 0,
+-      self: [1]:225..234 from 0,
 -      cfg: {
 -        aggregates: [
 -          {
 -            dest: {
 -              expr: root_field {
--                id: `n` @ [1]:242..243 from 0,
+-                id: `n` @ [1]:240..241 from 0,
 -                has_question_mark: false
 -              },
 -              has_this: false,
 -              path: [
 -                {
--                  id: `n` @ [1]:242..243 from 0,
+-                  id: `n` @ [1]:240..241 from 0,
 -                  has_question_mark: false
 -                }
 -              ]
@@ -144,7 +144,7 @@
 -            call: {
 -              fn: {
 -                path: [
--                  `count` @ [1]:244..249 from 0
+-                  `count` @ [1]:242..247 from 0
 -                ],
 -                ref: std::count/fn
 -              },
@@ -152,7 +152,7 @@
 -                
 -              ],
 -              method: false,
--              location: [1]:244..251 from 0
+-              location: [1]:242..249 from 0
 -            }
 -          }
 -        ],
@@ -160,13 +160,13 @@
 -          {
 -            expr: {
 -              expr: root_field {
--                id: `src` @ [1]:237..240 from 0,
+-                id: `src` @ [1]:235..238 from 0,
 -                has_question_mark: false
 -              },
 -              has_this: false,
 -              path: [
 -                {
--                  id: `src` @ [1]:237..240 from 0,
+-                  id: `src` @ [1]:235..238 from 0,
 -                  has_question_mark: false
 -                }
 -              ]
@@ -186,7 +186,7 @@
 -    where_ir {
 -      op: {
 -        path: [
--          `where` @ [1]:252..257 from 0
+-          `where` @ [1]:250..255 from 0
 -        ],
 -        ref: std::where/op
 -      },
@@ -196,22 +196,22 @@
            left: function_call {
              fn: {
                path: [
-                 `capitalize` @ [1]:262..272 from 0
+                 `to_title` @ [1]:260..268 from 0
                ],
-               ref: std::capitalize/fn
+               ref: std::to_title/fn
              },
              args: [
                root_field {
-                 id: `src` @ [1]:258..261 from 0,
+                 id: `src` @ [1]:256..259 from 0,
                  has_question_mark: false
                }
              ],
              method: true,
-             location: [1]:258..274 from 0
+             location: [1]:256..270 from 0
            },
            op: "eq",
-           right: constant string "A" @ [1]:278..281 from 0,
-           location: [1]:258..281 from 0
+           right: constant string "A" @ [1]:274..277 from 0,
+           location: [1]:256..277 from 0
          }
        ],
        named_args: [
@@ -223,7 +223,7 @@
 +      store: {
 +        op: {
 +          path: [
-+            `to_stdout` @ [1]:281..281 from 0
++            `to_stdout` @ [1]:277..277 from 0
 +          ],
 +          ref: std::to_stdout/op
 +        },
@@ -240,5 +240,5 @@
 +      order: "ordered"
      }
    ],
-   definition_location: [1]:133..281 from 0
+   definition_location: [1]:131..277 from 0
  }

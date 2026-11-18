@@ -600,6 +600,9 @@ auto ClickHouseDialect::render_binary(
   return Option<std::string>{fmt::format("(NOT {})", present)};
 }
 
+/// ClickHouse yields a `NaN` for the root of a negative number and for the
+/// logarithm of zero, where TQL yields `null`. The time functions count in
+/// UTC, whatever the time zone of the column.
 auto ClickHouseDialect::functions() const
   -> std::span<pushdown::Function const> {
   static constexpr auto rows = std::array{
@@ -609,18 +612,52 @@ auto ClickHouseDialect::functions() const
     pushdown::Function{"length_chars", 1, "lengthUTF8({0})"},
     pushdown::Function{"to_lower", 1, "lowerUTF8({0})"},
     pushdown::Function{"to_upper", 1, "upperUTF8({0})"},
+    pushdown::Function{"capitalize", 1,
+                       "concat(upperUTF8(leftUTF8({0}, 1)), "
+                       "lowerUTF8(substringUTF8({0}, 2)))"},
     pushdown::Function{"trim", 1, "trimBoth({0})"},
+    pushdown::Function{"trim_start", 1, "trimLeft({0})"},
+    pushdown::Function{"trim_end", 1, "trimRight({0})"},
+    pushdown::Function{"replace", 3, "replaceAll({0}, {1}, {2})"},
+    pushdown::Function{"is_empty", 1, "toBool(empty({0}))"},
+    // Negative bounds of `slice` stay in the pipeline.
+    pushdown::Function{"slice", 1, "substringUTF8({0}, {begin:nat} + 1)"},
+    pushdown::Function{"slice", 1, "leftUTF8({0}, {end:nat})"},
+    pushdown::Function{"slice", 1,
+                       "substringUTF8({0}, {begin:nat} + 1, greatest({end:nat} "
+                       "- {begin:nat}, 0))"},
+    pushdown::Function{"hash_md5", 1, "lower(hex(MD5({0})))"},
+    pushdown::Function{"hash_sha1", 1, "lower(hex(SHA1({0})))"},
+    pushdown::Function{"hash_sha256", 1, "lower(hex(SHA256({0})))"},
     pushdown::Function{"abs", 1, "abs({0})"},
+    pushdown::Function{"ceil", 1, "toInt64(ceil({0}))"},
+    pushdown::Function{"floor", 1, "toInt64(floor({0}))"},
+    pushdown::Function{"round", 1, "toInt64(round({0}))"},
+    pushdown::Function{"sqrt", 1, "if({0} >= 0, sqrt({0}), NULL)"},
+    pushdown::Function{"exp", 1, "exp({0})"},
+    pushdown::Function{"log", 1, "if({0} > 0, log({0}), NULL)"},
+    pushdown::Function{"log", 2, "if({0} > 0, log({0}) / log({1}), NULL)"},
+    pushdown::Function{"year", 1, "toYear({0}, 'UTC')"},
+    pushdown::Function{"month", 1, "toMonth({0}, 'UTC')"},
+    pushdown::Function{"day", 1, "toDayOfMonth({0}, 'UTC')"},
+    pushdown::Function{"hour", 1, "toHour({0}, 'UTC')"},
+    pushdown::Function{"minute", 1, "toMinute({0}, 'UTC')"},
+    pushdown::Function{"second", 1,
+                       "(toSecond({0}, 'UTC') + "
+                       "positiveModulo(toUnixTimestamp64Nano(toDateTime64({0}, "
+                       "9)), toInt64(1000000000)) / 1e9)"},
     pushdown::Function{"match_regex", 2, "match({0}, {1})"},
     // TQL buckets times by multiples of the width since the epoch, also
     // before it, which flooring division in nanoseconds reproduces, unlike
-    // `toStartOfInterval`.
+    // `toStartOfInterval`. The width is signed, since `positiveModulo` of a
+    // signed and an unsigned integer wraps.
     pushdown::Function{
       "floor", 2,
       "fromUnixTimestamp64Nano(toUnixTimestamp64Nano(toDateTime64({0}, 9, "
       "'UTC')) - positiveModulo(toUnixTimestamp64Nano(toDateTime64({0}, 9, "
-      "'UTC')), {1:ns}), 'UTC')"},
+      "'UTC')), toInt64({1:ns})), 'UTC')"},
   };
+  static_assert(pushdown::valid_rows(rows));
   return rows;
 }
 
@@ -638,7 +675,13 @@ auto ClickHouseDialect::aggregations() const
     pushdown::Aggregation{"count_distinct", 1, "toInt64(uniqExact({0}))"},
     pushdown::Aggregation{"sum", 1, "sumOrNull({0})"},
     pushdown::Aggregation{"mean", 1, "avgOrNull({0})"},
+    pushdown::Aggregation{"stddev", 1, "stddevPopOrNull({0})"},
+    pushdown::Aggregation{"variance", 1, "varPopOrNull({0})"},
+    // `all` and `any` hold for no values, as in TQL.
+    pushdown::Aggregation{"all", 1, "ifNull(minOrNull({0}), true)"},
+    pushdown::Aggregation{"any", 1, "ifNull(maxOrNull({0}), false)"},
   };
+  static_assert(pushdown::valid_rows(rows));
   return rows;
 }
 

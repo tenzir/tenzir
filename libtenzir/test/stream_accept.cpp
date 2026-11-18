@@ -32,6 +32,8 @@
 #include "tenzir/test/test.hpp"
 
 #include <functional>
+#include <string_view>
+#include <thread>
 
 namespace tenzir {
 namespace {
@@ -46,6 +48,15 @@ struct AcceptControl {
   Atomic<size_t> gated{0};
   Notify gated_changed;
   Notify release;
+  /// Number of subpipelines that stall until `release`.
+  Atomic<size_t> stalled{0};
+  Notify stalled_changed;
+  /// Bytes that reached subpipelines which do not stall.
+  Atomic<size_t> delivered{0};
+  Notify delivered_changed;
+  /// Number of warnings that all connection slots are taken.
+  Atomic<size_t> limit_warnings{0};
+  Notify limit_warnings_changed;
 };
 
 /// A listener that accepts one end of socket pairs queued by the test.
@@ -53,6 +64,7 @@ struct FakeAccept {
   struct Args {
     Arc<AcceptControl> control;
     located<ir::pipeline> pipeline;
+    uint64_t max_connections = 1;
   };
 
   struct AcceptedInfo {
@@ -65,7 +77,7 @@ struct FakeAccept {
   }
 
   auto max_connections() const -> uint64_t {
-    return 1;
+    return args_.max_connections;
   }
 
   auto prepare(OpCtx&) -> Task<bool> {
@@ -136,6 +148,11 @@ struct FakeAccept {
                          diagnostic_handler&) const -> void {
   }
 
+  auto emit_connection_limit_warning(uint64_t, diagnostic_handler&) -> void {
+    args_.control->limit_warnings.fetch_add(1, std::memory_order_relaxed);
+    args_.control->limit_warnings_changed.notify_one();
+  }
+
   auto debug_name() const -> std::string_view {
     return "fake_accept";
   }
@@ -164,6 +181,36 @@ public:
 
 private:
   Arc<AcceptControl> control_;
+};
+
+/// Stalls until the test releases it if its connection starts with `stall`,
+/// and otherwise counts the bytes it receives.
+template <class Output>
+class StallSub final : public Operator<chunk_ptr, Output> {
+public:
+  explicit StallSub(Arc<AcceptControl> control) : control_{std::move(control)} {
+  }
+
+  auto process(chunk_ptr chunk, Push<Output>&, OpCtx&) -> Task<void> override {
+    if (not stalls_) {
+      auto bytes = std::string_view{
+        reinterpret_cast<char const*>(chunk->data()), chunk->size()};
+      stalls_ = bytes.starts_with("stall");
+      if (*stalls_) {
+        control_->stalled.fetch_add(1, std::memory_order_relaxed);
+        control_->stalled_changed.notify_one();
+        co_await control_->release.wait();
+      }
+    }
+    if (not *stalls_) {
+      control_->delivered.fetch_add(chunk->size(), std::memory_order_relaxed);
+      control_->delivered_changed.notify_one();
+    }
+  }
+
+private:
+  Arc<AcceptControl> control_;
+  Option<bool> stalls_;
 };
 
 template <class Input>
@@ -226,17 +273,19 @@ private:
   Atomic<bool> failed_{false};
 };
 
-template <template <class> class Accept, class Output>
-auto accept_plan(Arc<AcceptControl> control) -> ir::Plan {
+template <template <class> class Accept, class Output,
+          template <class> class Sub = GateSub>
+auto accept_plan(Arc<AcceptControl> control, uint64_t max_connections = 1)
+  -> ir::Plan {
   auto sub = ir::pipeline{};
-  sub.operators.push_back(
-    TestIr{tag_v<Output>, [control]() -> AnyOperator {
-             return Box<Operator<chunk_ptr, Output>>{
-               GateSub<Output>{control}.with_name("gate")};
-           }});
+  sub.operators.push_back(TestIr{tag_v<Output>, [control]() -> AnyOperator {
+                                   return Box<Operator<chunk_ptr, Output>>{
+                                     Sub<Output>{control}.with_name("sub")};
+                                 }});
   auto args = FakeAccept::Args{
     .control = control,
     .pipeline = located{std::move(sub), location::unknown},
+    .max_connections = max_connections,
   };
   auto result = ir::Plan{};
   result.operators.push_back(ir::PlannedOperator{
@@ -271,6 +320,26 @@ auto connect_and_close(AcceptControl& control) -> void {
   REQUIRE_EQUAL(::socketpair(AF_UNIX, SOCK_STREAM, 0, fds), 0);
   ::close(fds[1]);
   control.pending.enqueue(fds[0]);
+}
+
+/// Queues a connection and returns the peer's end of it.
+auto connect(AcceptControl& control) -> int {
+  int fds[2];
+  REQUIRE_EQUAL(::socketpair(AF_UNIX, SOCK_STREAM, 0, fds), 0);
+  control.pending.enqueue(fds[0]);
+  return fds[1];
+}
+
+/// Writes all of `data` to `fd`, then closes it.
+auto send_and_close(int fd, std::string_view data) -> void {
+  while (not data.empty()) {
+    auto written = ::send(fd, data.data(), data.size(), MSG_NOSIGNAL);
+    if (written <= 0) {
+      break;
+    }
+    data.remove_prefix(static_cast<size_t>(written));
+  }
+  ::close(fd);
 }
 
 auto wait_until(Atomic<size_t>& counter, Notify& changed, size_t value)
@@ -314,10 +383,90 @@ auto check_slot_held_until_subpipeline_finishes() -> void {
   }));
 }
 
+template <template <class> class Accept, class Output>
+auto check_warns_once_when_connection_limit_is_reached() -> void {
+  auto config = caf::actor_system_config{};
+  auto system = caf::actor_system{config};
+  auto reg = make_builtin_registry();
+  auto control = Arc<AcceptControl>{std::in_place};
+  auto diagnostics = TestDiagnostics{};
+  auto graceful_stop = Notify{};
+  folly::coro::blockingWait(async_scope([&](AsyncScope& scope) -> Task<void> {
+    auto run
+      = scope.spawn(run_plan(accept_plan<Accept, Output>(control), reg, system,
+                             diagnostics, NoProfiler{}, false, &graceful_stop));
+    // With `max_connections=1`, the first connection takes the only slot.
+    connect_and_close(*control);
+    co_await wait_until(control->gated, control->gated_changed, 1);
+    co_await wait_until(control->limit_warnings,
+                        control->limit_warnings_changed, 1);
+    // Reaching the limit again right away does not repeat the warning.
+    control->release.notify_one();
+    connect_and_close(*control);
+    co_await wait_until(control->gated, control->gated_changed, 2);
+    co_await folly::coro::sleep(std::chrono::milliseconds{200});
+    CHECK_EQUAL(control->limit_warnings.load(std::memory_order_relaxed),
+                size_t{1});
+    control->release.notify_one();
+    graceful_stop.notify_one();
+    CHECK(not(co_await run.join()).is_error());
+  }));
+}
+
+auto check_stalled_connection_does_not_block_others() -> void {
+  auto config = caf::actor_system_config{};
+  auto system = caf::actor_system{config};
+  auto reg = make_builtin_registry();
+  auto control = Arc<AcceptControl>{std::in_place};
+  auto diagnostics = TestDiagnostics{};
+  auto graceful_stop = Notify{};
+  folly::coro::blockingWait(async_scope([&](AsyncScope& scope) -> Task<void> {
+    auto run = scope.spawn(
+      run_plan(accept_plan<StreamAccept, nova::Events, StallSub>(control, 2),
+               reg, system, diagnostics, NoProfiler{}, false, &graceful_stop));
+    // The first connection sends more data than any buffer between the
+    // operator and the stalled subpipeline can hold.
+    auto stalled = std::string(64 * 1024 * 1024, 'x');
+    stalled.replace(0, 5, "stall");
+    auto stalled_writer = std::thread{[fd = connect(*control), &stalled] {
+      send_and_close(fd, stalled);
+    }};
+    co_await wait_until(control->stalled, control->stalled_changed, 1);
+    // Give the operator time to fill every buffer in front of the stalled
+    // subpipeline before the second connection arrives.
+    co_await folly::coro::sleep(std::chrono::milliseconds{500});
+    // The second connection must still reach its subpipeline.
+    auto other = std::string_view{"hello"};
+    send_and_close(connect(*control), other);
+    co_await wait_until(control->delivered, control->delivered_changed,
+                        other.size());
+    CHECK_EQUAL(control->delivered.load(std::memory_order_relaxed),
+                other.size());
+    control->release.notify_one();
+    stalled_writer.join();
+    graceful_stop.notify_one();
+    CHECK(not(co_await run.join()).is_error());
+  }));
+}
+
 } // namespace
+
+TEST("accept keeps reading other connections while one stalls") {
+  check_stalled_connection_does_not_block_others();
+}
 
 TEST("accept holds the connection slot until the subpipeline finishes") {
   check_slot_held_until_subpipeline_finishes<StreamAccept, nova::Events>();
+}
+
+TEST("accept warns once when it reaches the connection limit") {
+  check_warns_once_when_connection_limit_is_reached<StreamAccept,
+                                                    nova::Events>();
+}
+
+TEST("legacy accept warns once when it reaches the connection limit") {
+  check_warns_once_when_connection_limit_is_reached<legacy::StreamAccept,
+                                                    table_slice>();
 }
 
 TEST("legacy accept holds the connection slot until the subpipeline "

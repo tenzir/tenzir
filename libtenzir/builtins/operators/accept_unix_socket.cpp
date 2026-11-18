@@ -160,6 +160,17 @@ struct UnixSocketAccept {
       .emit(dh);
   }
 
+  auto emit_connection_limit_warning(uint64_t max_connections,
+                                     diagnostic_handler& dh) const -> void {
+    diagnostic::warning("reached the connection limit of {}", max_connections)
+      .primary(args_.max_connections ? args_.max_connections->source
+                                     : args_.path.source)
+      .note("path: {}", path_)
+      .note("new connections wait until an open connection closes")
+      .hint("increase `max_connections` to accept more concurrent clients")
+      .emit(dh);
+  }
+
   auto debug_name() const -> std::string_view {
     return "accept_unix_socket";
   }

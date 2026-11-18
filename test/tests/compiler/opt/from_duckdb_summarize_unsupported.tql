@@ -1,4 +1,4 @@
-// `from_duckdb` does not compute `sum`, so the `summarize` stays in the
+// `from_duckdb` does not compute `mode`, so the `summarize` stays in the
 // pipeline.
 from_duckdb "events.duckdb", table="events"
-summarize src_ip, bytes=sum(bytes)
+summarize src_ip, bytes=mode(bytes)

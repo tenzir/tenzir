@@ -8,8 +8,13 @@
 
 #include "tenzir/pushdown/layout.hpp"
 
+#include "tenzir/concept/parseable/tenzir/time.hpp"
+#include "tenzir/nova/data_array_builder.hpp"
 #include "tenzir/nova/eval_util.hpp"
 #include "tenzir/tql2/ast.hpp"
+#include "tenzir/variant_traits.hpp"
+
+#include <charconv>
 
 namespace tenzir::pushdown {
 
@@ -25,6 +30,59 @@ auto segments(std::span<std::string const> path)
     });
   }
   return result;
+}
+
+/// Decodes the text in `value` as `decode` says, keeping text that does not
+/// read as one, as well as everything but text.
+auto decode_text(nova::MaskedArray<nova::Array<nova::Data>> value,
+                 Decode decode, std::string_view column, diagnostic_handler& dh)
+  -> nova::MaskedArray<nova::Array<nova::Data>> {
+  if (decode != Decode::exact and decode != Decode::time) {
+    return value;
+  }
+  auto builder = nova::ArrayBuilder<nova::Data>{};
+  auto overflow = false;
+  for (auto i = nova::storage::Index{0}; i < value.data.length(); ++i) {
+    if (not value.present.get(i)) {
+      builder.skip();
+      continue;
+    }
+    auto const row = value.data.get(i);
+    auto const* text = try_as<nova::RowView<nova::String>>(row);
+    if (not text) {
+      nova::append_row(builder, row);
+      continue;
+    }
+    auto const view = std::string_view{**text};
+    if (decode == Decode::exact) {
+      auto result = int64_t{};
+      auto const [end, error]
+        = std::from_chars(view.data(), view.data() + view.size(), result);
+      if (end == view.data() + view.size() and error == std::errc{}) {
+        builder.data(result);
+        continue;
+      }
+      if (end == view.data() + view.size()
+          and error == std::errc::result_out_of_range) {
+        overflow = true;
+        builder.null();
+        continue;
+      }
+    } else {
+      auto result = time{};
+      if (parsers::time(view, result)) {
+        builder.data(result);
+        continue;
+      }
+    }
+    builder.data(view);
+  }
+  if (overflow) {
+    diagnostic::warning("integer overflow")
+      .note("in the result column `{}`", column)
+      .emit(dh);
+  }
+  return {builder.finish(), std::move(value.present)};
 }
 
 } // namespace
@@ -56,8 +114,9 @@ auto apply_layout(nova::Events events, Layout const& layout,
     if (not value) {
       continue;
     }
-    result = nova::assign_nested_field(std::move(result), segments(field),
-                                       std::move(*value), dh);
+    result = nova::assign_nested_field(
+      std::move(result), segments(field),
+      decode_text(std::move(*value), layout.decode_of(column), column, dh), dh);
   }
   return nova::Events{std::move(result), std::move(events.mask),
                       std::move(meta)};

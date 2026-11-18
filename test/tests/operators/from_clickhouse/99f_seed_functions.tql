@@ -1,0 +1,11 @@
+// Seeds the table of the function tests.
+from {id: 1, f: -2.5, s: "  hello WORLD ", ts: 1969-12-31T23:59:59.5, b: true},
+     {id: 2, f: 4.0, s: "", ts: 2024-02-29T12:34:56.25, b: false},
+     {id: 3, f: null, s: null, ts: null, b: null}
+to_clickhouse table="fc_functions",
+              host=env("CLICKHOUSE_HOST"),
+              port=int(env("CLICKHOUSE_PORT")),
+              password=env("CLICKHOUSE_PASSWORD"),
+              tls=false,
+              primary=id,
+              mode="create"

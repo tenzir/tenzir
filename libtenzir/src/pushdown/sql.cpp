@@ -187,10 +187,21 @@ public:
   }
 
   auto finish() && -> SqlQuery {
+    auto fields = selection_ ? output_ : input_;
+    auto decode = std::vector<Decoded>{};
+    if (fields) {
+      for (auto const& entry : decode_) {
+        if (std::ranges::contains(*fields, entry.first,
+                                  &SqlFields::value_type::second)) {
+          decode.push_back(entry);
+        }
+      }
+    }
     auto layout = SqlLayout{
-      .fields = selection_ ? output_ : input_,
+      .fields = std::move(fields),
       .hidden = std::move(hidden_),
       .schema_name = std::move(schema_name_),
+      .decode = std::move(decode),
     };
     return SqlQuery{
       .select = current(),
@@ -242,6 +253,30 @@ private:
   /// name with a column, so the name is no alias that may collide.
   auto relation_alias(std::string_view kind) -> std::string {
     return fmt::format("__tenzir_{}_{}", kind, names_++);
+  }
+
+  /// How the column that holds the field at `path` of the input of the
+  /// current level decodes.
+  auto decode_at(std::span<std::string const> path) const -> Decode {
+    if (not input_) {
+      return Decode::native;
+    }
+    for (auto const& [field, column] : *input_) {
+      if (std::ranges::equal(field, path)) {
+        auto it = std::ranges::find(decode_, column, &Decoded::first);
+        return it == decode_.end() ? Decode::native : it->second;
+      }
+    }
+    return Decode::native;
+  }
+
+  /// How the value of `expr` decodes: as its field does, or as the row of
+  /// the function that computes it says.
+  auto decode_of(ast::expression const& expr) const -> Decode {
+    if (auto path = ir::field_segments(expr)) {
+      return decode_at(*path);
+    }
+    return call_decode(*dialect_, expr);
   }
 
   /// Spells the field at `path` of the input of the current level.
@@ -356,6 +391,7 @@ private:
     }
     auto selection = std::vector<std::string>{};
     auto output = SqlFields{};
+    auto decode = std::vector<Decoded>{};
     for (auto const& field : x.fields) {
       auto value = bind(field.input);
       if (not value) {
@@ -364,8 +400,12 @@ private:
       auto column = alias("column");
       selection.push_back(
         fmt::format("{} AS {}", *value, dialect_->quote_identifier(column)));
+      if (auto kind = decode_at(field.input); kind != Decode::native) {
+        decode.emplace_back(column, kind);
+      }
       output.emplace_back(field.output, std::move(column));
     }
+    decode_ = std::move(decode);
     if (selection.empty()) {
       // A query must select something to keep its rows.
       auto column = alias("row");
@@ -491,6 +531,7 @@ private:
     auto selection = std::vector<std::string>{};
     auto output = SqlFields{};
     auto group_by = std::vector<std::string>{};
+    auto decode = std::vector<Decoded>{};
     for (auto const& column : x.columns) {
       // A group key has its value as the only argument. It must read a
       // field, since a target may read a constant as the position of a
@@ -512,8 +553,23 @@ private:
       auto name = alias("column");
       selection.push_back(
         fmt::format("{} AS {}", *value, dialect_->quote_identifier(name)));
+      // A key and an extremum decode as their value, other functions as
+      // their row says.
+      auto kind = Decode::native;
+      if (not column.function or *column.function == "min"
+          or *column.function == "max") {
+        kind = decode_of(column.args.front());
+      } else if (auto const* row
+                 = find_row(dialect_->aggregations(), *column.function,
+                            column.args.size())) {
+        kind = row->decode;
+      }
+      if (kind != Decode::native) {
+        decode.emplace_back(name, kind);
+      }
       output.emplace_back(column.output, std::move(name));
     }
+    decode_ = std::move(decode);
     if (selection.empty()) {
       // A summary without columns yields one empty event, also for empty
       // input, as an aggregation without groups yields one row.
@@ -608,6 +664,8 @@ private:
   /// The columns of an unlisted input that a drop excluded.
   std::vector<std::string> excluded_;
   std::vector<std::string> hidden_;
+  /// The columns that the query introduces and that do not decode natively.
+  std::vector<Decoded> decode_;
   std::vector<std::string> aliases_;
   /// The number of names that the query introduced, including relations.
   size_t names_ = 0;
@@ -634,7 +692,12 @@ auto SqlQueryDialect::aggregations() const -> std::span<Aggregation const> {
                 Decode::integer},
     Aggregation{"count_distinct", 1, "COUNT(DISTINCT {0})", Decode::integer},
     Aggregation{"mean", 1, "AVG({0})"},
+    // A sum of integers widens beyond 64 bits.
+    Aggregation{"sum", 1, "SUM({0})", Decode::exact},
+    Aggregation{"stddev", 1, "STDDEV_POP({0})"},
+    Aggregation{"variance", 1, "VAR_POP({0})"},
   };
+  static_assert(valid_rows(rows));
   return rows;
 }
 

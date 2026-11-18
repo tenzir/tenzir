@@ -3,7 +3,9 @@
 This directory contains the built-in mapping catalog that lets the `sigma`
 operator match stock Sigma rules against OCSF events. Each YAML file describes
 one *mapping family*: how rules written for one Sigma logsource translate to
-one OCSF event class. Files are organized as `<product>/<family>.yaml`.
+one OCSF event class. Files are organized as `<product>/<family>.yaml`;
+families for Sigma's product-less generic categories such as `proxy`,
+`webserver`, and `dns` live in `generic/`.
 
 The build embeds every `*.yaml` file into the binary via
 `cmake/TenzirEmbedSigmaCatalog.cmake`; the parser in `../catalog.cpp` loads
@@ -35,7 +37,7 @@ title: Human-readable name       # used by documentation and diagnostics
 
 logsource:                       # which *rules* this family claims
   category: process_creation     # omit keys the rule must also omit
-  product: windows
+  product: windows               # omit for generic categories
   service: sysmon
   optional-service: true         # also claim rules without a service
 
@@ -63,9 +65,17 @@ suite (`libtenzir/test/sigma_ocsf.cpp`) lints every document at test time.
 ### `logsource`: selecting rules
 
 The selector reads the *rule*, never the event. It matches the exact
-logsource triple; an omitted `category` or `service` requires the rule to
-omit it too. Set `optional-service: true` when a service-specific family
-should also claim the category-only form that many stock rules use.
+logsource triple; an omitted `category`, `product`, or `service` requires
+the rule to omit it too, and every selector names a category or a product.
+Set `optional-service: true` when a service-specific family should also
+claim the category-only form that many stock rules use.
+
+A product-less selector claims Sigma's generic categories, such as `proxy`
+or `dns`, which describe a kind of log rather than one producer. A rule that
+adds a product, such as `category: proxy, product: squid`, stays unclaimed
+unless a product-specific family exists. Generic families imply no OS
+guard, and their translated rules match conformant events of the class from
+any producer.
 
 Several documents may share one selector when they target distinct
 `class-uid` values. Each such alternative plans independently, and disjoint

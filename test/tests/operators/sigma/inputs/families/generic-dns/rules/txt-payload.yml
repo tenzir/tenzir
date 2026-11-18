@@ -1,0 +1,9 @@
+title: PowerShell Payload In TXT Answer
+logsource:
+  category: dns
+detection:
+  selection:
+    query|endswith: '.duckdns.org'
+    record_type: 'TXT'
+    answer|contains: 'IEX'
+  condition: selection

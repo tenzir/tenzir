@@ -9,7 +9,7 @@
   ],
   debiased: [
     null,
-    0.5000000000000001,
+    0.5,
   ],
   deep_debiased: [
     null,

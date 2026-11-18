@@ -1,0 +1,7 @@
+// ClickHouse computes the deviation, the variance, and `all` and `any`.
+from_clickhouse table="fc_functions",
+              host=env("CLICKHOUSE_HOST"),
+              port=int(env("CLICKHOUSE_PORT")),
+              password=env("CLICKHOUSE_PASSWORD"),
+              tls=false
+summarize deviation=stddev(f), variance=variance(f), all=all(b), any=any(b)

@@ -1,0 +1,9 @@
+title: Dynamic DNS Query
+logsource:
+  category: dns
+detection:
+  selection:
+    query|endswith:
+      - 'ddns.net'
+      - 'duckdns.org'
+  condition: selection

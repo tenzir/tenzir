@@ -1,0 +1,6 @@
+from_microsoft_sql sql="INSERT INTO fns VALUES (1, -2.5, N'  hello WORLD ', '1969-12-31 23:59:59.5', 1), (2, 4.0, N'', '2024-02-29 12:34:56.25', 0), (3, NULL, NULL, NULL, NULL)",
+                   host=env("MSSQL_HOST"),
+                   port=int(env("MSSQL_PORT")),
+                   user=env("MSSQL_ADMIN_USER"),
+                   password=env("MSSQL_ADMIN_PASSWORD"),
+                   database=env("MSSQL_DATABASE")

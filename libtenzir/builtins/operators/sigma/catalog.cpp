@@ -398,9 +398,15 @@ auto parse_selector(record const& object)
   auto result = LogsourceSelector{};
   TRY(auto category, optional_string(object, "category"));
   result.category = category.value_or("");
-  TRY(result.product, require_string(object, "product"));
+  TRY(auto product, optional_string(object, "product"));
+  result.product = product.value_or("");
   TRY(auto service, optional_string(object, "service"));
   result.service = service.value_or("");
+  // Sigma's generic categories such as `proxy` or `dns` name no product;
+  // a selector must still name at least one of category and product.
+  if (result.category.empty() and result.product.empty()) {
+    return fail("`logsource` requires a `category` or a `product`");
+  }
   TRY(result.optional_service, optional_bool(object, "optional-service"));
   if (result.optional_service and result.service.empty()) {
     return fail("`optional-service` requires a `service`");

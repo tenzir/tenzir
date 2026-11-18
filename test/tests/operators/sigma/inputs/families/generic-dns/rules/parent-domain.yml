@@ -1,0 +1,7 @@
+title: Query For Parent Domain
+logsource:
+  category: dns
+detection:
+  selection:
+    parent_domain: 'duckdns.org'
+  condition: selection

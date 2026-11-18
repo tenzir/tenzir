@@ -104,7 +104,7 @@ For Linux wheels, you can bundle static `tenzir` and `tenzir-ctl` binaries and t
   runs `nix build .#tenzir-static` (override via `TENZIR_NIX_ATTR` or
   `TENZIR_NIX_BUILD_CMD`) unless `TENZIR_SKIP_NIX_BUILD=1` is set.
 
-The wheel exposes `tenzir` and `tenzir-ctl` console scripts that prefer the bundled
+The wheel exposes `tenzir` and, before v7, `tenzir-ctl` console scripts that prefer the bundled
 static binaries when present, falling back to the system `PATH` otherwise. Non-Linux
 platforms are supported via fallback only and are not expected to include binaries.
 

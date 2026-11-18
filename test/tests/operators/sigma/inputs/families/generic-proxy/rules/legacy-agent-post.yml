@@ -1,0 +1,9 @@
+title: POST With Legacy Browser Agent
+logsource:
+  category: proxy
+detection:
+  selection:
+    cs-method: 'POST'
+    c-useragent|contains: 'MSIE 6.0'
+    cs-uri-stem|endswith: '.php'
+  condition: selection

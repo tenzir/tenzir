@@ -1,0 +1,17 @@
+warning: integer overflow
+  = note: in the result column `__tenzir_column_1`
+{
+  s: "a",
+  total: null,
+  fractions: 7.5,
+}
+{
+  s: "a ",
+  total: 7,
+  fractions: 0.0,
+}
+{
+  s: null,
+  total: -9223372036854775808,
+  fractions: null,
+}

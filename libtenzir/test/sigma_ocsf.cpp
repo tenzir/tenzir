@@ -27,7 +27,10 @@ TEST("OCSF Sigma mapping catalog") {
   auto ids = std::vector<std::string_view>{};
   for (auto const& mapping : catalog) {
     CHECK(not mapping.id.empty());
-    CHECK(not mapping.selector.product.empty());
+    // Generic Sigma categories such as `proxy` name no product, but every
+    // selector names a category or a product.
+    CHECK(not mapping.selector.product.empty()
+          or not mapping.selector.category.empty());
     CHECK(not mapping.fields.empty());
     CHECK(std::ranges::find(ids, mapping.id) == ids.end());
     ids.push_back(mapping.id);
@@ -69,6 +72,21 @@ TEST("OCSF Sigma mapping selectors") {
     .product = "windows",
     .service = None{},
   };
+  auto proxy = tenzir::sigma::LogSource{
+    .category = "proxy",
+    .product = None{},
+    .service = None{},
+  };
+  auto vendor_proxy = tenzir::sigma::LogSource{
+    .category = "proxy",
+    .product = "zscaler",
+    .service = None{},
+  };
+  auto generic_dns = tenzir::sigma::LogSource{
+    .category = "dns",
+    .product = None{},
+    .service = None{},
+  };
   REQUIRE(ocsf::find_mapping(process));
   CHECK_EQUAL(ocsf::find_mapping(process)->id,
               "sigma/windows/process_creation");
@@ -84,6 +102,13 @@ TEST("OCSF Sigma mapping selectors") {
   REQUIRE_EQUAL(alternatives.size(), 2u);
   CHECK(alternatives[0]->guard.class_uid != alternatives[1]->guard.class_uid);
   CHECK(ocsf::find_mappings(unsupported).empty());
+  // A product-less selector claims Sigma's generic category only: a rule
+  // naming a product must find a product-specific family.
+  REQUIRE(ocsf::find_mapping(proxy));
+  CHECK_EQUAL(ocsf::find_mapping(proxy)->id, "sigma/generic/proxy");
+  CHECK(ocsf::find_mappings(vendor_proxy).empty());
+  REQUIRE(ocsf::find_mapping(generic_dns));
+  CHECK_EQUAL(ocsf::find_mapping(generic_dns)->id, "sigma/generic/dns");
 }
 
 TEST("OCSF Sigma provenance-scoped guards") {
@@ -240,6 +265,17 @@ TEST("OCSF Sigma mapping parser accepts a minimal document") {
   REQUIRE(path);
   CHECK_EQUAL(path->path, "some.path");
   CHECK(parsed.fields[0].projection.kind == ocsf::ProjectedKind::any);
+  // Generic Sigma categories name no product and imply no OS guard.
+  auto generic = std::string{minimal_mapping};
+  auto const at = generic.find("product: test");
+  REQUIRE(at != std::string::npos);
+  generic.replace(at, std::string_view{"product: test"}.size(),
+                  "category: proxy");
+  auto generic_mapping = ocsf::parse_mapping(generic);
+  REQUIRE(generic_mapping.is_ok());
+  CHECK(generic_mapping.unwrap().selector.product.empty());
+  CHECK_EQUAL(generic_mapping.unwrap().selector.category, "proxy");
+  CHECK(not generic_mapping.unwrap().guard.os);
 }
 
 TEST("OCSF Sigma mapping parser rejects malformed documents") {
@@ -271,6 +307,9 @@ TEST("OCSF Sigma mapping parser rejects malformed documents") {
   CHECK(parse_error(with("product: test", "product: test\n  optional-service: "
                                           "true"))
           .find("`optional-service` requires a `service`")
+        != std::string::npos);
+  CHECK(parse_error(with("product: test", "service: test"))
+          .find("`logsource` requires a `category` or a `product`")
         != std::string::npos);
   CHECK(parse_error(with("class-uid: 1001", "class-uid: 1001\n  source: nsa"))
           .find("unknown source kind `nsa`")

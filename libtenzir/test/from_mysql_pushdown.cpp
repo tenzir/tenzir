@@ -178,10 +178,10 @@ TEST("mysql leaves what it cannot spell in the pipeline") {
   // plan does not know stay, too.
   CHECK_EQUAL(prefix({filter("a.b == 1")}).prefix, size_t{0});
   CHECK_EQUAL(prefix({filter("ip in 10.0.0.0/8")}).prefix, size_t{0});
-  CHECK_EQUAL(prefix({filter("s.capitalize() == \"A\"")}).prefix, size_t{0});
+  CHECK_EQUAL(prefix({filter("s.to_title() == \"A\"")}).prefix, size_t{0});
   CHECK_EQUAL(prefix({drop({{"s"}})}).prefix, size_t{0});
   auto partial
-    = prefix({filter("id > 1"), filter("s.capitalize() == \"A\""), limit(1)});
+    = prefix({filter("id > 1"), filter("s.to_title() == \"A\""), limit(1)});
   CHECK_EQUAL(partial.prefix, size_t{1});
   CHECK_EQUAL(partial.declined, std::string{"MySQL cannot spell the stage"});
   // A drop after a selection knows its columns.
@@ -252,4 +252,40 @@ TEST("mysql selects invisible columns only for the stages") {
   CHECK_EQUAL(select(projection({"id", "g"}), {limit(2), filter("g > 1")}),
               std::string{"`id`, `g` | extra=g"});
   CHECK_EQUAL(select(None{}, {limit(2)}), std::string{"* | extra="});
+}
+
+TEST("mysql sums and buckets times with decoded results") {
+  auto const table
+    = pushdown::SqlTable{.from = "`t`", .columns = {"id", "ts", "n"}};
+  auto const stages = std::vector{ir::QueryStage{ir::QueryStage::Aggregate{
+    .columns = {{.output = {"hour"},
+                 .function = None{},
+                 .args = {parse("floor(ts, 1h)")}},
+                {.output = {"total"}, .function = "sum", .args = {parse("n")}}},
+    .schema_name = "tenzir.summarize"}}};
+  auto read = planner(pushdown::SqlMode::table).plan(stages, &table);
+  REQUIRE(read);
+  auto const bucket = std::string{
+    "TIMESTAMPADD(MICROSECOND, TIMESTAMPDIFF(MICROSECOND, '1970-01-01', "
+    "`ts`) - MOD(TIMESTAMPDIFF(MICROSECOND, '1970-01-01', `ts`), "
+    "3600000000) - CASE WHEN MOD(TIMESTAMPDIFF(MICROSECOND, '1970-01-01', "
+    "`ts`), 3600000000) < 0 THEN 3600000000 ELSE 0 END, '1970-01-01')"};
+  CHECK_EQUAL(read.unwrap().sql,
+              fmt::format("SELECT {0} AS `__tenzir_column_0`, SUM(`n`) AS "
+                          "`__tenzir_column_1` FROM `t` GROUP BY {0}",
+                          bucket));
+  // The bucket arrives as text and decodes as a time, and the sum of
+  // integers as a fixed-point number that decodes as an integer.
+  CHECK_EQUAL(read.unwrap().layout.decode,
+              (std::vector<pushdown::Decoded>{
+                {"__tenzir_column_0", pushdown::Decode::time},
+                {"__tenzir_column_1", pushdown::Decode::exact}}));
+  // Widths below a microsecond have no spelling.
+  CHECK_EQUAL(prefix({ir::QueryStage{ir::QueryStage::Aggregate{
+                       .columns = {{.output = {"k"},
+                                    .function = None{},
+                                    .args = {parse("floor(ts, 1ns)")}}},
+                       .schema_name = "tenzir.summarize"}}})
+                .prefix,
+              size_t{0});
 }

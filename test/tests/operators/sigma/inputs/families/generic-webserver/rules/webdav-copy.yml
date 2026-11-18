@@ -1,0 +1,8 @@
+title: WebDAV Copy Into Web Root
+logsource:
+  category: webserver
+detection:
+  selection:
+    cs-method: 'COPY'
+    cs-uri-stem|endswith: '.aspx'
+  condition: selection

@@ -1,0 +1,4 @@
+// DuckDB computes the deviation, the variance, and `all` and `any`, also for
+// no values, for which `all` holds and `any` does not.
+from_duckdb env("DUCKDB_SEED"), table="fns"
+summarize deviation=stddev(f), variance=variance(f), all=all(b), any=any(b)

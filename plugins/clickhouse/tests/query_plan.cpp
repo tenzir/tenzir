@@ -246,7 +246,7 @@ TEST("operators and functions spell in ClickHouse SQL") {
   CHECK_EQUAL(spell("x.abs() > 1"), "(abs(`x`) > 1)");
   CHECK_EQUAL(spell(R"(x.match_regex("^a."))"), "match(`x`, '^a.')");
   CHECK_EQUAL(spell(R"(x.starts_with("a", ignore_case=true))"), "<none>");
-  CHECK_EQUAL(spell(R"(x.capitalize() == "A")"), "<none>");
+  CHECK_EQUAL(spell(R"(x.to_title() == "A")"), "<none>");
 }
 
 TEST("fields spell from their syntax before binding") {
@@ -283,7 +283,7 @@ TEST("aggregations and exclusions spell in ClickHouse SQL") {
 TEST("absorption takes over the stages that ClickHouse spells") {
   auto chain = ir::QueryChain{
     .stages = {filter("x > 0"), sort({"x"}, true), limit(3),
-               filter("x.capitalize() == \"A\"")},
+               filter("x.to_title() == \"A\"")},
     .end = "",
   };
   auto absorption
@@ -306,7 +306,7 @@ TEST("absorption takes over the stages that ClickHouse spells") {
     size_t{0});
   // Hydrolix takes over the same stages and names itself when it declines.
   chain.stages = {filter("x > 0"), sort({"x"}, true), limit(3),
-                  filter("x.capitalize() == \"A\"")};
+                  filter("x.to_title() == \"A\"")};
   absorption = pushdown::absorb(chain, planner(true, pushdown::SqlMode::table));
   CHECK_EQUAL(absorption.prefix, size_t{3});
   CHECK_EQUAL(absorption.declined, "Hydrolix cannot spell the stage");

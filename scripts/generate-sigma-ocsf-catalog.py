@@ -98,13 +98,14 @@ OS_PRODUCTS = ("windows", "linux", "macos")
 def structure_mapping(document: dict) -> dict:
     guard = document["guard"]
     class_uid = guard["class-uid"]
-    product = document["logsource"]["product"]
+    # Generic categories such as `proxy` name no product.
+    product = document["logsource"].get("product")
     return {
         "id": document["id"],
         "title": document["title"],
         "selector": {
             "category": document["logsource"].get("category"),
-            "product": document["logsource"]["product"],
+            "product": product,
             "service": document["logsource"].get("service"),
             "optional_service": document["logsource"].get("optional-service", False),
         },

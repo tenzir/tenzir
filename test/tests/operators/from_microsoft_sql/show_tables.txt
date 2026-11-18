@@ -5,6 +5,11 @@
 }
 {
   table_schema: "dbo",
+  table_name: "fns",
+  table_type: "BASE TABLE",
+}
+{
+  table_schema: "dbo",
   table_name: "full_types",
   table_type: "BASE TABLE",
 }

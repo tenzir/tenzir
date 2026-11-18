@@ -27,5 +27,5 @@ from_azure_log_analytics env("AZLOG_QUERY"),
   },
   _base_url=env("AZLOG_URL"),
   tls=false
-where Name.capitalize() == "Alice"
+where Name.to_title() == "Alice"
 select Name, Missing

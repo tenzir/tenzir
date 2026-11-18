@@ -356,7 +356,9 @@ TEST("kql spells summaries with summarize") {
               "\n| summarize ['__tenzir_column_0'] = count(), "
               "['__tenzir_column_1'] = countif(isnotempty(['x'])), "
               "['__tenzir_column_2'] = min(['x']), ['__tenzir_column_3'] = "
-              "max(['x']), ['__tenzir_column_4'] = sum(['x']) by ['k'], ['j']");
+              "max(['x']), ['__tenzir_column_4'] = "
+              "iff(countif(isnotnull(['x'])) "
+              "> 0, sum(['x']), max(['x'])) by ['k'], ['j']");
   auto const expected = LayoutFields{
     {{"k"}, "k"},
     {{"n"}, "__tenzir_column_0"},
@@ -412,8 +414,11 @@ TEST("kql spells summaries with summarize") {
               "\n| extend ['__tenzir_column_0'] = tolower(['x'])\n| summarize "
               "['__tenzir_column_1'] = count_distinctif(['__tenzir_column_0'], "
               "isnotempty(['__tenzir_column_0']))");
-  // `avg` yields `NaN` for no values, and other functions have no spelling.
-  CHECK_EQUAL(kql({aggregate({call({"m"}, "mean", Path{"x"})})}), "-");
+  // `avg` yields `NaN` for no values, where TQL yields `null`.
+  CHECK_EQUAL(kql({aggregate({call({"m"}, "mean", Path{"x"})})}),
+              "\n| summarize ['__tenzir_column_0'] = "
+              "iff(countif(isnotnull(['x'])) "
+              "> 0, avg(['x']), real(null))");
   CHECK_EQUAL(kql({aggregate({call({"m"}, "min")})}), "-");
   CHECK_EQUAL(kql({aggregate({key({"x", "y"})})}), "-");
   CHECK_EQUAL(kql({aggregate({key({"a*"}), call({"n"}, "count")})}), "-");
@@ -440,9 +445,9 @@ TEST("kql buckets times with bin") {
               "by ['__tenzir_column_0']");
   // Other widths, finer ones than a tick, and those of the calendar have no
   // spelling.
-  for (auto expr : {"floor(ts, 7h)", "floor(ts, 3d)", "floor(ts, 50ns)",
-                    "floor(ts, 1w)", "floor(ts, 1mo)", "floor(ts, 0s)",
-                    "floor(ts, -1h)", "floor(ts)", "floor(ts, w)"}) {
+  for (auto expr :
+       {"floor(ts, 7h)", "floor(ts, 3d)", "floor(ts, 50ns)", "floor(ts, 1w)",
+        "floor(ts, 1mo)", "floor(ts, 0s)", "floor(ts, -1h)", "floor(ts, w)"}) {
     CHECK_EQUAL(bucket(expr), "-");
   }
   // The result keeps the type of `ts`, so it decodes natively.

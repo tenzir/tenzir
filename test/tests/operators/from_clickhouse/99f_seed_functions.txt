@@ -1,0 +1,7 @@
+warning: mode `create` is deprecated
+  --> tests/operators/from_clickhouse/99f_seed_functions.tql:11:20
+   |
+11 |               mode="create"
+   |                    ~~~~~~~~
+   |
+   = hint: create the table ahead of time and use `mode="append"`
