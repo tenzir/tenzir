@@ -712,8 +712,8 @@ private:
     return true;
   }
 
-  auto rows() const -> size_t {
-    return builder_ ? static_cast<size_t>(builder_->length()) : 0;
+  auto rows() const -> int64_t {
+    return builder_ ? builder_->length() : 0;
   }
 
   auto event() -> nova::EventBuilder::Record {

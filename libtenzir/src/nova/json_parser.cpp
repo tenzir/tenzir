@@ -304,7 +304,7 @@ auto JsonParser::make(Settings settings, diagnostic_handler& dh)
   if (not builder) {
     return None{};
   }
-  settings.batch_size = std::max(settings.batch_size, size_t{1});
+  settings.batch_size = std::max(settings.batch_size, int64_t{1});
   return JsonParser{std::move(settings), std::move(parser_dh),
                     std::move(builder).unwrap()};
 }
@@ -461,8 +461,8 @@ auto JsonParser::parse_document_value(std::string_view source)
   return builder.finish_data();
 }
 
-auto JsonParser::length() const -> size_t {
-  return static_cast<size_t>(builder_.length());
+auto JsonParser::length() const -> int64_t {
+  return builder_.length();
 }
 
 auto JsonParser::flush() -> void {

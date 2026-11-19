@@ -151,7 +151,13 @@ auto multi_series_builder_argument_parser::get_settings(diagnostic_handler& dh)
     settings_.timeout = *timeout_;
   }
   if (batch_size_.has_value()) {
-    settings_.desired_batch_size = *batch_size_;
+    if (batch_size_->inner <= 0) {
+      diagnostic::error("`_batch_size` must be greater than zero")
+        .primary(batch_size_->source)
+        .emit(dh);
+      return false;
+    }
+    settings_.desired_batch_size = batch_size_->inner;
   }
   return true;
 }

@@ -10,6 +10,7 @@
 
 #include "tenzir/box.hpp"
 #include "tenzir/defaults.hpp"
+#include "tenzir/detail/narrow.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/nova/event_builder.hpp"
 #include "tenzir/nova/events.hpp"
@@ -59,7 +60,8 @@ public:
   struct Settings {
     EventBuilder::Settings builder;
     JsonDecodingOptions decoding;
-    size_t batch_size = defaults::import::table_slice_size;
+    int64_t batch_size
+      = detail::narrow<int64_t>(defaults::import::parser_batch_size());
     location origin = location::unknown;
   };
 
@@ -88,7 +90,7 @@ public:
   auto flush() -> void;
   auto take_ready() -> std::vector<Events>;
   /// Number of events not yet cut into a batch.
-  auto length() const -> size_t;
+  auto length() const -> int64_t;
 
 private:
   JsonParser(Settings settings, Box<transforming_diagnostic_handler> dh,

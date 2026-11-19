@@ -428,7 +428,7 @@ struct ReadXsvArgs {
   Option<located<std::string>> unflatten_separator;
   Option<located<bool>> merge;
   Option<duration> batch_timeout;
-  Option<uint64_t> batch_size;
+  Option<int64_t> batch_size;
   // Internal: used in diagnostic messages; set at Describer construction time.
   std::string name = "xsv";
   OptimizationArgs<opt::Order> optimization;
@@ -443,6 +443,7 @@ struct ReadXsvCommonHandles {
   Argument<ReadXsvArgs, located<std::string>> selector;
   Argument<ReadXsvArgs, bool> schema_only;
   Argument<ReadXsvArgs, located<std::string>> unflatten_separator;
+  Argument<ReadXsvArgs, int64_t> batch_size;
 };
 
 /// Adds all common read_xsv optional args to the Describer (everything
@@ -465,10 +466,10 @@ auto add_read_xsv_args(Describer<ReadXsvArgs, Impls...>& d)
     = d.named("unflatten_separator", &ReadXsvArgs::unflatten_separator);
   d.named("merge", &ReadXsvArgs::merge);
   d.named("_batch_timeout", &ReadXsvArgs::batch_timeout);
-  d.named("_batch_size", &ReadXsvArgs::batch_size);
+  auto batch_size_arg = d.named("_batch_size", &ReadXsvArgs::batch_size);
   d.operator_location(&ReadXsvArgs::operator_location);
-  return {quotes_arg,   header_arg, schema_arg,
-          selector_arg, so_arg,     unflatten_arg};
+  return {quotes_arg, header_arg,    schema_arg,    selector_arg,
+          so_arg,     unflatten_arg, batch_size_arg};
 }
 
 auto validate_quote_conflicts(
@@ -527,6 +528,11 @@ auto validate_multi_series_builder_args(DescribeCtx& ctx,
       u.has_value() and u->inner.empty()) {
     diagnostic::error("`unflatten_separator` must not be empty")
       .primary(u->source)
+      .emit(ctx);
+  }
+  if (auto b = ctx.get(common.batch_size); b and *b <= 0) {
+    diagnostic::error("`_batch_size` must be greater than zero")
+      .primary(ctx.get_location(common.batch_size).value_or(location::unknown))
       .emit(ctx);
   }
 }

@@ -731,7 +731,8 @@ public:
       if (done_) {
         co_return;
       }
-      if (rows() >= args_.msb_options.settings.desired_batch_size) {
+      if (std::cmp_greater_equal(
+            rows(), args_.msb_options.settings.desired_batch_size)) {
         co_await flush(push);
       }
       if (*current == '\r') {

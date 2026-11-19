@@ -8,6 +8,8 @@
 
 #include "tenzir/defaults.hpp"
 
+#include "tenzir/nova_flag.hpp"
+
 #include <caf/actor_system.hpp>
 #include <caf/actor_system_config.hpp>
 #include <caf/settings.hpp>
@@ -17,6 +19,10 @@
 #include <string_view>
 
 namespace tenzir::defaults::import {
+
+auto parser_batch_size() -> size_t {
+  return nova_enabled() ? nova_parser_batch_size : table_slice_size;
+}
 
 size_t test::seed(const caf::settings& options) {
   constexpr auto key = std::string_view{"tenzir.import.test.seed"};

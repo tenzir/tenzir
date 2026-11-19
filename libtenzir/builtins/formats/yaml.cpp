@@ -566,8 +566,7 @@ public:
         process_line(buffer_);
         buffer_.clear();
       }
-      if (static_cast<size_t>(builder_->length())
-          >= args_.msb_options.settings.desired_batch_size) {
+      if (builder_->length() >= args_.msb_options.settings.desired_batch_size) {
         co_await emit_finished(push);
       }
       if (*current == '\r') {
