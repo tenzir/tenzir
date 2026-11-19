@@ -352,6 +352,7 @@ private:
   auto accept_loop(OpCtx& ctx) -> Task<void> {
     TENZIR_DEBUG("{}: accept loop started", impl_.debug_name());
     while (true) {
+      warn_if_connection_limit_reached(ctx.dh());
       co_await connection_slots_.consume();
       auto release_connection_slot_guard
         = detail::scope_guard{[this]() noexcept {
@@ -400,9 +401,29 @@ private:
       ConnectionClosed{conn_id, std::move(read_error)});
   }
 
+  /// Warns when all connection slots are taken, at most once per interval.
+  /// New clients then wait in the listen backlog, and nothing else reports
+  /// that they cannot connect.
+  auto warn_if_connection_limit_reached(diagnostic_handler& dh) -> void {
+    if (connection_slots_.available_permits() != 0) {
+      return;
+    }
+    auto now = std::chrono::steady_clock::now();
+    if (last_connection_limit_warning_
+        and now - *last_connection_limit_warning_
+              < connection_limit_warning_interval) {
+      return;
+    }
+    last_connection_limit_warning_ = now;
+    impl_.emit_connection_limit_warning(max_connections_, dh);
+  }
+
   static constexpr auto buffer_size = size_t{64 * 1024};
   static constexpr auto accept_retry_delay = std::chrono::milliseconds{100};
+  static constexpr auto connection_limit_warning_interval
+    = std::chrono::minutes{5};
   static constexpr auto message_queue_capacity = uint32_t{1'024};
+  Option<std::chrono::steady_clock::time_point> last_connection_limit_warning_;
   Impl impl_;
   folly::EventBase* evb_ = nullptr;
   uint64_t max_connections_ = 128;
