@@ -2309,9 +2309,11 @@ public:
   static constexpr auto status = std::uint16_t{503};
 };
 
-class IngestUnavailable {
+/// The deployment cannot read ingest endpoints because it is not hosted in the
+/// required reader region.
+class IngestUnavailableError {
 public:
-  IngestUnavailable(std::string message, std::string region)
+  IngestUnavailableError(std::string message, std::string region)
     : message{std::move(message)}, region{std::move(region)} {
   }
 
@@ -2499,8 +2501,8 @@ auto call(Transport& transport, PushTelemetry request)
 /// Attaching again replaces only the named deployment's password. Without
 /// `group`, the deployment reads in a group of its own and sees every event;
 /// deployments that name the same group share it, and each event reaches one of
-/// them. A deployment requesting its own attachment receives 400
-/// `IngestUnavailable` if it is not hosted in the required reader region.
+/// them. Returns 400 `IngestUnavailable` if the target deployment is not hosted
+/// in the required reader region. Missing or unreadable endpoints return 404.
 class AttachIngestEndpoint {
 public:
   AttachIngestEndpoint(AttachIngestEndpointPath path,
@@ -2514,7 +2516,8 @@ public:
 
 using AttachIngestEndpointError
   = variant<InternalServerError, NotFound, ServiceUnavailable, Unauthorized,
-            IngestUnavailable, Unauthenticated, CredentialConflict, Validation>;
+            IngestUnavailableError, Unauthenticated, CredentialConflict,
+            Validation>;
 
 auto call(Transport& transport, AttachIngestEndpoint request)
   -> Task<Result<IngestEndpointAttachment,
