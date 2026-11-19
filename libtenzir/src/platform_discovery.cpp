@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/async/blocking_executor.hpp>
+#include <tenzir/config.hpp>
 #include <tenzir/controller/api_support.hpp>
 #include <tenzir/curl.hpp>
 #include <tenzir/tunnel/platform.hpp>
@@ -39,6 +40,7 @@ auto fetch_configuration(std::string const& url, DiscoveryTimeouts timeouts)
   handle.set(CURLOPT_NOSIGNAL, 1L);
   handle.set(CURLOPT_FOLLOWLOCATION, 0L);
   handle.set(CURLOPT_NOPROXY, "localhost,127.0.0.0/8,::1");
+  handle.set_http_header(deployment_version_header, version::version);
   auto rc = handle.perform();
   if (rc == curl::easy::code::write_error) {
     return Err{fmt::format("discovery response exceeds {} KiB",

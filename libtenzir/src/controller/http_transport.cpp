@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/async/blocking_executor.hpp>
+#include <tenzir/config.hpp>
 #include <tenzir/controller/http_transport.hpp>
 #include <tenzir/curl.hpp>
+#include <tenzir/tunnel/platform.hpp>
 
 #include <folly/coro/DetachOnCancel.h>
 
@@ -36,9 +38,10 @@ auto BufferedHttpTransport::request(HttpRequest request)
       handle.set(CURLOPT_FOLLOWLOCATION, 0L);
       handle.set(CURLOPT_NOSIGNAL, 1L);
       handle.set(CURLOPT_NOPROXY, "localhost,127.0.0.0/8,::1");
-      handle.set_http_header("x-tenzir-deployment-key", key);
+      handle.set_http_header(deployment_key_header, key);
+      handle.set_http_header(deployment_version_header, version::version);
       for (auto const& [name, value] : request.headers) {
-        if (name != "x-tenzir-deployment-key") {
+        if (name != deployment_key_header) {
           handle.set_http_header(name, value);
         }
       }

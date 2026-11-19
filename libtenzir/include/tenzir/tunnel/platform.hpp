@@ -13,6 +13,12 @@
 
 namespace tenzir {
 
+/// Sent with every request a deployment makes to the platform.
+inline constexpr auto deployment_key_header
+  = std::string_view{"x-tenzir-deployment-key"};
+inline constexpr auto deployment_version_header
+  = std::string_view{"x-tenzir-deployment-version"};
+
 /// The defaults suit the deployment; best-effort telemetry passes shorter ones.
 struct DiscoveryTimeouts {
   std::chrono::milliseconds connect = std::chrono::seconds{15};
