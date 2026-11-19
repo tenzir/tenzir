@@ -293,7 +293,8 @@ private:
     if (attached.is_err()) {
       auto error = std::move(attached).unwrap_err();
       if (auto const* declared = try_as<AttachIngestEndpointError>(&error)) {
-        if (auto const* unavailable = try_as<IngestUnavailable>(declared)) {
+        if (auto const* unavailable
+            = try_as<IngestUnavailableError>(declared)) {
           diagnostic::error("ingest endpoints are only available on "
                             "deployments that Tenzir hosts")
             .primary(args_.name)

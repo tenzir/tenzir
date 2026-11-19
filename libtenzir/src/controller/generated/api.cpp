@@ -73,8 +73,8 @@ auto parse_too_large(simdjson::dom::element value)
   -> Result<TooLarge, ParseError>;
 auto parse_service_unavailable(simdjson::dom::element value)
   -> Result<ServiceUnavailable, ParseError>;
-auto parse_ingest_unavailable(simdjson::dom::element value)
-  -> Result<IngestUnavailable, ParseError>;
+auto parse_ingest_unavailable_error(simdjson::dom::element value)
+  -> Result<IngestUnavailableError, ParseError>;
 auto parse_invalid_configuration(simdjson::dom::element value)
   -> Result<InvalidConfiguration, ParseError>;
 auto parse_configuration_conflict(simdjson::dom::element value)
@@ -100,7 +100,7 @@ auto write_json(Validation const& value, std::string& out) -> void;
 auto write_json(NotFound const& value, std::string& out) -> void;
 auto write_json(TooLarge const& value, std::string& out) -> void;
 auto write_json(ServiceUnavailable const& value, std::string& out) -> void;
-auto write_json(IngestUnavailable const& value, std::string& out) -> void;
+auto write_json(IngestUnavailableError const& value, std::string& out) -> void;
 auto write_json(InvalidConfiguration const& value, std::string& out) -> void;
 auto write_json(ConfigurationConflict const& value, std::string& out) -> void;
 auto write_json(InvalidPipeline const& value, std::string& out) -> void;
@@ -294,27 +294,29 @@ auto write_json(ServiceUnavailable const&, std::string& out) -> void {
   out += '}';
 }
 
-auto parse_ingest_unavailable(simdjson::dom::element value)
-  -> Result<IngestUnavailable, ParseError> {
-  TRY(auto object, api::object_of(value, "IngestUnavailable"));
+auto parse_ingest_unavailable_error(simdjson::dom::element value)
+  -> Result<IngestUnavailableError, ParseError> {
+  TRY(auto object, api::object_of(value, "IngestUnavailableError"));
 
-  TRY(auto tag_raw, api::field(object, "_tag", "IngestUnavailable"));
-  TRY(auto tag, api::string_of(tag_raw, "IngestUnavailable"));
+  TRY(auto tag_raw, api::field(object, "_tag", "IngestUnavailableError"));
+  TRY(auto tag, api::string_of(tag_raw, "IngestUnavailableError"));
   if (tag != "IngestUnavailable") {
-    return Err{
-      ParseError{"IngestUnavailable", "expected `_tag` 'IngestUnavailable'"}};
+    return Err{ParseError{"IngestUnavailableError",
+                          "expected `_tag` 'IngestUnavailable'"}};
   }
 
-  TRY(auto message_raw, api::field(object, "message", "IngestUnavailable"));
-  TRY(auto message, api::string_of(message_raw, "IngestUnavailable.message"));
+  TRY(auto message_raw,
+      api::field(object, "message", "IngestUnavailableError"));
+  TRY(auto message,
+      api::string_of(message_raw, "IngestUnavailableError.message"));
 
-  TRY(auto region_raw, api::field(object, "region", "IngestUnavailable"));
-  TRY(auto region, api::string_of(region_raw, "IngestUnavailable.region"));
+  TRY(auto region_raw, api::field(object, "region", "IngestUnavailableError"));
+  TRY(auto region, api::string_of(region_raw, "IngestUnavailableError.region"));
 
-  return IngestUnavailable{std::move(message), std::move(region)};
+  return IngestUnavailableError{std::move(message), std::move(region)};
 }
 
-auto write_json(IngestUnavailable const& value, std::string& out) -> void {
+auto write_json(IngestUnavailableError const& value, std::string& out) -> void {
   out += '{';
   out += "\"_tag\":\"IngestUnavailable\"";
   out += ",\"message\":";
@@ -3637,10 +3639,10 @@ auto call(Transport& transport, AttachIngestEndpoint request)
       auto tag = api::tag_of(response_body);
       if (tag == "IngestUnavailable") {
         CO_TRY(auto document,
-               api::Document::parse(response_body, "IngestUnavailable")
+               api::Document::parse(response_body, "IngestUnavailableError")
                  .map_err(as_response_error(response.status, response_body)));
         CO_TRY(auto error,
-               parse_ingest_unavailable(document.root())
+               parse_ingest_unavailable_error(document.root())
                  .map_err(as_response_error(response.status, response_body)));
         co_return Err{std::move(error)};
       }
