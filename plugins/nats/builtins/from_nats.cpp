@@ -817,7 +817,7 @@ private:
     -> std::vector<table_slice> {
     auto opts = multi_series_builder::options{};
     opts.settings.default_schema_name = "tenzir.nats";
-    opts.settings.desired_batch_size = detail::narrow_cast<size_t>(
+    opts.settings.desired_batch_size = detail::narrow<int64_t>(
       std::min(args_.batch_size, args_.queue_capacity));
     opts.settings.timeout
       = std::chrono::duration_cast<multi_series_builder::duration>(

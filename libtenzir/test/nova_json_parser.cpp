@@ -50,7 +50,7 @@ TEST("document parsing accepts multiline objects and preserves pending "
   auto document = parser.parse_document("{\n \"id\": 2\n}\n");
   REQUIRE(document);
   CHECK_EQUAL(int_field(*document, "id"), 2);
-  CHECK_EQUAL(parser.length(), 1u);
+  CHECK_EQUAL(parser.length(), 1);
   CHECK(parser.take_ready().empty());
   parser.flush();
   auto ready = parser.take_ready();
@@ -136,7 +136,7 @@ TEST("value documents reject malformed input without changing frame state") {
         R"([{"x":1,"x":18446744073709551616}])", R"([{"x":1},{"x":"\uZZZZ"}])",
         "[] trailing", "[] []", "null false", "1 2", R"("text" {})"}) {
     CHECK(not parser.parse_document_value(source));
-    CHECK_EQUAL(parser.length(), 1u);
+    CHECK_EQUAL(parser.length(), 1);
     auto valid = parser.parse_document_value("[{}]");
     REQUIRE(valid);
   }
@@ -215,7 +215,7 @@ TEST("frame parsing clamps a zero batch size") {
   auto parser = make_parser(dh, settings);
   auto frame = std::string{R"({"id":1})"};
   parser.parse(frame);
-  CHECK_EQUAL(parser.length(), 0u);
+  CHECK_EQUAL(parser.length(), 0);
   auto ready = parser.take_ready();
   REQUIRE_EQUAL(ready.size(), 1u);
   CHECK_EQUAL(int_field(ready[0], "id"), 1);
@@ -257,7 +257,7 @@ TEST("document parsing rejects malformed or trailing input without partial "
         R"({"id":1,"broken":01})", R"({"id":1,"broken":18446744073709551616x})",
         R"({"id":1,"broken":})"}) {
     CHECK(not parser.parse_document(source));
-    CHECK_EQUAL(parser.length(), 0u);
+    CHECK_EQUAL(parser.length(), 0);
     CHECK(parser.take_ready().empty());
     auto valid = parser.parse_document(R"({"id":2})");
     REQUIRE(valid);

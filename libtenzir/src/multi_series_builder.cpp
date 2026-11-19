@@ -9,7 +9,6 @@
 #include "tenzir/arrow_table_slice.hpp"
 #include "tenzir/data.hpp"
 #include "tenzir/data_builder.hpp"
-#include "tenzir/defaults.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/option.hpp"
@@ -531,7 +530,8 @@ auto multi_series_builder::yield_ready_as_table_slice(time_point now)
       schema_name = settings_.default_schema_name;
     }
     res.merge(merging_builder_.yield_ready(
-      schema_name, now, settings_.desired_batch_size, settings_.timeout));
+      schema_name, now, detail::narrow<uint64_t>(settings_.desired_batch_size),
+      settings_.timeout));
     return res;
   }
   for (auto& entry : entries_) {
@@ -621,17 +621,15 @@ auto multi_series_builder::finalize_as_table_slice()
 }
 
 void multi_series_builder::complete_last_event() {
-  // Ensure that the slices emitted by us do not exceed `table_slice_size`.
+  // Ensure that the slices emitted by us do not exceed the desired batch size.
   if (uses_merging_builder()) {
-    if (merging_builder_.length()
-        >= detail::narrow<int64_t>(defaults::import::table_slice_size)) {
+    if (merging_builder_.length() >= settings_.desired_batch_size) {
       append_ready_events(merging_builder_.finish());
     }
     return;
   }
   for (auto& entry : entries_) {
-    if (entry.builder.length()
-        >= detail::narrow<int64_t>(defaults::import::table_slice_size)) {
+    if (entry.builder.length() >= settings_.desired_batch_size) {
       append_ready_events(entry.flush());
     }
   }

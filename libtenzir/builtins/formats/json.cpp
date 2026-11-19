@@ -768,7 +768,7 @@ private:
           continue;
         }
         nova::parse_json_object(object.value_unsafe(), builder.event(), dh);
-        if (static_cast<size_t>(builder.length()) >= batch_size) {
+        if (builder.length() >= batch_size) {
           co_await flush(push);
         }
       }
@@ -802,7 +802,7 @@ private:
         continue;
       }
       nova::parse_json_object(object.value_unsafe(), builder.event(), dh);
-      if (static_cast<size_t>(builder.length()) >= batch_size) {
+      if (builder.length() >= batch_size) {
         co_await flush(push);
       }
     }

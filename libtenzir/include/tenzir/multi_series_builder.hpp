@@ -11,6 +11,7 @@
 #include "tenzir/data_builder.hpp"
 #include "tenzir/defaults.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/detail/narrow.hpp"
 #include "tenzir/modules.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/series.hpp"
@@ -359,7 +360,8 @@ public:
     // desired batch size has been reached.
     duration timeout = defaults::import::batch_timeout;
     // Batch size after which the events should be yielded.
-    size_t desired_batch_size = defaults::import::table_slice_size;
+    int64_t desired_batch_size
+      = detail::narrow<int64_t>(defaults::import::parser_batch_size());
 
     auto friend inspect(auto& f, settings_type& x) -> bool {
       return f.object(x).fields(
@@ -451,7 +453,8 @@ private:
         schema_name = settings.default_schema_name;
       }
       auto r = builder.yield_ready(
-        schema_name, now, settings.desired_batch_size, settings.timeout);
+        schema_name, now, detail::narrow<uint64_t>(settings.desired_batch_size),
+        settings.timeout);
       if (not r.slices.empty()) {
         last_flush_age = now;
       }

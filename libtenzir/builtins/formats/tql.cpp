@@ -696,7 +696,7 @@ private:
               .emit(ctx);
             break;
         }
-        if (rows() >= opts_.settings.desired_batch_size) {
+        if (std::cmp_greater_equal(rows(), opts_.settings.desired_batch_size)) {
           co_await flush(push);
         }
       }

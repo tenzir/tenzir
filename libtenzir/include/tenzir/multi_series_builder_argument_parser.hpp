@@ -91,7 +91,7 @@ public:
   Option<located<std::string>> unnest_;
   Option<location> raw_;
   Option<duration> timeout_;
-  Option<uint64_t> batch_size_;
+  Option<located<int64_t>> batch_size_;
 };
 
 // -- Describer integration ----------------------------------------------------
@@ -118,7 +118,7 @@ struct msb_validator {
   Argument<Args, bool> raw;
   Argument<Args, std::string> unflatten_separator;
   Argument<Args, duration> batch_timeout;
-  Argument<Args, uint64_t> batch_size;
+  Argument<Args, int64_t> batch_size;
   bool schema_only_requires_schema_or_selector = true;
 
   auto operator()(DescribeCtx& ctx) const -> Empty {
@@ -166,7 +166,7 @@ struct msb_validator {
         .emit(ctx);
     }
     if (auto batch_size_val = ctx.get(batch_size);
-        batch_size_val and *batch_size_val == 0) {
+        batch_size_val and *batch_size_val <= 0) {
       diagnostic::error("`_batch_size` must be greater than zero")
         .primary(ctx.get_location(batch_size).value_or(location::unknown))
         .emit(ctx);
@@ -251,9 +251,9 @@ auto add_msb_to_describer(Describer<Args, Impls...>& d,
     Setter<located<duration>>{[opts_ptr](Any& args, located<duration> v) {
       ((&args.template as<Args>())->*opts_ptr).settings.timeout = v.inner;
     }});
-  result.batch_size = d.template named_with_setter<uint64_t>(
+  result.batch_size = d.template named_with_setter<int64_t>(
     "_batch_size",
-    Setter<located<uint64_t>>{[opts_ptr](Any& args, located<uint64_t> v) {
+    Setter<located<int64_t>>{[opts_ptr](Any& args, located<int64_t> v) {
       ((&args.template as<Args>())->*opts_ptr).settings.desired_batch_size
         = v.inner;
     }});

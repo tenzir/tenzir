@@ -31,6 +31,13 @@ namespace import {
 /// Maximum size for sources that generate table slices.
 inline constexpr uint64_t table_slice_size = 8192; // 8 Ki
 
+/// Batch size that parsers aim for when producing `nova::Events`.
+inline constexpr uint64_t nova_parser_batch_size = 16'384; // 16 Ki
+
+/// Batch size that parsers aim for by default: `nova_parser_batch_size` when
+/// `--nova` is enabled, and `table_slice_size` otherwise.
+auto parser_batch_size() -> size_t;
+
 /// Maximum number of results.
 inline constexpr size_t max_events = 0;
 
