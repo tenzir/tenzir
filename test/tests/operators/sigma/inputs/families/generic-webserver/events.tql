@@ -1,0 +1,53 @@
+// OCSF HTTP Activity (4002) fixture events for the product-less
+// `sigma/generic/webserver` mapping family. Web server access logs place the
+// client in `src_endpoint` and the server in `dst_endpoint`. Commented events
+// are near-miss negatives.
+{
+  id: "traversal",
+  time: 2024-05-01T12:00:00Z,
+  class_uid: 4002,
+  activity_id: 3,
+  metadata: {version: "1.9.0", product: {name: "IIS", vendor_name: "Microsoft"}},
+  status_id: 1,
+  src_endpoint: {ip: 198.51.100.7},
+  dst_endpoint: {ip: 10.0.0.80, port: 443},
+  http_request: {http_method: "GET", url: {hostname: "portal.example.test", path: "/cgi-bin/download.cgi", query_string: "file=../../../etc/passwd"}, user_agent: "curl/8.4.0", referrer: "https://portal.example.test/", version: "1.1"},
+  http_response: {code: 200},
+  traffic: {bytes_in: 2311, bytes_out: 418},
+}
+// Matches: a WebDAV method beyond ACL.
+{
+  id: "webdav-copy",
+  time: 2024-05-01T12:00:00.500Z,
+  class_uid: 4002,
+  activity_id: 15,
+  metadata: {version: "1.9.0", product: {name: "IIS", vendor_name: "Microsoft"}},
+  status_id: 1,
+  src_endpoint: {ip: 198.51.100.7},
+  dst_endpoint: {ip: 10.0.0.80, port: 443},
+  http_request: {http_method: "COPY", url: {hostname: "portal.example.test", path: "/uploads/shell.aspx"}},
+  http_response: {code: 201},
+}
+// Projection must not match: the path names the traversal, the query does
+// not.
+{
+  id: "path-only",
+  time: 2024-05-01T12:00:01Z,
+  class_uid: 4002,
+  activity_id: 3,
+  metadata: {version: "1.9.0", product: {name: "IIS", vendor_name: "Microsoft"}},
+  src_endpoint: {ip: 198.51.100.7},
+  dst_endpoint: {ip: 10.0.0.80, port: 443},
+  http_request: {http_method: "GET", url: {hostname: "portal.example.test", path: "/cgi-bin/../../../etc/passwd", query_string: "lang=en"}, user_agent: "curl/8.4.0"},
+  http_response: {code: 404},
+}
+// Guard must reject: wrong OCSF class.
+{
+  id: "web-resources-activity",
+  time: 2024-05-01T12:00:02Z,
+  class_uid: 6001,
+  activity_id: 1,
+  metadata: {version: "1.9.0", product: {name: "IIS", vendor_name: "Microsoft"}},
+  src_endpoint: {ip: 198.51.100.7},
+  http_request: {http_method: "GET", url: {hostname: "portal.example.test", path: "/cgi-bin/download.cgi", query_string: "file=../../../etc/passwd"}, user_agent: "curl/8.4.0"},
+}

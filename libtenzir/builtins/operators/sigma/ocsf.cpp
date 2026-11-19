@@ -562,7 +562,9 @@ auto find_mappings(tenzir::sigma::LogSource const& log_source)
     auto const category_matches = selector.category.empty()
                                     ? not log_source.category
                                     : log_source.category == selector.category;
-    auto const product_matches = log_source.product == selector.product;
+    auto const product_matches = selector.product.empty()
+                                   ? not log_source.product
+                                   : log_source.product == selector.product;
     auto const service_matches
       = selector.optional_service
           ? not log_source.service or log_source.service == selector.service

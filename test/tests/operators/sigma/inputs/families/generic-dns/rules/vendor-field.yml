@@ -1,0 +1,7 @@
+title: Query By Vendor Field Name
+logsource:
+  category: dns
+detection:
+  selection:
+    dns_query_name|endswith: 'duckdns.org'
+  condition: selection

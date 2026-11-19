@@ -1,0 +1,7 @@
+title: Suspicious Request Content Type
+logsource:
+  category: webserver
+detection:
+  selection:
+    cs-content-type: 'application/x-java-serialized-object'
+  condition: selection

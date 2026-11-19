@@ -1,0 +1,31 @@
+warning: sigma operator skips rule 'tests/operators/sigma/inputs/families/generic-dns/rules/parent-domain.yml' for OCSF input
+ --> tests/operators/sigma/families/generic-dns.tql:7:12
+  |
+7 | sigma path=f"{env("TENZIR_INPUTS")}/families/generic-dns/rules", format="plain"
+  |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+  = note: unresolved Sigma fields: `parent_domain`
+  = note: field `parent_domain` is unmapped: DNS Activity has no attribute for the parent domain of the query.
+  = note: use `mapping="direct"` only when the rule fields exist literally
+
+warning: sigma operator skips rule 'tests/operators/sigma/inputs/families/generic-dns/rules/vendor-field.yml' for OCSF input
+ --> tests/operators/sigma/families/generic-dns.tql:7:12
+  |
+7 | sigma path=f"{env("TENZIR_INPUTS")}/families/generic-dns/rules", format="plain"
+  |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+  = note: unresolved Sigma fields: `dns_query_name`
+  = note: field `dns_query_name` is absent from the OCSF schema
+  = note: use `mapping="direct"` only when the rule fields exist literally
+{
+  rule: "Dynamic DNS Query",
+  id: "sysmon",
+}
+{
+  rule: "Dynamic DNS Query",
+  id: "txt-payload",
+}
+{
+  rule: "PowerShell Payload In TXT Answer",
+  id: "txt-payload",
+}

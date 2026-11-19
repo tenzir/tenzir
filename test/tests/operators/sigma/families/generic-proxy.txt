@@ -1,0 +1,31 @@
+warning: sigma operator skips rule 'tests/operators/sigma/inputs/families/generic-proxy/rules/extension.yml' for OCSF input
+ --> tests/operators/sigma/families/generic-proxy.tql:7:12
+  |
+7 | sigma path=f"{env("TENZIR_INPUTS")}/families/generic-proxy/rules", format="plain"
+  |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+  = note: unresolved Sigma fields: `c-uri-extension`
+  = note: field `c-uri-extension` is unmapped: The OCSF URL object has no file extension attribute.
+  = note: use `mapping="direct"` only when the rule fields exist literally
+
+warning: sigma operator skips rule 'tests/operators/sigma/inputs/families/generic-proxy/rules/vendor-proxy.yml' for OCSF input
+ --> tests/operators/sigma/families/generic-proxy.tql:7:12
+  |
+7 | sigma path=f"{env("TENZIR_INPUTS")}/families/generic-proxy/rules", format="plain"
+  |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+  = note: unresolved Sigma fields: `c-uri`
+  = note: field `c-uri` is absent from the OCSF schema
+  = note: use `mapping="direct"` only when the rule fields exist literally
+{
+  rule: "Google Drive Direct Download",
+  id: "download",
+}
+{
+  rule: "POST With Legacy Browser Agent",
+  id: "beacon",
+}
+{
+  rule: "WebDAV Discovery Of Dynamic DNS Host",
+  id: "webdav",
+}

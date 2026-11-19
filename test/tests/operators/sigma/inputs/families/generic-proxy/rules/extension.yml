@@ -1,0 +1,9 @@
+title: Executable Download By Extension
+logsource:
+  category: proxy
+detection:
+  selection:
+    c-uri-extension:
+      - 'exe'
+      - 'vbs'
+  condition: selection

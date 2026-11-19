@@ -1,0 +1,8 @@
+title: WebDAV Discovery Of Dynamic DNS Host
+logsource:
+  category: proxy
+detection:
+  selection:
+    cs-method: 'PROPFIND'
+    r-dns|endswith: '.duckdns.org'
+  condition: selection

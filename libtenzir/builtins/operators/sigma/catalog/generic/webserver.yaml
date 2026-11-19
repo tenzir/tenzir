@@ -1,0 +1,82 @@
+id: sigma/generic/webserver
+title: Web server access log
+# Sigma's generic `webserver` category names no product: it covers web server
+# access logs in the W3C extended log taxonomy, which normalize into HTTP
+# Activity from the server's perspective.
+logsource:
+  category: webserver
+guard:
+  class-uid: 4002
+  # Every HTTP method that OCSF 1.9 defines, from Connect (1) through Version
+  # Control (40), including the WebDAV methods: the category covers any method
+  # a server answers.
+  activities:
+    [
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+      21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38,
+      39, 40,
+    ]
+fields:
+  cs-uri-stem:
+    primitive: path
+    path: http_request.url.path
+    kind: string
+  cs-uri-query:
+    primitive: path
+    path: http_request.url.query_string
+    kind: string
+    notes: Reads only the query component, as the W3C field defines; a rule value that spells out the path does not match.
+  cs-method:
+    primitive: path
+    path: http_request.http_method
+    kind: string
+  cs-user-agent:
+    primitive: path
+    path: http_request.user_agent
+    kind: string
+  cs-referer:
+    primitive: path
+    path: http_request.referrer
+    kind: string
+  cs-host:
+    primitive: path
+    path: http_request.url.hostname
+    kind: string
+  cs-version:
+    primitive: path
+    path: http_request.version
+    kind: string
+    rule-value: stringify
+  sc-status:
+    primitive: path
+    path: http_response.code
+    kind: integral
+  cs-bytes:
+    primitive: path
+    path: traffic.bytes_out
+    kind: integral
+    notes: Reads the bytes the client sent.
+  sc-bytes:
+    primitive: path
+    path: traffic.bytes_in
+    kind: integral
+    notes: Reads the bytes the client received.
+  c-ip:
+    primitive: path
+    path: src_endpoint.ip
+  s-ip:
+    primitive: path
+    path: dst_endpoint.ip
+  s-port:
+    primitive: path
+    path: dst_endpoint.port
+    kind: integral
+unmapped:
+  - field: cs-cookie
+    reason: HTTP Activity splits cookies into objects; the raw Cookie header does not survive.
+  - field: cs-content-type
+    reason: The OCSF HTTP request has no content type attribute.
+  - field: sc-win32-status
+    reason: HTTP Activity has no attribute for the Windows status code.
+  - field: s-sitename
+    reason: HTTP Activity has no attribute for the IIS site name.

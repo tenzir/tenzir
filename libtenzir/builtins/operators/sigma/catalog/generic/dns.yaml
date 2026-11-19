@@ -1,0 +1,32 @@
+id: sigma/generic/dns
+title: DNS
+# Sigma's generic `dns` category names no product: it covers DNS query logs
+# from any resolver or sensor, which normalize into DNS Activity.
+logsource:
+  category: dns
+guard:
+  class-uid: 4003
+  # Query, Response, and Traffic.
+  activities: [1, 2, 6]
+fields:
+  query:
+    primitive: path
+    path: query.hostname
+    kind: string
+  answer:
+    primitive: list-member
+    path: answers
+    member: rdata
+    rule-value: stringify
+    notes: A rule value matches when any answer matches.
+  record_type:
+    primitive: path
+    path: query.type
+    kind: string
+unmapped:
+  - field: parent_domain
+    reason: DNS Activity has no attribute for the parent domain of the query.
+  - field: query_etld_plus_one
+    reason: DNS Activity has no attribute for the registered domain of the query.
+  - field: query_length
+    reason: DNS Activity has no attribute for the length of the query.

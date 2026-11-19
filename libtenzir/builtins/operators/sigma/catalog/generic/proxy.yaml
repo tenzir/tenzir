@@ -1,0 +1,92 @@
+id: sigma/generic/proxy
+title: Web proxy
+# Sigma's generic `proxy` category names no product: it covers the web proxy
+# taxonomy that every proxy log normalizes into HTTP Activity.
+logsource:
+  category: proxy
+guard:
+  class-uid: 4002
+  # Every HTTP method that OCSF 1.9 defines, from Connect (1) through Version
+  # Control (40), including the WebDAV methods: the category covers any method
+  # a proxy forwards.
+  activities:
+    [
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+      21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38,
+      39, 40,
+    ]
+fields:
+  c-uri:
+    primitive: path
+    path: http_request.url.url_string
+    kind: string
+    notes: Reads the complete URL, including scheme and host.
+  c-uri-stem:
+    primitive: path
+    path: http_request.url.path
+    kind: string
+  cs-uri-stem:
+    primitive: path
+    path: http_request.url.path
+    kind: string
+  c-uri-query:
+    primitive: path
+    path: http_request.url.query_string
+    kind: string
+  c-useragent:
+    primitive: path
+    path: http_request.user_agent
+    kind: string
+  cs-host:
+    primitive: path
+    path: http_request.url.hostname
+    kind: string
+  r-dns:
+    primitive: fallback
+    primary: http_request.url.hostname
+    fallback: dst_endpoint.hostname
+    kind: string
+    notes: Falls back to the hostname of the remote endpoint when the URL has none.
+  cs-method:
+    primitive: path
+    path: http_request.http_method
+    kind: string
+  cs-referrer:
+    primitive: path
+    path: http_request.referrer
+    kind: string
+  cs-version:
+    primitive: path
+    path: http_request.version
+    kind: string
+    rule-value: stringify
+  sc-status:
+    primitive: path
+    path: http_response.code
+    kind: integral
+  cs-bytes:
+    primitive: path
+    path: traffic.bytes_out
+    kind: integral
+    notes: Reads the bytes the client sent.
+  sc-bytes:
+    primitive: path
+    path: traffic.bytes_in
+    kind: integral
+    notes: Reads the bytes the client received.
+  c-ip:
+    primitive: path
+    path: src_endpoint.ip
+  src_ip:
+    primitive: path
+    path: src_endpoint.ip
+  dst_ip:
+    primitive: path
+    path: dst_endpoint.ip
+unmapped:
+  - field: c-uri-extension
+    reason: The OCSF URL object has no file extension attribute.
+  - field: cs-uri
+    reason: No OCSF attribute carries the request URI without scheme and host.
+  - field: cs-cookie
+    reason: HTTP Activity splits cookies into objects; the raw Cookie header does not survive.

@@ -1,0 +1,8 @@
+title: Product-Specific Proxy Rule
+logsource:
+  category: proxy
+  product: squid
+detection:
+  selection:
+    c-uri|contains: 'drive.google.com'
+  condition: selection

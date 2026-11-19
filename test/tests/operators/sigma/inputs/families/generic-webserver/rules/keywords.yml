@@ -1,0 +1,7 @@
+title: Keyword In Web Server Access Log
+logsource:
+  category: webserver
+detection:
+  keywords:
+    - '/etc/passwd'
+  condition: keywords

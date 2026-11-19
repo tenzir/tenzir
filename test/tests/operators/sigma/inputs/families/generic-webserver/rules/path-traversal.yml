@@ -1,0 +1,19 @@
+title: Path Traversal In Query
+logsource:
+  category: webserver
+detection:
+  selection:
+    cs-method: 'GET'
+    cs-uri-stem|endswith: '.cgi'
+    cs-uri-query|contains: '../../../etc/'
+    cs-host: 'portal.example.test'
+    cs-referer|startswith: 'https://portal.'
+    cs-user-agent|startswith: 'curl/'
+    cs-version: '1.1'
+    sc-status: 200
+    cs-bytes|lt: 1000
+    sc-bytes|gt: 1000
+    c-ip: 198.51.100.7
+    s-ip|cidr: 10.0.0.0/8
+    s-port: 443
+  condition: selection
