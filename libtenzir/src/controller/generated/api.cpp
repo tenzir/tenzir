@@ -2156,29 +2156,6 @@ auto parse_api_channel_target(simdjson::dom::element value)
   return ApiChannelTarget{std::move(path), std::move(channel_index)};
 }
 
-auto to_string(Encoding value) -> std::string_view {
-  switch (value) {
-    case Encoding::json:
-      return "json";
-    case Encoding::typed_json:
-      return "typed_json";
-  }
-  TENZIR_UNREACHABLE();
-}
-
-auto parse_encoding(simdjson::dom::element value)
-  -> Result<Encoding, ParseError> {
-  TRY(auto raw, api::string_of(value, "Encoding"));
-  if (raw == "json") {
-    return Encoding::json;
-  }
-  if (raw == "typed_json") {
-    return Encoding::typed_json;
-  }
-  return Err{ParseError{
-    "Encoding", fmt::format("`{}` is not one of json, typed_json", raw)}};
-}
-
 auto parse_channel_tap_request(simdjson::dom::element value)
   -> Result<ChannelTapRequest, ParseError> {
   TRY(auto object, api::object_of(value, "ChannelTapRequest"));
@@ -2210,15 +2187,9 @@ auto parse_channel_tap_request(simdjson::dom::element value)
     limit = std::move(limit_present);
   }
 
-  auto encoding = Option<Encoding>{None{}};
-  if (auto encoding_raw = api::optional_field(object, "encoding")) {
-    TRY(auto encoding_present, parse_encoding(*encoding_raw));
-    encoding = std::move(encoding_present);
-  }
-
   return ChannelTapRequest{std::move(process_instance_id),
                            std::move(execution_id), std::move(channels),
-                           std::move(limit), std::move(encoding)};
+                           std::move(limit)};
 }
 
 auto parse_context_status(simdjson::dom::element value)
@@ -2283,14 +2254,8 @@ auto parse_adhoc_pipeline_definition(simdjson::dom::element value)
   TRY(auto definition,
       api::string_of(definition_raw, "AdhocPipelineDefinition.definition"));
 
-  auto encoding = Option<Encoding>{None{}};
-  if (auto encoding_raw = api::optional_field(object, "encoding")) {
-    TRY(auto encoding_present, parse_encoding(*encoding_raw));
-    encoding = std::move(encoding_present);
-  }
-
   return AdhocPipelineDefinition{std::move(adhoc_pipeline_id),
-                                 std::move(definition), std::move(encoding)};
+                                 std::move(definition)};
 }
 
 // ── Encoding ────────────────────────────────────────────────────────────────
@@ -3184,10 +3149,6 @@ auto write_json(ApiChannelTarget const& value, std::string& out) -> void {
   out += '}';
 }
 
-auto write_json(Encoding const& value, std::string& out) -> void {
-  api::write_string(to_string(value), out);
-}
-
 auto write_json(ChannelTapRequest const& value, std::string& out) -> void {
   out += '{';
   auto field_separator = "";
@@ -3218,16 +3179,6 @@ auto write_json(ChannelTapRequest const& value, std::string& out) -> void {
     out += "\"limit\":";
     if (value.limit) {
       fmt::format_to(std::back_inserter(out), "{}", *value.limit);
-    } else {
-      out += "null";
-    }
-  }
-  if (value.encoding) {
-    out += field_separator;
-    field_separator = ",";
-    out += "\"encoding\":";
-    if (value.encoding) {
-      write_json(*value.encoding, out);
     } else {
       out += "null";
     }
@@ -3269,25 +3220,10 @@ auto write_json(AdhocPipelineId const& value, std::string& out) -> void {
 auto write_json(AdhocPipelineDefinition const& value, std::string& out)
   -> void {
   out += '{';
-  auto field_separator = "";
-  out += field_separator;
-  field_separator = ",";
   out += "\"adhocPipelineId\":";
   write_json(value.adhoc_pipeline_id, out);
-  out += field_separator;
-  field_separator = ",";
-  out += "\"definition\":";
+  out += ",\"definition\":";
   api::write_string(value.definition, out);
-  if (value.encoding) {
-    out += field_separator;
-    field_separator = ",";
-    out += "\"encoding\":";
-    if (value.encoding) {
-      write_json(*value.encoding, out);
-    } else {
-      out += "null";
-    }
-  }
   out += '}';
 }
 

@@ -2030,30 +2030,17 @@ struct std::hash<tenzir::ApiChannelTarget> {
 
 namespace tenzir {
 
-/// How the deployment renders event values to JSON: `json` renders every value
-/// the way a terminal wants it, and `typed_json` renders int64 and uint64
-/// values as strings, so that they survive every JSON parser with their
-/// precision intact and a reader with the schema can take them back to numbers.
-/// `json` where left out
-enum class Encoding {
-  json,
-  typed_json,
-};
-
-auto to_string(Encoding value) -> std::string_view;
-
 /// An event tap on one or more channels of an execution, in one stream. Ends
 /// after at most five minutes without stopping the pipeline
 class ChannelTapRequest {
 public:
   ChannelTapRequest(Uuid process_instance_id, std::string execution_id,
                     std::vector<ApiChannelTarget> channels,
-                    Option<std::int64_t> limit, Option<Encoding> encoding)
+                    Option<std::int64_t> limit)
     : process_instance_id{std::move(process_instance_id)},
       execution_id{std::move(execution_id)},
       channels{std::move(channels)},
-      limit{std::move(limit)},
-      encoding{std::move(encoding)} {
+      limit{std::move(limit)} {
   }
 
   Uuid process_instance_id;
@@ -2061,8 +2048,6 @@ public:
   std::vector<ApiChannelTarget> channels;
   /// `limit`, may be absent.
   Option<std::int64_t> limit;
-  /// `encoding`, may be absent.
-  Option<Encoding> encoding;
 
   friend auto operator==(ChannelTapRequest const&, ChannelTapRequest const&)
     -> bool
@@ -2072,7 +2057,7 @@ public:
   friend auto hash_append(HashAlgorithm& h, ChannelTapRequest const& value)
     -> void {
     hash_append(h, value.process_instance_id, value.execution_id,
-                value.channels, value.limit, value.encoding);
+                value.channels, value.limit);
   }
 };
 
@@ -2197,16 +2182,13 @@ namespace tenzir {
 class AdhocPipelineDefinition {
 public:
   AdhocPipelineDefinition(AdhocPipelineId adhoc_pipeline_id,
-                          std::string definition, Option<Encoding> encoding)
+                          std::string definition)
     : adhoc_pipeline_id{std::move(adhoc_pipeline_id)},
-      definition{std::move(definition)},
-      encoding{std::move(encoding)} {
+      definition{std::move(definition)} {
   }
 
   AdhocPipelineId adhoc_pipeline_id;
   std::string definition;
-  /// `encoding`, may be absent.
-  Option<Encoding> encoding;
 
   friend auto
   operator==(AdhocPipelineDefinition const&, AdhocPipelineDefinition const&)
@@ -2216,7 +2198,7 @@ public:
   template <class HashAlgorithm>
   friend auto
   hash_append(HashAlgorithm& h, AdhocPipelineDefinition const& value) -> void {
-    hash_append(h, value.adhoc_pipeline_id, value.definition, value.encoding);
+    hash_append(h, value.adhoc_pipeline_id, value.definition);
   }
 };
 
@@ -2948,8 +2930,6 @@ auto parse_execution_metrics_snapshot(simdjson::dom::element value)
   -> Result<ExecutionMetricsSnapshot, ParseError>;
 auto parse_api_channel_target(simdjson::dom::element value)
   -> Result<ApiChannelTarget, ParseError>;
-auto parse_encoding(simdjson::dom::element value)
-  -> Result<Encoding, ParseError>;
 auto parse_channel_tap_request(simdjson::dom::element value)
   -> Result<ChannelTapRequest, ParseError>;
 auto parse_context_status(simdjson::dom::element value)
@@ -3025,7 +3005,6 @@ auto write_json(ExecutionChannelMetrics const& value, std::string& out) -> void;
 auto write_json(ExecutionMetricsSnapshot const& value, std::string& out)
   -> void;
 auto write_json(ApiChannelTarget const& value, std::string& out) -> void;
-auto write_json(Encoding const& value, std::string& out) -> void;
 auto write_json(ChannelTapRequest const& value, std::string& out) -> void;
 auto write_json(ContextStatus const& value, std::string& out) -> void;
 auto write_json(StopPipelineOptions const& value, std::string& out) -> void;
