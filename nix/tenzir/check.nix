@@ -37,12 +37,15 @@ stdenvNoCC.mkDerivation {
       export UV_NO_INDEX=1
       export UV_OFFLINE=1
       export UV_PYTHON=${lib.getExe py3}
-      export TENZIR_BINARY="${lib.getBin unchecked}/bin/tenzir run"
-      # Packages from v7 on install no `tenzir-node`. Started under that name,
-      # `tenzir` runs a node all the same.
-      mkdir -p "$TMPDIR/node"
-      ln -sf ${lib.getBin unchecked}/bin/tenzir "$TMPDIR/node/tenzir-node"
-      export TENZIR_NODE_BINARY="$TMPDIR/node/tenzir-node"
+      # Packages from v7 on install no `tenzir-node`, `tenzir-ctl`, or
+      # `tenzir-rebuild`. Started under those names, `tenzir` runs them all the
+      # same. Tests find the node's tools next to `tenzir`.
+      mkdir -p "$TMPDIR/bin"
+      for name in tenzir tenzir-node tenzir-ctl tenzir-rebuild; do
+        ln -sf ${lib.getBin unchecked}/bin/tenzir "$TMPDIR/bin/$name"
+      done
+      export TENZIR_BINARY="$TMPDIR/bin/tenzir run"
+      export TENZIR_NODE_BINARY="$TMPDIR/bin/tenzir-node"
       export TENZIR_TEST_DISABLE_INLINE_DEPENDENCY_INSTALL=1
       run_suite() {
         local targets=("$1")

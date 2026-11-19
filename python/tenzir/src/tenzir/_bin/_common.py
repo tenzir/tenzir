@@ -49,7 +49,8 @@ def _prepare_environment() -> None:
 
 def _v7_or_later() -> bool:
     # From v7 on, `tenzir` uses the unified command interface when
-    # `TENZIR_UNIFIED` is unset or empty, and Tenzir ships no node. The package
+    # `TENZIR_UNIFIED` is unset or empty, and Tenzir ships no node and none of
+    # its tools. The package
     # has the version of the engine it bundles.
     try:
         major = importlib.metadata.version("tenzir").split(".", 1)[0]
@@ -86,9 +87,9 @@ def _exec_platform_cli(arguments: list[str]) -> NoReturn:
 def exec_binary(name: str) -> NoReturn:
     # We don't support calling this helper outside of the generated tenzir(*) wrappers
     # from the [project.scripts] in pyproject.toml.
-    if name == "tenzir-node" and _v7_or_later():
+    if name in {"tenzir-node", "tenzir-ctl"} and _v7_or_later():
         _ = sys.stderr.write(
-            "tenzir-node: Tenzir v7 and later ship no node; "
+            f"{name}: Tenzir v7 and later ship no node and none of its tools; "
             "see https://tenzir.com/docs\n",
         )
         _ = sys.stderr.flush()

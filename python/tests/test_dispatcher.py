@@ -156,21 +156,23 @@ def test_wheel_dispatch(
         _common.exec_binary(name)
 
 
+@pytest.mark.parametrize("name", ["tenzir-node", "tenzir-ctl"])
 @pytest.mark.parametrize(
     ("version", "ships_node"),
     [("6.22.0", True), ("7.0.0", False), ("7.1.0rc1", False), (None, True)],
 )
-def test_tenzir_node_only_before_v7(
+def test_node_names_only_before_v7(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
     tmp_path: Path,
+    name: str,
     version: str | None,
     ships_node: bool,
 ) -> None:
-    def package_version(name: str) -> str:
-        assert name == "tenzir"
+    def package_version(package: str) -> str:
+        assert package == "tenzir"
         if version is None:
-            raise importlib.metadata.PackageNotFoundError(name)
+            raise importlib.metadata.PackageNotFoundError(package)
         return version
 
     binary = tmp_path / "libexec" / "tenzir-engine"
@@ -180,22 +182,22 @@ def test_tenzir_node_only_before_v7(
     monkeypatch.setattr(_common, "_pkg_bin_dir", lambda: tmp_path / "bin")
     monkeypatch.setattr(_common, "_prepare_environment", lambda: None)
     monkeypatch.setattr(importlib.metadata, "version", package_version)
-    monkeypatch.setattr(sys, "argv", ["tenzir-node"])
+    monkeypatch.setattr(sys, "argv", [name])
 
     def record_exec(path: str | Path, argv: list[str]) -> None:
         assert Path(path) == binary
-        assert argv == ["tenzir-node"]
+        assert argv == [name]
         raise ExecutedError
 
     monkeypatch.setattr(os, "execv", record_exec)
     if ships_node:
         with pytest.raises(ExecutedError):
-            _common.exec_binary("tenzir-node")
+            _common.exec_binary(name)
     else:
         with pytest.raises(SystemExit) as exit_info:
-            _common.exec_binary("tenzir-node")
+            _common.exec_binary(name)
         assert exit_info.value.code == 1
-        assert "ship no node" in capsys.readouterr().err
+        assert f"{name}: Tenzir v7 and later ship no node" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize("unified", [None, ""])

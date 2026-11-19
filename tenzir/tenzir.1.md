@@ -86,7 +86,7 @@ In the previous interface, `tenzir <pipeline>` runs a pipeline like
 argument. All other calls invoke the engine with their arguments unchanged.
 
 The `tenzir-node`, `tenzir-ctl`, and `tenzir-rebuild` compatibility names
-always invoke the engine.
+always invoke the engine. Only installations before v7 provide them.
 
 # ENVIRONMENT
 

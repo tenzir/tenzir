@@ -115,14 +115,14 @@ function (create_tenzir_symlink name)
   endif ()
 endfunction ()
 
-if (TENZIR_INSTALL_NODE)
-  create_tenzir_symlink(tenzir-node)
-else ()
-  # The integration tests start nodes through it.
-  create_tenzir_symlink(tenzir-node BUILD_TREE_ONLY)
-endif ()
-create_tenzir_symlink(tenzir-ctl)
-create_tenzir_symlink(tenzir-rebuild)
+# The integration tests start nodes and their tools through these names.
+foreach (name tenzir-node tenzir-ctl tenzir-rebuild)
+  if (TENZIR_INSTALL_NODE)
+    create_tenzir_symlink(${name})
+  else ()
+    create_tenzir_symlink(${name} BUILD_TREE_ONLY)
+  endif ()
+endforeach ()
 
 if (BUILD_TESTING)
   add_test(
