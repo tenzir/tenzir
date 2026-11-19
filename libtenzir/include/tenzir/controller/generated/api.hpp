@@ -2309,6 +2309,18 @@ public:
   static constexpr auto status = std::uint16_t{503};
 };
 
+class IngestUnavailable {
+public:
+  IngestUnavailable(std::string message, std::string region)
+    : message{std::move(message)}, region{std::move(region)} {
+  }
+
+  static constexpr auto status = std::uint16_t{400};
+
+  std::string message;
+  std::string region;
+};
+
 class InvalidConfiguration {
 public:
   explicit InvalidConfiguration(std::string message)
@@ -2485,7 +2497,9 @@ auto call(Transport& transport, PushTelemetry request)
 /// own that may read only that topic in the endpoint's consumer groups.
 /// Attaching again replaces only this deployment's password. Without `group`,
 /// the deployment reads in a group of its own and sees every event; deployments
-/// that name the same group share it, and each event reaches one of them.
+/// that name the same group share it, and each event reaches one of them. 400
+/// `IngestUnavailable` if the platform admits only deployments it hosts in a
+/// region as readers, and this deployment is not one of them.
 class AttachIngestEndpoint {
 public:
   AttachIngestEndpoint(AttachIngestEndpointPath path,
@@ -2499,7 +2513,7 @@ public:
 
 using AttachIngestEndpointError
   = variant<InternalServerError, NotFound, ServiceUnavailable, Unauthorized,
-            Unauthenticated, CredentialConflict, Validation>;
+            IngestUnavailable, Unauthenticated, CredentialConflict, Validation>;
 
 auto call(Transport& transport, AttachIngestEndpoint request)
   -> Task<Result<IngestEndpointAttachment,

@@ -73,6 +73,8 @@ auto parse_too_large(simdjson::dom::element value)
   -> Result<TooLarge, ParseError>;
 auto parse_service_unavailable(simdjson::dom::element value)
   -> Result<ServiceUnavailable, ParseError>;
+auto parse_ingest_unavailable(simdjson::dom::element value)
+  -> Result<IngestUnavailable, ParseError>;
 auto parse_invalid_configuration(simdjson::dom::element value)
   -> Result<InvalidConfiguration, ParseError>;
 auto parse_configuration_conflict(simdjson::dom::element value)
@@ -98,6 +100,7 @@ auto write_json(Validation const& value, std::string& out) -> void;
 auto write_json(NotFound const& value, std::string& out) -> void;
 auto write_json(TooLarge const& value, std::string& out) -> void;
 auto write_json(ServiceUnavailable const& value, std::string& out) -> void;
+auto write_json(IngestUnavailable const& value, std::string& out) -> void;
 auto write_json(InvalidConfiguration const& value, std::string& out) -> void;
 auto write_json(ConfigurationConflict const& value, std::string& out) -> void;
 auto write_json(InvalidPipeline const& value, std::string& out) -> void;
@@ -288,6 +291,36 @@ auto parse_service_unavailable(simdjson::dom::element value)
 auto write_json(ServiceUnavailable const&, std::string& out) -> void {
   out += '{';
   out += "\"_tag\":\"ServiceUnavailable\"";
+  out += '}';
+}
+
+auto parse_ingest_unavailable(simdjson::dom::element value)
+  -> Result<IngestUnavailable, ParseError> {
+  TRY(auto object, api::object_of(value, "IngestUnavailable"));
+
+  TRY(auto tag_raw, api::field(object, "_tag", "IngestUnavailable"));
+  TRY(auto tag, api::string_of(tag_raw, "IngestUnavailable"));
+  if (tag != "IngestUnavailable") {
+    return Err{
+      ParseError{"IngestUnavailable", "expected `_tag` 'IngestUnavailable'"}};
+  }
+
+  TRY(auto message_raw, api::field(object, "message", "IngestUnavailable"));
+  TRY(auto message, api::string_of(message_raw, "IngestUnavailable.message"));
+
+  TRY(auto region_raw, api::field(object, "region", "IngestUnavailable"));
+  TRY(auto region, api::string_of(region_raw, "IngestUnavailable.region"));
+
+  return IngestUnavailable{std::move(message), std::move(region)};
+}
+
+auto write_json(IngestUnavailable const& value, std::string& out) -> void {
+  out += '{';
+  out += "\"_tag\":\"IngestUnavailable\"";
+  out += ",\"message\":";
+  api::write_string(value.message, out);
+  out += ",\"region\":";
+  api::write_string(value.region, out);
   out += '}';
 }
 
@@ -3600,17 +3633,17 @@ auto call(Transport& transport, AttachIngestEndpoint request)
                .map_err(as_response_error(response.status, response_body)));
       co_return Err{std::move(error)};
     }
-    if (response.status == 401) {
-      CO_TRY(auto failed,
-             api::Document::parse(response_body, "Unauthenticated")
-               .map_err(as_response_error(response.status, response_body)));
-      CO_TRY(auto error,
-             parse_unauthenticated(failed.root())
-               .map_err(as_response_error(response.status, response_body)));
-      co_return Err{std::move(error)};
-    }
     if (response.status == 400) {
       auto tag = api::tag_of(response_body);
+      if (tag == "IngestUnavailable") {
+        CO_TRY(auto document,
+               api::Document::parse(response_body, "IngestUnavailable")
+                 .map_err(as_response_error(response.status, response_body)));
+        CO_TRY(auto error,
+               parse_ingest_unavailable(document.root())
+                 .map_err(as_response_error(response.status, response_body)));
+        co_return Err{std::move(error)};
+      }
       if (tag == "CredentialConflict") {
         CO_TRY(auto document,
                api::Document::parse(response_body, "CredentialConflict")
@@ -3632,6 +3665,15 @@ auto call(Transport& transport, AttachIngestEndpoint request)
       co_return Err{
         CallError{ResponseError{ResponseError::Reason::decode, response.status,
                                 std::move(response_body)}}};
+    }
+    if (response.status == 401) {
+      CO_TRY(auto failed,
+             api::Document::parse(response_body, "Unauthenticated")
+               .map_err(as_response_error(response.status, response_body)));
+      CO_TRY(auto error,
+             parse_unauthenticated(failed.root())
+               .map_err(as_response_error(response.status, response_body)));
+      co_return Err{std::move(error)};
     }
     co_return Err{
       CallError{ResponseError{ResponseError::Reason::decode, response.status,
