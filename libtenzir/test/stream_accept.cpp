@@ -54,6 +54,9 @@ struct AcceptControl {
   /// Bytes that reached subpipelines which do not stall.
   Atomic<size_t> delivered{0};
   Notify delivered_changed;
+  /// Number of warnings that all connection slots are taken.
+  Atomic<size_t> limit_warnings{0};
+  Notify limit_warnings_changed;
 };
 
 /// A listener that accepts one end of socket pairs queued by the test.
@@ -143,6 +146,11 @@ struct FakeAccept {
 
   auto emit_read_warning(uint64_t, std::string const&,
                          diagnostic_handler&) const -> void {
+  }
+
+  auto emit_connection_limit_warning(uint64_t, diagnostic_handler&) -> void {
+    args_.control->limit_warnings.fetch_add(1, std::memory_order_relaxed);
+    args_.control->limit_warnings_changed.notify_one();
   }
 
   auto debug_name() const -> std::string_view {
@@ -375,6 +383,36 @@ auto check_slot_held_until_subpipeline_finishes() -> void {
   }));
 }
 
+template <template <class> class Accept, class Output>
+auto check_warns_once_when_connection_limit_is_reached() -> void {
+  auto config = caf::actor_system_config{};
+  auto system = caf::actor_system{config};
+  auto reg = make_builtin_registry();
+  auto control = Arc<AcceptControl>{std::in_place};
+  auto diagnostics = TestDiagnostics{};
+  auto graceful_stop = Notify{};
+  folly::coro::blockingWait(async_scope([&](AsyncScope& scope) -> Task<void> {
+    auto run
+      = scope.spawn(run_plan(accept_plan<Accept, Output>(control), reg, system,
+                             diagnostics, NoProfiler{}, false, &graceful_stop));
+    // With `max_connections=1`, the first connection takes the only slot.
+    connect_and_close(*control);
+    co_await wait_until(control->gated, control->gated_changed, 1);
+    co_await wait_until(control->limit_warnings,
+                        control->limit_warnings_changed, 1);
+    // Reaching the limit again right away does not repeat the warning.
+    control->release.notify_one();
+    connect_and_close(*control);
+    co_await wait_until(control->gated, control->gated_changed, 2);
+    co_await folly::coro::sleep(std::chrono::milliseconds{200});
+    CHECK_EQUAL(control->limit_warnings.load(std::memory_order_relaxed),
+                size_t{1});
+    control->release.notify_one();
+    graceful_stop.notify_one();
+    CHECK(not(co_await run.join()).is_error());
+  }));
+}
+
 auto check_stalled_connection_does_not_block_others() -> void {
   auto config = caf::actor_system_config{};
   auto system = caf::actor_system{config};
@@ -419,6 +457,16 @@ TEST("accept keeps reading other connections while one stalls") {
 
 TEST("accept holds the connection slot until the subpipeline finishes") {
   check_slot_held_until_subpipeline_finishes<StreamAccept, nova::Events>();
+}
+
+TEST("accept warns once when it reaches the connection limit") {
+  check_warns_once_when_connection_limit_is_reached<StreamAccept,
+                                                    nova::Events>();
+}
+
+TEST("legacy accept warns once when it reaches the connection limit") {
+  check_warns_once_when_connection_limit_is_reached<legacy::StreamAccept,
+                                                    table_slice>();
 }
 
 TEST("legacy accept holds the connection slot until the subpipeline "
