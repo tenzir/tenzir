@@ -915,8 +915,12 @@ auto PlatformProfiler::diagnostic(tenzir::diagnostic const& value,
     return;
   }
   auto now = time::clock::now();
+  // With the call sites of a user-defined operator, so that the text says
+  // where the pipeline called it, as `tenzir` prints it.
+  auto enriched = sources.enrich(value);
   auto stream = std::ostringstream{};
-  make_diagnostic_printer(sources, color_diagnostics::no, stream)->emit(value);
+  make_diagnostic_printer(sources, color_diagnostics::no, stream)
+    ->emit(enriched);
   auto rendered = std::move(stream).str();
   auto notes = std::vector<PushTelemetryPayloadDiagnosticsNotes>{};
   auto annotations = std::vector<PushTelemetryPayloadDiagnosticsAnnotations>{};
@@ -925,7 +929,12 @@ auto PlatformProfiler::diagnostic(tenzir::diagnostic const& value,
     size += note.message.size();
     notes.emplace_back(note_kind(note.kind), note.message);
   }
-  for (auto const& annotation : value.annotations) {
+  for (auto const& annotation : enriched.annotations) {
+    // Offsets inside a user-defined operator point into its body rather than
+    // into the definition, so of those only the trace of its calls counts.
+    if (not annotation.source or annotation.source.callsite_index != 0) {
+      continue;
+    }
     size += annotation.text.size();
     annotations.emplace_back(annotation.primary, annotation.text,
                              count<TelemetryCount>(annotation.source.begin),
@@ -935,10 +944,10 @@ auto PlatformProfiler::diagnostic(tenzir::diagnostic const& value,
     dropped.fetch_add(1, std::memory_order_relaxed);
     return;
   }
-  auto severity = value.severity == tenzir::severity::error ? Severity::error
-                  : value.severity == tenzir::severity::warning
-                    ? Severity::warning
-                    : Severity::note;
+  auto severity
+    = value.severity == tenzir::severity::error     ? TelemetrySeverity::error
+      : value.severity == tenzir::severity::warning ? TelemetrySeverity::warning
+                                                    : TelemetrySeverity::note;
   auto const& report = *state_->report;
   auto sample = DiagnosticSample{report.id,
                                  report.run,

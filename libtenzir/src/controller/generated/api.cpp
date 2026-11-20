@@ -392,14 +392,53 @@ auto parse_invalid_pipeline(simdjson::dom::element value)
   TRY(auto message_raw, api::field(object, "message", "InvalidPipeline"));
   TRY(auto message, api::string_of(message_raw, "InvalidPipeline.message"));
 
-  return InvalidPipeline{std::move(message)};
+  auto diagnostics = Option<std::vector<Diagnostic>>{None{}};
+  if (auto diagnostics_raw = api::optional_field(object, "diagnostics")) {
+    auto diagnostics_present = std::vector<Diagnostic>{};
+    auto diagnostics_present_array = simdjson::dom::array{};
+    if ((*diagnostics_raw).get_array().get(diagnostics_present_array)
+        != simdjson::SUCCESS) {
+      return Err{
+        ParseError{"InvalidPipeline.diagnostics", "expected an array"}};
+    }
+    for (auto diagnostics_present_item : diagnostics_present_array) {
+      TRY(auto diagnostics_present_decoded,
+          parse_diagnostic(diagnostics_present_item));
+      diagnostics_present.push_back(std::move(diagnostics_present_decoded));
+    }
+    diagnostics = std::move(diagnostics_present);
+  }
+
+  return InvalidPipeline{std::move(message), std::move(diagnostics)};
 }
 
 auto write_json(InvalidPipeline const& value, std::string& out) -> void {
   out += '{';
   out += "\"_tag\":\"InvalidPipeline\"";
-  out += ",\"message\":";
+  auto field_separator = ",";
+  out += field_separator;
+  field_separator = ",";
+  out += "\"message\":";
   api::write_string(value.message, out);
+  if (value.diagnostics) {
+    out += field_separator;
+    field_separator = ",";
+    out += "\"diagnostics\":";
+    if (value.diagnostics) {
+      {
+        out += '[';
+        auto separator0 = "";
+        for (auto const& element0 : *value.diagnostics) {
+          out += separator0;
+          separator0 = ",";
+          write_json(element0, out);
+        }
+        out += ']';
+      }
+    } else {
+      out += "null";
+    }
+  }
   out += '}';
 }
 
@@ -906,32 +945,33 @@ auto parse_telemetry_small_count(simdjson::dom::element value)
   return TelemetrySmallCount::make(std::move(raw));
 }
 
-auto to_string(Severity value) -> std::string_view {
+auto to_string(TelemetrySeverity value) -> std::string_view {
   switch (value) {
-    case Severity::note:
+    case TelemetrySeverity::note:
       return "note";
-    case Severity::warning:
+    case TelemetrySeverity::warning:
       return "warning";
-    case Severity::error:
+    case TelemetrySeverity::error:
       return "error";
   }
   TENZIR_UNREACHABLE();
 }
 
-auto parse_severity(simdjson::dom::element value)
-  -> Result<Severity, ParseError> {
-  TRY(auto raw, api::string_of(value, "Severity"));
+auto parse_telemetry_severity(simdjson::dom::element value)
+  -> Result<TelemetrySeverity, ParseError> {
+  TRY(auto raw, api::string_of(value, "TelemetrySeverity"));
   if (raw == "note") {
-    return Severity::note;
+    return TelemetrySeverity::note;
   }
   if (raw == "warning") {
-    return Severity::warning;
+    return TelemetrySeverity::warning;
   }
   if (raw == "error") {
-    return Severity::error;
+    return TelemetrySeverity::error;
   }
-  return Err{ParseError{
-    "Severity", fmt::format("`{}` is not one of note, warning, error", raw)}};
+  return Err{
+    ParseError{"TelemetrySeverity",
+               fmt::format("`{}` is not one of note, warning, error", raw)}};
 }
 
 auto parse_push_telemetry_payload_diagnostics_notes(simdjson::dom::element value)
@@ -1010,7 +1050,7 @@ auto parse_diagnostic_sample(simdjson::dom::element value)
       api::string_of(fingerprint_raw, "DiagnosticSample.fingerprint"));
 
   TRY(auto severity_raw, api::field(object, "severity", "DiagnosticSample"));
-  TRY(auto severity, parse_severity(severity_raw));
+  TRY(auto severity, parse_telemetry_severity(severity_raw));
 
   TRY(auto message_raw, api::field(object, "message", "DiagnosticSample"));
   TRY(auto message, api::string_of(message_raw, "DiagnosticSample.message"));
@@ -1546,6 +1586,109 @@ auto parse_liveness(simdjson::dom::element value)
 
   return Liveness{std::move(status), uptime_ms, std::move(generation),
                   std::move(digest), suspended};
+}
+
+auto to_string(AdhocPipelineSeverity value) -> std::string_view {
+  switch (value) {
+    case AdhocPipelineSeverity::note:
+      return "note";
+    case AdhocPipelineSeverity::warning:
+      return "warning";
+    case AdhocPipelineSeverity::error:
+      return "error";
+  }
+  TENZIR_UNREACHABLE();
+}
+
+auto parse_adhoc_pipeline_severity(simdjson::dom::element value)
+  -> Result<AdhocPipelineSeverity, ParseError> {
+  TRY(auto raw, api::string_of(value, "AdhocPipelineSeverity"));
+  if (raw == "note") {
+    return AdhocPipelineSeverity::note;
+  }
+  if (raw == "warning") {
+    return AdhocPipelineSeverity::warning;
+  }
+  if (raw == "error") {
+    return AdhocPipelineSeverity::error;
+  }
+  return Err{
+    ParseError{"AdhocPipelineSeverity",
+               fmt::format("`{}` is not one of note, warning, error", raw)}};
+}
+
+auto parse_diagnostic_note(simdjson::dom::element value)
+  -> Result<DiagnosticNote, ParseError> {
+  TRY(auto object, api::object_of(value, "DiagnosticNote"));
+
+  TRY(auto kind_raw, api::field(object, "kind", "DiagnosticNote"));
+  TRY(auto kind, api::string_of(kind_raw, "DiagnosticNote.kind"));
+
+  TRY(auto message_raw, api::field(object, "message", "DiagnosticNote"));
+  TRY(auto message, api::string_of(message_raw, "DiagnosticNote.message"));
+
+  return DiagnosticNote{std::move(kind), std::move(message)};
+}
+
+auto parse_diagnostic_annotation(simdjson::dom::element value)
+  -> Result<DiagnosticAnnotation, ParseError> {
+  TRY(auto object, api::object_of(value, "DiagnosticAnnotation"));
+
+  TRY(auto primary_raw, api::field(object, "primary", "DiagnosticAnnotation"));
+  TRY(auto primary, api::bool_of(primary_raw, "DiagnosticAnnotation.primary"));
+
+  TRY(auto text_raw, api::field(object, "text", "DiagnosticAnnotation"));
+  TRY(auto text, api::string_of(text_raw, "DiagnosticAnnotation.text"));
+
+  TRY(auto begin_raw, api::field(object, "begin", "DiagnosticAnnotation"));
+  TRY(auto begin, api::int64_of(begin_raw, "DiagnosticAnnotation.begin"));
+
+  TRY(auto end_raw, api::field(object, "end", "DiagnosticAnnotation"));
+  TRY(auto end, api::int64_of(end_raw, "DiagnosticAnnotation.end"));
+
+  return DiagnosticAnnotation{primary, std::move(text), std::move(begin),
+                              std::move(end)};
+}
+
+auto parse_diagnostic(simdjson::dom::element value)
+  -> Result<Diagnostic, ParseError> {
+  TRY(auto object, api::object_of(value, "Diagnostic"));
+
+  TRY(auto severity_raw, api::field(object, "severity", "Diagnostic"));
+  TRY(auto severity, parse_adhoc_pipeline_severity(severity_raw));
+
+  TRY(auto message_raw, api::field(object, "message", "Diagnostic"));
+  TRY(auto message, api::string_of(message_raw, "Diagnostic.message"));
+
+  TRY(auto rendered_raw, api::field(object, "rendered", "Diagnostic"));
+  TRY(auto rendered, api::string_of(rendered_raw, "Diagnostic.rendered"));
+
+  TRY(auto notes_raw, api::field(object, "notes", "Diagnostic"));
+  auto notes = std::vector<DiagnosticNote>{};
+  auto notes_array = simdjson::dom::array{};
+  if (notes_raw.get_array().get(notes_array) != simdjson::SUCCESS) {
+    return Err{ParseError{"Diagnostic.notes", "expected an array"}};
+  }
+  for (auto notes_item : notes_array) {
+    TRY(auto notes_decoded, parse_diagnostic_note(notes_item));
+    notes.push_back(std::move(notes_decoded));
+  }
+
+  TRY(auto annotations_raw, api::field(object, "annotations", "Diagnostic"));
+  auto annotations = std::vector<DiagnosticAnnotation>{};
+  auto annotations_array = simdjson::dom::array{};
+  if (annotations_raw.get_array().get(annotations_array) != simdjson::SUCCESS) {
+    return Err{ParseError{"Diagnostic.annotations", "expected an array"}};
+  }
+  for (auto annotations_item : annotations_array) {
+    TRY(auto annotations_decoded,
+        parse_diagnostic_annotation(annotations_item));
+    annotations.push_back(std::move(annotations_decoded));
+  }
+
+  return Diagnostic{std::move(severity), std::move(message),
+                    std::move(rendered), std::move(notes),
+                    std::move(annotations)};
 }
 
 auto parse_identified_pipeline(simdjson::dom::element value)
@@ -2449,7 +2592,7 @@ auto write_json(TelemetrySmallCount const& value, std::string& out) -> void {
   fmt::format_to(std::back_inserter(out), "{}", value.value());
 }
 
-auto write_json(Severity const& value, std::string& out) -> void {
+auto write_json(TelemetrySeverity const& value, std::string& out) -> void {
   api::write_string(to_string(value), out);
 }
 
@@ -2798,6 +2941,65 @@ auto write_json(Liveness const& value, std::string& out) -> void {
   }
   out += ",\"suspended\":";
   out += value.suspended ? "true" : "false";
+  out += '}';
+}
+
+auto write_json(AdhocPipelineSeverity const& value, std::string& out) -> void {
+  api::write_string(to_string(value), out);
+}
+
+auto write_json(DiagnosticNote const& value, std::string& out) -> void {
+  out += '{';
+  out += "\"kind\":";
+  api::write_string(value.kind, out);
+  out += ",\"message\":";
+  api::write_string(value.message, out);
+  out += '}';
+}
+
+auto write_json(DiagnosticAnnotation const& value, std::string& out) -> void {
+  out += '{';
+  out += "\"primary\":";
+  out += value.primary ? "true" : "false";
+  out += ",\"text\":";
+  api::write_string(value.text, out);
+  out += ",\"begin\":";
+  fmt::format_to(std::back_inserter(out), "{}", value.begin);
+  out += ",\"end\":";
+  fmt::format_to(std::back_inserter(out), "{}", value.end);
+  out += '}';
+}
+
+auto write_json(Diagnostic const& value, std::string& out) -> void {
+  out += '{';
+  out += "\"severity\":";
+  write_json(value.severity, out);
+  out += ",\"message\":";
+  api::write_string(value.message, out);
+  out += ",\"rendered\":";
+  api::write_string(value.rendered, out);
+  out += ",\"notes\":";
+  {
+    out += '[';
+    auto separator0 = "";
+    for (auto const& element0 : value.notes) {
+      out += separator0;
+      separator0 = ",";
+      write_json(element0, out);
+    }
+    out += ']';
+  }
+  out += ",\"annotations\":";
+  {
+    out += '[';
+    auto separator0 = "";
+    for (auto const& element0 : value.annotations) {
+      out += separator0;
+      separator0 = ",";
+      write_json(element0, out);
+    }
+    out += ']';
+  }
   out += '}';
 }
 

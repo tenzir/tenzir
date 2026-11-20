@@ -622,13 +622,13 @@ struct std::hash<tenzir::TelemetrySmallCount> {
 
 namespace tenzir {
 
-enum class Severity {
+enum class TelemetrySeverity {
   note,
   warning,
   error,
 };
 
-auto to_string(Severity value) -> std::string_view;
+auto to_string(TelemetrySeverity value) -> std::string_view;
 
 class PushTelemetryPayloadDiagnosticsNotes {
 public:
@@ -710,8 +710,8 @@ class DiagnosticSample {
 public:
   DiagnosticSample(
     PipelineId pipeline_id, TelemetryCount run, time first_seen, time last_seen,
-    TelemetrySmallCount occurrences, std::string fingerprint, Severity severity,
-    std::string message, std::string rendered,
+    TelemetrySmallCount occurrences, std::string fingerprint,
+    TelemetrySeverity severity, std::string message, std::string rendered,
     std::vector<PushTelemetryPayloadDiagnosticsNotes> notes,
     std::vector<PushTelemetryPayloadDiagnosticsAnnotations> annotations)
     : pipeline_id{std::move(pipeline_id)},
@@ -733,7 +733,7 @@ public:
   time last_seen;
   TelemetrySmallCount occurrences;
   std::string fingerprint;
-  Severity severity;
+  TelemetrySeverity severity;
   std::string message;
   std::string rendered;
   std::vector<PushTelemetryPayloadDiagnosticsNotes> notes;
@@ -1451,6 +1451,127 @@ public:
 template <>
 struct std::hash<tenzir::Liveness> {
   auto operator()(tenzir::Liveness const& value) const -> std::size_t {
+    return tenzir::hash(value);
+  }
+};
+
+namespace tenzir {
+
+enum class AdhocPipelineSeverity {
+  note,
+  warning,
+  error,
+};
+
+auto to_string(AdhocPipelineSeverity value) -> std::string_view;
+
+/// What a diagnostic adds below it, such as a hint or a link
+class DiagnosticNote {
+public:
+  DiagnosticNote(std::string kind, std::string message)
+    : kind{std::move(kind)}, message{std::move(message)} {
+  }
+
+  std::string kind;
+  std::string message;
+
+  friend auto operator==(DiagnosticNote const&, DiagnosticNote const&) -> bool
+    = default;
+
+  template <class HashAlgorithm>
+  friend auto hash_append(HashAlgorithm& h, DiagnosticNote const& value)
+    -> void {
+    hash_append(h, value.kind, value.message);
+  }
+};
+
+} // namespace tenzir
+
+template <>
+struct std::hash<tenzir::DiagnosticNote> {
+  auto operator()(tenzir::DiagnosticNote const& value) const -> std::size_t {
+    return tenzir::hash(value);
+  }
+};
+
+namespace tenzir {
+
+/// A span of the definition a diagnostic marks, in bytes from its start, and
+/// what it says there
+class DiagnosticAnnotation {
+public:
+  DiagnosticAnnotation(bool primary, std::string text, std::int64_t begin,
+                       std::int64_t end)
+    : primary{primary},
+      text{std::move(text)},
+      begin{std::move(begin)},
+      end{std::move(end)} {
+  }
+
+  bool primary;
+  std::string text;
+  std::int64_t begin;
+  std::int64_t end;
+
+  friend auto
+  operator==(DiagnosticAnnotation const&, DiagnosticAnnotation const&) -> bool
+    = default;
+
+  template <class HashAlgorithm>
+  friend auto hash_append(HashAlgorithm& h, DiagnosticAnnotation const& value)
+    -> void {
+    hash_append(h, value.primary, value.text, value.begin, value.end);
+  }
+};
+
+} // namespace tenzir
+
+template <>
+struct std::hash<tenzir::DiagnosticAnnotation> {
+  auto operator()(tenzir::DiagnosticAnnotation const& value) const
+    -> std::size_t {
+    return tenzir::hash(value);
+  }
+};
+
+namespace tenzir {
+
+/// A warning or error of a pipeline, as it compiled or ran. An ad-hoc pipeline
+/// streams each one once, and at most 100 of them; a refused definition lists
+/// at most 100 as well
+class Diagnostic {
+public:
+  Diagnostic(AdhocPipelineSeverity severity, std::string message,
+             std::string rendered, std::vector<DiagnosticNote> notes,
+             std::vector<DiagnosticAnnotation> annotations)
+    : severity{std::move(severity)},
+      message{std::move(message)},
+      rendered{std::move(rendered)},
+      notes{std::move(notes)},
+      annotations{std::move(annotations)} {
+  }
+
+  AdhocPipelineSeverity severity;
+  std::string message;
+  std::string rendered;
+  std::vector<DiagnosticNote> notes;
+  std::vector<DiagnosticAnnotation> annotations;
+
+  friend auto operator==(Diagnostic const&, Diagnostic const&) -> bool
+    = default;
+
+  template <class HashAlgorithm>
+  friend auto hash_append(HashAlgorithm& h, Diagnostic const& value) -> void {
+    hash_append(h, value.severity, value.message, value.rendered, value.notes,
+                value.annotations);
+  }
+};
+
+} // namespace tenzir
+
+template <>
+struct std::hash<tenzir::Diagnostic> {
+  auto operator()(tenzir::Diagnostic const& value) const -> std::size_t {
     return tenzir::hash(value);
   }
 };
@@ -2329,12 +2450,16 @@ public:
 
 class InvalidPipeline {
 public:
-  explicit InvalidPipeline(std::string message) : message{std::move(message)} {
+  InvalidPipeline(std::string message,
+                  Option<std::vector<Diagnostic>> diagnostics)
+    : message{std::move(message)}, diagnostics{std::move(diagnostics)} {
   }
 
   static constexpr auto status = std::uint16_t{400};
 
   std::string message;
+  /// `diagnostics`, may be absent.
+  Option<std::vector<Diagnostic>> diagnostics;
 };
 
 class PipelineExists {
@@ -2852,8 +2977,8 @@ auto parse_pipeline_sample(simdjson::dom::element value)
   -> Result<PipelineSample, ParseError>;
 auto parse_telemetry_small_count(simdjson::dom::element value)
   -> Result<TelemetrySmallCount, ParseError>;
-auto parse_severity(simdjson::dom::element value)
-  -> Result<Severity, ParseError>;
+auto parse_telemetry_severity(simdjson::dom::element value)
+  -> Result<TelemetrySeverity, ParseError>;
 auto parse_push_telemetry_payload_diagnostics_notes(simdjson::dom::element value)
   -> Result<PushTelemetryPayloadDiagnosticsNotes, ParseError>;
 auto parse_push_telemetry_payload_diagnostics_annotations(
@@ -2896,6 +3021,14 @@ auto parse_resolved_secret(simdjson::dom::element value)
   -> Result<ResolvedSecret, ParseError>;
 auto parse_liveness(simdjson::dom::element value)
   -> Result<Liveness, ParseError>;
+auto parse_adhoc_pipeline_severity(simdjson::dom::element value)
+  -> Result<AdhocPipelineSeverity, ParseError>;
+auto parse_diagnostic_note(simdjson::dom::element value)
+  -> Result<DiagnosticNote, ParseError>;
+auto parse_diagnostic_annotation(simdjson::dom::element value)
+  -> Result<DiagnosticAnnotation, ParseError>;
+auto parse_diagnostic(simdjson::dom::element value)
+  -> Result<Diagnostic, ParseError>;
 auto parse_identified_pipeline(simdjson::dom::element value)
   -> Result<IdentifiedPipeline, ParseError>;
 auto parse_pipeline_state(simdjson::dom::element value)
@@ -2959,7 +3092,7 @@ auto write_json(ConnectorFlow const& value, std::string& out) -> void;
 auto write_json(TelemetrySeconds const& value, std::string& out) -> void;
 auto write_json(PipelineSample const& value, std::string& out) -> void;
 auto write_json(TelemetrySmallCount const& value, std::string& out) -> void;
-auto write_json(Severity const& value, std::string& out) -> void;
+auto write_json(TelemetrySeverity const& value, std::string& out) -> void;
 auto write_json(PushTelemetryPayloadDiagnosticsNotes const& value,
                 std::string& out) -> void;
 auto write_json(PushTelemetryPayloadDiagnosticsAnnotations const& value,
@@ -2986,6 +3119,10 @@ auto write_json(DeploymentSecretPath const& value, std::string& out) -> void;
 auto write_json(SecretResolution const& value, std::string& out) -> void;
 auto write_json(ResolvedSecret const& value, std::string& out) -> void;
 auto write_json(Liveness const& value, std::string& out) -> void;
+auto write_json(AdhocPipelineSeverity const& value, std::string& out) -> void;
+auto write_json(DiagnosticNote const& value, std::string& out) -> void;
+auto write_json(DiagnosticAnnotation const& value, std::string& out) -> void;
+auto write_json(Diagnostic const& value, std::string& out) -> void;
 auto write_json(IdentifiedPipeline const& value, std::string& out) -> void;
 auto write_json(PipelineState const& value, std::string& out) -> void;
 auto write_json(PipelineStatus const& value, std::string& out) -> void;

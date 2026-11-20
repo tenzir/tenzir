@@ -5,6 +5,7 @@
 #include <tenzir/controller/api_support.hpp>
 #include <tenzir/controller/generated/api.hpp>
 #include <tenzir/platform_profiler.hpp>
+#include <tenzir/source.hpp>
 
 #include <folly/coro/BlockingWait.h>
 #include <folly/coro/Collect.h>
@@ -708,6 +709,38 @@ TEST("platform profiler folds repeated diagnostics and accounts for "
   }
   CHECK_EQUAL(occurrences, 600);
   CHECK_EQUAL(batch.runs.size(), 8u);
+}
+
+TEST("platform profiler points a user-defined operator's diagnostic at its "
+     "call") {
+  auto sent = std::make_shared<Sent>();
+  auto reporter = recording(sent);
+  auto profiler = PlatformProfiler{reporter, "pipeline", 1};
+  auto sources = SourceMap{};
+  auto input = Source::new_source("from {}\nouter\n", "<pipeline>", true);
+  auto body = Source::new_source("head -1\n", "<body>", false);
+  auto input_id = input->index;
+  auto body_id = body->index;
+  sources.add_source(std::move(input));
+  sources.add_source(std::move(body));
+  auto call = sources.add_call_site(location{8, 13, input_id, 0});
+  profiler.diagnostic(
+    diagnostic::error("oops").primary(location{5, 7, body_id, call}).done(),
+    sources);
+  profiler.transition("failed");
+  flush(reporter);
+  REQUIRE_EQUAL(sent->batches.size(), 1u);
+  REQUIRE_EQUAL(sent->batches[0].diagnostics.size(), 1u);
+  auto const& reported = sent->batches[0].diagnostics[0];
+  // The text says where the pipeline called the operator, as `tenzir` does.
+  CHECK(reported.rendered.contains("called from here"));
+  CHECK(reported.rendered.contains("outer"));
+  // The spans are those of the definition only: the call, and not the body.
+  REQUIRE_EQUAL(reported.annotations.size(), 1u);
+  CHECK(reported.annotations[0].primary);
+  CHECK_EQUAL(reported.annotations[0].text, "called from here");
+  CHECK_EQUAL(reported.annotations[0].begin.value(), 8);
+  CHECK_EQUAL(reported.annotations[0].end.value(), 13);
 }
 
 } // namespace tenzir
