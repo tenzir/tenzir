@@ -38,6 +38,7 @@
 #include <list>
 #include <map>
 #include <set>
+#include <span>
 #include <unordered_set>
 #include <vector>
 
@@ -506,6 +507,13 @@ public:
 
   /// Erase this partition from the catalog. Leaves the on-disk files alone.
   void erase(const uuid& partition, notify_policy notify = notify_policy::yes);
+
+  /// Erase these partitions from the catalog in a single synopsis generation.
+  /// Each affected schema is rebuilt once, so the cost is linear in the size
+  /// of the touched schemas rather than in their size times the number of
+  /// erased partitions. Leaves the on-disk files alone.
+  void erase(std::span<const uuid> partitions, notify_policy notify
+                                               = notify_policy::yes);
 
   /// Records an outstanding candidate set and starts monitoring its owner, so
   /// that the lease is released even if the owner never gets around to it.

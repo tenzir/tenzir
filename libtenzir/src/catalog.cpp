@@ -56,6 +56,7 @@
 #include <filesystem>
 #include <ranges>
 #include <set>
+#include <span>
 #include <string_view>
 #include <unordered_set>
 
@@ -634,39 +635,76 @@ auto catalog_state::mutable_schema(synopsis_map& map, const type& schema)
 }
 
 void catalog_state::erase(const uuid& partition, notify_policy notify) {
-  // Admissions identify accounted partitions, including while package startup
-  // still holds back maintenance scheduling.
-  if (auto synopsis = find_synopsis(partition);
-      synopsis and admissions.contains(partition)) {
-    catalog_bytes -= synopsis->store_file.size + synopsis->indexes_file.size
-                     + synopsis->sketches_file.size;
-  }
-  ++storage_generation;
-  admissions.erase(partition);
-  policy_dirty.erase(partition);
-  policy_pending.erase(partition);
-  eviction_suppressed.erase(partition);
-  if (policy and notify == notify_policy::yes) {
-    policy->on_erased(partition);
-  }
-  invalidate_sketches(partition);
-  // Find the containing schema first, so a miss clones nothing.
-  const auto containing = std::invoke([&]() -> Option<type> {
+  erase(std::span{&partition, 1}, notify);
+}
+
+void catalog_state::erase(std::span<const uuid> partitions,
+                          notify_policy notify) {
+  // Group the partitions by the schema that contains them, so that every
+  // touched schema is rebuilt exactly once below.
+  auto by_schema = std::unordered_map<type, std::vector<uuid>>{};
+  for (const auto& partition : partitions) {
+    // Admissions identify accounted partitions, including while package
+    // startup still holds back maintenance scheduling.
+    auto containing = Option<type>{};
     for (const auto& [schema, entries] : *synopses_per_type) {
-      if (entries->find(partition) != entries->end()) {
-        return schema;
+      if (const auto it = entries->find(partition); it != entries->end()) {
+        if (admissions.contains(partition)) {
+          const auto& synopsis = it->second;
+          catalog_bytes -= synopsis->store_file.size
+                           + synopsis->indexes_file.size
+                           + synopsis->sketches_file.size;
+        }
+        containing = schema;
+        break;
       }
     }
-    return None{};
-  });
-  if (not containing) {
+    ++storage_generation;
+    admissions.erase(partition);
+    policy_dirty.erase(partition);
+    policy_pending.erase(partition);
+    eviction_suppressed.erase(partition);
+    if (policy and notify == notify_policy::yes) {
+      policy->on_erased(partition);
+    }
+    invalidate_sketches(partition);
+    if (containing) {
+      by_schema[*containing].push_back(partition);
+    }
+  }
+  if (by_schema.empty()) {
     return;
   }
   update_synopses([&](synopsis_map& map) {
-    auto& entries = mutable_schema(map, *containing);
-    entries.erase(partition);
-    if (entries.empty()) {
-      map.erase(*containing);
+    for (auto& [schema, erased] : by_schema) {
+      std::ranges::sort(erased);
+      const auto duplicates = std::ranges::unique(erased);
+      erased.erase(duplicates.begin(), duplicates.end());
+      const auto it = map.find(schema);
+      TENZIR_ASSERT(it != map.end());
+      const auto& entries = *it->second;
+      TENZIR_ASSERT(entries.size() >= erased.size());
+      if (entries.size() == erased.size()) {
+        map.erase(it);
+        continue;
+      }
+      // Both sequences are sorted by partition ID, so a single merge pass
+      // keeps everything that is not erased.
+      auto kept = schema_synopsis_map::vector_type{};
+      kept.reserve(entries.size() - erased.size());
+      auto next = erased.begin();
+      for (const auto& entry : entries) {
+        while (next != erased.end() and *next < entry.first) {
+          ++next;
+        }
+        if (next != erased.end() and *next == entry.first) {
+          ++next;
+          continue;
+        }
+        kept.push_back(entry);
+      }
+      it->second = std::make_shared<const schema_synopsis_map>(
+        schema_synopsis_map::make_unsafe(std::move(kept)));
     }
   });
 }
@@ -1935,9 +1973,7 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
         }
         policy->on_replaced(old_uuids, outputs);
       }
-      for (auto const& uuid : old_uuids) {
-        self->state().erase(uuid, catalog_state::notify_policy::no);
-      }
+      self->state().erase(old_uuids, catalog_state::notify_policy::no);
       auto result = self->state().merge(std::move(new_synopses));
       self->state().advance_maintenance(time::clock::now());
       return result;
