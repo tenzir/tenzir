@@ -1,4 +1,4 @@
-created: 2026-11-18
+created: 2026-11-20
 title: A new foundation for security data
 intro: >-
   This release candidate rebuilds Tenzir with a new platform and interface, a new
@@ -7,4 +7,4 @@ intro: >-
   to receive maintenance releases until the migration path is ready.
 source:
   mode: snapshot-prerelease
-  previous_stable: v6.22.0
+  previous_stable: v6.23.0
