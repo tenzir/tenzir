@@ -1,0 +1,8 @@
+// Creates and fills the table of the tests of non-ASCII `varchar` text in
+// different code pages.
+from_microsoft_sql sql="CREATE TABLE varchars (s VARCHAR(20), m VARCHAR(MAX), j VARCHAR(20) COLLATE Japanese_CI_AS, u VARCHAR(20) COLLATE Latin1_General_100_CI_AS_SC_UTF8); INSERT INTO varchars VALUES (N'élan', N'Grüße', N'日本語', N'naïve 😀')",
+                   host=env("MSSQL_HOST"),
+                   port=int(env("MSSQL_PORT")),
+                   user=env("MSSQL_ADMIN_USER"),
+                   password=env("MSSQL_ADMIN_PASSWORD"),
+                   database=env("MSSQL_DATABASE")

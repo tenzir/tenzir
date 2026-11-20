@@ -308,6 +308,13 @@ auto encode_utf16(std::string_view input, std::endian order)
 auto encode_utf16_lossy(std::string_view input, std::endian order)
   -> std::string;
 
+/// Decodes text in the Windows code page `code_page`, such as 1252, into
+/// UTF-8. Bytes that the code page leaves unmapped become a substitution
+/// character. Returns `None` for non-ASCII input in an unknown code page, or
+/// beyond about 700 MB.
+auto decode_code_page(std::span<std::byte const> input, uint16_t code_page)
+  -> Option<std::string>;
+
 /// Validates whether a string contains well-formed UTF-8.
 auto is_valid_utf8(std::string_view bytes) -> bool;
 
