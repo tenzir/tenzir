@@ -73,6 +73,27 @@ Filters that compare `_time` with a time, and the operators after them, stay in 
 
 *By @mavam.*
 
+### Sigma rules for generic proxy, web server, and DNS logs on OCSF
+
+The `sigma` operator now matches more stock Sigma rules against OCSF events. Rules for Sigma's generic `proxy` and `webserver` categories match HTTP Activity, and rules for the generic `dns` category match DNS Activity, from any producer:
+
+```yaml
+title: Google Drive Direct Download
+logsource:
+  category: proxy
+detection:
+  selection:
+    c-uri|contains|all:
+      - drive.google.com
+      - uc?id
+      - export=download
+  condition: selection
+```
+
+Proxy and web server rules read the URL, path, query, host, method, user agent, referrer, status code, byte counts, and endpoint addresses from their OCSF attributes. Fields without an OCSF counterpart, such as `c-uri-extension` and `cs-cookie`, skip the rule with a diagnostic that names the field.
+
+*By @mavam.*
+
 ## 🔧 Changes
 
 ### Content-skipping filters and limits after from_microsoft_365_activity
@@ -116,6 +137,12 @@ KQL computes `accounts` exactly with `count_distinctif(Account, isnotempty(Accou
 
 *By @mavam.*
 
+### Improved performance downstream of read operators
+
+We tuned the size of batches produced by parsers such as `read_json`, `read_csv`, and `read_syslog`. This improves the throughput of the operators that process events downstream of a parser.
+
+*By @IyeOnline.*
+
 ### KQL sources project fields also without pushdown
 
 With `pushdown=false`, `from_microsoft_defender` and `from_azure_log_analytics` now keep only the fields that the operators after them read, as other sources do. For example:
@@ -140,6 +167,25 @@ summarize big=count_if(n, v => v > 0), kinds=count_distinct(n), total=sum(id), a
 ```
 
 SQL Server computes this as `COUNT_BIG(CASE WHEN (([n] IS NOT NULL) AND ([n] > 0)) THEN [n] END)`, `COUNT_BIG(DISTINCT [n])`, `SUM([id])`, and `AVG(CAST([id] AS float))`. DuckDB and MySQL compute all but `sum`, ClickHouse and Hydrolix all four, Splunk all four with `count(eval(...))`, `dc`, `sum`, and `avg`, and Microsoft Defender and Azure Log Analytics `count_if` with `countif`. SentinelOne computes `count_distinct` with the approximate `estimate_distinct`, since PowerQuery has no exact distinct count.
+
+*By @mavam.*
+
+### More functions and aggregations run in remote sources
+
+`from_duckdb`, `from_mysql`, `from_microsoft_sql`, `from_clickhouse`, `from_hydrolix`, `from_microsoft_defender`, `from_azure_log_analytics`, and `from_splunk` now compute many more functions in the source, in filters and in the groups and arguments of a `summarize`:
+
+- Numbers: `ceil`, `floor`, and `round`, which return an `int`, as well as `sqrt`, `exp`, and `log`, also with a base.
+- Times: `year`, `month`, `day`, `hour`, `minute`, and `second`, and `since_epoch` in KQL.
+- Strings: `capitalize`, `trim_start`, `trim_end`, `replace`, `is_empty`, `slice` with constant bounds that are not negative, and the hashes `hash_md5`, `hash_sha1`, and `hash_sha256` of strings.
+- Aggregations: `stddev` and `variance`, `all` and `any` where the source has booleans, and `mean` in KQL.
+
+```tql
+from_clickhouse table="connections", host="localhost"
+day = ts.day()
+summarize day, deviation=stddev(bytes), dropped=any(blocked)
+```
+
+Which functions a source computes depends on what it can spell. The functions run with the source's own semantics, such as how it rounds floating-point numbers or maps case. KQL sums now yield `null` instead of 0 when there are no values, and ClickHouse buckets times before 1970 correctly. Use `pushdown=false` to compute everything in Tenzir.
 
 *By @mavam.*
 
@@ -271,6 +317,22 @@ DuckDB computes `worst` as `MAX(("severity" * 2))`. An assignment that the summa
 
 *By @mavam.*
 
+### Sums run in DuckDB and MySQL, and time buckets in MySQL
+
+`from_duckdb` and `from_mysql` now compute `sum` in the database, and `from_mysql` also computes time buckets with `floor`:
+
+```tql
+from_mysql table="connections", host="localhost", database="net"
+hour = floor(ts, 1h)
+summarize hour, bytes=sum(bytes)
+```
+
+Both databases widen a sum of integers beyond 64 bits, as a `HUGEINT` in DuckDB and a `DECIMAL` in MySQL. The sum still arrives as an `int`, and like in TQL, a sum that exceeds 64 bits becomes `null` with an "integer overflow" warning. A sum of floating-point numbers stays a `float`.
+
+MySQL buckets `DATETIME` and `DATE` values by multiples of the width since the epoch, as TQL does, also before 1970, and the buckets arrive as times. Like comparisons with time literals, the buckets treat the values as UTC. Widths below a microsecond and multiples of a week or a month stay in the pipeline.
+
+*By @mavam.*
+
 ### Tighter time ranges from filters
 
 Sources that narrow the time range of their requests to the filters after them now share one reading of those filters. A strict bound now excludes its time, so `from_splunk` requests `latest_time=1735689720` instead of `1735689721` for `where _time < 2025-01-01T00:02:00Z`. `from_microsoft_365_activity` now also narrows the listing to the range that encloses an `or`, such as for `where microsoft_365_activity.content_created >= 2024-01-02 or microsoft_365_activity.content_created == 2024-01-01`, and narrows the side of an `==` that it can represent.
@@ -337,11 +399,40 @@ Results with more than about two million values no longer fail with "result exce
 
 *By @mavam.*
 
+### Warning when accept_tcp reaches its connection limit
+
+The `accept_tcp` and `accept_unix_socket` operators now emit a warning when all `max_connections` slots are in use. While the limit is reached, new clients wait until an open connection closes, which previously happened without any notice:
+
+```text
+warning: reached the connection limit of 128
+  = note: endpoint: 0.0.0.0:514
+  = note: new connections wait until an open connection closes
+  = hint: increase `max_connections` to accept more concurrent clients
+```
+
+The warning repeats at most once every five minutes.
+
+*By @tobim.*
+
 ## 🐞 Bug fixes
+
+### accept_tcp closes connections to vanished peers
+
+The `accept_tcp` operator now detects clients that disappeared without closing their connection, for example because a NAT gateway or firewall dropped the connection state or the client host lost power. Previously, such connections stayed open indefinitely and kept occupying one of the `max_connections` slots, so the operator could eventually stop accepting new clients.
+
+The operator now enables TCP keepalive on accepted connections and closes a connection when its peer does not respond for about five minutes. Clients that are connected but idle are not affected.
+
+*By @tobim.*
 
 ### Accurate CPU times, start times, and memory sizes from processes on Linux
 
 On Linux, the `processes` operator reported `utime` and `stime` in whole seconds, which showed a mostly idle process as using no CPU at all, and left `startup` empty. It also reported `peak_mem` and `swap` in kilobytes rather than bytes, unlike `rsize` and `vsize`. The operator now reports CPU times to the millisecond, the time each process started, and all memory sizes in bytes.
+
+*By @mavam.*
+
+### Exact fractional seconds in parsed times
+
+Time literals and parsed time strings could be off by a nanosecond, as their fractional seconds went through a floating-point number that holds them only approximately. For example, `2024-01-01T00:00:00.000001` meant `2024-01-01T00:00:00.000000999`. Such times now mean exactly what they spell, in literals, in `time()`, and in parsers such as `read_syslog`.
 
 *By @mavam.*
 
@@ -368,6 +459,12 @@ Setting `debug` also no longer floods the pipeline with warnings. Previously, ev
 The `subscribe` operator uses less CPU. Its `schema_id` metrics values now match those reported by `measure events` and `type_id(this)` instead of legacy schema fingerprints.
 
 *By @IyeOnline.*
+
+### Non-ASCII varchar text from SQL Server
+
+`from_microsoft_sql` now decodes `varchar`, `char`, and `text` values by the code page of their collation, so non-ASCII text such as `élan` arrives as valid UTF-8 instead of raw code page bytes. Previously, string functions in the pipeline returned `null` for such values.
+
+*By @mavam.*
 
 ### Package hints name the tenzir command
 
