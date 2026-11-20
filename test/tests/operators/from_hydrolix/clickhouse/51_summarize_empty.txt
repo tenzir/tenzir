@@ -1,4 +1,4 @@
 {
   events: 0,
-  hi: null,
+  hi: 0,
 }

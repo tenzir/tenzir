@@ -89,7 +89,7 @@ public:
   /// Spells a finite `double` so that the target reads it as a floating-point
   /// number, also where its value is integral, as in `2.0`. Defaults to the
   /// shortest decimal spelling with an exponent, such as `2e0` or `1.5e0`.
-  auto render_double(double value) const -> std::string override;
+  auto render_double(double value) const -> Option<std::string> override;
 
   /// Spells a boolean literal. Defaults to `TRUE` or `FALSE`.
   auto render_bool(bool value) const -> std::string override;

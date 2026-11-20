@@ -1,0 +1,541 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "from_sentinelone_data_lake",
+       store: {
+         op: {
+           path: [
+             `from_sentinelone_data_lake` @ [1]:195..221 from 0
+           ],
+           ref: std::from_sentinelone_data_lake/op
+         },
+         args: [
+           located "https://example.sentinelone.net" @ [1]:222..255 from 0
+         ],
+         named_args: [
+           {
+             index: 0,
+             value: expression constant string "t" @ [1]:263..266 from 0
+           },
+           {
+             index: 1,
+             value: located "event.type = *" @ [1]:276..292 from 0
+           }
+         ]
+       },
+       filter: [
+         
+       ],
+-      order: "ordered"
+-    },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:293..298 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression function_call {
+-          fn: {
+-            path: [
+-              `starts_with` @ [1]:318..329 from 0
+-            ],
+-            ref: std::starts_with/fn
+-          },
+-          args: [
+-            function_call {
+-              fn: {
+-                path: [
+-                  `to_lower` @ [1]:307..315 from 0
+-                ],
+-                ref: std::to_lower/fn
++      order: "ordered",
++      projection: [
++        {
++          expr: field_access {
++            left: field_access {
++              left: root_field {
++                id: `tgt` @ [1]:389..392 from 0,
++                has_question_mark: false
+               },
+-              args: [
+-                field_access {
+-                  left: root_field {
+-                    id: `os` @ [1]:299..301 from 0,
+-                    has_question_mark: false
+-                  },
+-                  has_question_mark: false,
+-                  name: `name` @ [1]:302..306 from 0,
+-                  location: [1]:299..306 from 0
+-                }
+-              ],
+-              method: true,
+-              location: [1]:299..317 from 0
+-            },
+-            constant string "lin" @ [1]:330..335 from 0
+-          ],
+-          method: true,
+-          location: [1]:299..336 from 0
++              has_question_mark: false,
++              name: `file` @ [1]:393..397 from 0,
++              location: [1]:389..397 from 0
++            },
++            has_question_mark: false,
++            name: `name` @ [1]:398..402 from 0,
++            location: [1]:389..402 from 0
++          },
++          has_this: false,
++          path: [
++            {
++              id: `tgt` @ [1]:389..392 from 0,
++              has_question_mark: false
++            },
++            {
++              id: `file` @ [1]:393..397 from 0,
++              has_question_mark: false
++            },
++            {
++              id: `name` @ [1]:398..402 from 0,
++              has_question_mark: false
++            }
++          ]
++        },
++        {
++          expr: field_access {
++            left: field_access {
++              left: root_field {
++                id: `tgt` @ [1]:437..440 from 0,
++                has_question_mark: false
++              },
++              has_question_mark: false,
++              name: `file` @ [1]:441..445 from 0,
++              location: [1]:437..445 from 0
++            },
++            has_question_mark: false,
++            name: `size` @ [1]:446..450 from 0,
++            location: [1]:437..450 from 0
++          },
++          has_this: false,
++          path: [
++            {
++              id: `tgt` @ [1]:437..440 from 0,
++              has_question_mark: false
++            },
++            {
++              id: `file` @ [1]:441..445 from 0,
++              has_question_mark: false
++            },
++            {
++              id: `size` @ [1]:446..450 from 0,
++              has_question_mark: false
++            }
++          ]
++        },
++        {
++          expr: root_field {
++            id: `v` @ [1]:457..458 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `v` @ [1]:457..458 from 0,
++              has_question_mark: false
++            }
++          ]
++        },
++        {
++          expr: root_field {
++            id: `timestamp` @ [1]:344..353 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `timestamp` @ [1]:344..353 from 0,
++              has_question_mark: false
++            }
++          ]
++        },
++        {
++          expr: field_access {
++            left: root_field {
++              id: `os` @ [1]:299..301 from 0,
++              has_question_mark: false
++            },
++            has_question_mark: false,
++            name: `name` @ [1]:302..306 from 0,
++            location: [1]:299..306 from 0
++          },
++          has_this: false,
++          path: [
++            {
++              id: `os` @ [1]:299..301 from 0,
++              has_question_mark: false
++            },
++            {
++              id: `name` @ [1]:302..306 from 0,
++              has_question_mark: false
++            }
++          ]
+         }
+       ],
+-      named_args: [
+-        
+-      ]
+-    },
+-    SetIr {
+-      assignments: [
+-        {
+-          left: root_field {
+-            id: `hour` @ [1]:337..341 from 0,
+-            has_question_mark: false
+-          },
+-          right: function_call {
++      plan: [
++        Filter {
++          predicate: function_call {
+             fn: {
+               path: [
+-                `hour` @ [1]:354..358 from 0
+-              ],
+-              ref: std::hour/fn
++                `starts_with` @ [1]:318..329 from 0
++              ],
++              ref: std::starts_with/fn
+             },
+             args: [
+-              root_field {
+-                id: `timestamp` @ [1]:344..353 from 0,
+-                has_question_mark: false
+-              }
++              function_call {
++                fn: {
++                  path: [
++                    `to_lower` @ [1]:307..315 from 0
++                  ],
++                  ref: std::to_lower/fn
++                },
++                args: [
++                  field_access {
++                    left: root_field {
++                      id: `os` @ [1]:299..301 from 0,
++                      has_question_mark: false
++                    },
++                    has_question_mark: false,
++                    name: `name` @ [1]:302..306 from 0,
++                    location: [1]:299..306 from 0
++                  }
++                ],
++                method: true,
++                location: [1]:299..317 from 0
++              },
++              constant string "lin" @ [1]:330..335 from 0
+             ],
+             method: true,
+-            location: [1]:344..360 from 0
+-          },
+-          location: [1]:337..360 from 0
+-        }
+-      ],
+-      order: "ordered"
+-    },
+-    summarize {
+-      self: [1]:361..370 from 0,
+-      cfg: {
+-        aggregates: [
+-          {
+-            dest: {
+-              expr: root_field {
+-                id: `longest` @ [1]:377..384 from 0,
+-                has_question_mark: false
+-              },
+-              has_this: false,
+-              path: [
+-                {
+-                  id: `longest` @ [1]:377..384 from 0,
+-                  has_question_mark: false
++            location: [1]:299..336 from 0
++          }
++        },
++        Aggregate {
++          columns: [
++            {
++              output: [
++                "hour"
++              ],
++              args: [
++                function_call {
++                  fn: {
++                    path: [
++                      `hour` @ [1]:354..358 from 0
++                    ],
++                    ref: std::hour/fn
++                  },
++                  args: [
++                    root_field {
++                      id: `timestamp` @ [1]:344..353 from 0,
++                      has_question_mark: false
++                    }
++                  ],
++                  method: true,
++                  location: [1]:344..360 from 0
+                 }
+               ]
+             },
+-            call: {
+-              fn: {
+-                path: [
+-                  `max` @ [1]:385..388 from 0
+-                ],
+-                ref: std::max/fn
+-              },
++            {
++              output: [
++                "longest"
++              ],
++              function: "max",
+               args: [
+                 function_call {
+                   fn: {
+                     path: [
+                       `length_chars` @ [1]:403..415 from 0
+                     ],
+                     ref: std::length_chars/fn
+                   },
+                   args: [
+                     field_access {
+                       left: field_access {
+                         left: root_field {
+                           id: `tgt` @ [1]:389..392 from 0,
+                           has_question_mark: false
+                         },
+                         has_question_mark: false,
+                         name: `file` @ [1]:393..397 from 0,
+                         location: [1]:389..397 from 0
+                       },
+                       has_question_mark: false,
+                       name: `name` @ [1]:398..402 from 0,
+                       location: [1]:389..402 from 0
+                     }
+                   ],
+                   method: true,
+                   location: [1]:389..417 from 0
+                 }
+-              ],
+-              method: false,
+-              location: [1]:385..418 from 0
+-            }
+-          },
+-          {
+-            dest: {
+-              expr: root_field {
+-                id: `large` @ [1]:422..427 from 0,
+-                has_question_mark: false
+-              },
+-              has_this: false,
+-              path: [
+-                {
+-                  id: `large` @ [1]:422..427 from 0,
+-                  has_question_mark: false
+-                }
+               ]
+             },
+-            call: {
+-              fn: {
+-                path: [
+-                  `count_if` @ [1]:428..436 from 0
+-                ],
+-                ref: std::count_if/fn
+-              },
++            {
++              output: [
++                "large"
++              ],
++              function: "count_if",
+               args: [
+                 field_access {
+                   left: field_access {
+                     left: root_field {
+                       id: `tgt` @ [1]:437..440 from 0,
+                       has_question_mark: false
+                     },
+                     has_question_mark: false,
+                     name: `file` @ [1]:441..445 from 0,
+                     location: [1]:437..445 from 0
+                   },
+                   has_question_mark: false,
+                   name: `size` @ [1]:446..450 from 0,
+                   location: [1]:437..450 from 0
+                 },
+-                lambda_expr {
+-                  params: [
+-                    `v` @ [1]:452..453 from 0
+-                  ],
+-                  body: binary_expr {
+-                    left: root_field {
+-                      id: `v` @ [1]:457..458 from 0,
+-                      has_question_mark: false
++                binary_expr {
++                  left: binary_expr {
++                    left: field_access {
++                      left: field_access {
++                        left: root_field {
++                          id: `tgt` @ [1]:437..440 from 0,
++                          has_question_mark: false
++                        },
++                        has_question_mark: false,
++                        name: `file` @ [1]:441..445 from 0,
++                        location: [1]:437..445 from 0
++                      },
++                      has_question_mark: false,
++                      name: `size` @ [1]:446..450 from 0,
++                      location: [1]:437..450 from 0
++                    },
++                    op: "neq",
++                    right: constant none_t {} @ [0]:0..0 from 0,
++                    location: [1]:437..450 from 0
++                  },
++                  op: "and_",
++                  right: binary_expr {
++                    left: field_access {
++                      left: field_access {
++                        left: root_field {
++                          id: `tgt` @ [1]:437..440 from 0,
++                          has_question_mark: false
++                        },
++                        has_question_mark: false,
++                        name: `file` @ [1]:441..445 from 0,
++                        location: [1]:437..445 from 0
++                      },
++                      has_question_mark: false,
++                      name: `size` @ [1]:446..450 from 0,
++                      location: [1]:437..450 from 0
+                     },
+                     op: "gt",
+                     right: constant int64 1000 @ [1]:461..465 from 0,
+                     location: [1]:457..465 from 0
+                   },
+-                  location: [1]:452..465 from 0
+-                }
+-              ],
+-              method: false,
+-              location: [1]:428..466 from 0
+-            }
+-          },
+-          {
+-            dest: {
+-              expr: root_field {
+-                id: `avg` @ [1]:468..471 from 0,
+-                has_question_mark: false
+-              },
+-              has_this: false,
+-              path: [
+-                {
+-                  id: `avg` @ [1]:468..471 from 0,
+-                  has_question_mark: false
++                  location: [1]:437..465 from 0
+                 }
+               ]
+             },
+-            call: {
+-              fn: {
+-                path: [
+-                  `mean` @ [1]:472..476 from 0
+-                ],
+-                ref: std::mean/fn
+-              },
++            {
++              output: [
++                "avg"
++              ],
++              function: "mean",
+               args: [
+                 binary_expr {
+                   left: field_access {
+                     left: field_access {
+                       left: root_field {
+                         id: `tgt` @ [1]:477..480 from 0,
+                         has_question_mark: false
+                       },
+                       has_question_mark: false,
+                       name: `file` @ [1]:481..485 from 0,
+                       location: [1]:477..485 from 0
+                     },
+                     has_question_mark: false,
+                     name: `size` @ [1]:486..490 from 0,
+                     location: [1]:477..490 from 0
+                   },
+                   op: "div",
+                   right: constant int64 1024 @ [1]:493..497 from 0,
+                   location: [1]:477..497 from 0
+                 }
+-              ],
+-              method: false,
+-              location: [1]:472..498 from 0
+-            }
+-          }
++              ]
++            }
++          ],
++          schema_name: "tenzir.summarize"
++        }
++      ],
++      declined: "`to_stdout` is no stage"
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:498..498 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
+         ],
+-        groups: [
+-          {
+-            expr: {
+-              expr: root_field {
+-                id: `hour` @ [1]:371..375 from 0,
+-                has_question_mark: false
+-              },
+-              has_this: false,
+-              path: [
+-                {
+-                  id: `hour` @ [1]:371..375 from 0,
+-                  has_question_mark: false
+-                }
+-              ]
+-            }
+-          }
+-        ],
+-        indices: [
+-          -1,
+-          0,
+-          1,
+-          2
+-        ],
+-        emission: "final",
+-        mode: "reset",
+-        output: "summary",
+-        emit_every: 1
+-      }
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ],
+   definition_location: [1]:195..498 from 0
+ }

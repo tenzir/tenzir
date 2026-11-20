@@ -9,10 +9,10 @@
 #pragma once
 
 #include "tenzir/ip.hpp"
+#include "tenzir/ir.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/pushdown/layout.hpp"
 #include "tenzir/ref.hpp"
-#include "tenzir/subnet.hpp"
 #include "tenzir/time.hpp"
 #include "tenzir/tql2/ast.hpp"
 
@@ -50,7 +50,7 @@ class ExpressionRenderer;
 /// - `{0:pred}` spells the argument as a predicate.
 /// - `{0:nat}` requires a constant integer that is not negative, and spells
 ///   it as a decimal number.
-/// - `{0:s}`, `{0:ms}`, `{0:us}`, and `{0:ns}` require a constant duration
+/// - `{0:s}`, `{0:us}`, and `{0:ns}` require a constant duration
 ///   that is a whole, positive count of the unit, but no multiple of a week or
 ///   a month, which TQL buckets by the calendar, and spell the count.
 ///
@@ -60,19 +60,21 @@ class ExpressionRenderer;
 /// a row for each combination that the target spells. A call whose argument
 /// does not fit its hole has no spelling.
 ///
-/// A spelling computes with the semantics of the target. It must yield what
-/// TQL yields in kind: the same type, `null` where TQL yields `null`, and the
-/// same result for no input. Within that, the target's own arithmetic holds,
-/// such as how it rounds floating-point numbers, compares text, or maps case.
+/// A spelling computes with the semantics of the target, which may differ
+/// from TQL's: its types, how it treats `null`, its result for no input, and
+/// its arithmetic, such as how it rounds, compares text, or maps case.
 struct Function {
   std::string_view tql;
   uint8_t arity = 0;
   std::string_view spelling;
+  /// How the value that the spelling computes decodes.
+  Decode decode = Decode::native;
   /// Whether the spelling is a predicate rather than a value.
   bool predicate = false;
-  /// How a group key that the function computes decodes.
-  Decode decode = Decode::native;
 };
+
+/// The spelling of a TQL aggregation function, with holes as for `Function`.
+using Aggregation = Function;
 
 /// Whether `spelling` is well-formed for a row with `arity` positional
 /// arguments: every hole closes, names a positional argument below `arity` or
@@ -80,8 +82,8 @@ struct Function {
 /// in `static_assert(valid_rows(rows))`.
 constexpr auto valid_spelling(std::string_view spelling, size_t arity) -> bool {
   constexpr auto npos = std::string_view::npos;
-  constexpr auto kinds = std::array<std::string_view, 7>{
-    "", "pred", "nat", "s", "ms", "us", "ns",
+  constexpr auto kinds = std::array<std::string_view, 6>{
+    "", "pred", "nat", "s", "us", "ns",
   };
   auto const digit = [](char c) {
     return c >= '0' and c <= '9';
@@ -127,9 +129,8 @@ constexpr auto valid_spelling(std::string_view spelling, size_t arity) -> bool {
 }
 
 /// Whether every row of `rows` has a well-formed spelling.
-template <class Row, size_t N>
-consteval auto valid_rows(std::array<Row, N> const& rows) -> bool {
-  return std::ranges::all_of(rows, [](Row const& row) {
+consteval auto valid_rows(std::span<Function const> rows) -> bool {
+  return std::ranges::all_of(rows, [](Function const& row) {
     return valid_spelling(row.spelling, row.arity);
   });
 }
@@ -139,58 +140,16 @@ consteval auto valid_rows(std::array<Row, N> const& rows) -> bool {
 /// calendar.
 auto bucket_width(ast::expression const& expr) -> Option<duration>;
 
-/// The spelling of a TQL aggregation function, with holes as for `Function`.
-struct Aggregation {
-  std::string_view tql;
-  uint8_t arity = 0;
-  std::string_view spelling;
-  Decode decode = Decode::native;
-};
-
-/// The arguments of a call: the positional ones in order, and the named ones,
-/// which are assignments to a plain name, by their name.
-struct CallArguments {
-  std::vector<Ref<ast::expression const>> positional;
-  std::vector<std::pair<std::string, Ref<ast::expression const>>> named;
-};
-
-/// Splits `args` into positional and named arguments.
-auto call_arguments(std::span<ast::expression const> args) -> CallArguments;
-
-/// Whether a row with `spelling` and `arity` applies to a call with
-/// `positional` positional arguments and the `named` ones, which must be
-/// exactly the named arguments that its holes name.
-auto spelling_fits(std::string_view spelling, size_t arity, size_t positional,
-                   std::span<std::string const> named) -> bool;
-
-/// Returns the row of `rows` for `name` that applies to `args`, if any.
-template <class Row>
-auto find_row(std::span<Row const> rows, std::string_view name,
-              std::span<ast::expression const> args) -> Row const* {
-  auto const split = call_arguments(args);
-  auto names = std::vector<std::string>{};
-  for (auto const& [arg_name, _] : split.named) {
-    names.push_back(arg_name);
-  }
-  auto it = std::ranges::find_if(rows, [&](Row const& row) {
-    return row.tql == name
-           and spelling_fits(row.spelling, row.arity, split.positional.size(),
-                             names);
-  });
-  return it == rows.end() ? nullptr : &*it;
-}
+/// Returns the row of `rows` for `name` that applies to `args`, if any: one
+/// with as many positional arguments, whose holes name exactly the named
+/// arguments of the call.
+auto find_row(std::span<Function const> rows, std::string_view name,
+              std::span<ast::expression const> args) -> Function const*;
 
 /// Returns the row of `rows` for `name` with `arity` positional arguments and
 /// no named ones, if any.
-template <class Row>
-auto find_row(std::span<Row const> rows, std::string_view name, size_t arity)
-  -> Row const* {
-  auto it = std::ranges::find_if(rows, [&](Row const& row) {
-    return row.tql == name
-           and spelling_fits(row.spelling, row.arity, arity, {});
-  });
-  return it == rows.end() ? nullptr : &*it;
-}
+auto find_row(std::span<Function const> rows, std::string_view name,
+              size_t arity) -> Function const*;
 
 /// Fills the holes of `spelling` for `args` with `fill`, which receives an
 /// argument and whether its hole is a predicate. Returns `None` if an argument
@@ -224,24 +183,19 @@ public:
   /// cannot.
   virtual auto render_uint(uint64_t value) const -> Option<std::string> = 0;
 
-  /// Whether the target reads `value`, a finite `double`, as `render_double`
-  /// spells it. Defaults to `true`.
-  virtual auto accepts_double(double value) const -> bool;
-
-  /// Spells a finite `double`.
-  virtual auto render_double(double value) const -> std::string = 0;
+  /// Spells a finite `double`, or returns `None` if the target cannot.
+  virtual auto render_double(double value) const -> Option<std::string> = 0;
 
   /// Spells a string literal, or returns `None` if the dialect cannot spell
   /// `text`.
   virtual auto quote_string(std::string_view text) const -> Option<std::string>
     = 0;
 
-  /// Spells a time, a duration, an IP address, or a subnet literal. Each
-  /// defaults to vetoing.
+  /// Spells a time, a duration, or an IP address literal. Each defaults to
+  /// vetoing.
   virtual auto render_time(time value) const -> Option<std::string>;
   virtual auto render_duration(duration value) const -> Option<std::string>;
   virtual auto render_ip(ip value) const -> Option<std::string>;
-  virtual auto render_subnet(subnet value) const -> Option<std::string>;
 
   // -- Operators --------------------------------------------------------------
 
@@ -307,16 +261,26 @@ public:
   /// Defaults to `true`.
   virtual auto time_literal_arithmetic() const -> bool;
 
+  /// How the value of `expr` decodes when the target computes it, or `None`
+  /// if the dialect cannot tell, which keeps a group key of it local.
+  /// Defaults to the row of `functions()` of a call, and natively otherwise.
+  virtual auto value_decode(ast::expression const& expr) const
+    -> Option<Decode>;
+
   /// Whether a boolean value may stand where the dialect expects a predicate,
   /// as in `WHERE flag`, and a predicate where it expects a value, as in
   /// `(x > 1) = TRUE`.
   virtual auto boolean_values() const -> bool = 0;
 };
 
-/// How the value of `expr` decodes when `dialect` computes it: as the row of
-/// `ExpressionDialect::functions` of a call says, and natively otherwise.
-auto call_decode(ExpressionDialect const& dialect, ast::expression const& expr)
-  -> Decode;
+/// How the result column of `column` of an aggregation decodes, or `None` to
+/// keep it local. A group key decodes as its value, which `decode_of` tells,
+/// and so does an extremum where its value does not decode natively. Every
+/// other function decodes as its row of `ExpressionDialect::aggregations`.
+auto aggregate_decode(
+  ExpressionDialect const& dialect, ir::AggregateColumn const& column,
+  folly::FunctionRef<auto(ast::expression const&)->Option<Decode>> decode_of)
+  -> Option<Decode>;
 
 /// Spells expressions of TQL in an `ExpressionDialect`, with the semantics of
 /// the target, as far as their syntax allows. Fields bind through `bind`,

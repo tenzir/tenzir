@@ -28,7 +28,7 @@
 }
 {
   type: "QueryFinish",
-  query: "SELECT toInt64(count()) AS `__tenzir_column_0`, minOrNull(`time`) AS `__tenzir_column_1` FROM (SELECT `time` FROM default.fh_events WHERE (`time` > fromUnixTimestamp64Nano(1767225601000000000, 'UTC'))) AS `__tenzir_table`",
+  query: "SELECT toInt64(count()) AS `__tenzir_column_0`, min(`time`) AS `__tenzir_column_1` FROM (SELECT `time` FROM default.fh_events WHERE (`time` > fromUnixTimestamp64Nano(1767225601000000000, 'UTC'))) AS `__tenzir_table`",
 }
 {
   type: "QueryFinish",

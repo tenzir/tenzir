@@ -488,8 +488,17 @@ private:
     auto keys = std::vector<std::string>{};
     auto output = std::vector<Entry>{};
     auto decode = std::vector<Decoded>{};
-    // The group keys, whose columns may hold the target's own time.
-    auto key_output = std::vector<Entry>{};
+    // A field decodes as its column, also as the target's own time.
+    auto const decode_of = [&](ast::expression const& arg) -> Option<Decode> {
+      auto path = ir::field_segments(arg);
+      if (not path) {
+        return dialect_->value_decode(arg);
+      }
+      auto column = bind(*path);
+      auto it = column ? std::ranges::find(decode_, *column, &Decoded::first)
+                       : decode_.end();
+      return it == decode_.end() ? Decode::native : it->second;
+    };
     for (auto const& column : x.columns) {
       // A target computes on columns, so a key and a value argument read a
       // column or an alias. A predicate argument renders as for a filter, but
@@ -513,12 +522,14 @@ private:
         auto key = nameable(*input, aliases);
         if (not std::ranges::contains(keys, key)) {
           keys.push_back(key);
-          if (auto kind = call_decode(*dialect_, column.args.front());
-              kind != Decode::native) {
-            decode.emplace_back(key, kind);
+          auto kind = aggregate_decode(*dialect_, column, decode_of);
+          if (not kind) {
+            return false;
+          }
+          if (*kind != Decode::native) {
+            decode.emplace_back(key, *kind);
           }
         }
-        key_output.push_back({.path = column.output, .column = key});
         output.push_back({.path = column.output, .column = std::move(key)});
         continue;
       }
@@ -537,8 +548,9 @@ private:
       } else {
         name = fresh("column");
         functions.push_back({.name = name, .call = std::move(*call)});
-        if (row->decode != Decode::native) {
-          decode.emplace_back(name, row->decode);
+        auto kind = aggregate_decode(*dialect_, column, decode_of);
+        if (kind and *kind != Decode::native) {
+          decode.emplace_back(name, *kind);
         }
       }
       output.push_back({.path = column.output, .column = std::move(name)});
@@ -573,10 +585,9 @@ private:
       }
       keep_native_time(pairs);
     }
-    keep_decode(key_output, aliases);
     fields_ = std::move(output);
     excluded_.clear();
-    decode_.append_range(std::move(decode));
+    decode_ = std::move(decode);
     schema_name_ = x.schema_name;
     aggregates_ = true;
     return true;

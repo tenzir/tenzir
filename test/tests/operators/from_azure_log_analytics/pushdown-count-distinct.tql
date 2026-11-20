@@ -12,12 +12,11 @@ assertions:
       tokens: 1
       appended: |-
 
-        | summarize ['__tenzir_column_0'] = count_distinctif(['Account'], isnotempty(['Account'])) by ['Computer']
+        | summarize ['__tenzir_column_0'] = count_distinct(['Account']) by ['Computer']
         | sort by ['__tenzir_column_0'] desc
 ---
 
-// Log Analytics counts the distinct accounts exactly with `count_distinctif`,
-// which leaves out empty strings, as KQL holds no `null` string.
+// Log Analytics counts the distinct accounts exactly with `count_distinct`.
 from_azure_log_analytics env("AZLOG_QUERY"),
   workspace_id=env("AZLOG_WORKSPACE"),
   azure_auth={

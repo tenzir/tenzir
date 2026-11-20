@@ -465,7 +465,7 @@ public:
     return fmt::to_string(value);
   }
 
-  auto render_double(double value) const -> std::string override {
+  auto render_double(double value) const -> Option<std::string> override {
     return fmt::to_string(value);
   }
 
@@ -544,15 +544,17 @@ public:
   /// an empty `y`.
   auto functions() const -> std::span<Function const> override {
     static constexpr auto rows = std::array{
-      Function{"starts_with", 2, "(substr({0}, 1, len({1}))=={1})", true},
-      Function{"ends_with", 2, "(substr({0}, len({0})-len({1})+1)=={1})", true},
-      Function{"match_regex", 2, "match({0}, {1})", true},
+      Function{"starts_with", 2, "(substr({0}, 1, len({1}))=={1})",
+               Decode::native, true},
+      Function{"ends_with", 2, "(substr({0}, len({0})-len({1})+1)=={1})",
+               Decode::native, true},
+      Function{"match_regex", 2, "match({0}, {1})", Decode::native, true},
       Function{"to_lower", 1, "lower({0})"},
       Function{"to_upper", 1, "upper({0})"},
       Function{"trim", 1, "trim({0})"},
       Function{"trim_start", 1, "ltrim({0})"},
       Function{"trim_end", 1, "rtrim({0})"},
-      Function{"is_empty", 1, "(len({0})==0)", true},
+      Function{"is_empty", 1, "(len({0})==0)", Decode::native, true},
       Function{"length_chars", 1, "len({0})"},
       Function{"hash_md5", 1, "md5({0})"},
       Function{"hash_sha1", 1, "sha1({0})"},

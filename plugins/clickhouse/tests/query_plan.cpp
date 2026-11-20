@@ -266,12 +266,12 @@ TEST("aggregations and exclusions spell in ClickHouse SQL") {
   };
   CHECK_EQUAL(spelling("count", 0), "toInt64(count())");
   CHECK_EQUAL(spelling("count", 1), "toInt64(count({0}))");
-  CHECK_EQUAL(spelling("min", 1), "minOrNull({0})");
-  CHECK_EQUAL(spelling("max", 1), "maxOrNull({0})");
+  CHECK_EQUAL(spelling("min", 1), "min({0})");
+  CHECK_EQUAL(spelling("max", 1), "max({0})");
   CHECK_EQUAL(spelling("count_if", 2), "toInt64(countIf({0}, {1:pred}))");
   CHECK_EQUAL(spelling("count_distinct", 1), "toInt64(uniqExact({0}))");
-  CHECK_EQUAL(spelling("sum", 1), "sumOrNull({0})");
-  CHECK_EQUAL(spelling("mean", 1), "avgOrNull({0})");
+  CHECK_EQUAL(spelling("sum", 1), "sum({0})");
+  CHECK_EQUAL(spelling("mean", 1), "avg({0})");
   CHECK_EQUAL(spelling("median", 1), "<none>");
   CHECK_EQUAL(spelling("min", 0), "<none>");
   auto columns = std::vector<std::string>{"a", "b`c"};

@@ -22,11 +22,6 @@
 
 namespace tenzir::pushdown {
 
-auto ExpressionDialect::accepts_double(double value) const -> bool {
-  TENZIR_UNUSED(value);
-  return true;
-}
-
 auto ExpressionDialect::render_time(time value) const -> Option<std::string> {
   TENZIR_UNUSED(value);
   return None{};
@@ -39,12 +34,6 @@ auto ExpressionDialect::render_duration(duration value) const
 }
 
 auto ExpressionDialect::render_ip(ip value) const -> Option<std::string> {
-  TENZIR_UNUSED(value);
-  return None{};
-}
-
-auto ExpressionDialect::render_subnet(subnet value) const
-  -> Option<std::string> {
   TENZIR_UNUSED(value);
   return None{};
 }
@@ -91,19 +80,45 @@ auto bucket_width(ast::expression const& expr) -> Option<duration> {
   return *width;
 }
 
-auto call_decode(ExpressionDialect const& dialect, ast::expression const& expr)
-  -> Decode {
+auto ExpressionDialect::value_decode(ast::expression const& expr) const
+  -> Option<Decode> {
   auto const* call = try_as<ast::function_call>(expr);
   if (not call or not call->fn.ref.resolved()
       or call->fn.ref.pkg() != entity_pkg_std
       or call->fn.ref.segments().size() != 1) {
     return Decode::native;
   }
-  auto const* row
-    = find_row(dialect.functions(), call->fn.ref.segments().front(),
-               std::span{call->args});
+  auto const* row = find_row(functions(), call->fn.ref.segments().front(),
+                             std::span{call->args});
   return row ? row->decode : Decode::native;
 }
+
+auto aggregate_decode(
+  ExpressionDialect const& dialect, ir::AggregateColumn const& column,
+  folly::FunctionRef<auto(ast::expression const&)->Option<Decode>> decode_of)
+  -> Option<Decode> {
+  if (not column.function) {
+    return decode_of(column.args.front());
+  }
+  if (*column.function == "min" or *column.function == "max") {
+    if (auto kind = decode_of(column.args.front());
+        kind and *kind != Decode::native) {
+      return kind;
+    }
+  }
+  auto const* row
+    = find_row(dialect.aggregations(), *column.function, column.args.size());
+  return row ? row->decode : Decode::native;
+}
+
+namespace {
+
+/// The arguments of a call: the positional ones in order, and the named ones,
+/// which are assignments to a plain name, by their name.
+struct CallArguments {
+  std::vector<Ref<ast::expression const>> positional;
+  std::vector<std::pair<std::string, Ref<ast::expression const>>> named;
+};
 
 auto call_arguments(std::span<ast::expression const> args) -> CallArguments {
   auto result = CallArguments{};
@@ -118,8 +133,6 @@ auto call_arguments(std::span<ast::expression const> args) -> CallArguments {
   }
   return result;
 }
-
-namespace {
 
 /// A hole of a spelling: its argument, by index or by name, and its kind.
 struct Hole {
@@ -157,8 +170,9 @@ auto is_index(std::string_view argument) -> bool {
   });
 }
 
-} // namespace
-
+/// Whether a row with `spelling` and `arity` applies to a call with
+/// `positional` positional arguments and the `named` ones, which must be
+/// exactly the named arguments that its holes name.
 auto spelling_fits(std::string_view spelling, size_t arity, size_t positional,
                    std::span<std::string const> named) -> bool {
   if (arity != positional) {
@@ -175,6 +189,32 @@ auto spelling_fits(std::string_view spelling, size_t arity, size_t positional,
          and std::ranges::all_of(named, [&](std::string const& name) {
                return std::ranges::contains(holes, std::string_view{name});
              });
+}
+
+} // namespace
+
+auto find_row(std::span<Function const> rows, std::string_view name,
+              std::span<ast::expression const> args) -> Function const* {
+  auto const split = call_arguments(args);
+  auto names = std::vector<std::string>{};
+  for (auto const& [arg_name, _] : split.named) {
+    names.push_back(arg_name);
+  }
+  auto it = std::ranges::find_if(rows, [&](Function const& row) {
+    return row.tql == name
+           and spelling_fits(row.spelling, row.arity, split.positional.size(),
+                             names);
+  });
+  return it == rows.end() ? nullptr : &*it;
+}
+
+auto find_row(std::span<Function const> rows, std::string_view name,
+              size_t arity) -> Function const* {
+  auto it = std::ranges::find_if(rows, [&](Function const& row) {
+    return row.tql == name
+           and spelling_fits(row.spelling, row.arity, arity, {});
+  });
+  return it == rows.end() ? nullptr : &*it;
 }
 
 auto spell(
@@ -231,10 +271,9 @@ auto spell(
     // A count of a unit, from the width of a time bucket that is a whole
     // multiple of it.
     auto const ticks = kind == "s"    ? duration{std::chrono::seconds{1}}
-                       : kind == "ms" ? duration{std::chrono::milliseconds{1}}
                        : kind == "us" ? duration{std::chrono::microseconds{1}}
                                       : duration{1};
-    TENZIR_ASSERT(kind == "s" or kind == "ms" or kind == "us" or kind == "ns");
+    TENZIR_ASSERT(kind == "s" or kind == "us" or kind == "ns");
     auto width = bucket_width(*arg);
     if (not width or *width % ticks != duration::zero()) {
       failed = true;
@@ -298,10 +337,10 @@ auto ExpressionRenderer::render_literal(ast::constant::kind const& value) const
       return wrap(dialect_->render_uint(x));
     },
     [&](double x) -> Option<Fragment> {
-      if (not std::isfinite(x) or not dialect_->accepts_double(x)) {
+      if (not std::isfinite(x)) {
         return None{};
       }
-      return Fragment{dialect_->render_double(x)};
+      return wrap(dialect_->render_double(x));
     },
     [&](std::string const& x) -> Option<Fragment> {
       return wrap(dialect_->quote_string(x));
@@ -314,9 +353,6 @@ auto ExpressionRenderer::render_literal(ast::constant::kind const& value) const
     },
     [&](ip const& x) -> Option<Fragment> {
       return wrap(dialect_->render_ip(x));
-    },
-    [&](subnet const& x) -> Option<Fragment> {
-      return wrap(dialect_->render_subnet(x));
     },
     [](auto const&) -> Option<Fragment> {
       return None{};

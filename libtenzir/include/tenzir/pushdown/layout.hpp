@@ -20,13 +20,13 @@
 
 namespace tenzir::pushdown {
 
-/// How a result column decodes. `integer` and `number` also parse text, for
-/// targets whose results arrive as strings, and `time` reads the target's own
-/// time, also from text. `exact` is a number that the target may widen beyond
-/// 64 bits, such as a sum of integers: integral text decodes as an integer,
-/// or as `null` with a warning if it does not fit, while other values keep
-/// how they decode.
-enum class Decode { native, integer, number, time, exact };
+/// The TQL type that a result column becomes, which each reader reaches from
+/// what its target returns. `native` keeps what the reader infers, `integer`
+/// is a count, `number` a number, `time` the target's own time, and `text` a
+/// string without type inference. `exact` is an integer that the target may
+/// widen beyond 64 bits, such as a sum of integers, which becomes `null` with
+/// a warning if it does not fit.
+enum class Decode { native, integer, number, time, exact, text };
 
 /// A result column with how it decodes.
 using Decoded = std::pair<std::string, Decode>;

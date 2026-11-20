@@ -10,7 +10,7 @@ assertions:
       appended: |-
 
         | where (['RemotePort'] == 443)
-        | summarize ['__tenzir_column_0'] = count_distinctif(['RemoteIP'], isnotempty(['RemoteIP']))
+        | summarize ['__tenzir_column_0'] = count_distinct(['RemoteIP'])
 ---
 
 // Advanced hunting counts the distinct remote addresses exactly.

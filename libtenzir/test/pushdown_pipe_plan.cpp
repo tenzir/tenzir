@@ -139,7 +139,7 @@ public:
     return fmt::to_string(value);
   }
 
-  auto render_double(double value) const -> std::string override {
+  auto render_double(double value) const -> Option<std::string> override {
     return fmt::to_string(value);
   }
 
@@ -381,7 +381,7 @@ TEST("pipe plans track which columns hold the target's own time") {
   // A field reassigned to `ts` holds another column.
   CHECK_EQUAL(times({select({{{"ts"}, {"x"}}})}), std::vector<std::string>{});
   CHECK_EQUAL(times({drop({{"ts"}})}), std::vector<std::string>{});
-  // Group keys keep the time, while counts and extremes do not.
+  // Group keys and extremes keep the time, while counts do not.
   CHECK_EQUAL(
     times({summarize(
       {key({"ts"}), {.output = {"n"}, .function = "count", .args = {}}})}),
@@ -389,7 +389,7 @@ TEST("pipe plans track which columns hold the target's own time") {
   CHECK_EQUAL(
     times({summarize(
       {{.output = {"m"}, .function = "min", .args = {field({"ts"})}}})}),
-    std::vector<std::string>{});
+    std::vector{"_column0"s});
   // A base query that may redefine its time holds none of the target's own.
   auto query = plan({filter("x > 1")}, timed(false));
   REQUIRE(query);

@@ -1,0 +1,9 @@
+// `from_sentinelone_data_lake` takes over functions in filters, keys, and
+// arguments, and aggregations such as `count_if` and `mean`, which run in
+// SentinelOne with SentinelOne's semantics.
+from_sentinelone_data_lake "https://example.sentinelone.net", token="t",
+  query="event.type = *"
+where os.name.to_lower().starts_with("lin")
+hour = timestamp.hour()
+summarize hour, longest=max(tgt.file.name.length_chars()),
+  large=count_if(tgt.file.size, v => v > 1000), avg=mean(tgt.file.size / 1024)

@@ -507,7 +507,8 @@ auto ClickHouseDialect::quote_string(std::string_view text) const
   return quote_sql_string(text);
 }
 
-auto ClickHouseDialect::render_double(double value) const -> std::string {
+auto ClickHouseDialect::render_double(double value) const
+  -> Option<std::string> {
   // `{}` renders an integral value without a fraction, which ClickHouse would
   // read as an integer. A trailing `.` keeps it a `Float64`.
   auto result = fmt::format("{}", value);
@@ -601,8 +602,8 @@ auto ClickHouseDialect::render_binary(
 }
 
 /// ClickHouse yields a `NaN` for the root of a negative number and for the
-/// logarithm of zero, where TQL yields `null`. The time functions count in
-/// UTC, whatever the time zone of the column.
+/// logarithm of zero. The time functions count in UTC, whatever the time zone
+/// of the column.
 auto ClickHouseDialect::functions() const
   -> std::span<pushdown::Function const> {
   static constexpr auto rows = std::array{
@@ -633,10 +634,10 @@ auto ClickHouseDialect::functions() const
     pushdown::Function{"ceil", 1, "toInt64(ceil({0}))"},
     pushdown::Function{"floor", 1, "toInt64(floor({0}))"},
     pushdown::Function{"round", 1, "toInt64(round({0}))"},
-    pushdown::Function{"sqrt", 1, "if({0} >= 0, sqrt({0}), NULL)"},
+    pushdown::Function{"sqrt", 1, "sqrt({0})"},
     pushdown::Function{"exp", 1, "exp({0})"},
-    pushdown::Function{"log", 1, "if({0} > 0, log({0}), NULL)"},
-    pushdown::Function{"log", 2, "if({0} > 0, log({0}) / log({1}), NULL)"},
+    pushdown::Function{"log", 1, "log({0})"},
+    pushdown::Function{"log", 2, "(log({0}) / log({1}))"},
     pushdown::Function{"year", 1, "toYear({0}, 'UTC')"},
     pushdown::Function{"month", 1, "toMonth({0}, 'UTC')"},
     pushdown::Function{"day", 1, "toDayOfMonth({0}, 'UTC')"},
@@ -661,25 +662,24 @@ auto ClickHouseDialect::functions() const
   return rows;
 }
 
-/// TQL counts as `int64`, ClickHouse as `UInt64`. The `OrNull` combinator
-/// yields `NULL` for no rows, as TQL does, instead of the default value of the
-/// type. `uniqExact` skips `NULL`, unlike the approximate `uniq`.
+/// TQL counts as `int64`, ClickHouse as `UInt64`. Without rows, the other
+/// functions yield the default value of their type. `uniqExact` skips `NULL`,
+/// unlike the approximate `uniq`.
 auto ClickHouseDialect::aggregations() const
   -> std::span<pushdown::Aggregation const> {
   static constexpr auto rows = std::array{
     pushdown::Aggregation{"count", 0, "toInt64(count())"},
     pushdown::Aggregation{"count", 1, "toInt64(count({0}))"},
-    pushdown::Aggregation{"min", 1, "minOrNull({0})"},
-    pushdown::Aggregation{"max", 1, "maxOrNull({0})"},
+    pushdown::Aggregation{"min", 1, "min({0})"},
+    pushdown::Aggregation{"max", 1, "max({0})"},
     pushdown::Aggregation{"count_if", 2, "toInt64(countIf({0}, {1:pred}))"},
     pushdown::Aggregation{"count_distinct", 1, "toInt64(uniqExact({0}))"},
-    pushdown::Aggregation{"sum", 1, "sumOrNull({0})"},
-    pushdown::Aggregation{"mean", 1, "avgOrNull({0})"},
-    pushdown::Aggregation{"stddev", 1, "stddevPopOrNull({0})"},
-    pushdown::Aggregation{"variance", 1, "varPopOrNull({0})"},
-    // `all` and `any` hold for no values, as in TQL.
-    pushdown::Aggregation{"all", 1, "ifNull(minOrNull({0}), true)"},
-    pushdown::Aggregation{"any", 1, "ifNull(maxOrNull({0}), false)"},
+    pushdown::Aggregation{"sum", 1, "sum({0})"},
+    pushdown::Aggregation{"mean", 1, "avg({0})"},
+    pushdown::Aggregation{"stddev", 1, "stddevPop({0})"},
+    pushdown::Aggregation{"variance", 1, "varPop({0})"},
+    pushdown::Aggregation{"all", 1, "min({0})"},
+    pushdown::Aggregation{"any", 1, "max({0})"},
   };
   static_assert(pushdown::valid_rows(rows));
   return rows;

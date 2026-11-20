@@ -24,7 +24,7 @@
 }
 {
   type: "QueryFinish",
-  query: "SELECT toInt64(count()) AS `__tenzir_column_1`, maxOrNull(`time`) AS `__tenzir_column_2`, minOrNull(`time`) AS `__tenzir_column_3` FROM (SELECT * FROM (SELECT `time` FROM fc_ordering) AS `__tenzir_table` ORDER BY `time` DESC LIMIT 3) AS `__tenzir_level_0`",
+  query: "SELECT toInt64(count()) AS `__tenzir_column_1`, max(`time`) AS `__tenzir_column_2`, min(`time`) AS `__tenzir_column_3` FROM (SELECT * FROM (SELECT `time` FROM fc_ordering) AS `__tenzir_table` ORDER BY `time` DESC LIMIT 3) AS `__tenzir_level_0`",
 }
 {
   type: "QueryFinish",

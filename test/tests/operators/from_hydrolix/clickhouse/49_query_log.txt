@@ -15,7 +15,7 @@
 }
 {
   type: "QueryFinish",
-  query: "SELECT toInt64(count()) AS `__tenzir_column_0`, minOrNull(`id`) AS `__tenzir_column_1`, maxOrNull(`id`) AS `__tenzir_column_2` FROM (SELECT `id` FROM default.fh_events WHERE (`id` > 1)) AS `__tenzir_table`",
+  query: "SELECT toInt64(count()) AS `__tenzir_column_0`, min(`id`) AS `__tenzir_column_1`, max(`id`) AS `__tenzir_column_2` FROM (SELECT `id` FROM default.fh_events WHERE (`id` > 1)) AS `__tenzir_table`",
   settings: [],
 }
 {
@@ -45,7 +45,7 @@
 }
 {
   type: "QueryFinish",
-  query: "SELECT toInt64(count()) AS `__tenzir_column_0`, minOrNull(`time`) AS `__tenzir_column_1` FROM (SELECT `time` FROM default.fh_events WHERE (`time` > fromUnixTimestamp64Nano(1767225601000000000, 'UTC'))) AS `__tenzir_table`",
+  query: "SELECT toInt64(count()) AS `__tenzir_column_0`, min(`time`) AS `__tenzir_column_1` FROM (SELECT `time` FROM default.fh_events WHERE (`time` > fromUnixTimestamp64Nano(1767225601000000000, 'UTC'))) AS `__tenzir_table`",
   settings: [],
 }
 {
@@ -73,7 +73,7 @@
 }
 {
   type: "QueryFinish",
-  query: "SELECT * FROM (SELECT `name` AS `__tenzir_column_0`, toInt64(count()) AS `__tenzir_column_1`, maxOrNull(`score`) AS `__tenzir_column_2` FROM (SELECT `id`, `name`, `score` FROM default.fh_events WHERE (`id` > 0)) AS `__tenzir_table` GROUP BY `name`) AS `__tenzir_level_3` WHERE (`__tenzir_column_1` >= 1) ORDER BY `__tenzir_column_2` DESC LIMIT 2",
+  query: "SELECT * FROM (SELECT `name` AS `__tenzir_column_0`, toInt64(count()) AS `__tenzir_column_1`, max(`score`) AS `__tenzir_column_2` FROM (SELECT `id`, `name`, `score` FROM default.fh_events WHERE (`id` > 0)) AS `__tenzir_table` GROUP BY `name`) AS `__tenzir_level_3` WHERE (`__tenzir_column_1` >= 1) ORDER BY `__tenzir_column_2` DESC LIMIT 2",
   settings: [],
 }
 {

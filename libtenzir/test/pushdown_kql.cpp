@@ -354,11 +354,10 @@ TEST("kql spells summaries with summarize") {
   REQUIRE(query);
   CHECK_EQUAL(query->generated,
               "\n| summarize ['__tenzir_column_0'] = count(), "
-              "['__tenzir_column_1'] = countif(isnotempty(['x'])), "
+              "['__tenzir_column_1'] = countif(isnotnull(['x'])), "
               "['__tenzir_column_2'] = min(['x']), ['__tenzir_column_3'] = "
-              "max(['x']), ['__tenzir_column_4'] = "
-              "iff(countif(isnotnull(['x'])) "
-              "> 0, sum(['x']), max(['x'])) by ['k'], ['j']");
+              "max(['x']), ['__tenzir_column_4'] = sum(['x']) by ['k'], "
+              "['j']");
   auto const expected = LayoutFields{
     {{"k"}, "k"},
     {{"n"}, "__tenzir_column_0"},
@@ -402,23 +401,14 @@ TEST("kql spells summaries with summarize") {
                                .function = "count_if",
                                .args = {field_at({"x"}), parse("x > 1")}}})}),
               "\n| summarize ['__tenzir_column_0'] = countif((['x'] > 1))");
-  // `count_distinct` counts the distinct values that are not empty, also of
-  // a computed argument.
-  CHECK_EQUAL(
-    kql({aggregate({key({"k"}), call({"m"}, "count_distinct", Path{"x"})})}),
-    "\n| summarize ['__tenzir_column_0'] = "
-    "count_distinctif(['x'], isnotempty(['x'])) by ['k']");
+  // `count_distinct` counts exactly, also a computed argument.
   CHECK_EQUAL(kql({aggregate({{.output = {"m"},
                                .function = "count_distinct",
                                .args = {parse("x.to_lower()")}}})}),
               "\n| extend ['__tenzir_column_0'] = tolower(['x'])\n| summarize "
-              "['__tenzir_column_1'] = count_distinctif(['__tenzir_column_0'], "
-              "isnotempty(['__tenzir_column_0']))");
-  // `avg` yields `NaN` for no values, where TQL yields `null`.
+              "['__tenzir_column_1'] = count_distinct(['__tenzir_column_0'])");
   CHECK_EQUAL(kql({aggregate({call({"m"}, "mean", Path{"x"})})}),
-              "\n| summarize ['__tenzir_column_0'] = "
-              "iff(countif(isnotnull(['x'])) "
-              "> 0, avg(['x']), real(null))");
+              "\n| summarize ['__tenzir_column_0'] = avg(['x'])");
   CHECK_EQUAL(kql({aggregate({call({"m"}, "min")})}), "-");
   CHECK_EQUAL(kql({aggregate({key({"x", "y"})})}), "-");
   CHECK_EQUAL(kql({aggregate({key({"a*"}), call({"n"}, "count")})}), "-");

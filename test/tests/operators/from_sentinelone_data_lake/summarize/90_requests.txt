@@ -170,7 +170,7 @@
   scope: "aggregate",
   status: 200,
   type: "PQ",
-  query: "| group __tenzir_column_1 = count() by __tenzir_column_0 = timebucket(timestamp, \"2s\") | sort __tenzir_column_0 | limit 1600000",
+  query: "| let __tenzir_column_0 = timebucket(timestamp, \"2s\") | group __tenzir_column_1 = count() by __tenzir_column_0 | sort __tenzir_column_0 | limit 1600000",
   filter: null,
 }
 {

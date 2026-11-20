@@ -162,10 +162,11 @@ auto MysqlDialect::render_ip(ip value) const -> Option<std::string> {
 auto MysqlDialect::functions() const -> std::span<pushdown::Function const> {
   static constexpr auto rows = std::array{
     pushdown::Function{"starts_with", 2, "(LEFT({0}, CHAR_LENGTH({1})) = {1})",
-                       true},
+                       pushdown::Decode::native, true},
     pushdown::Function{"ends_with", 2, "(RIGHT({0}, CHAR_LENGTH({1})) = {1})",
-                       true},
-    pushdown::Function{"match_regex", 2, "REGEXP_LIKE({0}, {1}, 'c')", true},
+                       pushdown::Decode::native, true},
+    pushdown::Function{"match_regex", 2, "REGEXP_LIKE({0}, {1}, 'c')",
+                       pushdown::Decode::native, true},
     pushdown::Function{"length_bytes", 1, "LENGTH({0})"},
     pushdown::Function{"length_chars", 1, "CHAR_LENGTH({0})"},
     pushdown::Function{"to_lower", 1, "LOWER({0})"},
@@ -176,7 +177,8 @@ auto MysqlDialect::functions() const -> std::span<pushdown::Function const> {
     pushdown::Function{"trim_start", 1, "LTRIM({0})"},
     pushdown::Function{"trim_end", 1, "RTRIM({0})"},
     pushdown::Function{"replace", 3, "REPLACE({0}, {1}, {2})"},
-    pushdown::Function{"is_empty", 1, "(CHAR_LENGTH({0}) = 0)", true},
+    pushdown::Function{"is_empty", 1, "(CHAR_LENGTH({0}) = 0)",
+                       pushdown::Decode::native, true},
     // Negative bounds of `slice` stay in the pipeline.
     pushdown::Function{"slice", 1, "SUBSTRING({0}, {begin:nat} + 1)"},
     pushdown::Function{"slice", 1, "LEFT({0}, {end:nat})"},
@@ -210,7 +212,7 @@ auto MysqlDialect::functions() const -> std::span<pushdown::Function const> {
                        "{1:us}) - CASE WHEN "
                        "MOD(TIMESTAMPDIFF(MICROSECOND, '1970-01-01', {0}), "
                        "{1:us}) < 0 THEN {1:us} ELSE 0 END, '1970-01-01')",
-                       false, pushdown::Decode::time},
+                       pushdown::Decode::time},
   };
   static_assert(pushdown::valid_rows(rows));
   return rows;

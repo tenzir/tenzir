@@ -169,7 +169,7 @@ public:
   auto quote_string(std::string_view text) const
     -> Option<std::string> override;
 
-  auto render_double(double value) const -> std::string override;
+  auto render_double(double value) const -> Option<std::string> override;
 
   auto render_time(time value) const -> Option<std::string> override;
 

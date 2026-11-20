@@ -502,7 +502,8 @@ public:
 
   auto functions() const -> std::span<Function const> override {
     static constexpr auto rows = std::array{
-      Function{"starts_with", 2, "{0} LIKE {1} + '%'", true},
+      Function{"starts_with", 2, "{0} LIKE {1} + '%'", pushdown::Decode::native,
+               true},
       Function{"length_bytes", 1, "DATALENGTH({0})"},
     };
     return rows;
@@ -560,7 +561,7 @@ TEST("spellings take counts of units from constant durations") {
       .value_or("-");
   };
   CHECK_EQUAL(count("f({0}, {1:s})", "90min"), "f(x, 5400)");
-  CHECK_EQUAL(count("{1:ms} {1:us} {1:ns}", "1s"), "1000 1000000 1000000000");
+  CHECK_EQUAL(count("{1:us} {1:ns}", "1s"), "1000000 1000000000");
   CHECK_EQUAL(count("{1:s}", "1500ms"), "-");
   CHECK_EQUAL(count("{1:s}", "0s"), "-");
   CHECK_EQUAL(count("{1:s}", "-1h"), "-");
@@ -593,18 +594,16 @@ TEST("spellings name arguments and take constant integers") {
   CHECK_EQUAL(spelled("{0:nat}", "abs(x)"), "-");
   CHECK_EQUAL(spelled("{0:nat}", "abs(1.5)"), "-");
   // A row applies only to the named arguments that its holes name.
-  auto const fits
-    = [](std::string_view spelling, size_t arity, std::string_view call) {
-        auto const expr = parse(call);
-        auto const* x = try_as<ast::function_call>(expr);
-        REQUIRE(x);
-        auto const args = call_arguments(x->args);
-        auto names = std::vector<std::string>{};
-        for (auto const& [name, _] : args.named) {
-          names.push_back(name);
-        }
-        return spelling_fits(spelling, arity, args.positional.size(), names);
-      };
+  auto const fits = [](std::string_view spelling, size_t arity,
+                       std::string_view call) {
+    auto const expr = parse(call);
+    auto const* x = try_as<ast::function_call>(expr);
+    REQUIRE(x);
+    auto const rows
+      = std::array{Function{"slice", static_cast<uint8_t>(arity), spelling}};
+    return find_row(std::span<Function const>{rows}, "slice", x->args)
+           != nullptr;
+  };
   CHECK(fits("sub({0}, {begin:nat})", 1, "s.slice(begin=1)"));
   CHECK(not fits("sub({0}, {begin:nat})", 1, "s.slice(end=1)"));
   CHECK(not fits("sub({0}, {begin:nat})", 1, "s.slice(begin=1, end=2)"));

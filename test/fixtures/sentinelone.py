@@ -621,6 +621,16 @@ def _stage(rows: list[dict], columns: list[str], stage: str, coerce: bool) -> tu
     if command == "filter":
         node = _parse_predicate(rest)
         return [row for row in rows if _holds(node, row, coerce)], columns
+    if command == "let":
+        assignments = _assignments(rest)
+        if any(expr is None or expr[0] == "count" for _, expr in assignments):
+            raise QueryError(f"Don't understand [{rest}]")
+        result = [
+            {**row, **{name: _value(expr, row) for name, expr in assignments}}
+            for row in rows
+        ]
+        added = [name for name, _ in assignments if name not in columns]
+        return result, columns + added
     if command == "columns":
         assignments = _assignments(rest)
         result = []
@@ -811,7 +821,7 @@ def _check_query(payload: dict) -> None:
         command, _, rest = stage.partition(" ")
         if command == "filter":
             _parse_predicate(rest)
-        elif command in {"columns", "group"}:
+        elif command in {"columns", "group", "let"}:
             for text in rest.split(" by "):
                 _assignments(text)
         elif command == "limit":

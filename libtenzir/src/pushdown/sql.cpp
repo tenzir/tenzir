@@ -53,7 +53,7 @@ auto SqlQueryDialect::quote_string(std::string_view text) const
   return result;
 }
 
-auto SqlQueryDialect::render_double(double value) const -> std::string {
+auto SqlQueryDialect::render_double(double value) const -> Option<std::string> {
   // Without an exponent, `2.0` would read as an integer, and `0.1` as a
   // `DECIMAL` in many dialects.
   auto result = fmt::format("{}", value);
@@ -276,7 +276,7 @@ private:
     if (auto path = ir::field_segments(expr)) {
       return decode_at(*path);
     }
-    return call_decode(*dialect_, expr);
+    return dialect_->value_decode(expr).value_or(Decode::native);
   }
 
   /// Spells the field at `path` of the input of the current level.
@@ -553,17 +553,10 @@ private:
       auto name = alias("column");
       selection.push_back(
         fmt::format("{} AS {}", *value, dialect_->quote_identifier(name)));
-      // A key and an extremum decode as their value, other functions as
-      // their row says.
-      auto kind = Decode::native;
-      if (not column.function or *column.function == "min"
-          or *column.function == "max") {
-        kind = decode_of(column.args.front());
-      } else if (auto const* row
-                 = find_row(dialect_->aggregations(), *column.function,
-                            column.args.size())) {
-        kind = row->decode;
-      }
+      auto kind
+        = aggregate_decode(*dialect_, column, [&](ast::expression const& arg) {
+            return Option{decode_of(arg)};
+          }).value_or(Decode::native);
       if (kind != Decode::native) {
         decode.emplace_back(name, kind);
       }

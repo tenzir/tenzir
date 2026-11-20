@@ -231,7 +231,7 @@ public:
 
   /// A `double` keeps a `real` spelling, such as `2.0`, so that it does not
   /// read as a `long`, which divides as an integer.
-  auto render_double(double value) const -> std::string override {
+  auto render_double(double value) const -> Option<std::string> override {
     auto text = fmt::to_string(value);
     if (text.find_first_of(".e") == std::string::npos) {
       text += ".0";
@@ -387,23 +387,24 @@ public:
 
   /// String matching is case-sensitive, and the trims trim the whitespace that
   /// `\s` matches. KQL yields a `NaN` for the root of a negative number and
-  /// for the logarithm of zero, where TQL yields `null`.
+  /// `-Infinity` for the logarithm of zero.
   auto functions() const -> std::span<Function const> override {
     static constexpr auto rows = std::array{
-      Function{"starts_with", 2, "({0} startswith_cs {1})", true},
-      Function{"ends_with", 2, "({0} endswith_cs {1})", true},
-      Function{"match_regex", 2, "({0} matches regex {1})", true},
+      Function{"starts_with", 2, "({0} startswith_cs {1})", Decode::native,
+               true},
+      Function{"ends_with", 2, "({0} endswith_cs {1})", Decode::native, true},
+      Function{"match_regex", 2, "({0} matches regex {1})", Decode::native,
+               true},
       Function{"trim", 1, "trim(@\"\\s+\", {0})"},
       Function{"trim_start", 1, "trim_start(@\"\\s+\", {0})"},
       Function{"trim_end", 1, "trim_end(@\"\\s+\", {0})"},
       Function{"replace", 3, "replace_string({0}, {1}, {2})"},
-      Function{"is_empty", 1, "isempty({0})", true},
+      Function{"is_empty", 1, "isempty({0})", Decode::native, true},
       // Negative bounds of `slice` stay in the pipeline.
       Function{"slice", 1, "substring({0}, {begin:nat})"},
       Function{"slice", 1, "substring({0}, 0, {end:nat})"},
       Function{"slice", 1,
-               "substring({0}, {begin:nat}, max_of({end:nat} - {begin:nat}, "
-               "0))"},
+               "substring({0}, {begin:nat}, {end:nat} - {begin:nat})"},
       Function{"to_lower", 1, "tolower({0})"},
       Function{"to_upper", 1, "toupper({0})"},
       Function{"capitalize", 1,
@@ -417,10 +418,10 @@ public:
       Function{"ceil", 1, "tolong(ceiling({0}))"},
       Function{"floor", 1, "tolong(floor({0}, 1))"},
       Function{"round", 1, "tolong(round({0}))"},
-      Function{"sqrt", 1, "iff({0} >= 0, sqrt({0}), real(null))"},
+      Function{"sqrt", 1, "sqrt({0})"},
       Function{"exp", 1, "exp({0})"},
-      Function{"log", 1, "iff({0} > 0, log({0}), real(null))"},
-      Function{"log", 2, "iff({0} > 0, log({0}) / log({1}), real(null))"},
+      Function{"log", 1, "log({0})"},
+      Function{"log", 2, "(log({0}) / log({1}))"},
       Function{"year", 1, "getyear({0})"},
       Function{"month", 1, "getmonth({0})"},
       Function{"day", 1, "dayofmonth({0})"},
@@ -455,29 +456,21 @@ public:
     return fmt::format("bin({}, {})", subject, spelled);
   }
 
-  /// `count(x)` and `count_distinct(x)` count the values that are not empty:
-  /// KQL has no `null` string, but an empty one. `count_distinct` is exact,
+  /// KQL's `count(x)` counts every record, so `count(x)` counts where `x` is
+  /// not `null`, which an empty string is not. `count_distinct` is exact,
   /// unlike `dcount`, and fails the query beyond 100 million values. Without
-  /// values, `sum` yields 0 and `avg`, `stdevp`, and `variancep` a `NaN`
-  /// where TQL yields `null`, which the `max` of no values is. `all` and
-  /// `any` hold for no values, as in TQL.
+  /// values, `sum` yields 0, `avg` a `NaN`, and `stdevp` and `variancep` 0.
   auto aggregations() const -> std::span<Aggregation const> override {
     static constexpr auto rows = std::array{
       Aggregation{"count", 0, "count()"},
-      Aggregation{"count", 1, "countif(isnotempty({0}))"},
-      Aggregation{"count_distinct", 1,
-                  "count_distinctif({0}, isnotempty({0}))"},
+      Aggregation{"count", 1, "countif(isnotnull({0}))"},
+      Aggregation{"count_distinct", 1, "count_distinct({0})"},
       Aggregation{"min", 1, "min({0})"},
       Aggregation{"max", 1, "max({0})"},
-      Aggregation{"sum", 1,
-                  "iff(countif(isnotnull({0})) > 0, sum({0}), max({0}))"},
-      Aggregation{"mean", 1,
-                  "iff(countif(isnotnull({0})) > 0, avg({0}), real(null))"},
-      Aggregation{"stddev", 1,
-                  "iff(countif(isnotnull({0})) > 0, stdevp({0}), real(null))"},
-      Aggregation{"variance", 1,
-                  "iff(countif(isnotnull({0})) > 0, variancep({0}), "
-                  "real(null))"},
+      Aggregation{"sum", 1, "sum({0})"},
+      Aggregation{"mean", 1, "avg({0})"},
+      Aggregation{"stddev", 1, "stdevp({0})"},
+      Aggregation{"variance", 1, "variancep({0})"},
       Aggregation{"all", 1, "(countif({0} == false) == 0)"},
       Aggregation{"any", 1, "(countif({0} == true) > 0)"},
       Aggregation{"count_if", 2, "countif({1:pred})"},
