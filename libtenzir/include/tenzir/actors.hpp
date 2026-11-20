@@ -158,6 +158,12 @@ using catalog_lookup_worker_actor = typed_actor_fwd<
   // Evaluate an expression against a snapshot of the partition synopses.
   auto(atom::candidates, expression, catalog_snapshot)
     ->caf::result<catalog_lookup_result>,
+  // Build the `fields`, `schemas`, or `partitions` table from the candidates
+  // of an expression in a snapshot of the partition synopses.
+  auto(atom::get, std::string, expression, catalog_snapshot)
+    ->caf::result<std::vector<table_slice>>,
+  auto(atom::get, atom::nova, std::string, expression, catalog_snapshot)
+    ->caf::result<std::vector<nova::Events>>,
   // Drop cached sketches of a partition that left the catalog.
   auto(atom::erase, uuid)->caf::result<void>>::unwrap;
 

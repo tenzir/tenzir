@@ -494,8 +494,8 @@ void catalog_state::transform(
                     }
                     for (const auto& id : old_partition_ids) {
                       erased.emplace_back(id, find_synopsis(id));
-                      erase(id, notify_policy::no);
                     }
+                    erase(old_partition_ids, notify_policy::no);
                     std::ignore = merge(std::move(apsv));
                     // Rewrite the marker to tombstone form. The outputs are in
                     // place, so a replay must not try to move them again; the

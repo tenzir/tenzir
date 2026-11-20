@@ -756,3 +756,32 @@ TEST("arrivals cannot postpone or reopen a collection cutoff") {
   CHECK_EQUAL(f.state.closed_admission, closed);
   CHECK_EQUAL(f.state.next_collection, boundary + hours{1});
 }
+
+TEST("erasing many partitions at once keeps the others") {
+  auto f = fixture{};
+  auto kept = std::vector<uuid>{};
+  auto erased = std::vector<uuid>{};
+  for (auto i = 0; i < 20; ++i) {
+    (i % 3 == 0 ? erased : kept).push_back(f.add("a", 10));
+  }
+  const auto b1 = f.add("b", 10);
+  const auto b2 = f.add("b", 10);
+  auto batch = erased;
+  batch.push_back(b1);
+  batch.push_back(b2);
+  // Duplicates and unknown ids are harmless.
+  batch.push_back(erased.front());
+  batch.push_back(uuid::random());
+  f.state.erase(batch);
+  for (const auto& id : erased) {
+    CHECK(not f.state.find_synopsis(id));
+  }
+  for (const auto& id : kept) {
+    CHECK(f.state.find_synopsis(id));
+  }
+  CHECK(not f.state.find_synopsis(b1));
+  CHECK(not f.state.find_synopsis(b2));
+  // A schema without partitions disappears entirely.
+  CHECK_EQUAL(f.state.synopses_per_type->size(), size_t{1});
+  CHECK_EQUAL(f.state.synopses_per_type->begin()->second->size(), kept.size());
+}
