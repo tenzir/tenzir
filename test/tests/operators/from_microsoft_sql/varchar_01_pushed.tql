@@ -1,0 +1,11 @@
+// SQL Server computes the functions of `varchar` text, which the source
+// decodes by the code page of each column's collation.
+from_microsoft_sql table="varchars",
+                   host=env("MSSQL_HOST"),
+                   port=int(env("MSSQL_PORT")),
+                   user=env("MSSQL_USER"),
+                   password=env("MSSQL_PASSWORD"),
+                   database=env("MSSQL_DATABASE")
+upper = s.to_upper()
+length = m.length_chars()
+summarize s, upper, m, length, j, u

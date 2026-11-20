@@ -11,11 +11,14 @@
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/narrow.hpp"
 
+#include <fmt/format.h>
 #include <unicode/ucasemap.h>
 #include <unicode/uchar.h>
+#include <unicode/ucnv.h>
 #include <unicode/utf8.h>
 #include <unicode/utypes.h>
 
+#include <limits>
 #include <simdjson.h>
 
 namespace tenzir::unicode {
@@ -218,6 +221,43 @@ auto encode_utf16_lossy(std::string_view input, std::endian order)
   auto result = encode_utf16_impl<true>(input, order);
   TENZIR_ASSERT(result);
   return std::move(*result);
+}
+
+auto decode_code_page(std::span<std::byte const> input, uint16_t code_page)
+  -> Option<std::string> {
+  auto const text = std::string_view{
+    reinterpret_cast<char const*>(input.data()), input.size()};
+  // Every Windows code page encodes ASCII as itself.
+  if (is_ascii(text)) {
+    return std::string{text};
+  }
+  // ICU's tables differ from SQL Server's for a few bytes of code pages 437,
+  // 850, 932, 1253, 1255, and 1257, mostly where Microsoft maps to private-use
+  // code points. We accept that.
+  auto const name = fmt::format("windows-{}", code_page);
+  // A byte decodes to at most one UTF-16 code unit, or three UTF-8 bytes, and
+  // ICU appends a terminating NUL when there is room.
+  if (text.size() > (std::numeric_limits<int32_t>::max() - 1) / 3) {
+    return None{};
+  }
+  auto result = std::string(text.size() * 3 + 1, '\0');
+  auto status = U_ZERO_ERROR;
+  auto const length
+    = ucnv_convert("UTF-8", name.c_str(), result.data(),
+                   detail::narrow<int32_t>(result.size()), text.data(),
+                   detail::narrow<int32_t>(text.size()), &status);
+  if (U_FAILURE(status)) {
+    return None{};
+  }
+  result.resize(detail::narrow<size_t>(length));
+  // ICU's tables for these IBM-derived code pages swap the controls 0x1a,
+  // 0x1c, and 0x7f, which Windows maps to themselves.
+  if (code_page == 437 or code_page == 850 or code_page == 932) {
+    for (auto& c : result) {
+      c = c == 0x1c ? 0x1a : c == 0x7f ? 0x1c : c == 0x1a ? 0x7f : c;
+    }
+  }
+  return result;
 }
 
 auto is_valid_utf8(std::string_view bytes) -> bool {

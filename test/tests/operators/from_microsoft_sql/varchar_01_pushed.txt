@@ -1,0 +1,8 @@
+{
+  s: "élan",
+  upper: "ÉLAN",
+  m: "Grüße",
+  length: 5,
+  j: "日本語",
+  u: "naïve 😀",
+}
