@@ -56,6 +56,7 @@
 #include <filesystem>
 #include <ranges>
 #include <set>
+#include <span>
 #include <string_view>
 #include <unordered_set>
 
@@ -455,7 +456,89 @@ auto build_catalog_slices(catalog_slice_selector selector,
   TENZIR_UNREACHABLE();
 }
 
+auto parse_catalog_selector(std::string_view selector, bool filtered)
+  -> caf::expected<catalog_slice_selector> {
+  const auto parsed = from_string<catalog_slice_selector>(selector);
+  if (not parsed) {
+    return caf::make_error(ec::invalid_argument,
+                           fmt::format("unsupported catalog get selector: {}",
+                                       selector));
+  }
+  if (filtered and *parsed != catalog_slice_selector::partitions) {
+    return caf::make_error(ec::invalid_argument,
+                           fmt::format("filtered catalog get is only "
+                                       "supported for partitions, got {}",
+                                       selector));
+  }
+  return *parsed;
+}
+
+/// Collects the synopses of the candidates of `filter`, or of every partition
+/// if `filter` is unset or trivially true.
+auto collect_synopses(catalog_lookup_engine& engine, expression filter,
+                      const catalog_snapshot::map_type& synopses)
+  -> caf::expected<std::vector<partition_synopsis_pair>> {
+  auto result = std::vector<partition_synopsis_pair>{};
+  if (filter == caf::none or filter == trivially_true_expression()) {
+    for (const auto& [schema, entries] : synopses) {
+      for (const auto& [id, synopsis] : *entries) {
+        result.push_back({id, synopsis});
+      }
+    }
+    return result;
+  }
+  auto candidates = engine.lookup(std::move(filter), synopses);
+  if (not candidates) {
+    return std::move(candidates.error());
+  }
+  result.reserve(candidates->size());
+  for (const auto& [schema, candidate] : candidates->candidate_infos) {
+    const auto entries = synopses.find(schema);
+    TENZIR_ASSERT(entries != synopses.end());
+    for (const auto& partition : candidate.partition_infos) {
+      const auto synopsis = entries->second->find(partition.uuid);
+      if (synopsis != entries->second->end()) {
+        result.push_back({synopsis->first, synopsis->second});
+      }
+    }
+  }
+  return result;
+}
+
 } // namespace
+
+auto build_catalog_slices(catalog_lookup_engine& engine,
+                          std::string_view selector, expression filter,
+                          const catalog_snapshot::map_type& synopses)
+  -> caf::expected<std::vector<table_slice>> {
+  const auto parsed = parse_catalog_selector(selector, false);
+  if (not parsed) {
+    return parsed.error();
+  }
+  auto collected = collect_synopses(engine, std::move(filter), synopses);
+  if (not collected) {
+    return std::move(collected.error());
+  }
+  return build_catalog_slices(*parsed, *collected);
+}
+
+auto build_catalog_events(catalog_lookup_engine& engine,
+                          std::string_view selector, expression filter,
+                          const catalog_snapshot::map_type& synopses)
+  -> caf::expected<std::vector<nova::Events>> {
+  const auto parsed = parse_catalog_selector(selector, false);
+  if (not parsed) {
+    return parsed.error();
+  }
+  auto collected = collect_synopses(engine, std::move(filter), synopses);
+  if (not collected) {
+    return std::move(collected.error());
+  }
+  // `to_definition` only yields types the conversion supports, so nothing
+  // reaches the handler's warning path.
+  auto dh = null_diagnostic_handler{};
+  return build_catalog_events(*parsed, *collected, dh);
+}
 
 auto catalog_lookup_result::size() const noexcept -> size_t {
   return std::accumulate(candidate_infos.begin(), candidate_infos.end(),
@@ -634,39 +717,76 @@ auto catalog_state::mutable_schema(synopsis_map& map, const type& schema)
 }
 
 void catalog_state::erase(const uuid& partition, notify_policy notify) {
-  // Admissions identify accounted partitions, including while package startup
-  // still holds back maintenance scheduling.
-  if (auto synopsis = find_synopsis(partition);
-      synopsis and admissions.contains(partition)) {
-    catalog_bytes -= synopsis->store_file.size + synopsis->indexes_file.size
-                     + synopsis->sketches_file.size;
-  }
-  ++storage_generation;
-  admissions.erase(partition);
-  policy_dirty.erase(partition);
-  policy_pending.erase(partition);
-  eviction_suppressed.erase(partition);
-  if (policy and notify == notify_policy::yes) {
-    policy->on_erased(partition);
-  }
-  invalidate_sketches(partition);
-  // Find the containing schema first, so a miss clones nothing.
-  const auto containing = std::invoke([&]() -> Option<type> {
+  erase(std::span{&partition, 1}, notify);
+}
+
+void catalog_state::erase(std::span<const uuid> partitions,
+                          notify_policy notify) {
+  // Group the partitions by the schema that contains them, so that every
+  // touched schema is rebuilt exactly once below.
+  auto by_schema = std::unordered_map<type, std::vector<uuid>>{};
+  for (const auto& partition : partitions) {
+    // Admissions identify accounted partitions, including while package
+    // startup still holds back maintenance scheduling.
+    auto containing = Option<type>{};
     for (const auto& [schema, entries] : *synopses_per_type) {
-      if (entries->find(partition) != entries->end()) {
-        return schema;
+      if (const auto it = entries->find(partition); it != entries->end()) {
+        if (admissions.contains(partition)) {
+          const auto& synopsis = it->second;
+          catalog_bytes -= synopsis->store_file.size
+                           + synopsis->indexes_file.size
+                           + synopsis->sketches_file.size;
+        }
+        containing = schema;
+        break;
       }
     }
-    return None{};
-  });
-  if (not containing) {
+    ++storage_generation;
+    admissions.erase(partition);
+    policy_dirty.erase(partition);
+    policy_pending.erase(partition);
+    eviction_suppressed.erase(partition);
+    if (policy and notify == notify_policy::yes) {
+      policy->on_erased(partition);
+    }
+    invalidate_sketches(partition);
+    if (containing) {
+      by_schema[*containing].push_back(partition);
+    }
+  }
+  if (by_schema.empty()) {
     return;
   }
   update_synopses([&](synopsis_map& map) {
-    auto& entries = mutable_schema(map, *containing);
-    entries.erase(partition);
-    if (entries.empty()) {
-      map.erase(*containing);
+    for (auto& [schema, erased] : by_schema) {
+      std::ranges::sort(erased);
+      const auto duplicates = std::ranges::unique(erased);
+      erased.erase(duplicates.begin(), duplicates.end());
+      const auto it = map.find(schema);
+      TENZIR_ASSERT(it != map.end());
+      const auto& entries = *it->second;
+      TENZIR_ASSERT(entries.size() >= erased.size());
+      if (entries.size() == erased.size()) {
+        map.erase(it);
+        continue;
+      }
+      // Both sequences are sorted by partition ID, so a single merge pass
+      // keeps everything that is not erased.
+      auto kept = schema_synopsis_map::vector_type{};
+      kept.reserve(entries.size() - erased.size());
+      auto next = erased.begin();
+      for (const auto& entry : entries) {
+        while (next != erased.end() and *next < entry.first) {
+          ++next;
+        }
+        if (next != erased.end() and *next == entry.first) {
+          ++next;
+          continue;
+        }
+        kept.push_back(entry);
+      }
+      it->second = std::make_shared<const schema_synopsis_map>(
+        schema_synopsis_map::make_unsafe(std::move(kept)));
     }
   });
 }
@@ -1823,73 +1943,53 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
       -> caf::result<std::vector<partition_synopsis_pair>> {
       return collect_synopses(self->state(), filter);
     },
-    [self](atom::get, const std::string& selector)
-      -> caf::result<std::vector<table_slice>> {
-      const auto parsed = from_string<catalog_slice_selector>(selector);
-      if (not parsed) {
-        return caf::make_error(ec::invalid_argument,
-                               fmt::format("unsupported catalog get selector: "
-                                           "{}",
-                                           selector));
+    // The tables behind `fields`, `schemas`, and `partitions` walk every
+    // partition in the database, which blocked this actor -- and with it every
+    // merge the index waits for before accepting more events -- for seconds
+    // on large databases. A lookup worker builds them from a snapshot instead.
+    [self](atom::get,
+           std::string& selector) -> caf::result<std::vector<table_slice>> {
+      if (auto parsed = parse_catalog_selector(selector, false); not parsed) {
+        return std::move(parsed.error());
       }
-      return build_catalog_slices(*parsed, collect_synopses(self->state()));
+      auto& state = self->state();
+      return self
+        ->mail(atom::get_v, std::move(selector), expression{},
+               catalog_snapshot{state.synopses_per_type})
+        .delegate(state.next_lookup_worker());
     },
-    [self](atom::get, const std::string& selector,
-           const expression& filter) -> caf::result<std::vector<table_slice>> {
-      const auto parsed = from_string<catalog_slice_selector>(selector);
-      if (not parsed) {
-        return caf::make_error(ec::invalid_argument,
-                               fmt::format("unsupported catalog get selector: "
-                                           "{}",
-                                           selector));
+    [self](atom::get, std::string& selector,
+           expression& filter) -> caf::result<std::vector<table_slice>> {
+      if (auto parsed = parse_catalog_selector(selector, true); not parsed) {
+        return std::move(parsed.error());
       }
-      if (*parsed != catalog_slice_selector::partitions) {
-        return caf::make_error(ec::invalid_argument,
-                               fmt::format("filtered catalog get is only "
-                                           "supported for partitions, got {}",
-                                           selector));
-      }
-      const auto synopses = collect_synopses(self->state(), filter);
-      if (not synopses) {
-        return synopses.error();
-      }
-      return build_catalog_slices(*parsed, *synopses);
+      auto& state = self->state();
+      return self
+        ->mail(atom::get_v, std::move(selector), std::move(filter),
+               catalog_snapshot{state.synopses_per_type})
+        .delegate(state.next_lookup_worker());
     },
-    [self](atom::get, atom::nova, const std::string& selector)
-      -> caf::result<std::vector<nova::Events>> {
-      const auto parsed = from_string<catalog_slice_selector>(selector);
-      if (not parsed) {
-        return caf::make_error(ec::invalid_argument,
-                               fmt::format("unsupported catalog get selector: "
-                                           "{}",
-                                           selector));
+    [self](atom::get, atom::nova,
+           std::string& selector) -> caf::result<std::vector<nova::Events>> {
+      if (auto parsed = parse_catalog_selector(selector, false); not parsed) {
+        return std::move(parsed.error());
       }
-      // `to_definition` only yields types the conversion supports, so nothing
-      // reaches the handler's warning path.
-      auto dh = null_diagnostic_handler{};
-      return build_catalog_events(*parsed, collect_synopses(self->state()), dh);
+      auto& state = self->state();
+      return self
+        ->mail(atom::get_v, atom::nova_v, std::move(selector), expression{},
+               catalog_snapshot{state.synopses_per_type})
+        .delegate(state.next_lookup_worker());
     },
-    [self](atom::get, atom::nova, const std::string& selector,
-           const expression& filter) -> caf::result<std::vector<nova::Events>> {
-      const auto parsed = from_string<catalog_slice_selector>(selector);
-      if (not parsed) {
-        return caf::make_error(ec::invalid_argument,
-                               fmt::format("unsupported catalog get selector: "
-                                           "{}",
-                                           selector));
+    [self](atom::get, atom::nova, std::string& selector,
+           expression& filter) -> caf::result<std::vector<nova::Events>> {
+      if (auto parsed = parse_catalog_selector(selector, true); not parsed) {
+        return std::move(parsed.error());
       }
-      if (*parsed != catalog_slice_selector::partitions) {
-        return caf::make_error(ec::invalid_argument,
-                               fmt::format("filtered catalog get is only "
-                                           "supported for partitions, got {}",
-                                           selector));
-      }
-      const auto synopses = collect_synopses(self->state(), filter);
-      if (not synopses) {
-        return synopses.error();
-      }
-      auto dh = null_diagnostic_handler{};
-      return build_catalog_events(*parsed, *synopses, dh);
+      auto& state = self->state();
+      return self
+        ->mail(atom::get_v, atom::nova_v, std::move(selector),
+               std::move(filter), catalog_snapshot{state.synopses_per_type})
+        .delegate(state.next_lookup_worker());
     },
     [self](atom::erase, uuid partition) -> caf::result<atom::done> {
       return self->state().erase_from_disk(partition);
@@ -1935,9 +2035,7 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
         }
         policy->on_replaced(old_uuids, outputs);
       }
-      for (auto const& uuid : old_uuids) {
-        self->state().erase(uuid, catalog_state::notify_policy::no);
-      }
+      self->state().erase(old_uuids, catalog_state::notify_policy::no);
       auto result = self->state().merge(std::move(new_synopses));
       self->state().advance_maintenance(time::clock::now());
       return result;

@@ -23,6 +23,7 @@
 #include "tenzir/fbs/partition_synopsis.hpp"
 #include "tenzir/flatbuffer.hpp"
 #include "tenzir/logger.hpp"
+#include "tenzir/nova/events.hpp"
 #include "tenzir/partition_synopsis.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/synopsis.hpp"
@@ -698,6 +699,23 @@ auto catalog_lookup_worker(
         return std::move(result.error());
       }
       return std::move(*result);
+    },
+    [self](atom::get, std::string& selector, expression& filter,
+           catalog_snapshot& snapshot) -> caf::result<std::vector<table_slice>> {
+      if (not snapshot.synopses) {
+        return std::vector<table_slice>{};
+      }
+      return build_catalog_slices(self->state().engine, selector,
+                                  std::move(filter), *snapshot.synopses);
+    },
+    [self](
+      atom::get, atom::nova, std::string& selector, expression& filter,
+      catalog_snapshot& snapshot) -> caf::result<std::vector<nova::Events>> {
+      if (not snapshot.synopses) {
+        return std::vector<nova::Events>{};
+      }
+      return build_catalog_events(self->state().engine, selector,
+                                  std::move(filter), *snapshot.synopses);
     },
     [self](atom::erase, uuid id) -> caf::result<void> {
       // The catalog broadcasts this for a partition that left it or was

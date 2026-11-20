@@ -38,6 +38,7 @@
 #include <list>
 #include <map>
 #include <set>
+#include <span>
 #include <unordered_set>
 #include <vector>
 
@@ -282,6 +283,22 @@ struct catalog_lookup_engine {
   sketch_cache sketches = {};
 };
 
+/// Builds the table behind the `fields`, `schemas`, or `partitions` operator
+/// from the candidates of `filter` in a snapshot of the partition synopses. An
+/// unset or trivially true `filter` selects every partition. Lookup workers run
+/// this, because it walks every partition in the database and must not block
+/// the catalog's own thread.
+auto build_catalog_slices(catalog_lookup_engine& engine,
+                          std::string_view selector, expression filter,
+                          const catalog_snapshot::map_type& synopses)
+  -> caf::expected<std::vector<table_slice>>;
+
+/// Like `build_catalog_slices`, but produces Nova events.
+auto build_catalog_events(catalog_lookup_engine& engine,
+                          std::string_view selector, expression filter,
+                          const catalog_snapshot::map_type& synopses)
+  -> caf::expected<std::vector<nova::Events>>;
+
 /// A lookup worker: one engine, driven by delegated candidate requests.
 struct catalog_lookup_worker_state {
   static inline constexpr auto name = "catalog-lookup-worker";
@@ -506,6 +523,13 @@ public:
 
   /// Erase this partition from the catalog. Leaves the on-disk files alone.
   void erase(const uuid& partition, notify_policy notify = notify_policy::yes);
+
+  /// Erase these partitions from the catalog in a single synopsis generation.
+  /// Each affected schema is rebuilt once, so the cost is linear in the size
+  /// of the touched schemas rather than in their size times the number of
+  /// erased partitions. Leaves the on-disk files alone.
+  void erase(std::span<const uuid> partitions, notify_policy notify
+                                               = notify_policy::yes);
 
   /// Records an outstanding candidate set and starts monitoring its owner, so
   /// that the lease is released even if the owner never gets around to it.
