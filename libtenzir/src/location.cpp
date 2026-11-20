@@ -38,6 +38,8 @@ auto location::combine(into_location other) const -> location {
 struct SourceMap::Impl {
   std::vector<Arc<const Source>> sources;
   std::vector<location> call_sites;
+  /// Parallel to `call_sites`.
+  std::vector<Option<SourceId>> callees;
 };
 
 SourceMap::SourceMap() : impl_{std::in_place} {
@@ -63,8 +65,10 @@ void SourceMap::add_source(Arc<const Source> source) {
   impl_->sources.push_back(std::move(source));
 }
 
-auto SourceMap::add_call_site(location call_site) -> CallSiteId {
+auto SourceMap::add_call_site(location call_site, Option<SourceId> callee)
+  -> CallSiteId {
   impl_->call_sites.push_back(call_site);
+  impl_->callees.push_back(callee);
   return detail::narrow_cast<CallSiteId>(impl_->call_sites.size());
 }
 
@@ -123,6 +127,13 @@ auto SourceMap::sources() const -> std::span<const Arc<const Source>> {
 
 auto SourceMap::call_sites() const -> std::span<const location> {
   return impl_->call_sites;
+}
+
+auto SourceMap::callee(CallSiteId id) const -> Option<SourceId> {
+  if (id < 1 or id > impl_->callees.size()) {
+    return None{};
+  }
+  return impl_->callees[id - 1];
 }
 
 } // namespace tenzir

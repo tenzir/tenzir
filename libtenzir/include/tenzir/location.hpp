@@ -121,8 +121,10 @@ public:
   ///
   /// The location's `source_index` identifies the caller's source, and its
   /// `callsite_index` the parent call site for nested calls (`0` means
-  /// top-level).
-  auto add_call_site(location call_site) -> CallSiteId;
+  /// top-level). `callee` identifies the source of the operator's definition,
+  /// which the call expands into.
+  auto add_call_site(location call_site, Option<SourceId> callee = None{})
+    -> CallSiteId;
 
   /// Return the source for the given id.
   auto source(SourceId id) const -> Option<const Source&>;
@@ -138,6 +140,10 @@ public:
 
   /// Return all registered call sites.
   auto call_sites() const -> std::span<const location>;
+
+  /// Return the source the given call site expands into, if it was registered
+  /// with one.
+  auto callee(CallSiteId id) const -> Option<SourceId>;
 
 private:
   struct Impl;

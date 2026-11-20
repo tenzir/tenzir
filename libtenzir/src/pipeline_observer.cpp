@@ -10,6 +10,7 @@
 
 #include "tenzir/async/result.hpp"
 #include "tenzir/detail/scope_guard.hpp"
+#include "tenzir/source_frame.hpp"
 
 #include <boost/multi_index/mem_fun.hpp>
 #include <boost/multi_index/member.hpp>
@@ -429,41 +430,16 @@ private:
 };
 
 namespace {
-/// A location in the frame it belongs to. An argument that a package operator
-/// took keeps the position in the caller's source it was written at, but is
-/// stamped with the callee's call site, so that the body it was substituted
-/// into has one call site throughout. No reader finds that pairing: it looks a
-/// call site's locations up in the callee's source. The frame such a location
-/// belongs to is the deepest one whose call was written in the same source,
-/// and the location takes that call's own call site.
-auto in_own_frame(location source, Option<Arc<SourceMap const>> const& sources)
-  -> location {
-  if (not source or not sources) {
-    return source;
-  }
-  auto call_site = source.callsite_index;
-  while (call_site != 0) {
-    auto call = (*sources)->call_site(call_site);
-    if (not call) {
-      break;
-    }
-    if (call->source_index == source.source_index) {
-      source.callsite_index = call->callsite_index;
-      break;
-    }
-    call_site = call->callsite_index;
-  }
-  return source;
-}
-
 auto describe_plan(ir::Plan const& plan,
                    Option<Arc<SourceMap const>> const& sources)
   -> PipelineGraph {
   auto graph = PipelineGraph{};
   graph.definition_location = plan.definition_location;
   for (auto const& op : plan.operators) {
-    graph.operators.push_back({op.id, op.op->display_name(),
-                               in_own_frame(op.op->main_location(), sources)});
+    auto source = op.op->main_location();
+    graph.operators.push_back(
+      {op.id, op.op->display_name(),
+       sources ? in_own_frame(source, **sources) : source});
   }
   graph.channels = plan.channels;
   return graph;

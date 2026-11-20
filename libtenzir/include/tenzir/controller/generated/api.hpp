@@ -1496,22 +1496,25 @@ struct std::hash<tenzir::DiagnosticNote> {
 
 namespace tenzir {
 
-/// A span of the definition a diagnostic marks, in bytes from its start, and
-/// what it says there
+/// A span a diagnostic marks, in bytes from the start of its source, and what
+/// it says there
 class DiagnosticAnnotation {
 public:
   DiagnosticAnnotation(bool primary, std::string text, std::int64_t begin,
-                       std::int64_t end)
+                       std::int64_t end, Option<std::int64_t> callsite_index)
     : primary{primary},
       text{std::move(text)},
       begin{std::move(begin)},
-      end{std::move(end)} {
+      end{std::move(end)},
+      callsite_index{std::move(callsite_index)} {
   }
 
   bool primary;
   std::string text;
   std::int64_t begin;
   std::int64_t end;
+  /// `callsiteIndex`, may be absent.
+  Option<std::int64_t> callsite_index;
 
   friend auto
   operator==(DiagnosticAnnotation const&, DiagnosticAnnotation const&) -> bool
@@ -1520,7 +1523,8 @@ public:
   template <class HashAlgorithm>
   friend auto hash_append(HashAlgorithm& h, DiagnosticAnnotation const& value)
     -> void {
-    hash_append(h, value.primary, value.text, value.begin, value.end);
+    hash_append(h, value.primary, value.text, value.begin, value.end,
+                value.callsite_index);
   }
 };
 
@@ -1572,6 +1576,109 @@ public:
 template <>
 struct std::hash<tenzir::Diagnostic> {
   auto operator()(tenzir::Diagnostic const& value) const -> std::size_t {
+    return tenzir::hash(value);
+  }
+};
+
+namespace tenzir {
+
+class SourceFile {
+public:
+  SourceFile(std::int64_t id, std::string origin, std::string text)
+    : id{std::move(id)}, origin{std::move(origin)}, text{std::move(text)} {
+  }
+
+  std::int64_t id;
+  std::string origin;
+  std::string text;
+
+  friend auto operator==(SourceFile const&, SourceFile const&) -> bool
+    = default;
+
+  template <class HashAlgorithm>
+  friend auto hash_append(HashAlgorithm& h, SourceFile const& value) -> void {
+    hash_append(h, value.id, value.origin, value.text);
+  }
+};
+
+} // namespace tenzir
+
+template <>
+struct std::hash<tenzir::SourceFile> {
+  auto operator()(tenzir::SourceFile const& value) const -> std::size_t {
+    return tenzir::hash(value);
+  }
+};
+
+namespace tenzir {
+
+/// Where a user-defined operator is called: a span of the caller, which is
+/// itself inside the call `callsiteIndex`, or at the top level
+class ApiCallSite {
+public:
+  ApiCallSite(std::int64_t begin, std::int64_t end, std::int64_t source_index,
+              std::int64_t callsite_index, Option<std::int64_t> callee_index)
+    : begin{std::move(begin)},
+      end{std::move(end)},
+      source_index{std::move(source_index)},
+      callsite_index{std::move(callsite_index)},
+      callee_index{std::move(callee_index)} {
+  }
+
+  std::int64_t begin;
+  std::int64_t end;
+  std::int64_t source_index;
+  std::int64_t callsite_index;
+  /// `calleeIndex`, may be absent.
+  Option<std::int64_t> callee_index;
+
+  friend auto operator==(ApiCallSite const&, ApiCallSite const&) -> bool
+    = default;
+
+  template <class HashAlgorithm>
+  friend auto hash_append(HashAlgorithm& h, ApiCallSite const& value) -> void {
+    hash_append(h, value.begin, value.end, value.source_index,
+                value.callsite_index, value.callee_index);
+  }
+};
+
+} // namespace tenzir
+
+template <>
+struct std::hash<tenzir::ApiCallSite> {
+  auto operator()(tenzir::ApiCallSite const& value) const -> std::size_t {
+    return tenzir::hash(value);
+  }
+};
+
+namespace tenzir {
+
+/// The text a compiled pipeline comes from: its own, and the definition of each
+/// user-defined operator it calls, with every call between them
+class ApiSources {
+public:
+  ApiSources(std::vector<SourceFile> sources,
+             std::vector<ApiCallSite> call_sites)
+    : sources{std::move(sources)}, call_sites{std::move(call_sites)} {
+  }
+
+  std::vector<SourceFile> sources;
+  std::vector<ApiCallSite> call_sites;
+
+  friend auto operator==(ApiSources const&, ApiSources const&) -> bool
+    = default;
+
+  template <class HashAlgorithm>
+  friend auto hash_append(HashAlgorithm& h, ApiSources const& value) -> void {
+    hash_append(h, value.sources, value.call_sites);
+  }
+};
+
+} // namespace tenzir
+
+template <>
+struct std::hash<tenzir::ApiSources> {
+  auto operator()(tenzir::ApiSources const& value) const -> std::size_t {
     return tenzir::hash(value);
   }
 };
@@ -1881,36 +1988,6 @@ enum class ApiExecutionOutcome {
 
 auto to_string(ApiExecutionOutcome value) -> std::string_view;
 
-class SourceFile {
-public:
-  SourceFile(std::int64_t id, std::string origin, std::string text)
-    : id{std::move(id)}, origin{std::move(origin)}, text{std::move(text)} {
-  }
-
-  std::int64_t id;
-  std::string origin;
-  std::string text;
-
-  friend auto operator==(SourceFile const&, SourceFile const&) -> bool
-    = default;
-
-  template <class HashAlgorithm>
-  friend auto hash_append(HashAlgorithm& h, SourceFile const& value) -> void {
-    hash_append(h, value.id, value.origin, value.text);
-  }
-};
-
-} // namespace tenzir
-
-template <>
-struct std::hash<tenzir::SourceFile> {
-  auto operator()(tenzir::SourceFile const& value) const -> std::size_t {
-    return tenzir::hash(value);
-  }
-};
-
-namespace tenzir {
-
 /// A snapshot of the optimized runtime graph. Discovery starts with live plans
 /// when inspection attaches and includes later nested plans with bounded
 /// retention. Snapshots do not report which nested instances are currently
@@ -1922,7 +1999,7 @@ public:
                          std::vector<ApiPipelineGraph> graphs,
                          Option<ApiExecutionOutcome> end,
                          std::vector<SourceFile> sources,
-                         std::vector<SourceLocation> call_sites)
+                         std::vector<ApiCallSite> call_sites)
     : run{std::move(run)},
       process_instance_id{std::move(process_instance_id)},
       execution_id{std::move(execution_id)},
@@ -1940,7 +2017,7 @@ public:
   /// `end`, may be null.
   Option<ApiExecutionOutcome> end;
   std::vector<SourceFile> sources;
-  std::vector<SourceLocation> call_sites;
+  std::vector<ApiCallSite> call_sites;
 
   friend auto
   operator==(ExecutionGraphSnapshot const&, ExecutionGraphSnapshot const&)
@@ -2302,12 +2379,16 @@ namespace tenzir {
 
 class AdhocPipelineDefinition {
 public:
-  AdhocPipelineDefinition(AdhocPipelineId adhoc_pipeline_id,
+  AdhocPipelineDefinition(Option<bool> include_sources,
+                          AdhocPipelineId adhoc_pipeline_id,
                           std::string definition)
-    : adhoc_pipeline_id{std::move(adhoc_pipeline_id)},
+    : include_sources{std::move(include_sources)},
+      adhoc_pipeline_id{std::move(adhoc_pipeline_id)},
       definition{std::move(definition)} {
   }
 
+  /// `includeSources`, may be absent.
+  Option<bool> include_sources;
   AdhocPipelineId adhoc_pipeline_id;
   std::string definition;
 
@@ -2319,7 +2400,8 @@ public:
   template <class HashAlgorithm>
   friend auto
   hash_append(HashAlgorithm& h, AdhocPipelineDefinition const& value) -> void {
-    hash_append(h, value.adhoc_pipeline_id, value.definition);
+    hash_append(h, value.include_sources, value.adhoc_pipeline_id,
+                value.definition);
   }
 };
 
@@ -2328,6 +2410,39 @@ public:
 template <>
 struct std::hash<tenzir::AdhocPipelineDefinition> {
   auto operator()(tenzir::AdhocPipelineDefinition const& value) const
+    -> std::size_t {
+    return tenzir::hash(value);
+  }
+};
+
+namespace tenzir {
+
+class DeploymentStartedAdhocPipeline {
+public:
+  explicit DeploymentStartedAdhocPipeline(Option<ApiSources> sources)
+    : sources{std::move(sources)} {
+  }
+
+  /// `sources`, may be absent.
+  Option<ApiSources> sources;
+
+  friend auto operator==(DeploymentStartedAdhocPipeline const&,
+                         DeploymentStartedAdhocPipeline const&) -> bool
+    = default;
+
+  template <class HashAlgorithm>
+  friend auto
+  hash_append(HashAlgorithm& h, DeploymentStartedAdhocPipeline const& value)
+    -> void {
+    hash_append(h, value.sources);
+  }
+};
+
+} // namespace tenzir
+
+template <>
+struct std::hash<tenzir::DeploymentStartedAdhocPipeline> {
+  auto operator()(tenzir::DeploymentStartedAdhocPipeline const& value) const
     -> std::size_t {
     return tenzir::hash(value);
   }
@@ -2451,8 +2566,11 @@ public:
 class InvalidPipeline {
 public:
   InvalidPipeline(std::string message,
-                  Option<std::vector<Diagnostic>> diagnostics)
-    : message{std::move(message)}, diagnostics{std::move(diagnostics)} {
+                  Option<std::vector<Diagnostic>> diagnostics,
+                  Option<ApiSources> sources)
+    : message{std::move(message)},
+      diagnostics{std::move(diagnostics)},
+      sources{std::move(sources)} {
   }
 
   static constexpr auto status = std::uint16_t{400};
@@ -2460,6 +2578,8 @@ public:
   std::string message;
   /// `diagnostics`, may be absent.
   Option<std::vector<Diagnostic>> diagnostics;
+  /// `sources`, may be absent.
+  Option<ApiSources> sources;
 };
 
 class PipelineExists {
@@ -2840,8 +2960,9 @@ public:
 /// and ends with it. The definition has to compile, begin with a source, and
 /// produce events, which is the opposite of what a persisted pipeline has to
 /// do; one that ends in a sink or in bytes is refused. Answers as soon as the
-/// ad-hoc pipeline has started. The deployment then opens a request of its own
-/// to the platform, `POST
+/// ad-hoc pipeline has started. When includeSources is true, the response
+/// includes the sources it compiled from. The deployment then opens a request
+/// of its own to the platform, `POST
 /// /organizations/:org/workspaces/:workspace/deployments/:deploymentId/adhoc-pipelines/:adhocPipelineId/events`,
 /// and streams the events in its body for as long as the ad-hoc pipeline lasts.
 /// A start of an ad-hoc pipeline that is already live is a no-op, so a retry is
@@ -2921,8 +3042,8 @@ public:
 
   virtual auto handle(DeletePipeline request) -> Task<void> = 0;
 
-  virtual auto handle(StartAdhocPipeline request)
-    -> Task<Result<void, StartAdhocPipelineFailure>>
+  virtual auto handle(StartAdhocPipeline request) -> Task<
+    Result<Option<DeploymentStartedAdhocPipeline>, StartAdhocPipelineFailure>>
     = 0;
 
   virtual auto handle(Suspend) -> Task<void> = 0;
@@ -3029,6 +3150,12 @@ auto parse_diagnostic_annotation(simdjson::dom::element value)
   -> Result<DiagnosticAnnotation, ParseError>;
 auto parse_diagnostic(simdjson::dom::element value)
   -> Result<Diagnostic, ParseError>;
+auto parse_source_file(simdjson::dom::element value)
+  -> Result<SourceFile, ParseError>;
+auto parse_api_call_site(simdjson::dom::element value)
+  -> Result<ApiCallSite, ParseError>;
+auto parse_api_sources(simdjson::dom::element value)
+  -> Result<ApiSources, ParseError>;
 auto parse_identified_pipeline(simdjson::dom::element value)
   -> Result<IdentifiedPipeline, ParseError>;
 auto parse_pipeline_state(simdjson::dom::element value)
@@ -3051,8 +3178,6 @@ auto parse_api_pipeline_graph(simdjson::dom::element value)
   -> Result<ApiPipelineGraph, ParseError>;
 auto parse_api_execution_outcome(simdjson::dom::element value)
   -> Result<ApiExecutionOutcome, ParseError>;
-auto parse_source_file(simdjson::dom::element value)
-  -> Result<SourceFile, ParseError>;
 auto parse_execution_graph_snapshot(simdjson::dom::element value)
   -> Result<ExecutionGraphSnapshot, ParseError>;
 auto parse_execution_operator_metrics(simdjson::dom::element value)
@@ -3073,6 +3198,8 @@ auto parse_adhoc_pipeline_id(simdjson::dom::element value)
   -> Result<AdhocPipelineId, ParseError>;
 auto parse_adhoc_pipeline_definition(simdjson::dom::element value)
   -> Result<AdhocPipelineDefinition, ParseError>;
+auto parse_deployment_started_adhoc_pipeline(simdjson::dom::element value)
+  -> Result<DeploymentStartedAdhocPipeline, ParseError>;
 
 /// Appends the type as JSON, in the bytes the API puts on the wire, so a
 /// copy stored elsewhere decodes with the same function.
@@ -3123,6 +3250,9 @@ auto write_json(AdhocPipelineSeverity const& value, std::string& out) -> void;
 auto write_json(DiagnosticNote const& value, std::string& out) -> void;
 auto write_json(DiagnosticAnnotation const& value, std::string& out) -> void;
 auto write_json(Diagnostic const& value, std::string& out) -> void;
+auto write_json(SourceFile const& value, std::string& out) -> void;
+auto write_json(ApiCallSite const& value, std::string& out) -> void;
+auto write_json(ApiSources const& value, std::string& out) -> void;
 auto write_json(IdentifiedPipeline const& value, std::string& out) -> void;
 auto write_json(PipelineState const& value, std::string& out) -> void;
 auto write_json(PipelineStatus const& value, std::string& out) -> void;
@@ -3134,7 +3264,6 @@ auto write_json(InspectionChannelKind const& value, std::string& out) -> void;
 auto write_json(InspectionChannel const& value, std::string& out) -> void;
 auto write_json(ApiPipelineGraph const& value, std::string& out) -> void;
 auto write_json(ApiExecutionOutcome const& value, std::string& out) -> void;
-auto write_json(SourceFile const& value, std::string& out) -> void;
 auto write_json(ExecutionGraphSnapshot const& value, std::string& out) -> void;
 auto write_json(ExecutionOperatorMetrics const& value, std::string& out)
   -> void;
@@ -3147,5 +3276,7 @@ auto write_json(ContextStatus const& value, std::string& out) -> void;
 auto write_json(StopPipelineOptions const& value, std::string& out) -> void;
 auto write_json(AdhocPipelineId const& value, std::string& out) -> void;
 auto write_json(AdhocPipelineDefinition const& value, std::string& out) -> void;
+auto write_json(DeploymentStartedAdhocPipeline const& value, std::string& out)
+  -> void;
 
 } // namespace tenzir

@@ -409,7 +409,14 @@ auto parse_invalid_pipeline(simdjson::dom::element value)
     diagnostics = std::move(diagnostics_present);
   }
 
-  return InvalidPipeline{std::move(message), std::move(diagnostics)};
+  auto sources = Option<ApiSources>{None{}};
+  if (auto sources_raw = api::optional_field(object, "sources")) {
+    TRY(auto sources_present, parse_api_sources(*sources_raw));
+    sources = std::move(sources_present);
+  }
+
+  return InvalidPipeline{std::move(message), std::move(diagnostics),
+                         std::move(sources)};
 }
 
 auto write_json(InvalidPipeline const& value, std::string& out) -> void {
@@ -435,6 +442,16 @@ auto write_json(InvalidPipeline const& value, std::string& out) -> void {
         }
         out += ']';
       }
+    } else {
+      out += "null";
+    }
+  }
+  if (value.sources) {
+    out += field_separator;
+    field_separator = ",";
+    out += "\"sources\":";
+    if (value.sources) {
+      write_json(*value.sources, out);
     } else {
       out += "null";
     }
@@ -1646,8 +1663,16 @@ auto parse_diagnostic_annotation(simdjson::dom::element value)
   TRY(auto end_raw, api::field(object, "end", "DiagnosticAnnotation"));
   TRY(auto end, api::int64_of(end_raw, "DiagnosticAnnotation.end"));
 
+  auto callsite_index = Option<std::int64_t>{None{}};
+  if (auto callsite_index_raw = api::optional_field(object, "callsiteIndex")) {
+    TRY(auto callsite_index_present,
+        api::int64_of(*callsite_index_raw,
+                      "DiagnosticAnnotation.callsiteIndex"));
+    callsite_index = std::move(callsite_index_present);
+  }
+
   return DiagnosticAnnotation{primary, std::move(text), std::move(begin),
-                              std::move(end)};
+                              std::move(end), std::move(callsite_index)};
 }
 
 auto parse_diagnostic(simdjson::dom::element value)
@@ -1689,6 +1714,81 @@ auto parse_diagnostic(simdjson::dom::element value)
   return Diagnostic{std::move(severity), std::move(message),
                     std::move(rendered), std::move(notes),
                     std::move(annotations)};
+}
+
+auto parse_source_file(simdjson::dom::element value)
+  -> Result<SourceFile, ParseError> {
+  TRY(auto object, api::object_of(value, "SourceFile"));
+
+  TRY(auto id_raw, api::field(object, "id", "SourceFile"));
+  TRY(auto id, api::int64_of(id_raw, "SourceFile.id"));
+
+  TRY(auto origin_raw, api::field(object, "origin", "SourceFile"));
+  TRY(auto origin, api::string_of(origin_raw, "SourceFile.origin"));
+
+  TRY(auto text_raw, api::field(object, "text", "SourceFile"));
+  TRY(auto text, api::string_of(text_raw, "SourceFile.text"));
+
+  return SourceFile{std::move(id), std::move(origin), std::move(text)};
+}
+
+auto parse_api_call_site(simdjson::dom::element value)
+  -> Result<ApiCallSite, ParseError> {
+  TRY(auto object, api::object_of(value, "ApiCallSite"));
+
+  TRY(auto begin_raw, api::field(object, "begin", "ApiCallSite"));
+  TRY(auto begin, api::int64_of(begin_raw, "ApiCallSite.begin"));
+
+  TRY(auto end_raw, api::field(object, "end", "ApiCallSite"));
+  TRY(auto end, api::int64_of(end_raw, "ApiCallSite.end"));
+
+  TRY(auto source_index_raw, api::field(object, "sourceIndex", "ApiCallSite"));
+  TRY(auto source_index,
+      api::int64_of(source_index_raw, "ApiCallSite.sourceIndex"));
+
+  TRY(auto callsite_index_raw,
+      api::field(object, "callsiteIndex", "ApiCallSite"));
+  TRY(auto callsite_index,
+      api::int64_of(callsite_index_raw, "ApiCallSite.callsiteIndex"));
+
+  auto callee_index = Option<std::int64_t>{None{}};
+  if (auto callee_index_raw = api::optional_field(object, "calleeIndex")) {
+    TRY(auto callee_index_present,
+        api::int64_of(*callee_index_raw, "ApiCallSite.calleeIndex"));
+    callee_index = std::move(callee_index_present);
+  }
+
+  return ApiCallSite{std::move(begin), std::move(end), std::move(source_index),
+                     std::move(callsite_index), std::move(callee_index)};
+}
+
+auto parse_api_sources(simdjson::dom::element value)
+  -> Result<ApiSources, ParseError> {
+  TRY(auto object, api::object_of(value, "ApiSources"));
+
+  TRY(auto sources_raw, api::field(object, "sources", "ApiSources"));
+  auto sources = std::vector<SourceFile>{};
+  auto sources_array = simdjson::dom::array{};
+  if (sources_raw.get_array().get(sources_array) != simdjson::SUCCESS) {
+    return Err{ParseError{"ApiSources.sources", "expected an array"}};
+  }
+  for (auto sources_item : sources_array) {
+    TRY(auto sources_decoded, parse_source_file(sources_item));
+    sources.push_back(std::move(sources_decoded));
+  }
+
+  TRY(auto call_sites_raw, api::field(object, "callSites", "ApiSources"));
+  auto call_sites = std::vector<ApiCallSite>{};
+  auto call_sites_array = simdjson::dom::array{};
+  if (call_sites_raw.get_array().get(call_sites_array) != simdjson::SUCCESS) {
+    return Err{ParseError{"ApiSources.callSites", "expected an array"}};
+  }
+  for (auto call_sites_item : call_sites_array) {
+    TRY(auto call_sites_decoded, parse_api_call_site(call_sites_item));
+    call_sites.push_back(std::move(call_sites_decoded));
+  }
+
+  return ApiSources{std::move(sources), std::move(call_sites)};
 }
 
 auto parse_identified_pipeline(simdjson::dom::element value)
@@ -2027,22 +2127,6 @@ auto parse_api_execution_outcome(simdjson::dom::element value)
     fmt::format("`{}` is not one of completed, failed, cancelled", raw)}};
 }
 
-auto parse_source_file(simdjson::dom::element value)
-  -> Result<SourceFile, ParseError> {
-  TRY(auto object, api::object_of(value, "SourceFile"));
-
-  TRY(auto id_raw, api::field(object, "id", "SourceFile"));
-  TRY(auto id, api::int64_of(id_raw, "SourceFile.id"));
-
-  TRY(auto origin_raw, api::field(object, "origin", "SourceFile"));
-  TRY(auto origin, api::string_of(origin_raw, "SourceFile.origin"));
-
-  TRY(auto text_raw, api::field(object, "text", "SourceFile"));
-  TRY(auto text, api::string_of(text_raw, "SourceFile.text"));
-
-  return SourceFile{std::move(id), std::move(origin), std::move(text)};
-}
-
 auto parse_execution_graph_snapshot(simdjson::dom::element value)
   -> Result<ExecutionGraphSnapshot, ParseError> {
   TRY(auto object, api::object_of(value, "ExecutionGraphSnapshot"));
@@ -2097,14 +2181,14 @@ auto parse_execution_graph_snapshot(simdjson::dom::element value)
 
   TRY(auto call_sites_raw,
       api::field(object, "callSites", "ExecutionGraphSnapshot"));
-  auto call_sites = std::vector<SourceLocation>{};
+  auto call_sites = std::vector<ApiCallSite>{};
   auto call_sites_array = simdjson::dom::array{};
   if (call_sites_raw.get_array().get(call_sites_array) != simdjson::SUCCESS) {
     return Err{
       ParseError{"ExecutionGraphSnapshot.callSites", "expected an array"}};
   }
   for (auto call_sites_item : call_sites_array) {
-    TRY(auto call_sites_decoded, parse_source_location(call_sites_item));
+    TRY(auto call_sites_decoded, parse_api_call_site(call_sites_item));
     call_sites.push_back(std::move(call_sites_decoded));
   }
 
@@ -2388,6 +2472,15 @@ auto parse_adhoc_pipeline_definition(simdjson::dom::element value)
   -> Result<AdhocPipelineDefinition, ParseError> {
   TRY(auto object, api::object_of(value, "AdhocPipelineDefinition"));
 
+  auto include_sources = Option<bool>{None{}};
+  if (auto include_sources_raw
+      = api::optional_field(object, "includeSources")) {
+    TRY(auto include_sources_present,
+        api::bool_of(*include_sources_raw,
+                     "AdhocPipelineDefinition.includeSources"));
+    include_sources = std::move(include_sources_present);
+  }
+
   TRY(auto adhoc_pipeline_id_raw,
       api::field(object, "adhocPipelineId", "AdhocPipelineDefinition"));
   TRY(auto adhoc_pipeline_id, parse_adhoc_pipeline_id(adhoc_pipeline_id_raw));
@@ -2397,8 +2490,22 @@ auto parse_adhoc_pipeline_definition(simdjson::dom::element value)
   TRY(auto definition,
       api::string_of(definition_raw, "AdhocPipelineDefinition.definition"));
 
-  return AdhocPipelineDefinition{std::move(adhoc_pipeline_id),
+  return AdhocPipelineDefinition{std::move(include_sources),
+                                 std::move(adhoc_pipeline_id),
                                  std::move(definition)};
+}
+
+auto parse_deployment_started_adhoc_pipeline(simdjson::dom::element value)
+  -> Result<DeploymentStartedAdhocPipeline, ParseError> {
+  TRY(auto object, api::object_of(value, "DeploymentStartedAdhocPipeline"));
+
+  auto sources = Option<ApiSources>{None{}};
+  if (auto sources_raw = api::optional_field(object, "sources")) {
+    TRY(auto sources_present, parse_api_sources(*sources_raw));
+    sources = std::move(sources_present);
+  }
+
+  return DeploymentStartedAdhocPipeline{std::move(sources)};
 }
 
 // ── Encoding ────────────────────────────────────────────────────────────────
@@ -2959,14 +3066,33 @@ auto write_json(DiagnosticNote const& value, std::string& out) -> void {
 
 auto write_json(DiagnosticAnnotation const& value, std::string& out) -> void {
   out += '{';
+  auto field_separator = "";
+  out += field_separator;
+  field_separator = ",";
   out += "\"primary\":";
   out += value.primary ? "true" : "false";
-  out += ",\"text\":";
+  out += field_separator;
+  field_separator = ",";
+  out += "\"text\":";
   api::write_string(value.text, out);
-  out += ",\"begin\":";
+  out += field_separator;
+  field_separator = ",";
+  out += "\"begin\":";
   fmt::format_to(std::back_inserter(out), "{}", value.begin);
-  out += ",\"end\":";
+  out += field_separator;
+  field_separator = ",";
+  out += "\"end\":";
   fmt::format_to(std::back_inserter(out), "{}", value.end);
+  if (value.callsite_index) {
+    out += field_separator;
+    field_separator = ",";
+    out += "\"callsiteIndex\":";
+    if (value.callsite_index) {
+      fmt::format_to(std::back_inserter(out), "{}", *value.callsite_index);
+    } else {
+      out += "null";
+    }
+  }
   out += '}';
 }
 
@@ -2994,6 +3120,76 @@ auto write_json(Diagnostic const& value, std::string& out) -> void {
     out += '[';
     auto separator0 = "";
     for (auto const& element0 : value.annotations) {
+      out += separator0;
+      separator0 = ",";
+      write_json(element0, out);
+    }
+    out += ']';
+  }
+  out += '}';
+}
+
+auto write_json(SourceFile const& value, std::string& out) -> void {
+  out += '{';
+  out += "\"id\":";
+  fmt::format_to(std::back_inserter(out), "{}", value.id);
+  out += ",\"origin\":";
+  api::write_string(value.origin, out);
+  out += ",\"text\":";
+  api::write_string(value.text, out);
+  out += '}';
+}
+
+auto write_json(ApiCallSite const& value, std::string& out) -> void {
+  out += '{';
+  auto field_separator = "";
+  out += field_separator;
+  field_separator = ",";
+  out += "\"begin\":";
+  fmt::format_to(std::back_inserter(out), "{}", value.begin);
+  out += field_separator;
+  field_separator = ",";
+  out += "\"end\":";
+  fmt::format_to(std::back_inserter(out), "{}", value.end);
+  out += field_separator;
+  field_separator = ",";
+  out += "\"sourceIndex\":";
+  fmt::format_to(std::back_inserter(out), "{}", value.source_index);
+  out += field_separator;
+  field_separator = ",";
+  out += "\"callsiteIndex\":";
+  fmt::format_to(std::back_inserter(out), "{}", value.callsite_index);
+  if (value.callee_index) {
+    out += field_separator;
+    field_separator = ",";
+    out += "\"calleeIndex\":";
+    if (value.callee_index) {
+      fmt::format_to(std::back_inserter(out), "{}", *value.callee_index);
+    } else {
+      out += "null";
+    }
+  }
+  out += '}';
+}
+
+auto write_json(ApiSources const& value, std::string& out) -> void {
+  out += '{';
+  out += "\"sources\":";
+  {
+    out += '[';
+    auto separator0 = "";
+    for (auto const& element0 : value.sources) {
+      out += separator0;
+      separator0 = ",";
+      write_json(element0, out);
+    }
+    out += ']';
+  }
+  out += ",\"callSites\":";
+  {
+    out += '[';
+    auto separator0 = "";
+    for (auto const& element0 : value.call_sites) {
       out += separator0;
       separator0 = ",";
       write_json(element0, out);
@@ -3166,17 +3362,6 @@ auto write_json(ApiPipelineGraph const& value, std::string& out) -> void {
 
 auto write_json(ApiExecutionOutcome const& value, std::string& out) -> void {
   api::write_string(to_string(value), out);
-}
-
-auto write_json(SourceFile const& value, std::string& out) -> void {
-  out += '{';
-  out += "\"id\":";
-  fmt::format_to(std::back_inserter(out), "{}", value.id);
-  out += ",\"origin\":";
-  api::write_string(value.origin, out);
-  out += ",\"text\":";
-  api::write_string(value.text, out);
-  out += '}';
 }
 
 auto write_json(ExecutionGraphSnapshot const& value, std::string& out) -> void {
@@ -3422,10 +3607,42 @@ auto write_json(AdhocPipelineId const& value, std::string& out) -> void {
 auto write_json(AdhocPipelineDefinition const& value, std::string& out)
   -> void {
   out += '{';
+  auto field_separator = "";
+  if (value.include_sources) {
+    out += field_separator;
+    field_separator = ",";
+    out += "\"includeSources\":";
+    if (value.include_sources) {
+      out += *value.include_sources ? "true" : "false";
+    } else {
+      out += "null";
+    }
+  }
+  out += field_separator;
+  field_separator = ",";
   out += "\"adhocPipelineId\":";
   write_json(value.adhoc_pipeline_id, out);
-  out += ",\"definition\":";
+  out += field_separator;
+  field_separator = ",";
+  out += "\"definition\":";
   api::write_string(value.definition, out);
+  out += '}';
+}
+
+auto write_json(DeploymentStartedAdhocPipeline const& value, std::string& out)
+  -> void {
+  out += '{';
+  auto field_separator = "";
+  if (value.sources) {
+    out += field_separator;
+    field_separator = ",";
+    out += "\"sources\":";
+    if (value.sources) {
+      write_json(*value.sources, out);
+    } else {
+      out += "null";
+    }
+  }
   out += '}';
 }
 
@@ -4117,7 +4334,8 @@ auto dispatch(DeploymentApi& handler, HttpRequest request)
           std::move(payload).unwrap_err());
       }
       auto decoded = StartAdhocPipeline{std::move(payload).unwrap()};
-      co_return api::encode<204>(co_await handler.handle(std::move(decoded)));
+      co_return api::encode<200, 204>(
+        co_await handler.handle(std::move(decoded)));
     }
     co_return HttpResponse{
       405, R"({"error":"method not allowed","allow":["POST"]})"};

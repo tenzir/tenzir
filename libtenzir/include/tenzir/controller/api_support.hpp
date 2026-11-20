@@ -603,10 +603,17 @@ inline auto match_path(std::string_view pattern, std::string_view path,
 /// Turns a handler's answer into a frame, under the status the endpoint says it
 /// succeeds with. A failure carries its own status, which is why the error type
 /// holds one.
-template <std::uint16_t Status, class T>
+template <std::uint16_t Status, std::uint16_t EmptyStatus = 0, class T>
 auto encode(T value) -> HttpResponse {
   auto body = std::string{};
-  write_json(value, body);
+  if constexpr (EmptyStatus != 0) {
+    if (not value) {
+      return HttpResponse{EmptyStatus, std::string{}};
+    }
+    write_json(*value, body);
+  } else {
+    write_json(value, body);
+  }
   return HttpResponse{Status, std::move(body)};
 }
 
@@ -636,7 +643,7 @@ auto refused(variant<Fs...> failed) -> HttpResponse {
 }
 
 /// A handler that may fail.
-template <std::uint16_t Status, class T, class E>
+template <std::uint16_t Status, std::uint16_t EmptyStatus = 0, class T, class E>
 auto encode(Result<T, E> answer) -> HttpResponse {
   if (answer.is_err()) {
     return refused(std::move(answer).unwrap_err());
@@ -647,7 +654,7 @@ auto encode(Result<T, E> answer) -> HttpResponse {
     std::move(answer).unwrap();
     return encode<Status>();
   } else {
-    return encode<Status>(std::move(answer).unwrap());
+    return encode<Status, EmptyStatus>(std::move(answer).unwrap());
   }
 }
 

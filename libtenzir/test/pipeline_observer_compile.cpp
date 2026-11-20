@@ -235,6 +235,15 @@ TEST("inspection source locations resolve through nested package calls") {
                                outer_call->end - outer_call->begin),
            "sourcepkg::outer");
   check_eq(outer_call->callsite_index, 0u);
+  // Each call names the file it expands into: the outer call the outer
+  // operator's file, which holds the inner call, and that one the inner file.
+  auto outer_callee = sources.callee(inner_call->callsite_index);
+  require(outer_callee.is_some());
+  check_eq(*outer_callee, inner_call->source_index);
+  auto inner_callee = sources.callee(op.source.callsite_index);
+  require(inner_callee.is_some());
+  check_eq(*inner_callee, op.source.source_index);
+  check(sources.callee(0).is_none());
 }
 
 TEST("inspection keeps where, if and match inside a package operator that "
