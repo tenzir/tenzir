@@ -1,4 +1,4 @@
-// PowerQuery's `stddev` is that of a sample, so the `summarize` stays in
-// Tenzir, while `count(x)` would not.
+// PowerQuery does not compute `mode`, so the `summarize` stays in Tenzir,
+// while `count(x)` would not.
 from_sentinelone_data_lake "https://example.sentinelone.net", token="t"
-summarize event.type, spread=stddev(tgt.file.size), events=count(src.ip)
+summarize event.type, common=mode(tgt.file.size), events=count(src.ip)

@@ -503,6 +503,7 @@ private:
       // A target computes on columns, so a key and a value argument read a
       // column or an alias. A predicate argument renders as for a filter, but
       // without time literals, which compare only with the time column there.
+      auto argument = Option<std::string>{};
       auto const fill = [&](ast::expression const& arg,
                             bool predicate) -> Option<std::string> {
         if (predicate) {
@@ -510,9 +511,13 @@ private:
                                     : renderer().predicate(arg);
         }
         TRY(auto input, column_of(arg, aliases));
-        return dialect_->name_column(input).or_else([&] {
+        auto rendered = dialect_->name_column(input).or_else([&] {
           return dialect_->bind_column(input);
         });
+        if (column.args.size() == 1 and rendered) {
+          argument = *rendered;
+        }
+        return rendered;
       };
       if (not column.function) {
         auto input = column_of(column.args.front(), aliases);
@@ -547,7 +552,10 @@ private:
         name = existing->name;
       } else {
         name = fresh("column");
-        functions.push_back({.name = name, .call = std::move(*call)});
+        functions.push_back({.name = name,
+                             .call = std::move(*call),
+                             .function = row->tql,
+                             .argument = std::move(argument)});
         auto kind = aggregate_decode(*dialect_, column, decode_of);
         if (kind and *kind != Decode::native) {
           decode.emplace_back(name, *kind);

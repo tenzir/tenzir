@@ -249,6 +249,7 @@ public:
     static constexpr auto rows = std::array{
       Aggregation{"count", 0, "count()", Decode::integer},
       Aggregation{"count", 1, "count({0})", Decode::integer},
+      Aggregation{"count_if", 2, "count({1:pred})", Decode::integer},
       Aggregation{"min", 1, "min({0})"},
       Aggregation{"max", 1, "max({0})"},
     };
@@ -259,6 +260,7 @@ public:
                        std::span<PipeFunction const> functions,
                        std::span<std::string const> keys) const
     -> Option<std::string> override {
+    seen_functions.assign(functions.begin(), functions.end());
     auto calls = std::vector<std::string>{};
     for (auto const& function : functions) {
       calls.push_back(fmt::format("{}={}", function.name, function.call));
@@ -266,6 +268,8 @@ public:
     return fmt::format(" | {}stats {} by {}", assign(aliases),
                        fmt::join(calls, ", "), fmt::join(keys, ", "));
   }
+
+  mutable std::vector<PipeFunction> seen_functions;
 
   auto
   sort_stage(std::span<PipeSortKey const> keys, Option<uint64_t> bound) const
@@ -486,4 +490,31 @@ TEST("time windows bound the times that filters compare with") {
   // An open side stays open.
   CHECK_EQUAL(in_units(TimeWindow{}, duration{1}, Round::inward),
               (Units{None{}, None{}}));
+}
+
+TEST("pipe plans record aggregation names and unary arguments") {
+  auto dialect = TestDialect{true};
+  auto query = render_pipe(
+    std::vector{summarize(
+      {key({"k"}),
+       {.output = {"n"}, .function = "count", .args = {}},
+       {.output = {"c"}, .function = "count", .args = {field({"a", "b"})}},
+       {.output = {"ci"},
+        .function = "count_if",
+        .args = {field({"x"}), parse("x > 1")}}})},
+    dialect, PipeOptions{});
+  REQUIRE(query);
+  REQUIRE_EQUAL(dialect.seen_functions.size(), size_t{3});
+  CHECK_EQUAL(dialect.seen_functions[0].function, "count");
+  CHECK(not dialect.seen_functions[0].argument);
+  CHECK_EQUAL(dialect.seen_functions[1].function, "count");
+  CHECK_EQUAL(dialect.seen_functions[1].argument, Option<std::string>{"a.b"});
+  CHECK_EQUAL(dialect.seen_functions[2].function, "count_if");
+  CHECK(not dialect.seen_functions[2].argument);
+  // A synthetic count for a key-only summary leaves `function` empty.
+  REQUIRE(
+    render_pipe(std::vector{summarize({key({"k"})})}, dialect, PipeOptions{}));
+  REQUIRE_EQUAL(dialect.seen_functions.size(), size_t{1});
+  CHECK(dialect.seen_functions[0].function.empty());
+  CHECK(not dialect.seen_functions[0].argument);
 }

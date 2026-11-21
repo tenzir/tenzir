@@ -73,6 +73,11 @@ struct PipeFunction {
   /// with each argument as `name_column` or else `bind_column` spells it.
   /// Calls that spell the same compute the same column.
   std::string call;
+  /// The TQL aggregation name, or empty for a synthetic count when a summary
+  /// has only group keys.
+  std::string_view function = {};
+  /// The rendered value argument of a unary aggregation, if any.
+  Option<std::string> argument = None{};
 };
 
 /// A key of a sort stage.
