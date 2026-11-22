@@ -68,6 +68,25 @@ auto ExpressionDialect::time_literal_arithmetic() const -> bool {
   return true;
 }
 
+auto ExpressionDialect::render_predicate_value(std::string_view predicate) const
+  -> Option<std::string> {
+  TENZIR_UNUSED(predicate);
+  return None{};
+}
+
+auto escape_regex(std::string_view text) -> std::string {
+  constexpr auto meta = std::string_view{R"(\^$.|?*+()[]{})"};
+  auto result = std::string{};
+  result.reserve(text.size());
+  for (auto c : text) {
+    if (meta.contains(c)) {
+      result += '\\';
+    }
+    result += c;
+  }
+  return result;
+}
+
 auto bucket_width(ast::expression const& expr) -> Option<duration> {
   auto const* constant = try_as<ast::constant>(expr);
   auto const* width = constant ? try_as<duration>(constant->value) : nullptr;
@@ -82,6 +101,17 @@ auto bucket_width(ast::expression const& expr) -> Option<duration> {
 
 auto ExpressionDialect::value_decode(ast::expression const& expr) const
   -> Option<Decode> {
+  if (not boolean_values()) {
+    if (auto const* x = try_as<ast::binary_expr>(expr)) {
+      using enum ast::binary_op;
+      if (x->op != add and x->op != sub and x->op != mul and x->op != div) {
+        return Decode::boolean;
+      }
+    } else if (auto const* x = try_as<ast::unary_expr>(expr);
+               x and x->op == ast::unary_op::not_) {
+      return Decode::boolean;
+    }
+  }
   auto const* call = try_as<ast::function_call>(expr);
   if (not call or not call->fn.ref.resolved()
       or call->fn.ref.pkg() != entity_pkg_std
@@ -90,6 +120,9 @@ auto ExpressionDialect::value_decode(ast::expression const& expr) const
   }
   auto const* row = find_row(functions(), call->fn.ref.segments().front(),
                              std::span{call->args});
+  if (row and row->predicate and not boolean_values()) {
+    return Decode::boolean;
+  }
   return row ? row->decode : Decode::native;
 }
 
@@ -219,7 +252,7 @@ auto find_row(std::span<Function const> rows, std::string_view name,
 
 auto spell(
   std::string_view spelling, std::span<ast::expression const> args,
-  folly::FunctionRef<auto(ast::expression const&, bool)->Option<std::string>>
+  folly::FunctionRef<auto(ast::expression const&, HoleKind)->Option<std::string>>
     fill) -> Option<std::string> {
   auto const split = call_arguments(args);
   auto const argument = [&](std::string_view name) -> ast::expression const* {
@@ -249,8 +282,11 @@ auto spell(
     auto const* arg = argument(hole->argument);
     TENZIR_ASSERT(arg);
     auto const& kind = hole->kind;
-    if (kind.empty() or kind == "pred") {
-      auto text = fill(*arg, kind == "pred");
+    if (kind.empty() or kind == "pred" or kind == "expr") {
+      auto hole_kind = kind == "pred"   ? HoleKind::predicate
+                       : kind == "expr" ? HoleKind::expr
+                                        : HoleKind::value;
+      auto text = fill(*arg, hole_kind);
       if (not text) {
         failed = true;
         return;
@@ -305,7 +341,7 @@ auto ExpressionRenderer::value(ast::expression const& expr) const
   -> Option<std::string> {
   TRY(auto result, render(expr));
   if (result.predicate and not dialect_->boolean_values()) {
-    return None{};
+    return dialect_->render_predicate_value(result.text);
   }
   return std::move(result.text);
 }

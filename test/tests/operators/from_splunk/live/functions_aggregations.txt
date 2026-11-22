@@ -1,4 +1,6 @@
 {
   deviation: 0.9428090415820642,
   variance: 0.8888888888888905,
+  all_login: false,
+  any_login: true,
 }

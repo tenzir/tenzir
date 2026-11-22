@@ -289,3 +289,40 @@ TEST("mysql sums and buckets times with decoded results") {
                 .prefix,
               size_t{0});
 }
+
+TEST("mysql spells boolean aggregations and predicates as values") {
+  auto const table
+    = pushdown::SqlTable{.from = "`t`", .columns = {"id", "flag", "s"}};
+  auto const stages = std::vector{ir::QueryStage{ir::QueryStage::Aggregate{
+    .columns
+    = {{.output = {"sw"},
+        .function = None{},
+        .args = {parse(R"(s.starts_with("a"))")}},
+       {.output = {"re"},
+        .function = None{},
+        .args = {parse(R"(s.match_regex("^a"))")}},
+       {.output = {"emp"}, .function = None{}, .args = {parse("s.is_empty()")}},
+       {.output = {"a"}, .function = "all", .args = {parse("flag")}},
+       {.output = {"b"}, .function = "any", .args = {parse("flag")}}},
+    .schema_name = "tenzir.summarize"}}};
+  auto read = planner(pushdown::SqlMode::table).plan(stages, &table);
+  REQUIRE(read);
+  auto const sw
+    = "CASE WHEN (LEFT(`s`, CHAR_LENGTH('a')) = 'a') THEN 1 ELSE 0 END";
+  auto const re = "CASE WHEN REGEXP_LIKE(`s`, '^a', 'c') THEN 1 ELSE 0 END";
+  auto const emp = "CASE WHEN (CHAR_LENGTH(`s`) = 0) THEN 1 ELSE 0 END";
+  CHECK_EQUAL(read.unwrap().sql,
+              fmt::format("SELECT {0} AS `__tenzir_column_0`, {1} AS "
+                          "`__tenzir_column_1`, {2} AS `__tenzir_column_2`, "
+                          "MIN(`flag` <> 0) AS `__tenzir_column_3`, "
+                          "MAX(`flag` <> 0) AS `__tenzir_column_4` "
+                          "FROM `t` GROUP BY {0}, {1}, {2}",
+                          sw, re, emp));
+  CHECK_EQUAL(read.unwrap().layout.decode,
+              (std::vector<pushdown::Decoded>{
+                {"__tenzir_column_0", pushdown::Decode::boolean},
+                {"__tenzir_column_1", pushdown::Decode::boolean},
+                {"__tenzir_column_2", pushdown::Decode::boolean},
+                {"__tenzir_column_3", pushdown::Decode::boolean},
+                {"__tenzir_column_4", pushdown::Decode::boolean}}));
+}

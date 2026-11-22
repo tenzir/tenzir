@@ -1,4 +1,4 @@
-// Splunk computes the deviation and the variance.
+// Splunk computes deviation, variance, all, and any.
 from_splunk env("SPLUNK_MGMT_URL"),
   index="main",
   earliest="1735689599",
@@ -8,4 +8,4 @@ from_splunk env("SPLUNK_MGMT_URL"),
   },
   tls={skip_peer_verification: true}
 length = user.length_chars()
-summarize deviation=stddev(length), variance=variance(length)
+summarize deviation=stddev(length), variance=variance(length), all_login=all(action == "login"), any_login=any(action == "login")

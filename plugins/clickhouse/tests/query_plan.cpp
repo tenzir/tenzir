@@ -244,6 +244,9 @@ TEST("operators and functions spell in ClickHouse SQL") {
   CHECK_EQUAL(spell(R"(x.to_lower() == x.to_upper().trim())"),
               "(lowerUTF8(`x`) = trimBoth(upperUTF8(`x`)))");
   CHECK_EQUAL(spell("x.abs() > 1"), "(abs(`x`) > 1)");
+  CHECK_EQUAL(spell("x.since_epoch() > y.since_epoch()"),
+              "(toUnixTimestamp64Nano(toDateTime64(`x`, 9, 'UTC')) > "
+              "toUnixTimestamp64Nano(toDateTime64(`y`, 9, 'UTC')))");
   CHECK_EQUAL(spell(R"(x.match_regex("^a."))"), "match(`x`, '^a.')");
   CHECK_EQUAL(spell(R"(x.starts_with("a", ignore_case=true))"), "<none>");
   CHECK_EQUAL(spell(R"(x.to_title() == "A")"), "<none>");
@@ -260,6 +263,10 @@ TEST("fields spell from their syntax before binding") {
 
 TEST("aggregations and exclusions spell in ClickHouse SQL") {
   auto const dialect = ClickHouseDialect{};
+  auto const* since_epoch
+    = pushdown::find_row(dialect.functions(), "since_epoch", 1);
+  REQUIRE(since_epoch);
+  CHECK_EQUAL(since_epoch->decode, pushdown::Decode::duration);
   auto const spelling = [&](std::string_view name, size_t arity) {
     auto const* row = pushdown::find_row(dialect.aggregations(), name, arity);
     return row ? std::string{row->spelling} : std::string{"<none>"};

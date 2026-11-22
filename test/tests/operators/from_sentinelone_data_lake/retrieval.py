@@ -154,7 +154,7 @@ def main() -> None:
         }
         for i in range(1005)
     ], rows
-    tail = 'where event.dns.request.match_regex("^host-100[0-4]$")\nhead 3'
+    tail = 'where "host-100" in event.dns.request and event.dns.request.length_bytes() == 9\nhead 3'
     rows, posts = run(tail, scope="hybrid_dense")
     assert [row["id"] for row in rows] == [1000, 1001, 1002], rows
     assert all(post["payload"]["queryType"] == "LOG" for post in posts), posts

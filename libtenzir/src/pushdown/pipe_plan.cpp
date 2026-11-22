@@ -505,15 +505,17 @@ private:
       // without time literals, which compare only with the time column there.
       auto argument = Option<std::string>{};
       auto const fill = [&](ast::expression const& arg,
-                            bool predicate) -> Option<std::string> {
-        if (predicate) {
+                            HoleKind kind) -> Option<std::string> {
+        if (kind == HoleKind::predicate) {
           return mentions_time(arg) ? Option<std::string>{}
                                     : renderer().predicate(arg);
         }
         TRY(auto input, column_of(arg, aliases));
-        auto rendered = dialect_->name_column(input).or_else([&] {
-          return dialect_->bind_column(input);
-        });
+        auto rendered = kind == HoleKind::expr
+                          ? dialect_->bind_column(input)
+                          : dialect_->name_column(input).or_else([&] {
+                              return dialect_->bind_column(input);
+                            });
         if (column.args.size() == 1 and rendered) {
           argument = *rendered;
         }

@@ -410,6 +410,7 @@ public:
       Function{"capitalize", 1,
                "strcat(toupper(substring({0}, 0, 1)), "
                "tolower(substring({0}, 1)))"},
+      Function{"length_bytes", 1, "string_size({0})"},
       Function{"length_chars", 1, "strlen({0})"},
       Function{"hash_md5", 1, "hash_md5({0})"},
       Function{"hash_sha1", 1, "hash_sha1({0})"},

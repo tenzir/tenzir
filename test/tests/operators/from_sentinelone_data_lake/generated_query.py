@@ -115,7 +115,7 @@ def main() -> None:
     assert rows == [{"event_id": 42}], rows
     rows, _ = run(
         WINDOW
-        + '\nwhere event_id > 40 and message.match_regex("attempt$")\nhead 1\nselect event_id',
+        + "\nwhere event_id > 40 and message.length_bytes() == 13\nhead 1\nselect event_id",
         query=f"{window} and (event_id > 40)",
         window=("2023-12-31T23:59:59.999Z", end),
     )
@@ -165,7 +165,7 @@ def main() -> None:
     )
     assert rows == [{"event_id": 43}], rows
     rows, _ = run(
-        'where message.match_regex("attempt$")\nselect event_id',
+        "where message.length_bytes() == 13\nselect event_id",
         args=f", start={START}, end={END}",
         query="",
     )
@@ -207,8 +207,8 @@ def main() -> None:
     for tail in [
         "",
         "select event_id",
-        'where message.match_regex("attempt$")',
-        'where message.match_regex("attempt$")\nhead 1',
+        "where message.length_bytes() == 13",
+        "where message.length_bytes() == 13\nhead 1",
         'where message == "' + "a" * 10000 + '"',
     ]:
         run(tail, query=None, error="cannot construct a SentinelOne query from TQL")
@@ -247,7 +247,7 @@ def main() -> None:
                 "| columns __tenzir_column_0 = event | limit 1600000"
             ),
         ),
-        ('event.type.match_regex("DNS")', window),
+        ("event.type.length_bytes() == 3", window),
     ):
         run(
             WINDOW + f"\nwhere {predicate}\nselect event",

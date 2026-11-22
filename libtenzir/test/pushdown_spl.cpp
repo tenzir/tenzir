@@ -234,6 +234,25 @@ TEST("spl spells other filters as where stages") {
               R"((substr('user', len('user')-len("ce")+1)=="ce"))");
   CHECK_EQUAL(where(R"(user.match_regex("^a"))"), R"(match('user', "^a"))");
   CHECK_EQUAL(where(R"(user.to_lower() == "a")"), R"((lower('user') == "a"))");
+  CHECK_EQUAL(
+    where(R"(user.capitalize() == "Alice")"),
+    R"(((upper(substr('user', 1, 1)) + lower(substr('user', 2))) == "Alice"))");
+  CHECK_EQUAL(where(R"(user.replace(".", "-") == "a-b")"),
+              R"((replace('user', "\\.", "-") == "a-b"))");
+  CHECK_EQUAL(where(R"(user.replace(other, "-") == "a")"), "");
+  CHECK_EQUAL(where(R"(user.slice(begin=1, end=3) == "li")"),
+              R"((if(3 > 1, substr('user', 1 + 1, 3 - 1), "") == "li"))");
+  CHECK_EQUAL(where(R"(user.slice(begin=2) == "ice")"),
+              R"((substr('user', 2 + 1) == "ice"))");
+  CHECK_EQUAL(where(R"(user.slice(end=2) == "al")"),
+              R"((substr('user', 1, 2) == "al"))");
+  CHECK_EQUAL(
+    where(R"(user.starts_with("a") == true)"),
+    R"((if((substr('user', 1, len("a"))=="a"), "true", "false") == "true"))");
+  CHECK_EQUAL(where("_time.year() == 2025"),
+              R"((tonumber(strftime('_time', "%Y")) == 2025))");
+  CHECK_EQUAL(where("_time.second() > 1.5"),
+              R"((tonumber(strftime('_time', "%S.%6N")) > 1.5))");
   CHECK_EQUAL(where(R"(this["a b"] == 1)"), "('a b' == 1)");
   CHECK_EQUAL(where("_time > 2025-01-01T00:01:00Z"), "('_time' > 1735689660)");
   // A string or a field name that SPL cannot hold, nested paths, bare

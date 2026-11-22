@@ -1,8 +1,8 @@
-// MySQL computes the deviation and the variance, also without values.
+// MySQL computes deviation, variance, all, and any.
 from_mysql table="fns",
            host=env("MYSQL_HOST"),
            port=int(env("MYSQL_PORT")),
            user=env("MYSQL_USER"),
            password=env("MYSQL_PASSWORD"),
            database=env("MYSQL_DATABASE")
-summarize deviation=stddev(f), variance=variance(f)
+summarize deviation=stddev(f), variance=variance(f), all_pos=all(f > 0), any_pos=any(f > 0)

@@ -32,12 +32,14 @@ auto segments(std::span<std::string const> path)
   return result;
 }
 
-/// Decodes the text in `value` as `decode` says, keeping text that does not
-/// read as one, as well as everything but text.
-auto decode_text(nova::MaskedArray<nova::Array<nova::Data>> value,
-                 Decode decode, std::string_view column, diagnostic_handler& dh)
+/// Decodes `value` as `decode` says, keeping values that do not match the
+/// expected encoding as they are.
+auto decode_column(nova::MaskedArray<nova::Array<nova::Data>> value,
+                   Decode decode, std::string_view column,
+                   diagnostic_handler& dh)
   -> nova::MaskedArray<nova::Array<nova::Data>> {
-  if (decode != Decode::exact and decode != Decode::time) {
+  if (decode != Decode::exact and decode != Decode::time
+      and decode != Decode::boolean and decode != Decode::duration) {
     return value;
   }
   auto builder = nova::ArrayBuilder<nova::Data>{};
@@ -48,6 +50,37 @@ auto decode_text(nova::MaskedArray<nova::Array<nova::Data>> value,
       continue;
     }
     auto const row = value.data.get(i);
+    if (decode == Decode::boolean) {
+      if (auto const* x = try_as<nova::RowView<nova::Int>>(row)) {
+        builder.data(**x != 0);
+        continue;
+      }
+      if (auto const* x = try_as<nova::RowView<nova::UInt>>(row)) {
+        builder.data(**x != 0);
+        continue;
+      }
+      if (auto const* text = try_as<nova::RowView<nova::String>>(row)) {
+        auto const view = std::string_view{**text};
+        if (view == "1" or view == "true") {
+          builder.data(true);
+          continue;
+        }
+        if (view == "0" or view == "false") {
+          builder.data(false);
+          continue;
+        }
+      }
+      nova::append_row(builder, row);
+      continue;
+    }
+    if (decode == Decode::duration) {
+      if (auto const* x = try_as<nova::RowView<nova::Int>>(row)) {
+        builder.data(duration{std::chrono::nanoseconds{**x}});
+        continue;
+      }
+      nova::append_row(builder, row);
+      continue;
+    }
     auto const* text = try_as<nova::RowView<nova::String>>(row);
     if (not text) {
       nova::append_row(builder, row);
@@ -116,7 +149,8 @@ auto apply_layout(nova::Events events, Layout const& layout,
     }
     result = nova::assign_nested_field(
       std::move(result), segments(field),
-      decode_text(std::move(*value), layout.decode_of(column), column, dh), dh);
+      decode_column(std::move(*value), layout.decode_of(column), column, dh),
+      dh);
   }
   return nova::Events{std::move(result), std::move(events.mask),
                       std::move(meta)};

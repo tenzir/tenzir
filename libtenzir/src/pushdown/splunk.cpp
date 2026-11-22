@@ -541,7 +541,8 @@ public:
   }
 
   /// Unlike `substr(x, -len(y))`, the spelling of `ends_with` also holds for
-  /// an empty `y`.
+  /// an empty `y`. Time parts and buckets use Splunk's `strftime` in its own
+  /// time zone.
   auto functions() const -> std::span<Function const> override {
     static constexpr auto rows = std::array{
       Function{"starts_with", 2, "(substr({0}, 1, len({1}))=={1})",
@@ -551,10 +552,19 @@ public:
       Function{"match_regex", 2, "match({0}, {1})", Decode::native, true},
       Function{"to_lower", 1, "lower({0})"},
       Function{"to_upper", 1, "upper({0})"},
+      Function{"capitalize", 1,
+               "(upper(substr({0}, 1, 1)) + lower(substr({0}, 2)))"},
       Function{"trim", 1, "trim({0})"},
       Function{"trim_start", 1, "ltrim({0})"},
       Function{"trim_end", 1, "rtrim({0})"},
+      Function{"replace", 3, "replace({0}, {1}, {2})"},
       Function{"is_empty", 1, "(len({0})==0)", Decode::native, true},
+      // Negative bounds of `slice` stay in the pipeline.
+      Function{"slice", 1, "substr({0}, {begin:nat} + 1)"},
+      Function{"slice", 1, "substr({0}, 1, {end:nat})"},
+      Function{"slice", 1,
+               "if({end:nat} > {begin:nat}, substr({0}, {begin:nat} + 1, "
+               "{end:nat} - {begin:nat}), \"\")"},
       Function{"length_chars", 1, "len({0})"},
       Function{"hash_md5", 1, "md5({0})"},
       Function{"hash_sha1", 1, "sha1({0})"},
@@ -567,9 +577,42 @@ public:
       Function{"exp", 1, "exp({0})"},
       Function{"log", 1, "ln({0})"},
       Function{"log", 2, "log({0}, {1})"},
+      Function{"year", 1, "tonumber(strftime({0}, \"%Y\"))", Decode::number},
+      Function{"month", 1, "tonumber(strftime({0}, \"%m\"))", Decode::number},
+      Function{"day", 1, "tonumber(strftime({0}, \"%d\"))", Decode::number},
+      Function{"hour", 1, "tonumber(strftime({0}, \"%H\"))", Decode::number},
+      Function{"minute", 1, "tonumber(strftime({0}, \"%M\"))", Decode::number},
+      Function{"second", 1, "tonumber(strftime({0}, \"%S.%6N\"))",
+               Decode::number},
+      Function{"floor", 2,
+               "strftime(floor({0} / {1:s}) * {1:s}, \"%Y-%m-%dT%H:%M:%S%z\")",
+               Decode::time},
     };
     static_assert(valid_rows(rows));
     return rows;
+  }
+
+  /// `replace` takes a PCRE pattern, so a constant literal needle is
+  /// regex-escaped. Non-literal needles stay in Tenzir.
+  auto render_call(ast::function_call const& call,
+                   ExpressionRenderer const& renderer) const
+    -> Option<std::string> override {
+    if (call.fn.ref.segments().front() == "replace" and call.args.size() == 3
+        and not std::ranges::any_of(call.args, [](ast::expression const& arg) {
+              return is<ast::assignment>(arg);
+            })) {
+      auto const* constant = try_as<ast::constant>(call.args[1]);
+      auto const* needle
+        = constant ? try_as<std::string>(constant->value) : nullptr;
+      if (not needle) {
+        return None{};
+      }
+      TRY(auto subject, renderer.value(call.args[0]));
+      TRY(auto pattern, quote_string(escape_regex(*needle)));
+      TRY(auto replacement, renderer.value(call.args[2]));
+      return fmt::format("replace({}, {}, {})", subject, pattern, replacement);
+    }
+    return PipeQueryDialect::render_call(call, renderer);
   }
 
   /// Splunk returns every value as a string, so counts and sums decode as
@@ -589,6 +632,12 @@ public:
       Aggregation{"mean", 1, "avg({0})", Decode::number},
       Aggregation{"stddev", 1, "stdevp({0})", Decode::number},
       Aggregation{"variance", 1, "varp({0})", Decode::number},
+      Aggregation{"all", 1,
+                  "min(case({0:expr}==\"true\", 1, {0:expr}==\"false\", 0))",
+                  Decode::boolean},
+      Aggregation{"any", 1,
+                  "max(case({0:expr}==\"true\", 1, {0:expr}==\"false\", 0))",
+                  Decode::boolean},
     };
     static_assert(valid_rows(spl2_rows));
     if (spl2_) {
@@ -605,6 +654,14 @@ public:
       Aggregation{"mean", 1, "avg({0})", Decode::number},
       Aggregation{"stddev", 1, "stdevp({0})", Decode::number},
       Aggregation{"variance", 1, "varp({0})", Decode::number},
+      Aggregation{"all", 1,
+                  "min(eval(case({0:expr}==\"true\", 1, {0:expr}==\"false\", "
+                  "0)))",
+                  Decode::boolean},
+      Aggregation{"any", 1,
+                  "max(eval(case({0:expr}==\"true\", 1, {0:expr}==\"false\", "
+                  "0)))",
+                  Decode::boolean},
     };
     static_assert(valid_rows(rows));
     return rows;
@@ -613,6 +670,11 @@ public:
   /// Fields hold strings, never booleans, and `where` needs a predicate.
   auto boolean_values() const -> bool override {
     return false;
+  }
+
+  auto render_predicate_value(std::string_view predicate) const
+    -> Option<std::string> override {
+    return fmt::format(R"(if({}, "true", "false"))", predicate);
   }
 
   auto bind_column(std::string_view column) const

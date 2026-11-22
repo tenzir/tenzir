@@ -323,6 +323,55 @@ TEST("summaries compute keys and arguments with eval") {
                               .args = {parse("_time - 2024-01-01")}}})}));
 }
 
+TEST("summaries spell all, any, predicate keys, and time functions") {
+  auto query = plan({aggregate({
+    {.output = {"sw"},
+     .function = None{},
+     .args = {parse(R"(user.starts_with("a"))")}},
+    {.output = {"yr"}, .function = None{}, .args = {parse("_time.year()")}},
+    {.output = {"bkt"}, .function = None{}, .args = {parse("floor(_time, 1h)")}},
+    {.output = {"a"}, .function = "all", .args = {parse(R"(this["a.b"])")}},
+    {.output = {"b"}, .function = "any", .args = {parse("flag")}},
+  })});
+  REQUIRE(query);
+  CHECK_EQUAL(
+    query->search,
+    "search index=\"main\"\n| eval tenzir_column_0=if((substr('user', 1, "
+    "len(\"a\"))==\"a\"), \"true\", \"false\"), "
+    "tenzir_column_1=tonumber(strftime('_time', \"%Y\")), "
+    "tenzir_column_2=strftime(floor('_time' / 3600) * 3600, "
+    "\"%Y-%m-%dT%H:%M:%S%z\")\n| stats min(eval(case('a.b'==\"true\", 1, "
+    "'a.b'==\"false\", 0))) as tenzir_column_3, "
+    "max(eval(case('flag'==\"true\", "
+    "1, 'flag'==\"false\", 0))) as tenzir_column_4 by tenzir_column_0, "
+    "tenzir_column_1, tenzir_column_2\n| appendpipe [stats count as "
+    "tenzir_groups_0]");
+  CHECK_EQUAL(decoded(query->layout, Decode::boolean),
+              (std::vector<std::string>{"tenzir_column_0", "tenzir_column_3",
+                                        "tenzir_column_4"}));
+  CHECK_EQUAL(decoded(query->layout, Decode::number),
+              (std::vector<std::string>{"tenzir_column_1"}));
+  CHECK_EQUAL(decoded(query->layout, Decode::time),
+              (std::vector<std::string>{"tenzir_column_2"}));
+  // SPL2 omits `eval(...)` inside `stats`.
+  auto spl2
+    = spl_planner(SplSource{.search = std::string{"from main"},
+                            .indexes = {},
+                            .spl2 = true},
+                  None{}, None{})
+        .plan(std::vector{aggregate({
+                {.output = {"a"}, .function = "all", .args = {parse("flag")}},
+                {.output = {"b"}, .function = "any", .args = {parse("flag")}},
+              })},
+              nullptr);
+  REQUIRE(spl2);
+  CHECK_EQUAL(
+    spl2.unwrap().search,
+    "from main\n| stats min(case('flag'==\"true\", 1, 'flag'==\"false\", 0)) "
+    "as tenzir_column_0, max(case('flag'==\"true\", 1, 'flag'==\"false\", 0)) "
+    "as tenzir_column_1\n| appendpipe [stats count() as tenzir_groups_0]");
+}
+
 TEST("summaries with functions that Splunk does not compute stay local") {
   CHECK(not plan({aggregate({call({"s"}, "median", Path{"n"})})}));
   CHECK(not plan({aggregate({call({"s"}, "min")})}));

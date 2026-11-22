@@ -22,11 +22,21 @@ namespace tenzir::pushdown {
 
 /// The TQL type that a result column becomes, which each reader reaches from
 /// what its target returns. `native` keeps what the reader infers, `integer`
-/// is a count, `number` a number, `time` the target's own time, and `text` a
-/// string without type inference. `exact` is an integer that the target may
-/// widen beyond 64 bits, such as a sum of integers, which becomes `null` with
-/// a warning if it does not fit.
-enum class Decode { native, integer, number, time, exact, text };
+/// is a count, `number` a number, `time` the target's own time, `duration`
+/// nanoseconds as a duration, `text` a string without type inference, and
+/// `boolean` an integer or string encoding of a boolean. `exact` is an integer
+/// that the target may widen beyond 64 bits, such as a sum of integers, which
+/// becomes `null` with a warning if it does not fit.
+enum class Decode {
+  native,
+  integer,
+  number,
+  time,
+  duration,
+  exact,
+  text,
+  boolean,
+};
 
 /// A result column with how it decodes.
 using Decoded = std::pair<std::string, Decode>;

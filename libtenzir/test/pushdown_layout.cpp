@@ -126,3 +126,38 @@ TEST("layouts decode exact numbers and times from text") {
   REQUIRE_EQUAL(diagnostics.size(), size_t{1});
   CHECK_EQUAL(diagnostics.front().message, "integer overflow");
 }
+
+TEST("layouts decode booleans and durations") {
+  auto builder = nova::ArrayBuilder<nova::Record>{};
+  auto add = [&](auto flag, auto dur) {
+    auto row = builder.record();
+    row.field("f").data(flag);
+    row.field("d").data(dur);
+  };
+  add(int64_t{1}, int64_t{1'500'000'000});
+  add(int64_t{0}, int64_t{-2'000'000'000});
+  add(std::string_view{"true"}, int64_t{0});
+  add(std::string_view{"0"}, std::string_view{"other"});
+  builder.record().field("f").null();
+  auto events = nova::Events{builder.finish(), nova::storage::BitMap{5, true},
+                             nova::Events::Meta::make_empty(5, "test.results")};
+  auto dh = collecting_diagnostic_handler{};
+  auto decoded = pushdown::apply_layout(
+    std::move(events),
+    pushdown::Layout{
+      .fields = pushdown::LayoutFields{{{"flag"}, "f"}, {{"dur"}, "d"}},
+      .hidden = {},
+      .schema_name = None{},
+      .decode
+      = {{"f", pushdown::Decode::boolean}, {"d", pushdown::Decode::duration}},
+    },
+    dh);
+  CHECK_EQUAL(rows(decoded), (std::vector<std::string>{
+                               "<flag: true, dur: 1.5s>",
+                               "<flag: false, dur: -2s>",
+                               "<flag: true, dur: 0ns>",
+                               "<flag: false, dur: \"other\">",
+                               "<flag: null>",
+                             }));
+  CHECK(std::move(dh).collect().empty());
+}

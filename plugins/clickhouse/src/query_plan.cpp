@@ -647,6 +647,9 @@ auto ClickHouseDialect::functions() const
                        "(toSecond({0}, 'UTC') + "
                        "positiveModulo(toUnixTimestamp64Nano(toDateTime64({0}, "
                        "9)), toInt64(1000000000)) / 1e9)"},
+    pushdown::Function{"since_epoch", 1,
+                       "toUnixTimestamp64Nano(toDateTime64({0}, 9, 'UTC'))",
+                       pushdown::Decode::duration},
     pushdown::Function{"match_regex", 2, "match({0}, {1})"},
     // TQL buckets times by multiples of the width since the epoch, also
     // before it, which flooring division in nanoseconds reproduces, unlike

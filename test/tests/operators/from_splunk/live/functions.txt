@@ -4,6 +4,13 @@
   root: 2.23606797749979,
   half: 3,
   digits: 0.6989700043360189,
+  cap: "Alice",
+  rep: "Alice",
+  sl: "li",
+  sw: true,
+  yr: 2025,
+  sec: 0.0,
+  bkt: 2025-01-01T00:00:00Z,
 }
 {
   user: "bob",
@@ -11,4 +18,11 @@
   root: 1.7320508075688772,
   half: 2,
   digits: 0.47712125471966244,
+  cap: "Bob",
+  rep: "bob",
+  sl: "ob",
+  sw: false,
+  yr: 2025,
+  sec: 0.0,
+  bkt: 2025-01-01T00:01:00Z,
 }

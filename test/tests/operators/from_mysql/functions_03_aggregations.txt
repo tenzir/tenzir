@@ -1,4 +1,6 @@
 {
   deviation: 3.25,
   variance: 10.5625,
+  all_pos: false,
+  any_pos: true,
 }

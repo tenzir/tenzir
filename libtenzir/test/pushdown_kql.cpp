@@ -259,6 +259,7 @@ TEST("kql spells expressions") {
   CHECK_EQUAL(where(R"(x.match_regex("^a"))"), R"((['x'] matches regex "^a"))");
   CHECK_EQUAL(where(R"(x.to_lower() == "a")"), R"((tolower(['x']) == "a"))");
   CHECK_EQUAL(where(R"(x.to_upper() == "A")"), R"((toupper(['x']) == "A"))");
+  CHECK_EQUAL(where("x.length_bytes() > 1"), "(string_size(['x']) > 1)");
   CHECK_EQUAL(where("x.length_chars() > 1"), "(strlen(['x']) > 1)");
   CHECK_EQUAL(where("x.abs() > 1"), "(abs(['x']) > 1)");
   CHECK_EQUAL(where(R"(x.trim() == "a")"), R"((trim(@"\s+", ['x']) == "a"))");
@@ -274,7 +275,7 @@ TEST("kql spells expressions") {
   // Optional fields, named arguments, and other functions have no spelling.
   CHECK_EQUAL(where("x? == 1"), "");
   CHECK_EQUAL(where(R"(x.starts_with("a", ignore_case=true))"), "");
-  CHECK_EQUAL(where("x.length_bytes() > 1"), "");
+  CHECK_EQUAL(where(R"(x.to_title() == "A")"), "");
 }
 
 TEST("kql spells IP addresses and subnets as strings") {

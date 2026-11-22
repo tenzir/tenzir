@@ -13,5 +13,12 @@ md5 = user.hash_md5()
 root = sqrt(user.length_chars())
 half = (user.length_chars() / 2).ceil()
 digits = log(user.length_chars(), 10)
-summarize user, md5, root, half, digits
+cap = user.capitalize()
+rep = user.replace("a", "A")
+sl = user.slice(begin=1, end=3)
+sw = user.starts_with("a")
+yr = _time.year()
+sec = _time.second()
+bkt = floor(_time, 1m)
+summarize user, md5, root, half, digits, cap, rep, sl, sw, yr, sec, bkt
 sort user

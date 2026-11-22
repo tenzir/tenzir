@@ -48,6 +48,8 @@ class ExpressionRenderer;
 /// a colon changes that:
 ///
 /// - `{0:pred}` spells the argument as a predicate.
+/// - `{0:expr}` spells the argument as an expression value (e.g. a column
+///   reference inside an inline `eval` expression of a piped aggregation).
 /// - `{0:nat}` requires a constant integer that is not negative, and spells
 ///   it as a decimal number.
 /// - `{0:s}`, `{0:us}`, and `{0:ns}` require a constant duration
@@ -82,8 +84,8 @@ using Aggregation = Function;
 /// in `static_assert(valid_rows(rows))`.
 constexpr auto valid_spelling(std::string_view spelling, size_t arity) -> bool {
   constexpr auto npos = std::string_view::npos;
-  constexpr auto kinds = std::array<std::string_view, 6>{
-    "", "pred", "nat", "s", "us", "ns",
+  constexpr auto kinds = std::array<std::string_view, 7>{
+    "", "pred", "expr", "nat", "s", "us", "ns",
   };
   auto const digit = [](char c) {
     return c >= '0' and c <= '9';
@@ -151,12 +153,18 @@ auto find_row(std::span<Function const> rows, std::string_view name,
 auto find_row(std::span<Function const> rows, std::string_view name,
               size_t arity) -> Function const*;
 
+/// How a non-constant hole in a spelling expects its argument to render.
+enum class HoleKind { value, predicate, expr };
+
+/// Escapes regex metacharacters in `text` so that a regex matches it literally.
+auto escape_regex(std::string_view text) -> std::string;
+
 /// Fills the holes of `spelling` for `args` with `fill`, which receives an
-/// argument and whether its hole is a predicate. Returns `None` if an argument
-/// does not fit its hole, or if `fill` does.
+/// argument and its hole kind. Returns `None` if an argument does not fit its
+/// hole, or if `fill` does.
 auto spell(
   std::string_view spelling, std::span<ast::expression const> args,
-  folly::FunctionRef<auto(ast::expression const&, bool)->Option<std::string>>
+  folly::FunctionRef<auto(ast::expression const&, HoleKind)->Option<std::string>>
     fill) -> Option<std::string>;
 
 /// The spelling of expressions in the language of a target.
@@ -271,6 +279,11 @@ public:
   /// as in `WHERE flag`, and a predicate where it expects a value, as in
   /// `(x > 1) = TRUE`.
   virtual auto boolean_values() const -> bool = 0;
+
+  /// Spells a predicate as a value when `boolean_values()` is `false`, or
+  /// returns `None` if the dialect cannot. Defaults to vetoing.
+  virtual auto render_predicate_value(std::string_view predicate) const
+    -> Option<std::string>;
 };
 
 /// How the result column of `column` of an aggregation decodes, or `None` to
@@ -306,8 +319,8 @@ public:
   auto spell(Row const& row, std::span<ast::expression const> args) const
     -> Option<std::string> {
     return pushdown::spell(
-      row.spelling, args, [&](ast::expression const& arg, bool predicate) {
-        return predicate ? this->predicate(arg) : value(arg);
+      row.spelling, args, [&](ast::expression const& arg, HoleKind kind) {
+        return kind == HoleKind::predicate ? this->predicate(arg) : value(arg);
       });
   }
 

@@ -1,8 +1,8 @@
-// SQL Server computes the deviation and the variance.
+// SQL Server computes the deviation, variance, all, and any.
 from_microsoft_sql table="fns",
                    host=env("MSSQL_HOST"),
                    port=int(env("MSSQL_PORT")),
                    user=env("MSSQL_ADMIN_USER"),
                    password=env("MSSQL_ADMIN_PASSWORD"),
                    database=env("MSSQL_DATABASE")
-summarize deviation=stddev(f), variance=variance(f)
+summarize deviation=stddev(f), variance=variance(f), all_b=all(b), any_b=any(b)

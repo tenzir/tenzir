@@ -218,14 +218,31 @@ auto MysqlDialect::functions() const -> std::span<pushdown::Function const> {
   return rows;
 }
 
+auto MysqlDialect::aggregations() const
+  -> std::span<pushdown::Aggregation const> {
+  static auto const rows = [this] {
+    auto const base = SqlQueryDialect::aggregations();
+    auto result = std::vector<pushdown::Aggregation>(base.begin(), base.end());
+    result.push_back({"all", 1, "MIN({0} <> 0)", pushdown::Decode::boolean});
+    result.push_back({"any", 1, "MAX({0} <> 0)", pushdown::Decode::boolean});
+    return result;
+  }();
+  return rows;
+}
+
 auto MysqlDialect::time_literal_arithmetic() const -> bool {
   return false;
 }
 
-/// MySQL has no booleans: a predicate as a value is an integer, and a value
-/// as a predicate tests a number.
+/// MySQL has no booleans: a predicate as a value is encoded as 0/1 and decoded
+/// back as a boolean.
 auto MysqlDialect::boolean_values() const -> bool {
   return false;
+}
+
+auto MysqlDialect::render_predicate_value(std::string_view predicate) const
+  -> Option<std::string> {
+  return fmt::format("CASE WHEN {} THEN 1 ELSE 0 END", predicate);
 }
 
 auto planner(pushdown::SqlMode mode)

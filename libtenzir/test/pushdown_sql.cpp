@@ -555,7 +555,7 @@ TEST("spellings take counts of units from constant durations") {
   auto const count = [](std::string_view hole, std::string_view width) {
     auto args = std::vector{parse("x"), parse(width)};
     return spell(hole, args,
-                 [](ast::expression const&, bool) -> Option<std::string> {
+                 [](ast::expression const&, HoleKind) -> Option<std::string> {
                    return std::string{"x"};
                  })
       .value_or("-");
@@ -577,13 +577,13 @@ TEST("spellings name arguments and take constant integers") {
     auto const expr = parse(call);
     auto const* x = try_as<ast::function_call>(expr);
     REQUIRE(x);
-    return spell(spelling, x->args,
-                 [](ast::expression const& arg, bool) -> Option<std::string> {
-                   return fmt::to_string(
-                     ir::field_segments(arg)
-                       .value_or(std::vector<std::string>{"?"})
-                       .front());
-                 })
+    return spell(
+             spelling, x->args,
+             [](ast::expression const& arg, HoleKind) -> Option<std::string> {
+               return fmt::to_string(ir::field_segments(arg)
+                                       .value_or(std::vector<std::string>{"?"})
+                                       .front());
+             })
       .value_or("-");
   };
   CHECK_EQUAL(spelled("sub({0}, {begin:nat}, {end:nat})",

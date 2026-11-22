@@ -129,7 +129,7 @@ def main() -> None:
         '"needle" in x',
         '"" in x',
         'x.starts_with("a", ignore_case=true)',
-        'x.match_regex("a")',
+        'x.match_regex("")',
         "x == 192.0.2.1",
         "x in 192.0.2.0/24",
         "x.length_bytes() > 0",
@@ -302,7 +302,7 @@ def main() -> None:
     ], rows
     # A predicate that stays in Tenzir keeps the select there, too.
     rows = run(
-        'where event.type.match_regex("^DNS")\nselect account.id',
+        "where event.type.length_bytes() == 12\nselect account.id",
         scope="pushdown_projection",
         expected="",
     )
