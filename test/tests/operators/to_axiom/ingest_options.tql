@@ -1,0 +1,28 @@
+---
+fixtures:
+  - axiom:
+      case: ingest
+timeout: 60
+assertions:
+  fixtures:
+    axiom:
+      ingestions: 1
+      timestamp_field: metadata.logged_time
+      timestamp_format: "2006/01/02 15:04:05"
+      labels:
+        env: prod
+        cluster: eu-1
+      events:
+        - metadata:
+            logged_time: "2026/11/22 10:00:00"
+          status: 200
+---
+
+from {metadata: {logged_time: "2026/11/22 10:00:00"}, status: 200}
+to_axiom "test",
+  token=env("AXIOM_TOKEN"),
+  endpoint=env("AXIOM_URL"),
+  timestamp_field="metadata.logged_time",
+  timestamp_format="2006/01/02 15:04:05",
+  labels={env: "prod", cluster: "eu-1"},
+  tls=false

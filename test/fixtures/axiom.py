@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qs, urlsplit
 
 from tenzir_test import FixtureHandle, current_options, fixture
 
@@ -30,6 +31,11 @@ class Assertions:
     apl: str | None = None
     start_time: str | None = None
     end_time: str | None = None
+    nocache: bool = False
+    variables: dict[str, Any] | None = None
+    timestamp_field: str | None = None
+    timestamp_format: str | None = None
+    labels: dict[str, Any] | None = None
     events: list[dict[str, Any]] | None = None
 
 
@@ -39,7 +45,9 @@ class Server(ThreadingHTTPServer):
         self.options = options
         self.queries = 0
         self.ingestions = 0
+        self.query_params: dict[str, list[str]] = {}
         self.request_body: dict[str, Any] | None = None
+        self.ingest_labels: dict[str, Any] | None = None
         self.events: list[dict[str, Any]] = []
         self.failures: list[str] = []
 
@@ -61,11 +69,13 @@ class Handler(BaseHTTPRequestHandler):
         assert isinstance(self.server, Server)
         length = int(self.headers.get("Content-Length", "0"))
         raw = self.rfile.read(length)
+        parsed = urlsplit(self.path)
+        params = parse_qs(parsed.query, keep_blank_values=True)
         if self.server.options.case == "auth-echo":
             auth = self.headers.get("Authorization", "")
-            if self.path == "/v1/query/_apl?format=tabular":
+            if parsed.path == "/v1/query/_apl" and params.get("format") == ["tabular"]:
                 self.server.queries += 1
-            elif self.path == "/v1/ingest/test":
+            elif parsed.path == "/v1/ingest/test":
                 self.server.ingestions += 1
             self.send_json(
                 401,
@@ -78,9 +88,11 @@ class Handler(BaseHTTPRequestHandler):
             )
             self.send_json(401, {"code": 401, "message": "unauthorized"})
             return
-        if self.path == "/v1/query/_apl?format=tabular":
+        if parsed.path == "/v1/query/_apl" and params.get("format") == ["tabular"]:
+            self.server.query_params = params
             self.handle_query(raw)
-        elif self.path == "/v1/ingest/test":
+        elif parsed.path == "/v1/ingest/test":
+            self.server.query_params = params
             self.handle_ingest(raw)
         else:
             self.server.failures.append(f"unexpected path: {self.path}")
@@ -189,6 +201,8 @@ class Handler(BaseHTTPRequestHandler):
             self.server.failures.append(
                 f"unexpected Content-Encoding: {self.headers.get('Content-Encoding')!r}"
             )
+        if raw_labels := self.headers.get("X-Axiom-Event-Labels"):
+            self.server.ingest_labels = json.loads(raw_labels)
         payload = gzip.decompress(raw).decode()
         lines = [line for line in payload.splitlines() if line]
         for line in lines:
@@ -271,6 +285,40 @@ def run() -> FixtureHandle:
             assert server.request_body.get("endTime") == assertions.end_time, (
                 server.request_body.get("endTime"),
                 assertions.end_time,
+            )
+        if assertions.queries > 0 and server.options.case != "auth-echo":
+            expected_nocache = ["true"] if assertions.nocache else None
+            assert server.query_params.get("nocache") == expected_nocache, (
+                server.query_params.get("nocache"),
+                expected_nocache,
+            )
+            assert server.request_body is not None
+            assert server.request_body.get("variables") == assertions.variables, (
+                server.request_body.get("variables"),
+                assertions.variables,
+            )
+        if assertions.ingestions > 0 and server.options.case != "auth-echo":
+            expected_tf = (
+                [assertions.timestamp_field]
+                if assertions.timestamp_field is not None
+                else None
+            )
+            assert server.query_params.get("timestamp-field") == expected_tf, (
+                server.query_params.get("timestamp-field"),
+                expected_tf,
+            )
+            expected_fmt = (
+                [assertions.timestamp_format]
+                if assertions.timestamp_format is not None
+                else None
+            )
+            assert server.query_params.get("timestamp-format") == expected_fmt, (
+                server.query_params.get("timestamp-format"),
+                expected_fmt,
+            )
+            assert server.ingest_labels == assertions.labels, (
+                server.ingest_labels,
+                assertions.labels,
             )
         if assertions.events is not None:
             assert server.events == assertions.events, (

@@ -1,0 +1,22 @@
+---
+fixtures:
+  - axiom:
+      case: query
+timeout: 60
+assertions:
+  fixtures:
+    axiom:
+      queries: 1
+      apl: "['test'] | where status >= min_status"
+      nocache: true
+      variables:
+        min_status: 400
+        env: prod
+---
+
+from_axiom query="['test'] | where status >= min_status",
+  token=env("AXIOM_TOKEN"),
+  endpoint=env("AXIOM_URL"),
+  nocache=true,
+  variables={min_status: 400, env: "prod"},
+  tls=false
