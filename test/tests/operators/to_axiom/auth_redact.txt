@@ -1,0 +1,9 @@
+error: Axiom ingest request failed: HTTP 401
+  --> tests/operators/to_axiom/auth_redact.tql:14:1
+   |
+14 | to_axiom "test",
+   | ^^^^^^^^
+   |
+   = note: Axiom error: unauthorized: echoed Bearer ***
+   = note: trace ID: trace-axiom-123
+   = hint: check the Axiom API token and dataset ingest permissions

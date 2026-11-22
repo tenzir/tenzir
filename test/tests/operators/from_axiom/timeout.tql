@@ -1,0 +1,17 @@
+---
+fixtures:
+  - axiom:
+      case: retry-timeout
+timeout: 15
+error: true
+assertions:
+  fixtures:
+    axiom:
+      queries: 1
+---
+
+from_axiom "test",
+  token=env("AXIOM_TOKEN"),
+  endpoint=env("AXIOM_URL"),
+  timeout=200ms,
+  tls=false

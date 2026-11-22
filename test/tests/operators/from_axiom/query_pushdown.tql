@@ -1,0 +1,33 @@
+---
+fixtures:
+  - axiom:
+      case: query
+timeout: 60
+assertions:
+  fixtures:
+    axiom:
+      queries: 1
+      apl: |-
+        ['test']
+        | where (['status'] >= 400)
+        | where not(ipv4_is_in_range(['src_ip'], "10.0.0.0/8"))
+        | extend ['__tenzir_column_0'] = bin(['_time'], timespan(300000000000ns))
+        | summarize ['__tenzir_part_0'] = count() by ['__tenzir_column_0'], ['method'], ['src_ip']
+        | summarize ['__tenzir_column_1'] = sum(['__tenzir_part_0']), ['__tenzir_column_2'] = countif(isnotnull(['src_ip'])) by ['__tenzir_column_0'], ['method']
+        | sort by ['__tenzir_column_1'] desc
+        | take 10
+      start_time: "2026-11-21T00:00:00.000000000Z"
+      end_time: "2026-11-22T00:00:00.000000000Z"
+---
+
+from_axiom "test",
+  token=env("AXIOM_TOKEN"),
+  endpoint=env("AXIOM_URL"),
+  start=2026-11-21T00:00:00Z,
+  end=2026-11-22T00:00:00Z,
+  tls=false
+where status >= 400 and not (src_ip in 10.0.0.0/8)
+bucket = _time.floor(5min)
+summarize bucket, method, errors = count(), unique_ips = count_distinct(src_ip)
+sort -errors
+head 10

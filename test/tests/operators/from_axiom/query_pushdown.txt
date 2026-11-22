@@ -1,0 +1,6 @@
+{
+  bucket: 2026-11-22T00:00:00Z,
+  method: "GET",
+  errors: 42,
+  unique_ips: 7,
+}

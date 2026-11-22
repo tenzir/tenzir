@@ -17,9 +17,9 @@
 #include <string>
 #include <string_view>
 
-/// The queries in the Kusto Query Language (KQL) that the sources send that
-/// run a user's KQL query, such as Microsoft Defender advanced hunting and
-/// Azure Log Analytics, with the stages that they take over.
+/// The queries in the Kusto Query Language (KQL) and Axiom Processing Language
+/// (APL) that sources send when querying Microsoft Defender advanced hunting,
+/// Azure Log Analytics, or Axiom, with the stages that they take over.
 ///
 /// A source appends the stages that it takes over to the user's query, each
 /// on a new line, where they run with KQL's semantics:
@@ -53,8 +53,8 @@ namespace tenzir::pushdown {
 /// statement, since each tabular statement returns a table of its own.
 auto kql_accepts_trailing_stages(std::string_view query) -> bool;
 
-/// The largest number of bytes that a KQL source appends to a user's query.
-/// Both services limit the size of a query; stages beyond this budget stay in
+/// The largest number of bytes that a KQL or APL source appends to a query.
+/// These services limit the size of a query; stages beyond this budget stay in
 /// the pipeline.
 inline constexpr auto max_kql_appendix = size_t{16'384};
 
@@ -81,6 +81,19 @@ struct KqlQuery {
 /// that refers to a whole event, the query keeps every column. A query that
 /// does not accept stages goes out unchanged, if there are none.
 auto kql_planner(std::string target, std::string query,
+                 Option<ir::OptimizeProjection> projection)
+  -> Planner<KqlQuery>;
+
+/// Quotes an Axiom dataset name as the base APL query `['<dataset>']`, or
+/// returns `None` for an empty name or invalid UTF-8.
+auto apl_dataset_query(std::string_view dataset) -> Option<std::string>;
+
+/// Returns the planner for Axiom Processing Language (APL). APL inherits every
+/// KQL stage and expression spelling as-is, overriding only its differing
+/// function/aggregation spellings, exact two-stage `count_distinct`,
+/// Bessel-rescaled population `stddev`/`variance`, `take 0` veto, nanosecond
+/// literals, and Unix-epoch-aligned `bin`.
+auto apl_planner(std::string target, std::string query,
                  Option<ir::OptimizeProjection> projection)
   -> Planner<KqlQuery>;
 

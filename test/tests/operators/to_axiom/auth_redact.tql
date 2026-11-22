@@ -1,0 +1,17 @@
+---
+fixtures:
+  - axiom:
+      case: auth-echo
+timeout: 60
+error: true
+assertions:
+  fixtures:
+    axiom:
+      ingestions: 1
+---
+
+from {status: 200}
+to_axiom "test",
+  token="xaat-literal-dummy-secret",
+  endpoint=env("AXIOM_URL"),
+  tls=false

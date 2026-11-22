@@ -130,6 +130,21 @@ constexpr auto valid_spelling(std::string_view spelling, size_t arity) -> bool {
   }
 }
 
+/// Concatenates two fixed-size arrays at compile time, for dialect row tables
+/// that share a common base and append dialect-specific rows.
+template <class T, size_t N, size_t M>
+constexpr auto concat(std::array<T, N> const& lhs, std::array<T, M> const& rhs)
+  -> std::array<T, N + M> {
+  auto result = std::array<T, N + M>{};
+  for (auto i = size_t{0}; i < N; ++i) {
+    result[i] = lhs[i];
+  }
+  for (auto i = size_t{0}; i < M; ++i) {
+    result[N + i] = rhs[i];
+  }
+  return result;
+}
+
 /// Whether every row of `rows` has a well-formed spelling.
 consteval auto valid_rows(std::span<Function const> rows) -> bool {
   return std::ranges::all_of(rows, [](Function const& row) {

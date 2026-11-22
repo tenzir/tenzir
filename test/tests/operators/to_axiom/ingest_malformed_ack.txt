@@ -1,0 +1,8 @@
+error: Axiom returned an unrecognized ingest response; ingest outcome unknown
+  --> tests/operators/to_axiom/ingest_malformed_ack.tql:14:1
+   |
+14 | to_axiom "test",
+   | ^^^^^^^^
+   |
+   = note: trace ID: trace-axiom-123
+   = hint: the batch may have been accepted by Axiom and was not retried

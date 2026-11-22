@@ -199,9 +199,134 @@ auto ip_text(ip const& address) -> std::string {
   return fmt::format("\"{}\"", address);
 }
 
+/// Spells `value` as a `datetime(...)` literal at `resolution` (100ns ticks
+/// for KQL with 7 fractional digits, or 1ns for APL with 9 fractional digits),
+/// or returns `None` if `value` does not fall on a multiple of `resolution`.
+auto render_datetime(time value, duration resolution) -> Option<std::string> {
+  if (value.time_since_epoch() % resolution != duration::zero()) {
+    return None{};
+  }
+  // Split into days and the time of the day without converting the start
+  // of the day to nanoseconds, which overflows for the earliest times.
+  constexpr auto per_day
+    = std::chrono::duration_cast<duration>(std::chrono::days{1}).count();
+  auto const ns = value.time_since_epoch().count();
+  auto days = ns / per_day;
+  auto of_day = ns % per_day;
+  if (of_day < 0) {
+    days -= 1;
+    of_day += per_day;
+  }
+  auto const date = std::chrono::year_month_day{
+    std::chrono::sys_days{std::chrono::days{days}}};
+  auto const clock = std::chrono::hh_mm_ss{std::chrono::nanoseconds{of_day}};
+  auto const width = resolution == tick ? 7 : 9;
+  return fmt::format("datetime({:04}-{:02}-{:02}T{:02}:{:02}:{:02}.{:0{}}Z)",
+                     static_cast<int>(date.year()),
+                     static_cast<unsigned>(date.month()),
+                     static_cast<unsigned>(date.day()), clock.hours().count(),
+                     clock.minutes().count(), clock.seconds().count(),
+                     clock.subseconds() / resolution, width);
+}
+
+/// Function rows shared identically by KQL and APL.
+constexpr auto kusto_functions = std::array{
+  Function{"starts_with", 2, "({0} startswith_cs {1})", Decode::native, true},
+  Function{"ends_with", 2, "({0} endswith_cs {1})", Decode::native, true},
+  Function{"match_regex", 2, "({0} matches regex {1})", Decode::native, true},
+  Function{"is_empty", 1, "isempty({0})", Decode::native, true},
+  // Negative bounds of `slice` stay in the pipeline.
+  Function{"slice", 1, "substring({0}, {begin:nat})"},
+  Function{"slice", 1, "substring({0}, 0, {end:nat})"},
+  Function{"slice", 1, "substring({0}, {begin:nat}, {end:nat} - {begin:nat})"},
+  Function{"to_lower", 1, "tolower({0})"},
+  Function{"to_upper", 1, "toupper({0})"},
+  Function{"capitalize", 1,
+           "strcat(toupper(substring({0}, 0, 1)), "
+           "tolower(substring({0}, 1)))"},
+  Function{"length_bytes", 1, "string_size({0})"},
+  Function{"length_chars", 1, "strlen({0})"},
+  Function{"hash_md5", 1, "hash_md5({0})"},
+  Function{"hash_sha1", 1, "hash_sha1({0})"},
+  Function{"hash_sha256", 1, "hash_sha256({0})"},
+  Function{"abs", 1, "abs({0})"},
+  Function{"ceil", 1, "tolong(ceiling({0}))"},
+  Function{"round", 1, "tolong(round({0}))"},
+  Function{"sqrt", 1, "sqrt({0})"},
+  Function{"exp", 1, "exp({0})"},
+  Function{"log", 1, "log({0})"},
+  Function{"log", 2, "(log({0}) / log({1}))"},
+  Function{"year", 1, "getyear({0})"},
+  Function{"month", 1, "getmonth({0})"},
+  Function{"day", 1, "dayofmonth({0})"},
+  Function{"hour", 1, "datetime_part(\"hour\", {0})"},
+  Function{"minute", 1, "datetime_part(\"minute\", {0})"},
+  Function{"second", 1,
+           "(datetime_part(\"second\", {0}) + "
+           "datetime_part(\"nanosecond\", {0}) / 1e9)"},
+  Function{"since_epoch", 1, "({0} - datetime(1970-01-01))"},
+};
+
+constexpr auto kql_functions = concat(
+  kusto_functions, std::array{
+                     Function{"trim", 1, "trim(@\"\\s+\", {0})"},
+                     Function{"trim_start", 1, "trim_start(@\"\\s+\", {0})"},
+                     Function{"trim_end", 1, "trim_end(@\"\\s+\", {0})"},
+                     Function{"replace", 3, "replace_string({0}, {1}, {2})"},
+                     Function{"floor", 1, "tolong(floor({0}, 1))"},
+                   });
+static_assert(valid_rows(kql_functions));
+
+constexpr auto apl_functions
+  = concat(kusto_functions,
+           std::array{
+             Function{"trim", 1, "trim_regex(@\"\\s+\", {0})"},
+             Function{"trim_start", 1, "trim_start_regex(@\"\\s+\", {0})"},
+             Function{"trim_end", 1, "trim_end_regex(@\"\\s+\", {0})"},
+             Function{"replace", 3, "replace_string({1}, {2}, {0})"},
+             Function{"floor", 1, "tolong(floor({0}))"},
+           });
+static_assert(valid_rows(apl_functions));
+
+/// Aggregation rows shared by KQL and APL. In APL, the `count_distinct({0})`
+/// row exists only so the planner captures the argument for
+/// `AplDialect::aggregate_stage`, which rewrites it into two `summarize`
+/// stages or declines; the raw spelling is never emitted in APL.
+constexpr auto kusto_aggregations = std::array{
+  Aggregation{"count", 0, "count()"},
+  Aggregation{"count", 1, "countif(isnotnull({0}))"},
+  Aggregation{"count_distinct", 1, "count_distinct({0})"},
+  Aggregation{"min", 1, "min({0})"},
+  Aggregation{"max", 1, "max({0})"},
+  Aggregation{"sum", 1, "sum({0})"},
+  Aggregation{"mean", 1, "avg({0})"},
+  Aggregation{"all", 1, "(countif({0} == false) == 0)"},
+  Aggregation{"any", 1, "(countif({0} == true) > 0)"},
+  Aggregation{"count_if", 2, "countif({1:pred})"},
+};
+
+constexpr auto kql_aggregations
+  = concat(kusto_aggregations, std::array{
+                                 Aggregation{"stddev", 1, "stdevp({0})"},
+                                 Aggregation{"variance", 1, "variancep({0})"},
+                               });
+static_assert(valid_rows(kql_aggregations));
+
+constexpr auto apl_aggregations = concat(
+  kusto_aggregations,
+  std::array{
+    Aggregation{"stddev", 1,
+                "(stdev({0}) * sqrt(todouble(countif(isnotnull({0})) - 1) / "
+                "countif(isnotnull({0}))))"},
+    Aggregation{"variance", 1,
+                "(variance({0}) * (todouble(countif(isnotnull({0})) - 1) / "
+                "countif(isnotnull({0}))))"},
+  });
+static_assert(valid_rows(apl_aggregations));
+
 /// The stages of KQL. Columns spell as `['name']`, both in expressions and as
 /// arguments of commands.
-class KqlDialect final : public PipeQueryDialect {
+class KqlDialect : public PipeQueryDialect {
 public:
   /// KQL has no `null` literal that compares with every type.
   auto render_null() const -> Option<std::string> override {
@@ -247,29 +372,7 @@ public:
   /// KQL holds times in ticks of 100 nanoseconds, so a time in between has no
   /// spelling.
   auto render_time(time value) const -> Option<std::string> override {
-    if (value.time_since_epoch() % tick != duration::zero()) {
-      return None{};
-    }
-    // Split into days and the time of the day without converting the start
-    // of the day to nanoseconds, which overflows for the earliest times.
-    constexpr auto per_day
-      = std::chrono::duration_cast<duration>(std::chrono::days{1}).count();
-    auto const ticks = value.time_since_epoch().count();
-    auto days = ticks / per_day;
-    auto of_day = ticks % per_day;
-    if (of_day < 0) {
-      days -= 1;
-      of_day += per_day;
-    }
-    auto const date = std::chrono::year_month_day{
-      std::chrono::sys_days{std::chrono::days{days}}};
-    auto const clock = std::chrono::hh_mm_ss{std::chrono::nanoseconds{of_day}};
-    return fmt::format("datetime({:04}-{:02}-{:02}T{:02}:{:02}:{:02}.{:07}Z)",
-                       static_cast<int>(date.year()),
-                       static_cast<unsigned>(date.month()),
-                       static_cast<unsigned>(date.day()), clock.hours().count(),
-                       clock.minutes().count(), clock.seconds().count(),
-                       clock.subseconds() / tick);
+    return render_datetime(value, tick);
   }
 
   /// KQL reads the count of ticks of a `timespan` literal as a `double`, so
@@ -389,52 +492,7 @@ public:
   /// `\s` matches. KQL yields a `NaN` for the root of a negative number and
   /// `-Infinity` for the logarithm of zero.
   auto functions() const -> std::span<Function const> override {
-    static constexpr auto rows = std::array{
-      Function{"starts_with", 2, "({0} startswith_cs {1})", Decode::native,
-               true},
-      Function{"ends_with", 2, "({0} endswith_cs {1})", Decode::native, true},
-      Function{"match_regex", 2, "({0} matches regex {1})", Decode::native,
-               true},
-      Function{"trim", 1, "trim(@\"\\s+\", {0})"},
-      Function{"trim_start", 1, "trim_start(@\"\\s+\", {0})"},
-      Function{"trim_end", 1, "trim_end(@\"\\s+\", {0})"},
-      Function{"replace", 3, "replace_string({0}, {1}, {2})"},
-      Function{"is_empty", 1, "isempty({0})", Decode::native, true},
-      // Negative bounds of `slice` stay in the pipeline.
-      Function{"slice", 1, "substring({0}, {begin:nat})"},
-      Function{"slice", 1, "substring({0}, 0, {end:nat})"},
-      Function{"slice", 1,
-               "substring({0}, {begin:nat}, {end:nat} - {begin:nat})"},
-      Function{"to_lower", 1, "tolower({0})"},
-      Function{"to_upper", 1, "toupper({0})"},
-      Function{"capitalize", 1,
-               "strcat(toupper(substring({0}, 0, 1)), "
-               "tolower(substring({0}, 1)))"},
-      Function{"length_bytes", 1, "string_size({0})"},
-      Function{"length_chars", 1, "strlen({0})"},
-      Function{"hash_md5", 1, "hash_md5({0})"},
-      Function{"hash_sha1", 1, "hash_sha1({0})"},
-      Function{"hash_sha256", 1, "hash_sha256({0})"},
-      Function{"abs", 1, "abs({0})"},
-      Function{"ceil", 1, "tolong(ceiling({0}))"},
-      Function{"floor", 1, "tolong(floor({0}, 1))"},
-      Function{"round", 1, "tolong(round({0}))"},
-      Function{"sqrt", 1, "sqrt({0})"},
-      Function{"exp", 1, "exp({0})"},
-      Function{"log", 1, "log({0})"},
-      Function{"log", 2, "(log({0}) / log({1}))"},
-      Function{"year", 1, "getyear({0})"},
-      Function{"month", 1, "getmonth({0})"},
-      Function{"day", 1, "dayofmonth({0})"},
-      Function{"hour", 1, "datetime_part(\"hour\", {0})"},
-      Function{"minute", 1, "datetime_part(\"minute\", {0})"},
-      Function{"second", 1,
-               "(datetime_part(\"second\", {0}) + "
-               "datetime_part(\"nanosecond\", {0}) / 1e9)"},
-      Function{"since_epoch", 1, "({0} - datetime(1970-01-01))"},
-    };
-    static_assert(valid_rows(rows));
-    return rows;
+    return kql_functions;
   }
 
   /// TQL buckets times by multiples of the width since the epoch, also before
@@ -462,22 +520,7 @@ public:
   /// unlike `dcount`, and fails the query beyond 100 million values. Without
   /// values, `sum` yields 0, `avg` a `NaN`, and `stdevp` and `variancep` 0.
   auto aggregations() const -> std::span<Aggregation const> override {
-    static constexpr auto rows = std::array{
-      Aggregation{"count", 0, "count()"},
-      Aggregation{"count", 1, "countif(isnotnull({0}))"},
-      Aggregation{"count_distinct", 1, "count_distinct({0})"},
-      Aggregation{"min", 1, "min({0})"},
-      Aggregation{"max", 1, "max({0})"},
-      Aggregation{"sum", 1, "sum({0})"},
-      Aggregation{"mean", 1, "avg({0})"},
-      Aggregation{"stddev", 1, "stdevp({0})"},
-      Aggregation{"variance", 1, "variancep({0})"},
-      Aggregation{"all", 1, "(countif({0} == false) == 0)"},
-      Aggregation{"any", 1, "(countif({0} == true) > 0)"},
-      Aggregation{"count_if", 2, "countif({1:pred})"},
-    };
-    static_assert(valid_rows(rows));
-    return rows;
+    return kql_aggregations;
   }
 
   /// `where flag` keeps the rows where a `bool` column holds.
@@ -579,7 +622,7 @@ public:
     return fmt::format("\n| take {}", count);
   }
 
-private:
+protected:
   static auto quote_names(std::span<std::string const> columns)
     -> Option<std::vector<std::string>> {
     auto result = std::vector<std::string>{};
@@ -590,6 +633,7 @@ private:
     return result;
   }
 
+private:
   /// Spells `x in y`: a test for a substring of a string, for membership in
   /// a subnet, or for membership in a list with IP addresses, or the default
   /// spelling for other lists.
@@ -637,6 +681,175 @@ private:
     TRY(auto subject, renderer.value(x.left));
     TRY(auto text, render_in(subject, elements));
     return Option<std::string>{std::move(text)};
+  }
+};
+
+/// Axiom Processing Language (APL). Inherits every KQL stage and expression
+/// spelling as-is, differing only in its 5 function rows, 2 population
+/// aggregation rows, two-stage exact `count_distinct`, `take 0` veto,
+/// nanosecond literals, and Unix-epoch-aligned `bin`.
+class AplDialect final : public KqlDialect {
+public:
+  auto render_time(time value) const -> Option<std::string> override {
+    return render_datetime(value, std::chrono::nanoseconds{1});
+  }
+
+  /// APL parses signed 64-bit nanosecond timespans except `int64_min`.
+  auto render_duration(duration value) const -> Option<std::string> override {
+    if (value == duration::min()) {
+      return None{};
+    }
+    return fmt::format("timespan({}ns)", value.count());
+  }
+
+  auto functions() const -> std::span<Function const> override {
+    return apl_functions;
+  }
+
+  /// APL's `bin` aligns to the Unix epoch (1970-01-01) and accepts any
+  /// positive nanosecond width.
+  auto render_call(ast::function_call const& call,
+                   ExpressionRenderer const& renderer) const
+    -> Option<std::string> override {
+    if (call.fn.ref.segments().front() != "floor" or call.args.size() != 2) {
+      return PipeQueryDialect::render_call(call, renderer);
+    }
+    TRY(auto width, bucket_width(call.args[1]));
+    TRY(auto subject, renderer.value(call.args[0]));
+    TRY(auto spelled, render_duration(width));
+    return fmt::format("bin({}, {})", subject, spelled);
+  }
+
+  /// APL lacks `stdevp`, `variancep`, and single-stage exact `count_distinct`.
+  /// `stddev` and `variance` rescale sample `stdev`/`variance` to population
+  /// values; `count_distinct` is inherited from `kusto_aggregations` only so
+  /// the planner captures its argument for `aggregate_stage` (never emitted).
+  auto aggregations() const -> std::span<Aggregation const> override {
+    return apl_aggregations;
+  }
+
+  auto aggregate_stage(std::span<PipeAlias const> aliases,
+                       std::span<PipeFunction const> functions,
+                       std::span<std::string const> keys) const
+    -> Option<std::string> override {
+    auto const* distinct = static_cast<PipeFunction const*>(nullptr);
+    for (auto const& f : functions) {
+      if (f.function == "count_distinct") {
+        if (distinct or not f.argument) {
+          return None{};
+        }
+        distinct = &f;
+      }
+    }
+    if (not distinct) {
+      return KqlDialect::aggregate_stage(aliases, functions, keys);
+    }
+    for (auto const& f : functions) {
+      if (&f == distinct) {
+        continue;
+      }
+      auto const ok
+        = f.function == "count" or f.function == "count_if"
+          or f.function == "sum" or f.function == "min" or f.function == "max"
+          or ((f.function == "all" or f.function == "any") and f.argument);
+      if (not ok) {
+        return None{};
+      }
+    }
+    auto result = std::string{};
+    auto assignments = std::vector<std::string>{};
+    for (auto const& alias : aliases) {
+      TRY(auto name, quote_name(alias.name));
+      TRY(auto value, alias_value(alias));
+      assignments.push_back(fmt::format("{} = {}", name, value));
+    }
+    if (not assignments.empty()) {
+      result = fmt::format("\n| extend {}", fmt::join(assignments, ", "));
+    }
+    TRY(auto stage2_by, quote_names(keys));
+    auto stage1_by = stage2_by;
+    auto const& distinct_key = *distinct->argument;
+    if (not std::ranges::contains(stage1_by, distinct_key)) {
+      stage1_by.push_back(distinct_key);
+    }
+    auto const used = [&](std::string_view name) {
+      auto quoted = quote_name(name);
+      return std::ranges::contains(keys, name)
+             or std::ranges::any_of(aliases,
+                                    [&](auto const& a) {
+                                      return a.name == name or a.input == name;
+                                    })
+             or std::ranges::any_of(functions, [&](auto const& f) {
+                  return f.name == name or (quoted and f.argument == *quoted);
+                });
+    };
+    auto part_counter = size_t{0};
+    auto stage1 = std::vector<std::pair<std::string, std::string>>{};
+    auto const add_part = [&](std::string call) -> Option<std::string> {
+      for (auto const& [name, existing] : stage1) {
+        if (existing == call) {
+          return name;
+        }
+      }
+      auto raw = std::string{};
+      while (true) {
+        raw = generated_name("part", part_counter++);
+        if (not used(raw)) {
+          break;
+        }
+      }
+      TRY(auto quoted, quote_name(raw));
+      stage1.emplace_back(quoted, std::move(call));
+      return quoted;
+    };
+    auto stage2 = std::vector<std::string>{};
+    for (auto const& f : functions) {
+      TRY(auto out, quote_name(f.name));
+      if (&f == distinct) {
+        stage2.push_back(
+          fmt::format("{} = countif(isnotnull({}))", out, distinct_key));
+      } else if (f.function == "count" or f.function == "count_if"
+                 or f.function == "sum") {
+        TRY(auto part, add_part(f.call));
+        stage2.push_back(fmt::format("{} = sum({})", out, part));
+      } else if (f.function == "min" or f.function == "max") {
+        TRY(auto part, add_part(f.call));
+        stage2.push_back(fmt::format("{} = {}({})", out, f.function, part));
+      } else if (f.function == "all") {
+        TRY(auto part,
+            add_part(fmt::format("countif({} == false)", *f.argument)));
+        stage2.push_back(fmt::format("{} = (sum({}) == 0)", out, part));
+      } else if (f.function == "any") {
+        TRY(auto part,
+            add_part(fmt::format("countif({} == true)", *f.argument)));
+        stage2.push_back(fmt::format("{} = (sum({}) > 0)", out, part));
+      }
+    }
+    if (stage1.empty()) {
+      result += fmt::format("\n| summarize by {}", fmt::join(stage1_by, ", "));
+    } else {
+      auto stage1_calls = std::vector<std::string>{};
+      stage1_calls.reserve(stage1.size());
+      for (auto const& [name, call] : stage1) {
+        stage1_calls.push_back(fmt::format("{} = {}", name, call));
+      }
+      result
+        += fmt::format("\n| summarize {} by {}", fmt::join(stage1_calls, ", "),
+                       fmt::join(stage1_by, ", "));
+    }
+    result += fmt::format("\n| summarize {}", fmt::join(stage2, ", "));
+    if (not stage2_by.empty()) {
+      result += fmt::format(" by {}", fmt::join(stage2_by, ", "));
+    }
+    return result;
+  }
+
+  /// APL rejects `take 0` with HTTP 400.
+  auto limit_stage(uint64_t count) const -> Option<std::string> override {
+    if (count == 0) {
+      return None{};
+    }
+    return KqlDialect::limit_stage(count);
   }
 };
 
@@ -875,8 +1088,11 @@ auto kql_accepts_trailing_stages(std::string_view query) -> bool {
   return *last != ';' and *last != '|';
 }
 
-auto kql_planner(std::string target, std::string query,
-                 Option<ir::OptimizeProjection> projection)
+namespace {
+
+template <class Dialect>
+auto make_kusto_planner(std::string target, std::string query,
+                        Option<ir::OptimizeProjection> projection)
   -> Planner<KqlQuery> {
   auto declined = fmt::format("{} cannot spell the stage", target);
   return {
@@ -891,9 +1107,9 @@ auto kql_planner(std::string target, std::string query,
         }
         return result;
       }
-      // KQL holds times in typed columns, so the plan needs no time column,
-      // and the request window never depends on the stages.
-      auto pipe = render_pipe(stages, KqlDialect{},
+      // Both KQL and APL hold times in typed columns, so the plan needs no
+      // time column, and the request window never depends on the stages.
+      auto pipe = render_pipe(stages, Dialect{},
                               PipeOptions{.extend_base = false,
                                           .time_column = None{},
                                           .native_time = true,
@@ -901,7 +1117,7 @@ auto kql_planner(std::string target, std::string query,
       if (not pipe) {
         return Err{declined};
       }
-      // Both services limit the size of a query, so stages that would grow it
+      // Services limit the size of a query, so stages that would grow it
       // beyond the budget stay in the pipeline, and a projection that would
       // only stays out of the query.
       if (pipe->stages.size() > max_kql_appendix) {
@@ -921,6 +1137,30 @@ auto kql_planner(std::string target, std::string query,
       return result;
     },
   };
+}
+
+} // namespace
+
+auto kql_planner(std::string target, std::string query,
+                 Option<ir::OptimizeProjection> projection)
+  -> Planner<KqlQuery> {
+  return make_kusto_planner<KqlDialect>(std::move(target), std::move(query),
+                                        std::move(projection));
+}
+
+auto apl_dataset_query(std::string_view dataset) -> Option<std::string> {
+  if (dataset.empty()) {
+    return None{};
+  }
+  TRY(auto quoted, quote(dataset, '\''));
+  return fmt::format("[{}]", quoted);
+}
+
+auto apl_planner(std::string target, std::string query,
+                 Option<ir::OptimizeProjection> projection)
+  -> Planner<KqlQuery> {
+  return make_kusto_planner<AplDialect>(std::move(target), std::move(query),
+                                        std::move(projection));
 }
 
 } // namespace tenzir::pushdown

@@ -1,0 +1,15 @@
+warning: Axiom rejected 1 of 2 events in batch
+  --> tests/operators/to_axiom/ingest_failures.tql:13:1
+   |
+13 | to_axiom "test",
+   | ~~~~~~~~
+   |
+   = note: first failure: event timestamp too old
+   = note: trace ID: trace-axiom-123
+
+warning: Axiom ingest warning (column_limit_drop): field limit reached
+  --> tests/operators/to_axiom/ingest_failures.tql:13:1
+   |
+13 | to_axiom "test",
+   | ~~~~~~~~
+   |

@@ -1,0 +1,47 @@
+warning: the result is partial
+  --> tests/operators/from_axiom/warnings.tql:13:12
+   |
+13 | from_axiom "test",
+   |            ~~~~~~
+   |
+   = note: Axiom marked the query result as partial
+
+warning: the result is estimated
+  --> tests/operators/from_axiom/warnings.tql:13:12
+   |
+13 | from_axiom "test",
+   |            ~~~~~~
+   |
+   = note: Axiom marked the query result as an estimate
+
+warning: the result hit Axiom's default row limit
+  --> tests/operators/from_axiom/warnings.tql:13:12
+   |
+13 | from_axiom "test",
+   |            ~~~~~~
+   |
+   = note: A default limit of 1000 was applied
+   = hint: narrow the query or time range, or aggregate rows with `summarize`
+
+warning: the query time range was restricted
+  --> tests/operators/from_axiom/warnings.tql:13:12
+   |
+13 | from_axiom "test",
+   |            ~~~~~~
+   |
+   = note: Query time range is restricted due to license limit
+
+warning: the result hit Axiom's maximum row limit
+  --> tests/operators/from_axiom/warnings.tql:13:12
+   |
+13 | from_axiom "test",
+   |            ~~~~~~
+   |
+   = note: A maximum limit was applied
+   = hint: narrow the query or time range, or aggregate rows with `summarize`
+{
+  _time: 2026-11-22T01:02:03.123456789Z,
+  "geo.country": "DE",
+  elapsed: 15ms,
+  ratio: 2.0,
+}

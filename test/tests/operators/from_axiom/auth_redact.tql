@@ -1,0 +1,16 @@
+---
+fixtures:
+  - axiom:
+      case: auth-echo
+timeout: 60
+error: true
+assertions:
+  fixtures:
+    axiom:
+      queries: 1
+---
+
+from_axiom "test",
+  token=env("AXIOM_TOKEN"),
+  endpoint=env("AXIOM_URL"),
+  tls=false

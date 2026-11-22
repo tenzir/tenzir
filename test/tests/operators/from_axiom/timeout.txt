@@ -1,0 +1,14 @@
+warning: HTTP error 429, attempt 1/6, retrying after 5s
+  --> tests/operators/from_axiom/timeout.tql:13:1
+   |
+13 | from_axiom "test",
+   | ~~~~~~~~~~
+   |
+
+error: Axiom query timed out after 200000000ns
+  --> tests/operators/from_axiom/timeout.tql:13:12
+   |
+13 | from_axiom "test",
+   |            ^^^^^^
+   |
+   = hint: narrow the query or time range, or increase `timeout`

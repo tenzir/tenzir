@@ -1,0 +1,21 @@
+---
+fixtures:
+  - axiom:
+      case: ingest
+timeout: 60
+assertions:
+  fixtures:
+    axiom:
+      ingestions: 1
+      events:
+        - status: 200
+          method: GET
+        - status: 500
+          method: POST
+---
+
+from {status: 200, method: "GET"}, {status: 500, method: "POST"}
+to_axiom "test",
+  token=env("AXIOM_TOKEN"),
+  endpoint=env("AXIOM_URL"),
+  tls=false

@@ -1,0 +1,17 @@
+---
+fixtures:
+  - axiom:
+      case: ingest-malformed-ack
+timeout: 60
+error: true
+assertions:
+  fixtures:
+    axiom:
+      ingestions: 1
+---
+
+from {status: 200}
+to_axiom "test",
+  token=env("AXIOM_TOKEN"),
+  endpoint=env("AXIOM_URL"),
+  tls=false
