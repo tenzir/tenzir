@@ -143,7 +143,7 @@ struct parameter_parser : parser_base<parameter_parser> {
     auto escaped = esc >> (ch<']'> | ch<'\\'> | ch<'"'>);
     // We allow not escaping it in some situations to be more permissive.
     auto can_come_after_closing_bracket
-      = parsers::eoi | ' ' | '\n' | '\r' | '[';
+      = parsers::eoi | ' ' | '\t' | '\n' | '\r' | '[';
     auto can_come_after_quote = (' ' | ("]" >> can_come_after_closing_bracket));
     auto not_escaped = printable - ('"' >> can_come_after_quote);
     auto value = escaped | not_escaped;
@@ -217,12 +217,13 @@ struct checkpoint_param : parser_base<checkpoint_param> {
     auto key = +key_char;
     auto checkpoint_key_char = key_char - ':'_p;
     auto non_terminal_colon = ch<':'> >> ! '\"'_p;
-    auto checkpoint_key
-      = rep(checkpoint_key_char | non_terminal_colon, 1, 31) >> ':'_p;
+    // Check Point keys have no length limit, for example the 33 characters of
+    // `script_value_for_one_time_scripts` in management audit records.
+    auto checkpoint_key = +(checkpoint_key_char | non_terminal_colon) >> ':'_p;
     auto esc = '\\'_p;
     auto escaped = esc >> (ch<']'> | ch<'\\'> | ch<'"'>);
     auto can_come_after_closing_bracket
-      = parsers::eoi | ' '_p | '\n'_p | '\r'_p | '['_p | ';'_p;
+      = parsers::eoi | ' '_p | '\t'_p | '\n'_p | '\r'_p | '['_p | ';'_p;
     auto value_terminator
       = '"'_p >> (' '_p | ';'_p | (']'_p >> can_come_after_closing_bracket));
     auto value_char = escaped | (! value_terminator >> printable);
@@ -242,6 +243,9 @@ struct checkpoint_param : parser_base<checkpoint_param> {
 /// Parser for all Check Point structured data element parameters.
 ///
 /// Example: `action:"Accept"; conn_direction:"Incoming"`
+///
+/// Accepts a final delimiter and spaces after the last parameter, as in
+/// `action:"Accept";` or `action:"Accept" `.
 struct checkpoint_params : parser_base<checkpoint_params> {
   using attribute = std::vector<parameter>;
 
@@ -249,7 +253,7 @@ struct checkpoint_params : parser_base<checkpoint_params> {
   auto parse(Iterator& f, const Iterator& l, Attribute& x) const -> bool {
     using namespace parser_literals;
     auto sep = +' '_p | (';'_p >> *' '_p);
-    auto p = checkpoint_param{} % sep;
+    auto p = checkpoint_param{} % sep >> ignore(*(' '_p | ';'_p));
     return p(f, l, x);
   }
 };
@@ -334,8 +338,8 @@ struct message {
 
 inline auto merge_duplicate_sd_ids(std::vector<structured_data_element>& data)
   -> void {
-  // Combine duplicate SD element IDs. Deduplicate param keys (last wins)
-  // to avoid writing the same field twice to the builder.
+  // Combine duplicate SD element IDs. Repeated param keys stay, so that the
+  // builder collects their values into a list.
   // Typically 0-3 elements, so linear scan is optimal.
   for (size_t i = 1; i < data.size();) {
     auto merged = false;
@@ -343,19 +347,8 @@ inline auto merge_duplicate_sd_ids(std::vector<structured_data_element>& data)
       if (data[j].id == data[i].id) {
         auto& target = data[j].params;
         auto& source = data[i].params;
-        for (auto& [sk, sv] : source) {
-          auto found = false;
-          for (auto& [tk, tv] : target) {
-            if (tk == sk) {
-              tv = std::move(sv);
-              found = true;
-              break;
-            }
-          }
-          if (not found) {
-            target.emplace_back(std::move(sk), std::move(sv));
-          }
-        }
+        target.insert(target.end(), std::make_move_iterator(source.begin()),
+                      std::make_move_iterator(source.end()));
         data.erase(data.begin() + detail::narrow_cast<ptrdiff_t>(i));
         merged = true;
         break;
@@ -377,9 +370,10 @@ struct message_parser : parser_base<message_parser> {
     using namespace parsers;
     using namespace parser_literals;
     // Octet-framed messages can include a line terminator even without MSG.
+    // Some emitters separate MSG from the structured data with a tab.
     auto p = header_parser{} >> ' '
              >> (structured_data_parser{} | checkpoint_structured_data_parser{})
-             >> -(' ' >> message_content_parser{})
+             >> -((' '_p | '\t'_p) >> message_content_parser{})
              >> ignore(-("\r\n"_p | '\n'_p));
     if constexpr (std::is_same_v<Attribute, unused_type>) {
       return p(f, l, unused);
@@ -524,7 +518,8 @@ struct legacy_message_parser : parser_base<legacy_message_parser> {
       const auto structured_data_prefix
         = &'['_p
           >> (structured_data_parser{} | checkpoint_structured_data_parser{})
-          >> -(' '_p >> message_content_parser{}) >> *' '_p >> parsers::eoi;
+          >> -((' '_p | '\t'_p) >> message_content_parser{}) >> *' '_p
+          >> parsers::eoi;
       auto data = std::vector<structured_data_element>{};
       auto msg = Option<message_content>{};
       if (structured_data_prefix(begin, end, data, msg)) {

@@ -1,0 +1,13 @@
+// RFC 5424 §6.3.3 allows a parameter name to repeat within an element.
+from {
+  x: r#"<134>1 2026-11-22T10:00:00Z gw CheckPoint 1 - [checkpoint_2620 layer_name:"Network"; layer_name:"Application"]"#,
+}, {
+  x: r#"<134>1 2026-11-22T10:00:00Z gw CheckPoint 1 - [x@2620 layer_name="Network" layer_name="Application"]"#,
+}, {
+  x: r#"<134>1 2026-11-22T10:00:00Z gw app 1 - [x@1 a="1" b="2" a="3" c="4" a="5"]"#,
+}, {
+  x: r#"<134>1 2026-11-22T10:00:00Z gw app 1 - [x@1 a="1" b="2"][x@1 a="3"]"#,
+}, {
+  x: r#"<134>1 2026-11-22T10:00:00Z gw CheckPoint 1 - [action:"Drop"; layer_name:"Network"; layer_uuid:"1"; rule_action:"Accept"; rule_name:"Allow web"; layer_name:"Application"; layer_uuid:"2"; rule_action:"Drop"; rule_name:"Block social"]"#,
+}
+select sd = x.parse_syslog().structured_data

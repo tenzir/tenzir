@@ -1,0 +1,36 @@
+{
+  structured_data: {
+    checkpoint_2620: {
+      action: "Drop",
+      layer_name: [
+        "Network",
+        "Application",
+      ],
+      rule_action: [
+        "Accept",
+        "Drop",
+      ],
+    },
+  },
+}
+{
+  structured_data: {
+    "x@2620": {
+      layer_name: [
+        "Network",
+        "Application",
+      ],
+    },
+  },
+}
+{
+  structured_data: {
+    "Originator@6876": {
+      sub: [
+        "a",
+        "b",
+      ],
+      opID: 1,
+    },
+  },
+}

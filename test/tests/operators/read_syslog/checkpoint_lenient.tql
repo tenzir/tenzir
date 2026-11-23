@@ -1,0 +1,12 @@
+from {
+  line: r#"<134>1 2026-11-22T10:00:00Z gw CheckPoint 1 - [action:"Accept"; script_value_for_one_time_scripts:"x"]"#,
+}, {
+  line: r#"<134>1 2026-11-22T10:00:00Z gw CheckPoint 1 - [action:"Accept"; src:"192.0.2.1" ]"#,
+}, {
+  line: r#"<134>1 2026-11-22T10:00:00Z gw CheckPoint 1 - [action:"Detect"; web_client_type:"Chrome"; ]"#,
+}, {
+  line: "<134>1 2026-11-22T10:00:00Z gw CheckPoint 1 - [action:\"Accept\"]\tmessage",
+}
+write_lines
+read_syslog
+select structured_data, message

@@ -219,6 +219,9 @@ public:
         auto& settings = args.dialect_settings[i];
         settings = args.settings;
         settings.infer_unparsed_under = "structured_data";
+        // RFC 5424 allows a structured-data parameter to repeat, so keep
+        // every value as a list instead of the last one, also under a schema.
+        settings.merge_structural = true;
         if (try_as<nova::EventBuilder::NoPolicy>(settings.policy)) {
           settings.policy = nova::EventBuilder::SchemaPolicy{schemas[i]};
           TRY(nova::EventBuilder::make(settings, ctx));
