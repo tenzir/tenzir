@@ -9,7 +9,10 @@
 {
   structured_data: {
     "sd@1": {
-      a: 3,
+      a: [
+        1,
+        3,
+      ],
       b: 2,
       c: true,
     },

@@ -1,0 +1,40 @@
+// Check Point keys have no length limit.
+from {
+  c: "key-31",
+  x: r#"<134>1 2026-11-22T10:00:00Z gw CheckPoint 1 - [checkpoint_2620 action:"Accept"; aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:"x"]"#,
+}, {
+  c: "key-32",
+  x: r#"<134>1 2026-11-22T10:00:00Z gw CheckPoint 1 - [checkpoint_2620 action:"Accept"; aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:"x"]"#,
+}, {
+  c: "key-33",
+  x: r#"<134>1 2026-11-22T10:00:00Z gw CheckPoint 1 - [action:"Accept"; script_value_for_one_time_scripts:"x"]"#,
+}, {
+  // A final delimiter, spaces, or both before the closing bracket.
+  c: "final-semicolon",
+  x: r#"<134>1 2026-11-22T10:00:00Z gw CheckPoint 1 - [checkpoint_2620 action:"Accept"; src:"192.0.2.1";]"#,
+}, {
+  c: "space-before-bracket",
+  x: r#"<134>1 2026-11-22T10:00:00Z gw CheckPoint 1 - [checkpoint_2620 action:"Accept"; src:"192.0.2.1" ]"#,
+}, {
+  c: "semicolon-space-before-bracket",
+  x: r#"<134>1 2026-11-22T10:00:00Z gw CheckPoint 1 - [action:"Detect"; web_client_type:"Chrome"; ]"#,
+}, {
+  // A tab after the structured data.
+  c: "trailing-tab",
+  x: "<134>1 2026-11-22T10:00:00Z gw CheckPoint 1 - [checkpoint_2620 action:\"Accept\"; src:\"192.0.2.1\"]\t",
+}, {
+  c: "tab-before-message",
+  x: "<134>1 2026-11-22T10:00:00Z gw CheckPoint 1 - [action:\"Accept\"]\tmessage",
+}, {
+  c: "rfc-tab-before-message",
+  x: "<134>1 2026-11-22T10:00:00Z gw app 1 - [x@1 a=\"1\"]\tmessage",
+}, {
+  // RFC 3164 messages with a structured-data prefix.
+  c: "legacy-tab-before-content",
+  x: "<166>2026-02-11T18:01:45.587Z esx Hostd[1]: [Originator@6876 sub=a]\tdone",
+}, {
+  c: "legacy-final-semicolon",
+  x: r#"<166>2026-02-11T18:01:45.587Z esx Hostd[1]: [action:"Accept";] done"#,
+}
+y = x.parse_syslog()
+select c, sd = y.structured_data, message = y.message, content = y.content

@@ -1,0 +1,35 @@
+{
+  structured_data: {
+    checkpoint_2620: {
+      action: "Accept",
+      script_value_for_one_time_scripts: "x",
+    },
+  },
+  message: null,
+}
+{
+  structured_data: {
+    checkpoint_2620: {
+      action: "Accept",
+      src: 192.0.2.1,
+    },
+  },
+  message: null,
+}
+{
+  structured_data: {
+    checkpoint_2620: {
+      action: "Detect",
+      web_client_type: "Chrome",
+    },
+  },
+  message: null,
+}
+{
+  structured_data: {
+    checkpoint_2620: {
+      action: "Accept",
+    },
+  },
+  message: "message",
+}

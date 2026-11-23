@@ -1,8 +1,14 @@
 {
   structured_data: {
     example: {
-      a: 2,
-      b: false,
+      a: [
+        1,
+        2,
+      ],
+      b: [
+        true,
+        false,
+      ],
     },
   },
 }

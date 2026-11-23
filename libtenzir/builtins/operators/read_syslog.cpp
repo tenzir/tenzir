@@ -703,6 +703,9 @@ private:
     }
     auto settings = nova::event_builder_settings(options);
     settings.infer_unparsed_under = "structured_data";
+    // RFC 5424 allows a structured-data parameter to repeat, so keep every
+    // value as a list instead of the last one, also under a schema.
+    settings.merge_structural = true;
     auto builder = nova::EventBuilder::make(std::move(settings), *dh_);
     if (not builder) {
       done_ = true;

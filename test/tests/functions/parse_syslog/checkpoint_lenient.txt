@@ -1,0 +1,138 @@
+warning: record does not have field
+  --> tests/functions/parse_syslog/checkpoint_lenient.tql:40:66
+   |
+40 | select c, sd = y.structured_data, message = y.message, content = y.content
+   |                                                                  ~
+   ⋮
+40 | select c, sd = y.structured_data, message = y.message, content = y.content
+   |                                                                    ------- field does not exist
+   |
+   = hint: append `?` to suppress this warning
+
+warning: record does not have field
+  --> tests/functions/parse_syslog/checkpoint_lenient.tql:40:45
+   |
+40 | select c, sd = y.structured_data, message = y.message, content = y.content
+   |                                             ~
+   ⋮
+40 | select c, sd = y.structured_data, message = y.message, content = y.content
+   |                                               ------- field does not exist
+   |
+   = hint: append `?` to suppress this warning
+{
+  c: "key-31",
+  sd: {
+    checkpoint_2620: {
+      action: "Accept",
+      aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa: "x",
+    },
+  },
+  message: null,
+  content: null,
+}
+{
+  c: "key-32",
+  sd: {
+    checkpoint_2620: {
+      action: "Accept",
+      aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa: "x",
+    },
+  },
+  message: null,
+  content: null,
+}
+{
+  c: "key-33",
+  sd: {
+    checkpoint_2620: {
+      action: "Accept",
+      script_value_for_one_time_scripts: "x",
+    },
+  },
+  message: null,
+  content: null,
+}
+{
+  c: "final-semicolon",
+  sd: {
+    checkpoint_2620: {
+      action: "Accept",
+      src: 192.0.2.1,
+    },
+  },
+  message: null,
+  content: null,
+}
+{
+  c: "space-before-bracket",
+  sd: {
+    checkpoint_2620: {
+      action: "Accept",
+      src: 192.0.2.1,
+    },
+  },
+  message: null,
+  content: null,
+}
+{
+  c: "semicolon-space-before-bracket",
+  sd: {
+    checkpoint_2620: {
+      action: "Detect",
+      web_client_type: "Chrome",
+    },
+  },
+  message: null,
+  content: null,
+}
+{
+  c: "trailing-tab",
+  sd: {
+    checkpoint_2620: {
+      action: "Accept",
+      src: 192.0.2.1,
+    },
+  },
+  message: "",
+  content: null,
+}
+{
+  c: "tab-before-message",
+  sd: {
+    checkpoint_2620: {
+      action: "Accept",
+    },
+  },
+  message: "message",
+  content: null,
+}
+{
+  c: "rfc-tab-before-message",
+  sd: {
+    "x@1": {
+      a: 1,
+    },
+  },
+  message: "message",
+  content: null,
+}
+{
+  c: "legacy-tab-before-content",
+  sd: {
+    "Originator@6876": {
+      sub: "a",
+    },
+  },
+  message: null,
+  content: "done",
+}
+{
+  c: "legacy-final-semicolon",
+  sd: {
+    checkpoint_2620: {
+      action: "Accept",
+    },
+  },
+  message: null,
+  content: "done",
+}

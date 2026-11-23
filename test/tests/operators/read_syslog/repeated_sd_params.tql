@@ -1,0 +1,10 @@
+from {
+  line: r#"<134>1 2026-11-22T10:00:00Z gw CheckPoint 1 - [action:"Drop"; layer_name:"Network"; rule_action:"Accept"; layer_name:"Application"; rule_action:"Drop";]"#,
+}, {
+  line: r#"<134>1 2026-11-22T10:00:00Z gw CheckPoint 1 - [x@2620 layer_name="Network" layer_name="Application"] message"#,
+}, {
+  line: r#"<166>2026-02-11T18:01:45.587Z esx Hostd[1]: [Originator@6876 sub=a opID=1 sub=b] done"#,
+}
+write_lines
+read_syslog
+select structured_data
