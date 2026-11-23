@@ -2527,8 +2527,8 @@ public:
   static constexpr auto status = std::uint16_t{503};
 };
 
-/// The deployment cannot read ingest endpoints because it is not hosted in the
-/// required reader region.
+/// The deployment cannot read the ingest endpoint because Tenzir does not host
+/// it in the endpoint's region.
 class IngestUnavailableError {
 public:
   IngestUnavailableError(std::string message, std::string region)
@@ -2728,8 +2728,9 @@ auto call(Transport& transport, PushTelemetry request)
 /// Attaching again replaces only the named deployment's password. Without
 /// `group`, the deployment reads in a group of its own and sees every event;
 /// deployments that name the same group share it, and each event reaches one of
-/// them. Returns 400 `IngestUnavailable` if the target deployment is not hosted
-/// in the required reader region. Missing or unreadable endpoints return 404.
+/// them. Returns 400 `IngestUnavailable` if Tenzir does not host the target
+/// deployment in the endpoint's region. Missing or unreadable endpoints return
+/// 404.
 class AttachIngestEndpoint {
 public:
   AttachIngestEndpoint(AttachIngestEndpointPath path,
