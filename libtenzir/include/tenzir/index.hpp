@@ -53,11 +53,23 @@ struct active_partition_info {
   }
 };
 
+/// A batch of events that one or more partitions retain. Each partition that
+/// receives rows of a batch keeps the whole batch alive, so the batch counts
+/// toward the buffer limit once, until its last holder releases it.
+struct NovaRetainedBatch {
+  size_t bytes = 0;
+  size_t holders = 0;
+};
+
 struct nova_active_partition_info {
   nova_active_partition_actor actor = {};
   size_t events = 0;
+  /// The share of the retained bytes attributed to this partition,
+  /// proportional to its rows of each batch.
   size_t bytes = 0;
   uuid generation = {};
+  /// The retained batches that this partition holds.
+  std::vector<uint64_t> batches = {};
 };
 
 /// The state of the index actor.
@@ -81,7 +93,9 @@ struct index_state {
   void enforce_buffer_limit();
   void release_nova_pressure();
   void rollback_nova_append(ImportShapeKey const& key, uuid const& generation,
-                            size_t events, size_t bytes);
+                            size_t events, size_t bytes, uint64_t batch);
+  auto retain_nova_batch(size_t bytes) -> uint64_t;
+  void release_nova_batch(uint64_t batch);
 
   void complete_publication(caf::error error);
   void publish_or_defer(std::function<void()> action);
@@ -140,6 +154,7 @@ struct index_state {
     nova_active_partition_actor actor = {};
     bool internal = false;
     size_t bytes = 0;
+    std::vector<uint64_t> batches = {};
     size_t ref_count = 1;
     bool visible_for_recent = true;
     bool exit_sent = false;
@@ -147,7 +162,14 @@ struct index_state {
   };
   std::unordered_map<uuid, nova_unpersisted_partition_info> nova_unpersisted
     = {};
+  /// The retained batches by id.
+  std::unordered_map<uint64_t, NovaRetainedBatch> nova_retained_batches = {};
+  uint64_t next_nova_batch = 0;
+  /// The bytes of all retained batches, each counted once.
   size_t buffered_nova_bytes = 0;
+  /// The shares of partitions that are persisting, i.e., the bytes that are
+  /// about to be released without flushing further partitions.
+  size_t releasing_nova_bytes = 0;
   size_t max_buffered_nova_bytes = 0;
   std::vector<caf::typed_response_promise<void>> nova_pressure_waiters = {};
 

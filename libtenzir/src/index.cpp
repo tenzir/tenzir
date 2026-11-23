@@ -236,7 +236,12 @@ auto index_state::handle_events(nova::Events events) -> caf::result<void> {
     return caf::make_error(ec::type_clash, std::move(grouped).unwrap_err());
   }
   auto rp = self->make_response_promise<void>();
-  auto const retained_bytes = events.approx_held_storage();
+  // Every partition that receives rows of this batch retains all of it, so the
+  // batch counts once. This function holds a reference until all partitions
+  // took theirs, and attributes the bytes to partitions by their rows.
+  auto const batch_bytes = events.approx_held_storage();
+  auto const batch = retain_nova_batch(batch_bytes);
+  auto const batch_rows = static_cast<size_t>(events.mask.true_count());
   auto pending = std::make_shared<size_t>(1);
   auto first_error = std::make_shared<caf::error>();
   auto finish = [this, pending, first_error, rp]() mutable {
@@ -266,6 +271,7 @@ auto index_state::handle_events(nova::Events events) -> caf::result<void> {
           if (not first_error->valid()) {
             *first_error = created.error();
           }
+          release_nova_batch(batch);
           finish();
           return rp;
         }
@@ -278,9 +284,11 @@ auto index_state::handle_events(nova::Events events) -> caf::result<void> {
                          static_cast<size_t>(
                            std::numeric_limits<nova::storage::Index>::max()))));
       auto count = static_cast<size_t>(part.true_count());
+      auto share = batch_rows == 0 ? 0 : batch_bytes * count / batch_rows;
       it->second.events += count;
-      it->second.bytes += retained_bytes;
-      buffered_nova_bytes += retained_bytes;
+      it->second.bytes += share;
+      it->second.batches.push_back(batch);
+      ++nova_retained_batches.at(batch).holders;
       buffered_events += count;
       auto generation = it->second.generation;
       remaining = remaining.and_not(part);
@@ -291,9 +299,9 @@ auto index_state::handle_events(nova::Events events) -> caf::result<void> {
           [finish]() mutable {
             finish();
           },
-          [this, key = group.key, generation, count, retained_bytes, finish,
+          [this, key = group.key, generation, count, share, batch, finish,
            first_error](caf::error const& error) mutable {
-            rollback_nova_append(key, generation, count, retained_bytes);
+            rollback_nova_append(key, generation, count, share, batch);
             if (not first_error->valid()) {
               *first_error = error;
             }
@@ -304,6 +312,7 @@ auto index_state::handle_events(nova::Events events) -> caf::result<void> {
       }
     }
   }
+  release_nova_batch(batch);
   enforce_buffer_limit();
   finish();
   return rp;
@@ -328,7 +337,17 @@ void index_state::enforce_buffer_limit() {
       decommission_active_partition(old->first, {});
     }
   }
-  while (buffered_nova_bytes > max_buffered_nova_bytes
+  // Start flushing before the limit so that persisting overlaps with further
+  // imports. Only exceeding the limit itself holds back replies, see
+  // `handle_events()`.
+  auto const flush_threshold
+    = max_buffered_nova_bytes - (max_buffered_nova_bytes / 5);
+  // Partitions that are already persisting release their bytes soon, so only
+  // flush more partitions while that does not suffice. Otherwise, a single
+  // overflow would flush every active partition.
+  while (buffered_nova_bytes
+             - std::min(buffered_nova_bytes, releasing_nova_bytes)
+           > flush_threshold
          and not nova_active_partitions.empty()) {
     auto largest = std::ranges::max_element(
       nova_active_partitions, std::less<>{}, [](auto const& entry) {
@@ -350,7 +369,12 @@ void index_state::release_nova_pressure() {
 
 void index_state::rollback_nova_append(ImportShapeKey const& key,
                                        uuid const& generation, size_t events,
-                                       size_t bytes) {
+                                       size_t bytes, uint64_t batch) {
+  auto forget = [&](std::vector<uint64_t>& batches) {
+    auto it = std::ranges::find(batches, batch);
+    TENZIR_ASSERT(it != batches.end());
+    batches.erase(it);
+  };
   if (auto it = nova_active_partitions.find(key);
       it != nova_active_partitions.end()
       and it->second.generation == generation) {
@@ -360,18 +384,40 @@ void index_state::rollback_nova_append(ImportShapeKey const& key,
     it->second.events -= events;
     it->second.bytes -= bytes;
     buffered_events -= events;
+    forget(it->second.batches);
   } else if (auto it = nova_unpersisted.find(generation);
              it != nova_unpersisted.end()) {
-    // Sealing already released the row reservation, but retains the bytes.
+    // Sealing already released the row reservation, but retains the batch.
     TENZIR_ASSERT_GEQ(it->second.bytes, bytes);
+    TENZIR_ASSERT_GEQ(releasing_nova_bytes, bytes);
     it->second.bytes -= bytes;
+    releasing_nova_bytes -= bytes;
+    forget(it->second.batches);
   } else {
-    // Retirement already released this generation's entire reservation.
+    // Retirement already released all batches of this generation.
     return;
   }
-  TENZIR_ASSERT_GEQ(buffered_nova_bytes, bytes);
-  buffered_nova_bytes -= bytes;
+  release_nova_batch(batch);
   release_nova_pressure();
+}
+
+auto index_state::retain_nova_batch(size_t bytes) -> uint64_t {
+  auto batch = next_nova_batch++;
+  nova_retained_batches.emplace(batch, NovaRetainedBatch{bytes, 1});
+  buffered_nova_bytes += bytes;
+  return batch;
+}
+
+void index_state::release_nova_batch(uint64_t batch) {
+  auto it = nova_retained_batches.find(batch);
+  TENZIR_ASSERT(it != nova_retained_batches.end());
+  TENZIR_ASSERT_GT(it->second.holders, 0u);
+  if (--it->second.holders != 0) {
+    return;
+  }
+  TENZIR_ASSERT_GEQ(buffered_nova_bytes, it->second.bytes);
+  buffered_nova_bytes -= it->second.bytes;
+  nova_retained_batches.erase(it);
 }
 
 // -- partition handling -----------------------------------------------------
@@ -409,13 +455,16 @@ void index_state::decommission_nova_active_partition(
   buffered_events -= it->second.events;
   auto generation = it->second.generation;
   auto actor = it->second.actor;
-  nova_unpersisted.emplace(generation, nova_unpersisted_partition_info{
-                                         .actor = actor,
-                                         .internal = key.internal,
-                                         .bytes = it->second.bytes,
-                                         .ref_count = 1,
-                                         .visible_for_recent = true,
-                                       });
+  releasing_nova_bytes += it->second.bytes;
+  nova_unpersisted.emplace(generation,
+                           nova_unpersisted_partition_info{
+                             .actor = actor,
+                             .internal = key.internal,
+                             .bytes = it->second.bytes,
+                             .batches = std::move(it->second.batches),
+                             .ref_count = 1,
+                             .visible_for_recent = true,
+                           });
   nova_active_partitions.erase(it);
   ++pending_publications;
   TENZIR_TRACEPOINT(index_persist_begin, fmt::to_string(generation).c_str(),
@@ -717,9 +766,18 @@ void index_state::unpin_recent_nova_partition(const uuid& id) {
                                         ? it->second.exit_reason
                                         : caf::exit_reason::normal);
   }
-  TENZIR_ASSERT_GEQ(buffered_nova_bytes, it->second.bytes);
-  buffered_nova_bytes -= it->second.bytes;
+  TENZIR_ASSERT_GEQ(releasing_nova_bytes, it->second.bytes);
+  releasing_nova_bytes -= it->second.bytes;
+  for (auto batch : it->second.batches) {
+    release_nova_batch(batch);
+  }
   nova_unpersisted.erase(it);
+  // A partition's share frees nothing while other partitions still hold its
+  // batches. If held replies still wait for memory, flush further partitions
+  // now, because no new events arrive to trigger it.
+  if (not nova_pressure_waiters.empty()) {
+    enforce_buffer_limit();
+  }
   release_nova_pressure();
 }
 
