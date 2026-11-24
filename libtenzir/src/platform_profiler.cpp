@@ -23,6 +23,7 @@
 #include <algorithm>
 #include <deque>
 #include <exception>
+#include <limits>
 #include <map>
 #include <mutex>
 #include <sstream>
@@ -40,7 +41,17 @@ constexpr auto max_batch_bytes = std::size_t{256} << 10;
 // and served requests each count on their own.
 constexpr auto max_batch_rows = std::size_t{10'000};
 constexpr auto max_diagnostic_bytes = std::size_t{16} << 10;
-constexpr auto max_pending_batches = uint32_t{16};
+// How long a batch waits for the platform to take it, as it does while a
+// rollout of the platform takes it down. Past it, the batch counts as dropped.
+constexpr auto max_batch_age = std::chrono::minutes{2};
+// The wait between attempts to deliver a batch: short at first, for a lost
+// response, and then every few seconds while the platform is down.
+constexpr auto min_retry_delay = std::chrono::milliseconds{250};
+constexpr auto max_retry_delay = std::chrono::seconds{5};
+// Room for the batches of `max_batch_age` at one a second, so that an outage
+// costs no resolution while they wait. At `max_batch_bytes` each, they take
+// at most 32 MiB, though a batch is usually a few KiB.
+constexpr auto max_pending_batches = uint32_t{128};
 constexpr auto max_wire_count = uint64_t{9'007'199'254'740'991};
 // Ample for a deployment the platform calls a few times a second, and bounded
 // for one that something floods: past it, a request counts as dropped.
@@ -185,14 +196,18 @@ public:
     co_return false;
   }
 
+  /// Retries `pending` until the platform answers for good or the batch is
+  /// older than `max_batch_age`. The jitter keeps deployments from retrying in
+  /// lockstep when the platform comes back.
   auto deliver(Pending const& pending) const -> Task<bool> {
     struct RetryTelemetry : std::exception {};
     try {
       co_return co_await folly::coro::retryWithExponentialBackoff(
-        2, std::chrono::milliseconds{250}, std::chrono::milliseconds{500}, 0.0,
+        std::numeric_limits<uint32_t>::max(), min_retry_delay, max_retry_delay,
+        0.1,
         [this, &pending]() -> Task<bool> {
           if (std::chrono::steady_clock::now() - pending.created
-              > std::chrono::seconds{15}) {
+              > max_batch_age) {
             co_return false;
           }
           auto result = co_await transmit(pending);

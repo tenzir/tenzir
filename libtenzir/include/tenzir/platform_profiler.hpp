@@ -42,8 +42,10 @@ class PlatformProfiler;
 /// It sends one batch a second for all of them, however many pipelines run,
 /// and splits a batch only where the platform's limits require it. Its batches
 /// share the process's boot and sequence. Pending data waits in bounded
-/// queues, and delivery is best effort: what is lost counts as dropped, and
-/// the next batch reports it. Copies share the pending data and the sender.
+/// queues, and delivery is best effort: a batch the platform does not take is
+/// retried for up to two minutes, enough to outlast a rollout of the platform.
+/// What is lost counts as dropped, and the next batch reports it. Copies share
+/// the pending data and the sender.
 class PlatformReporter {
 public:
   /// The most ended runs whose reports wait for a batch, as they do while the

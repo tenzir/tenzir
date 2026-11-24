@@ -591,16 +591,15 @@ TEST("platform reporter retries the immutable batch") {
   }
 }
 
-TEST("platform reporter stops after three transient failures") {
+TEST("platform reporter keeps a batch through repeated transient failures") {
   auto sent = std::make_shared<Sent>();
   auto reporter = recording(sent, {500, 429, 0});
   auto profiler = PlatformProfiler{reporter, "pipeline", 1};
   profiler.transition("running");
   flush(reporter);
-  REQUIRE_EQUAL(sent->batches.size(), 3u);
-  flush(reporter);
   REQUIRE_EQUAL(sent->batches.size(), 4u);
-  CHECK_EQUAL(sent->batches[3].dropped.value(), 1);
+  CHECK_EQUAL(sent->batches[3].dropped.value(), 0);
+  CHECK_EQUAL(sent->batches[3].runs.size(), 1u);
 }
 
 TEST("platform reporter flushes a canceled batch before later samples") {
