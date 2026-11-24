@@ -20,7 +20,6 @@ let
     fileset = lib.fileset.unions [
       (src + "/bun.lock")
       (src + "/package.json")
-      (src + "/patches")
       (src + "/services/shared")
       (src + "/tools/platform-cli")
     ];
