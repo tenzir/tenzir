@@ -1,0 +1,7 @@
+// read_zeek_json decodes the unflattened fields that a downstream `where`
+// references.
+from_stdin {
+  read_zeek_json
+}
+where id.resp_p == 443
+select schema=@name, port=id.resp_p, proto

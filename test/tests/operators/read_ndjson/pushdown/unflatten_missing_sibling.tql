@@ -1,0 +1,6 @@
+// Unflattened sibling keys preserve the parent record so optional access
+// (`a.b?`) does not emit a spurious missing-root warning.
+from_stdin {
+  read_ndjson unflatten_separator="."
+}
+select x=a.b?

@@ -1,0 +1,153 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "from_http",
+       store: {
+         op: {
+           path: [
+             `from_http` @ [1]:181..190 from 0
+           ],
+           ref: std::from_http/op
+         },
+         args: [
+           expression constant string "http://example.invalid/events" @ [1]:191..222 from 0
+         ],
+         named_args: [
+           {
+             index: 7,
+             value: expression lambda_expr {
+               params: [
+                 `x` @ [1]:233..234 from 0
+               ],
+               body: field_access {
+                 left: root_field {
+                   id: `x` @ [1]:238..239 from 0,
+                   has_question_mark: false
+                 },
+                 has_question_mark: false,
+                 name: `next` @ [1]:240..244 from 0,
+                 location: [1]:238..244 from 0
+               },
+               location: [1]:233..244 from 0
+             }
+           }
+         ],
+         pipeline: {
+           pipeline: {
+             lets: [
+               
+             ],
+             operators: [
+               GenericIr {
+                 desc: "read_json",
+                 store: {
+                   op: {
+                     path: [
+                       `read_json` @ [1]:249..258 from 0
+                     ],
+                     ref: std::read_json/op
+                   },
+                   args: [
+                     
+                   ],
+                   named_args: [
+                     
+                   ]
+                 },
+                 filter: [
+                   
+                 ],
+                 order: "ordered"
+               }
+             ],
+             definition_location: [1]:249..258 from 0
+           } @ [1]:245..260 from 0,
+           let_ids: {
+             "0": 1
+           }
+         }
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
+     },
+     where_ir {
+       op: {
+         path: [
+-          `where` @ [1]:261..266 from 0
++          
+         ],
+-        ref: std::where/op
++        ref: unresolved
+       },
+       args: [
+-        expression binary_expr {
++        Incomplete binary_expr {
+           left: root_field {
+             id: `sev` @ [1]:267..270 from 0,
+             has_question_mark: false
+           },
+           op: "eq",
+           right: constant string "high" @ [1]:274..280 from 0,
+           location: [1]:267..280 from 0
+         }
+       ],
+       named_args: [
+         
+       ]
+     },
+     SetIr {
+       assignments: [
+         {
+           left: this_ [0]:0..0 from 0,
+           right: record {
+             begin: [0]:0..0 from 0,
+             items: [
+               
+             ],
+             end: [0]:0..0 from 0
+           },
+           location: [0]:0..0 from 0
+         },
+         {
+           left: root_field {
+             id: `id` @ [1]:288..290 from 0,
+             has_question_mark: false
+           },
+           right: root_field {
+             id: `id` @ [1]:288..290 from 0,
+             has_question_mark: false
+           },
+           location: [1]:288..290 from 0
+         }
+       ],
+       order: "ordered"
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:290..290 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ],
+   definition_location: [1]:181..290 from 0
+ }

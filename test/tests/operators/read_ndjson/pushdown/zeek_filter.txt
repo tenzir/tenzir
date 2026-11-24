@@ -1,0 +1,10 @@
+{
+  schema: "zeek.conn",
+  port: 443,
+  proto: "tcp",
+}
+{
+  schema: "zeek.conn",
+  port: 443,
+  proto: "udp",
+}

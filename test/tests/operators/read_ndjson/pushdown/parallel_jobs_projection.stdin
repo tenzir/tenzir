@@ -1,0 +1,3 @@
+{"id": 1, "msg": "ok", "bad": 123abc}
+{"id": 2, "msg": "skip", "bad": truX}
+{"id": 3, "msg": "ok too", "bad": 99bad}

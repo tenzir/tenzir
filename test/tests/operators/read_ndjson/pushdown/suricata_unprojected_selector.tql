@@ -1,0 +1,7 @@
+// read_suricata retains the selector field (`event_type`) to select schemas
+// and type projected fields even when downstream does not select `event_type`.
+from_stdin {
+  read_suricata
+}
+where dest_port == 443
+select schema=@name, dest_port

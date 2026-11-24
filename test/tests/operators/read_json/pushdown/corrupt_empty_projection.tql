@@ -1,0 +1,5 @@
+// Empty projections preserve row counts without decoding unselected fields.
+from_stdin {
+  read_json
+}
+summarize n=count()

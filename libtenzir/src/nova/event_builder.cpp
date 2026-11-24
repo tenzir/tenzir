@@ -628,6 +628,22 @@ auto field_seed(type const& seed, std::string_view name, bool schema_only)
   return type{};
 }
 
+/// Returns the projection of the field `name` of a record restricted by
+/// `projection`, with `nullptr` for an unrestricted field, or `None` if the
+/// field must be discarded.
+auto field_projection(ProjectionTree::Node const* projection,
+                      std::string_view name)
+  -> Option<ProjectionTree::Node const*> {
+  if (projection == nullptr) {
+    return Option<ProjectionTree::Node const*>{nullptr};
+  }
+  auto const* child = projection->lookup(name);
+  if (child == nullptr) {
+    return None{};
+  }
+  return Option<ProjectionTree::Node const*>{child->is_all() ? nullptr : child};
+}
+
 /// Converts the records among the top-level values in `rows` to `seed`, which
 /// is a `record_type` or a null type. Other values stay as they are.
 auto retype_records(Array<Data> array, storage::BitMap const& rows,
@@ -699,11 +715,13 @@ auto EventBuilder::Slot::list() -> ArrayBuilder<nova::List>::ListBuilder {
 
 EventBuilder::Record::Record(
   EventBuilder& parent, Option<ArrayBuilder<nova::Record>::RecordBuilder> inner,
-  type seed, value_path path, State state)
+  type seed, value_path path, State state,
+  ProjectionTree::Node const* projection)
   : parent_{parent},
     inner_{std::move(inner)},
     seed_{std::move(seed)},
-    path_{path} {
+    path_{path},
+    projection_{projection} {
   if (state == State::reopened or not inner_ or not seed_) {
     return;
   }
@@ -744,6 +762,10 @@ auto EventBuilder::Record::lookup_record(std::string_view name,
   if (not inner_) {
     return Record{*parent_, None{}, type{}, path};
   }
+  auto projection = field_projection(projection_, name);
+  if (not projection) {
+    return Record{*parent_, None{}, type{}, path};
+  }
   auto seed = field_seed(seed_, name, parent_->settings_.schema_only);
   if (not seed) {
     return Record{*parent_, None{}, type{}, path};
@@ -752,11 +774,11 @@ auto EventBuilder::Record::lookup_record(std::string_view name,
   // that is still open instead of repeating the key.
   if (not *seed or is<record_type>(*seed)) {
     if (auto record = parent_->open_record(*inner_, name)) {
-      return Record{*parent_, std::move(*record), std::move(*seed), path,
-                    State::reopened};
+      return Record{*parent_, std::move(*record), std::move(*seed),
+                    path,     State::reopened,    *projection};
     }
   }
-  return lookup(name, path).record();
+  return take_field(name, path, std::move(*seed), *projection).record();
 }
 
 auto EventBuilder::Record::lookup(std::string_view name, value_path const& path)
@@ -764,27 +786,41 @@ auto EventBuilder::Record::lookup(std::string_view name, value_path const& path)
   if (not inner_) {
     return Field{*parent_, None{}, type{}, path};
   }
+  auto projection = field_projection(projection_, name);
+  if (not projection) {
+    return Field{*parent_, None{}, type{}, path};
+  }
   auto seed = field_seed(seed_, name, parent_->settings_.schema_only);
   if (not seed) {
     return Field{*parent_, None{}, type{}, path};
   }
+  return take_field(name, path, std::move(*seed), *projection);
+}
+
+auto EventBuilder::Record::take_field(std::string_view name,
+                                      value_path const& path, type seed,
+                                      ProjectionTree::Node const* projection)
+  -> Field {
   auto previous = Option<Data>{};
   auto extend = false;
   auto inner = Slot{parent_->take(*inner_, name, previous, extend)};
-  return Field{*parent_, std::move(inner),    std::move(*seed),
-               path,     std::move(previous), extend};
+  return Field{*parent_,  std::move(inner),    std::move(seed),
+               path,      std::move(previous), extend,
+               projection};
 }
 
 // -- Field -------------------------------------------------------------------
 
 EventBuilder::Field::Field(EventBuilder& parent, Option<Slot> inner, type seed,
-                           value_path path, Option<Data> previous, bool extend)
+                           value_path path, Option<Data> previous, bool extend,
+                           ProjectionTree::Node const* projection)
   : parent_{parent},
     inner_{std::move(inner)},
     seed_{std::move(seed)},
     path_{path},
     previous_{std::move(previous)},
-    extend_{extend} {
+    extend_{extend},
+    projection_{projection} {
 }
 
 auto EventBuilder::Field::repeat() -> List {
@@ -866,12 +902,14 @@ auto EventBuilder::Field::record() -> Record {
   if (seed_ and not is<record_type>(seed_)) {
     emit_mismatch(*parent_->dh_, path_, type_kind::of<record_type>, seed_);
     if (not parent_->settings_.schema_only) {
-      return Record{*parent_, inner_->record(), type{}, path_};
+      return Record{*parent_, inner_->record(),     type{},
+                    path_,    Record::State::fresh, projection_};
     }
     inner_->null();
     return Record{*parent_, None{}, type{}, path_};
   }
-  return Record{*parent_, inner_->record(), seed_, path_};
+  return Record{*parent_, inner_->record(),     seed_,
+                path_,    Record::State::fresh, projection_};
 }
 
 auto EventBuilder::Field::list() -> List {
@@ -1020,6 +1058,19 @@ auto EventBuilder::make(Settings settings, diagnostic_handler& dh)
   auto const& s = result.settings_;
   result.raw_ = s.raw;
   result.name_ = s.default_schema_name;
+  if (s.projection) {
+    if (auto const* selector = try_as<SelectorPolicy>(s.policy)) {
+      // `finish_selected()` needs the selector field to name events and resolve
+      // schemas, so always retain it in the decode projection.
+      auto tree = **s.projection;
+      tree.add_dotted_path(selector->field);
+      if (not tree.root().is_all()) {
+        result.projection_ = Arc<ProjectionTree const>{std::move(tree)};
+      }
+    } else if (not(*s.projection)->root().is_all()) {
+      result.projection_ = s.projection;
+    }
+  }
   if (auto const* policy = try_as<SchemaPolicy>(s.policy)) {
     result.name_ = policy->name;
     auto schema = modules::get_schema(policy->name);
@@ -1038,7 +1089,9 @@ auto EventBuilder::make(Settings settings, diagnostic_handler& dh)
       diagnostic::error("schema `{}` is not a record", policy->name).emit(dh);
       return failure::promise();
     } else {
-      result.seed_ = std::move(*schema);
+      result.seed_ = result.projection_
+                       ? (*result.projection_)->prune_schema(*schema)
+                       : std::move(*schema);
     }
   } else if (is<SelectorPolicy>(s.policy)) {
     // Strings stay unparsed until the selected schema is known.
@@ -1090,11 +1143,15 @@ auto EventBuilder::event() -> Record {
   rows_.emplace_back(true);
   auto const defer_schema
     = settings_.merge_structural and is<SchemaPolicy>(settings_.policy);
-  return Record{*this, builder_.record(), defer_schema ? type{} : seed_,
-                value_path{}};
+  auto const* proj = projection_ ? &(*projection_)->root() : nullptr;
+  return Record{
+    *this,        builder_.record(),    defer_schema ? type{} : seed_,
+    value_path{}, Record::State::fresh, proj};
 }
 
 auto EventBuilder::value() -> Field {
+  // Event projections apply at the event root, not arbitrary values.
+  TENZIR_ASSERT(not projection_);
   repeated_.clear();
   rows_.emplace_back(true);
   auto const defer_schema
@@ -1171,6 +1228,8 @@ auto EventBuilder::schema(std::string const& name) -> Option<type> const& {
     auto schema = modules::get_schema(name);
     if (schema and not is<record_type>(*schema)) {
       schema = None{};
+    } else if (schema and projection_) {
+      schema = (*projection_)->prune_schema(*schema);
     }
     it = schemas_.emplace(name, std::move(schema)).first;
   }

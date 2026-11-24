@@ -1,0 +1,10 @@
+{
+  schema: "suricata.alert",
+  event_type: "alert",
+  dest_port: 443,
+}
+{
+  schema: "suricata.alert",
+  event_type: "alert",
+  dest_port: 443,
+}

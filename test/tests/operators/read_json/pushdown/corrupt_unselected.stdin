@@ -1,0 +1,2 @@
+{"id": 1, "bad": 123abc, "nested": {"x": 10, "bad_sibling": truX}}
+{"id": 2, "bad": [1, 2, 3abc], "nested": {"x": 20, "bad_sibling": 99bad}}

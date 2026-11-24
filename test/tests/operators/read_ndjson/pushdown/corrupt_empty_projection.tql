@@ -1,0 +1,5 @@
+// Empty projections skip all field decoding while preserving row count.
+from_stdin {
+  read_ndjson
+}
+summarize n=count()

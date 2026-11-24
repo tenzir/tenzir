@@ -1,0 +1,7 @@
+// `from_http` passes the downstream ordering into its parser, so the parser
+// may run unordered, while the filter stays behind `from_http`.
+from_http "http://example.invalid/events", paginate=x => x.next {
+  read_json
+}
+where sev == "high"
+discard

@@ -1,0 +1,20 @@
+warning: failed to parse a JSON boolean
+ --> tests/operators/read_json/pushdown/parse_json_schema_only_malformed.tql:4:15
+  |
+4 | select parsed=raw.parse_json(schema="suricata.alert", schema_only=true)
+  |               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+  = note: context:
+          {"event_type":"alert","bogus":tru}
+                                        ^
+  = note: total buffer size: 34
+
+warning: could not parse json
+ --> tests/operators/read_json/pushdown/parse_json_schema_only_malformed.tql:4:15
+  |
+4 | select parsed=raw.parse_json(schema="suricata.alert", schema_only=true)
+  |               ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  |
+{
+  parsed: null,
+}

@@ -1,0 +1,7 @@
+// Function predicates still skip decoding unselected columns.
+from_file f"{env("READ_PUSHDOWN_ROOT")}/corrupt-unused" {
+  read_feather
+}
+where string(id) == "1"
+select id
+head 1

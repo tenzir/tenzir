@@ -1,0 +1,6 @@
+// Escaped keys still match the projection tree, and arrays under projected
+// paths are not projected through their elements.
+from_stdin {
+  read_json
+}
+select ab, a

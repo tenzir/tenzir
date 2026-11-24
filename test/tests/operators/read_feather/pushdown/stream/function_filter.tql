@@ -1,4 +1,4 @@
-// Function predicates require conservative full-schema reads.
+// Function predicates retain only their referenced fields.
 from_file f"{env("READ_PUSHDOWN_ROOT")}/clean" {
   read_feather
 }

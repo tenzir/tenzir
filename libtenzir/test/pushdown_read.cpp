@@ -119,11 +119,20 @@ TEST("named arguments label parameters rather than reference fields") {
               (std::vector<std::vector<std::string>>{{"x"}}));
 }
 
-TEST("reader projection conservatively handles whole events and functions") {
-  CHECK(not pushdown::read_projection(projection_from("this"), {}));
+TEST("reader projection tracks function arguments and stays conservative on "
+     "whole events and dynamic indices") {
   auto filter = ir::OptimizeFilter{};
-  filter.push_back(expression_from("string(id) == \"4\""));
+  filter.push_back(expression_from("string(other) == \"4\""));
+  auto columns = pushdown::read_projection(projection_from("id"), filter);
+  REQUIRE(columns);
+  CHECK_EQUAL(*columns, (std::vector<std::string>{"id", "other"}));
+  filter.clear();
+  filter.push_back(expression_from("string(this) == \"4\""));
   CHECK(not pushdown::read_projection(projection_from("id"), filter));
+  filter.clear();
+  filter.push_back(expression_from("xs[i] == 1"));
+  CHECK(not pushdown::read_projection(projection_from("id"), filter));
+  CHECK(not pushdown::read_projection(projection_from("this"), {}));
   CHECK(not pushdown::read_projection({}, {}));
 }
 
@@ -135,9 +144,16 @@ TEST("path-preserving reader projection keeps nested paths and filter "
     = pushdown::read_projection_paths(projection_from("nested.x"), filter);
   CHECK_EQUAL(projection_paths(result), (std::vector<std::vector<std::string>>{
                                           {"nested", "x"}, {"nested", "y"}}));
-  // As for top-level columns, functions and whole events keep everything.
   filter.clear();
-  filter.push_back(expression_from("string(id) == \"4\""));
+  filter.push_back(expression_from("string(nested.y) == \"4\""));
+  result = pushdown::read_projection_paths(projection_from("nested.x"), filter);
+  CHECK_EQUAL(projection_paths(result), (std::vector<std::vector<std::string>>{
+                                          {"nested", "x"}, {"nested", "y"}}));
+  filter.clear();
+  filter.push_back(expression_from("string(this) == \"4\""));
+  CHECK(not pushdown::read_projection_paths(projection_from("id"), filter));
+  filter.clear();
+  filter.push_back(expression_from("xs[i] == 1"));
   CHECK(not pushdown::read_projection_paths(projection_from("id"), filter));
   CHECK(not pushdown::read_projection_paths(projection_from("this"), {}));
   CHECK(not pushdown::read_projection_paths({}, {}));

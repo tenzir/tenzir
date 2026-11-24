@@ -1833,8 +1833,11 @@ public:
     auto retry_delay_arg = d.named("retry_delay", &FromHttpArgs::retry_delay);
     auto encode_arg = d.named("encode", &FromHttpArgs::encode);
     auto server_arg = d.named("server", &FromHttpArgs::server);
+    // Pagination reads fields of the parser output, and `error_field` emits
+    // events that bypass the parser, so only the downstream ordering may
+    // enter the parser.
     auto parser_arg
-      = d.pipeline(&FromHttpArgs::parser, SubOptimize::from_downstream,
+      = d.pipeline(&FromHttpArgs::parser, SubOptimize::order_from_downstream,
                    {{"response", &FromHttpArgs::response}});
     d.operator_location(&FromHttpArgs::operator_location);
     d.validate([=](DescribeCtx& ctx) -> Empty {

@@ -1,0 +1,4 @@
+{
+  schema: "zeek.conn",
+  port: 443,
+}

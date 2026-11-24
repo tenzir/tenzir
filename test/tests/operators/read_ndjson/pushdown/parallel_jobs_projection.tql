@@ -1,0 +1,11 @@
+// Parallel _jobs workers share the decode projection tree and skip malformed
+// unselected fields.
+unordered {
+  from_stdin {
+    split_bytes 16
+    read_ndjson _jobs=2
+  }
+  where msg.starts_with("ok")
+  select id
+}
+sort id

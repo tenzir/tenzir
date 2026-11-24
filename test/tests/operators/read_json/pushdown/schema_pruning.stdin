@@ -1,0 +1,2 @@
+{"src_ip": "10.0.0.1", "dest_port": "53", "src_port": "not_a_port", "extra": 123, "dns": {"rcode": "NOERROR"}}
+{"src_ip": "10.0.0.2", "dest_port": "53", "src_port": "not_a_port", "dns": {"rrname": "ignored.example"}}

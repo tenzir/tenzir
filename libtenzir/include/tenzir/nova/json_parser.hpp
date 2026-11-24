@@ -40,6 +40,8 @@ struct JsonDecodingOptions {
 
 /// Appends an already framed object to an event builder. Malformed values
 /// produce warnings and nulls. Returns whether the object was well-formed.
+/// When `row` is restricted by a projection, unselected fields are skipped
+/// over simdjson's structural tape without decoding their values.
 auto parse_json_object(simdjson::ondemand::object object,
                        EventBuilder::Record row, diagnostic_handler& dh,
                        std::string_view source = {}) -> bool;

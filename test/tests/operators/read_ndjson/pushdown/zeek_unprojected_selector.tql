@@ -1,0 +1,6 @@
+// read_zeek_json retains `_path` for schema selection while selectively
+// decoding unflattened nested fields and skipping malformed unselected ones.
+from_stdin {
+  read_zeek_json
+}
+select schema=@name, port=id.resp_p

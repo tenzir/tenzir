@@ -7,27 +7,12 @@
 #include "tenzir/nova/structured_storage.hpp"
 #include "tenzir/tql2/filter.hpp"
 
+#include <algorithm>
 #include <string_view>
 
 namespace tenzir::pushdown {
 
 namespace {
-
-class ReadProjectionVisitor final : public ast::visitor<ReadProjectionVisitor> {
-public:
-  template <class T>
-  void visit(T& x) {
-    enter(x);
-  }
-
-  void visit(ast::function_call&) {
-    // Function implementations can inspect their evaluation context as well
-    // as explicit arguments. Retain the full schema for such predicates.
-    full_schema = true;
-  }
-
-  bool full_schema = false;
-};
 
 class RequiredFieldCollector final
   : public ast::visitor<RequiredFieldCollector> {
@@ -97,12 +82,6 @@ auto read_projection(Option<ir::OptimizeProjection> projection,
                      ir::OptimizeFilter const& filter)
   -> Option<std::vector<std::string>> {
   for (auto const& expr : filter) {
-    auto visitor = ReadProjectionVisitor{};
-    auto copy = expr;
-    visitor.visit(copy);
-    if (visitor.full_schema) {
-      return {};
-    }
     ir::add_refs_to_projection(projection, expr);
   }
   if (not projection) {
@@ -125,12 +104,6 @@ auto read_projection_paths(Option<ir::OptimizeProjection> projection,
                            ir::OptimizeFilter const& filter)
   -> Option<ir::OptimizeProjection> {
   for (auto const& expr : filter) {
-    auto visitor = ReadProjectionVisitor{};
-    auto copy = expr;
-    visitor.visit(copy);
-    if (visitor.full_schema) {
-      return {};
-    }
     ir::add_refs_to_projection(projection, expr);
   }
   if (projection and std::ranges::any_of(*projection, [](auto const& field) {
@@ -139,6 +112,27 @@ auto read_projection_paths(Option<ir::OptimizeProjection> projection,
     return {};
   }
   return projection;
+}
+
+auto make_projection_tree(Option<ir::OptimizeProjection> projection)
+  -> Option<Arc<nova::ProjectionTree const>> {
+  auto paths = read_projection_paths(std::move(projection), {});
+  if (not paths) {
+    return None{};
+  }
+  auto tree = nova::ProjectionTree{};
+  for (auto const& field : *paths) {
+    auto segments = std::vector<std::string_view>{};
+    segments.reserve(field.path().size());
+    for (auto const& segment : field.path()) {
+      segments.push_back(segment.id.name);
+    }
+    tree.add_path(segments);
+    if (tree.root().is_all()) {
+      return None{};
+    }
+  }
+  return Arc<nova::ProjectionTree const>{std::move(tree)};
 }
 
 auto apply_read(table_slice slice, ir::OptimizeFilter const& filter,

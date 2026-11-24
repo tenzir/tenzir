@@ -1,0 +1,7 @@
+// read_suricata decodes the selector-typed fields that a downstream `where`
+// references.
+from_stdin {
+  read_suricata
+}
+where dest_port == 443
+select schema=@name, event_type, dest_port

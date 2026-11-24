@@ -4,14 +4,18 @@
 
 #pragma once
 
+#include "tenzir/arc.hpp"
 #include "tenzir/async.hpp"
+#include "tenzir/diagnostics.hpp"
 #include "tenzir/ir.hpp"
 #include "tenzir/nova/eval.hpp"
 #include "tenzir/nova/events.hpp"
+#include "tenzir/nova/projection_tree.hpp"
 #include "tenzir/option.hpp"
 #include "tenzir/table_slice.hpp"
 
 #include <concepts>
+#include <cstdint>
 #include <span>
 #include <string>
 #include <vector>
@@ -45,7 +49,7 @@ auto required_fields(ast::expression const& expr) -> std::vector<RequiredField>;
 /// Resolve conservative top-level column requirements for a reader, including
 /// the columns referenced by pushed-down filter predicates.
 /// Returns `None` when the reader must retain all columns, for example when
-/// the projection references `this` or a filter contains a function call.
+/// the projection or a filter references `this` or an ambiguous index.
 auto read_projection(Option<ir::OptimizeProjection> projection,
                      ir::OptimizeFilter const& filter)
   -> Option<std::vector<std::string>>;
@@ -55,6 +59,11 @@ auto read_projection(Option<ir::OptimizeProjection> projection,
 auto read_projection_paths(Option<ir::OptimizeProjection> projection,
                            ir::OptimizeFilter const& filter)
   -> Option<ir::OptimizeProjection>;
+
+/// Builds a decode projection tree covering `projection`, or returns `None`
+/// when every field must be decoded.
+auto make_projection_tree(Option<ir::OptimizeProjection> projection)
+  -> Option<Arc<nova::ProjectionTree const>>;
 
 /// Apply pushed-down filter predicates and then the remaining row limit.
 /// The limit counts only events that survive every predicate, and `remaining`

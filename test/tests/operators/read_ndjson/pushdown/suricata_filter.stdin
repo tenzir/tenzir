@@ -1,0 +1,3 @@
+{"event_type": "dns", "dest_port": "53"}
+{"event_type": "alert", "dest_port": "443"}
+{"event_type": "alert", "dest_port": "443"}

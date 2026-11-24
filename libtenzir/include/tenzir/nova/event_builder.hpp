@@ -8,12 +8,14 @@
 
 #pragma once
 
+#include "tenzir/arc.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/multi_series_builder.hpp"
 #include "tenzir/multi_series_builder_argument_parser.hpp"
 #include "tenzir/nova/data_array_builder.hpp"
 #include "tenzir/nova/events.hpp"
 #include "tenzir/nova/function_plugin.hpp"
+#include "tenzir/nova/projection_tree.hpp"
 #include "tenzir/nova/record_array_builder.hpp"
 #include "tenzir/nova_flag.hpp"
 #include "tenzir/option.hpp"
@@ -87,6 +89,12 @@ public:
     std::string infer_unparsed_under = {};
     /// Retains repeated values even when a schema policy is active.
     bool merge_structural = false;
+    /// Decode-time projection tree for event mode (`event()` / `finish()`), or
+    /// `None` to retain every field. Must not be set in value mode (`value()` /
+    /// `finish_data()`). When set, `EventBuilder::make()` automatically retains
+    /// any `SelectorPolicy::field` and prunes `SchemaPolicy` and
+    /// `SelectorPolicy` schemas to the effective tree.
+    Option<Arc<ProjectionTree const>> projection = None{};
   };
 
   class Field;
@@ -125,6 +133,14 @@ public:
     auto field(std::string_view name) -> Field;
     /// Writes a literal field name, bypassing unflattening.
     auto exact_field(std::string_view name) -> Field;
+    /// Whether a non-wildcard projection restricts the fields of this record.
+    auto is_projected() const -> bool {
+      return projection_ != nullptr;
+    }
+    /// Whether the projection of this record selects no fields at all.
+    auto projects_nothing() const -> bool {
+      return projection_ != nullptr and projection_->is_empty();
+    }
 
   private:
     friend class EventBuilder;
@@ -134,11 +150,15 @@ public:
 
     Record(EventBuilder& parent,
            Option<ArrayBuilder<nova::Record>::RecordBuilder> inner, type seed,
-           value_path path, State state = State::fresh);
+           value_path path, State state = State::fresh,
+           ProjectionTree::Node const* projection = nullptr);
 
     auto descend(std::string_view key, value_path const& path) -> Field;
     auto lookup(std::string_view name, value_path const& path) -> Field;
     auto lookup_record(std::string_view name, value_path const& path) -> Record;
+    /// Takes the slot for `name`, which the seed and projection admit.
+    auto take_field(std::string_view name, value_path const& path, type seed,
+                    ProjectionTree::Node const* projection) -> Field;
 
     Ref<EventBuilder> parent_;
     /// Absent if everything written to this record is discarded.
@@ -146,11 +166,19 @@ public:
     /// The `record_type` this record must conform to, or a null type.
     type seed_;
     value_path path_;
+    /// Active projection node for this record, or `nullptr` if unrestricted.
+    ProjectionTree::Node const* projection_ = nullptr;
   };
 
   /// A field of a `Record`.
   class Field {
   public:
+    /// Whether this field drops its value (due to projection or `schema_only`),
+    /// letting parsers skip decoding it.
+    auto is_discarded() const -> bool {
+      return not inner_;
+    }
+
     template <fundamental_view_type V>
     auto data(V v) -> void;
 
@@ -172,7 +200,8 @@ public:
     friend class EventBuilder;
     friend class Record;
     Field(EventBuilder& parent, Option<Slot> inner, type seed, value_path path,
-          Option<Data> previous = None{}, bool extend = false);
+          Option<Data> previous = None{}, bool extend = false,
+          ProjectionTree::Node const* projection = nullptr);
 
     /// Rewrites the previous value as the list of the key's values, to which
     /// the caller appends the new value.
@@ -186,6 +215,8 @@ public:
     Option<Data> previous_;
     /// Whether `previous_` is the list of an already repeated key's values.
     bool extend_ = false;
+    /// Active projection node propagated into `record()`, or `nullptr`.
+    ProjectionTree::Node const* projection_ = nullptr;
   };
 
   /// A list within an event.
@@ -281,6 +312,9 @@ private:
   bool raw_ = false;
   /// The schema applied while building, or a null type.
   type seed_;
+  /// Effective decode projection tree (including any `SelectorPolicy::field`),
+  /// or `None` when every field is decoded.
+  Option<Arc<ProjectionTree const>> projection_;
   /// The name of the events unless a selector picks one.
   std::string name_;
   ArrayBuilder<Data> builder_;

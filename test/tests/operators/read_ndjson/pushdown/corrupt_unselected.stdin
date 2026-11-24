@@ -1,0 +1,2 @@
+{"id": 1, "msg": "ok", "bad": 123abc, "nested": {"x": 10, "bad2": truX}}
+{"id": 2, "msg": "fatal err", "bad": 123abc, "nested": {"x": 20, "bad2": truX}}

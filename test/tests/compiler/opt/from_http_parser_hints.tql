@@ -1,0 +1,8 @@
+// `from_http` keeps downstream hints out of its parser: here the lambda reads
+// `next` from the parsed response, so the filter and the projection must stay
+// behind `from_http`.
+from_http "http://example.invalid/events", paginate=x => x.next {
+  read_json
+}
+where sev == "high"
+select id

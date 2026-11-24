@@ -114,6 +114,12 @@ enum class SubOptimize {
   /// The subpipeline's output becomes the operator's output.
   /// Example: `from_tcp { read_ndjson }`, `parallel { ... }`.
   from_downstream,
+  /// The subpipeline's output becomes the operator's output, but the operator
+  /// also reads that output or emits events that bypass it. Only the ordering
+  /// that downstream requires enters the subpipeline. Downstream filters,
+  /// limits, and projections stay behind the operator.
+  /// Example: `from_http url, paginate=... { read_json }`.
+  order_from_downstream,
   /// The subpipeline is a self-contained side-channel fed the same input
   /// stream. Optimize independently (empty filter, ordered), reinsert
   /// residual filters, and require the stronger ordering of downstream

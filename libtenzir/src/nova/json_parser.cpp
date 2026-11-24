@@ -8,6 +8,7 @@
 
 #include "tenzir/nova/json_parser.hpp"
 
+#include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/flat_set.hpp"
 #include "tenzir/detail/function.hpp"
 #include "tenzir/json_parser.hpp"
@@ -225,6 +226,17 @@ auto parse_object_impl(simdjson::ondemand::object object,
     }
     return simdjson::UNINITIALIZED;
   };
+  auto const projected = row.is_projected();
+  if (row.projects_nothing() and not options.reject_duplicate_keys) {
+    // Advance past the object via simdjson's structural tape without inspecting
+    // pairs or decoding values, preserving framing errors and leaving the
+    // document iterator positioned at the end of the object.
+    if (auto raw = object.raw_json(); raw.error()) {
+      warn_malformed(dh, source, location(), "failed to parse a JSON object");
+      return false;
+    }
+    return true;
+  }
   auto ok = true;
   auto keys = detail::flat_set<std::string_view>{};
   for (auto pair : object) {
@@ -234,37 +246,41 @@ auto parse_object_impl(simdjson::ondemand::object object,
       ok = false;
       continue;
     }
-    auto key = pair.unescaped_key();
-    if (key.error()) {
-      warn_malformed(dh, source, location(), "failed to parse a JSON key");
-      ok = false;
-      continue;
-    }
-    auto value = pair.value();
-    if (value.error()) {
-      warn_malformed(dh, source, value.current_location(),
-                     "failed to parse a JSON object value");
-      ok = false;
-      continue;
+    auto field_pair = pair.value_unsafe();
+    // A key without escape sequences equals its unescaped form, so only keys
+    // with a backslash need unescaping.
+    auto key = field_pair.escaped_key();
+    if (key.find('\\') != std::string_view::npos) {
+      auto unescaped = field_pair.unescaped_key();
+      if (unescaped.error()) {
+        warn_malformed(dh, source, location(), "failed to parse a JSON key");
+        ok = false;
+        continue;
+      }
+      key = unescaped.value_unsafe();
     }
     if ((options.first_duplicate_wins or options.reject_duplicate_keys)
-        and not keys.insert(key.value_unsafe()).second) {
+        and not keys.insert(key).second) {
       if (options.reject_duplicate_keys) {
         warn_malformed(dh, source, location(), "duplicate JSON object key");
         ok = false;
       }
-      // Ignoring a repeated key must not hide malformed JSON in its value.
-      auto discarded_settings = EventBuilder::Settings{};
-      discarded_settings.raw = true;
-      auto discarded
-        = EventBuilder::make_prevalidated(std::move(discarded_settings), dh);
-      ok &= parse_value_impl(value.value_unsafe(), discarded.value(), dh,
-                             source, options, depth + 1);
+      if (not projected) {
+        // Ignoring a repeated key must not hide malformed JSON in its value.
+        auto discarded_settings = EventBuilder::Settings{};
+        discarded_settings.raw = true;
+        auto discarded
+          = EventBuilder::make_prevalidated(std::move(discarded_settings), dh);
+        ok &= parse_value_impl(field_pair.value(), discarded.value(), dh,
+                               source, options, depth + 1);
+      }
       continue;
     }
-    auto field = options.exact_keys ? row.exact_field(key.value_unsafe())
-                                    : row.field(key.value_unsafe());
-    ok &= parse_value_impl(value.value_unsafe(), std::move(field), dh, source,
+    auto field = options.exact_keys ? row.exact_field(key) : row.field(key);
+    if (projected and field.is_discarded()) {
+      continue;
+    }
+    ok &= parse_value_impl(field_pair.value(), std::move(field), dh, source,
                            options, depth + 1);
   }
   return ok;
@@ -437,6 +453,7 @@ auto JsonParser::parse_document(std::string_view source) -> failure_or<Events> {
 
 auto JsonParser::parse_document_value(std::string_view source)
   -> failure_or<Array<Data>> {
+  TENZIR_ASSERT(not settings_.builder.projection);
   auto buffer = std::string{source};
   auto document = parser_.iterate(buffer);
   // Iterating may reallocate the buffer to add padding.

@@ -1,0 +1,4 @@
+// `parse_json` with `schema_only=true` must still reject malformed JSON values
+// in fields dropped by the schema.
+from {raw: "{\"event_type\":\"alert\",\"bogus\":tru}"}
+select parsed=raw.parse_json(schema="suricata.alert", schema_only=true)

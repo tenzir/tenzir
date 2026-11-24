@@ -44,6 +44,7 @@
 #include <tenzir/nova_json_printer.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/pushdown/read.hpp>
 #include <tenzir/read_detection.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/si_literals.hpp>
@@ -488,7 +489,7 @@ struct ReadJsonArgs {
   bool arrays_of_objects = false;
   split_at split_mode = split_at::none;
   uint64_t jobs = 0;
-  OptimizationArgs<opt::Order> optimization = {};
+  OptimizationArgs<opt::Order, opt::Projection> optimization = {};
   multi_series_builder::options msb_options;
 };
 
@@ -568,10 +569,12 @@ auto make_operator_dh(location operator_location, diagnostic_handler& dh)
     });
 }
 
-auto make_frame_parser(ReadJsonArgs const& args, diagnostic_handler& dh)
+auto make_frame_parser(ReadJsonArgs const& args, diagnostic_handler& dh,
+                       Option<Arc<nova::ProjectionTree const>> projection)
   -> Option<nova::JsonParser> {
   auto settings = nova::JsonParser::Settings{};
   settings.builder = nova::event_builder_settings(args.msb_options);
+  settings.builder.projection = std::move(projection);
   settings.batch_size = args.msb_options.settings.desired_batch_size;
   settings.origin = args.operator_location;
   return nova::JsonParser::make(std::move(settings), dh);
@@ -630,8 +633,11 @@ public:
     co_await Operator<chunk_ptr, nova::Events>::start(ctx);
     builder_dh_
       = nova_json::make_operator_dh(args_.operator_location, ctx.dh());
-    auto builder = nova::EventBuilder::make(
-      nova::event_builder_settings(args_.msb_options), *builder_dh_);
+    auto builder_settings = nova::event_builder_settings(args_.msb_options);
+    builder_settings.projection
+      = pushdown::make_projection_tree(args_.optimization.projection);
+    auto builder
+      = nova::EventBuilder::make(std::move(builder_settings), *builder_dh_);
     if (builder) {
       builder_ = std::move(builder).unwrap();
     }
@@ -1215,8 +1221,11 @@ public:
       done_ = true;
       co_return;
     }
+    auto projection
+      = pushdown::make_projection_tree(args_.optimization.projection);
     if (args_.jobs == 0) {
-      parser_ = nova_json::make_frame_parser(args_, ctx.dh());
+      parser_
+        = nova_json::make_frame_parser(args_, ctx.dh(), std::move(projection));
       done_ = not parser_;
       co_return;
     }
@@ -1224,7 +1233,7 @@ public:
     // that invalid settings fail before any worker starts.
     auto parsers = std::vector<nova::JsonParser>{};
     for (auto i = uint64_t{0}; i < args_.jobs; ++i) {
-      auto parser = nova_json::make_frame_parser(args_, ctx.dh());
+      auto parser = nova_json::make_frame_parser(args_, ctx.dh(), projection);
       if (not parser) {
         done_ = true;
         co_return;

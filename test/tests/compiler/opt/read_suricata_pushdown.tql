@@ -1,0 +1,7 @@
+// The projection reaching `read_suricata` covers both the selected field and
+// the field that the `where` behind it references.
+from_file "eve.json" {
+  read_suricata
+}
+where event_type == "alert"
+select dest_port

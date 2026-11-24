@@ -1,0 +1,6 @@
+// Selective decoding skips malformed values in unselected top-level and nested
+// fields while decoding selected paths.
+from_stdin {
+  read_json
+}
+select id, x=nested.x

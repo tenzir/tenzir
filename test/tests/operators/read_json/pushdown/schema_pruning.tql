@@ -1,0 +1,7 @@
+// Schema pruning skips mismatches on unselected schema fields while keeping
+// missing projected schema fields as null and preserving filter schema types.
+from_stdin {
+  read_json schema="suricata.dns", schema_only=true
+}
+where src_ip == 10.0.0.1
+select dest_port, rrname=dns.rrname, extra=extra?

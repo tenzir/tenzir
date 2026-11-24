@@ -1,0 +1,7 @@
+// Selective decoding skips unselected malformed fields even when a downstream
+// filter calls a function.
+from_stdin {
+  read_ndjson
+}
+where msg.ends_with("err")
+select id, x=nested.x

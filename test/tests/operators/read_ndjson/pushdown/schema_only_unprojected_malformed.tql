@@ -1,0 +1,7 @@
+// Without projection pushdown, `schema_only=true` must still diagnose
+// malformed JSON values in fields dropped by the schema.
+from_stdin {
+  read_ndjson schema="suricata.alert", schema_only=true
+}
+optimize_barrier
+select event_type

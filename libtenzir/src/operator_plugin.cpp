@@ -828,6 +828,19 @@ public:
           pipe->pipeline.inner = std::move(sub.replacement);
           break;
         }
+        case SubOptimize::order_from_downstream: {
+          // Only the ordering passes into the subpipeline. Filters that it
+          // returns stay inside it, and the limit and projection that it
+          // requests from its input are hints that may be dropped.
+          auto sub
+            = std::move(pipe->pipeline.inner)
+                .optimize(ir::OptimizeRequest{.filter = {}, .order = order},
+                          octx);
+          sub.replacement.prepend(std::move(sub.filter), octx.reg);
+          pipe->pipeline.inner = std::move(sub.replacement);
+          order = sub.order;
+          break;
+        }
         case SubOptimize::fork: {
           // Optimize independently. The branch input and the main path share
           // the enclosing upstream, so their projections are unioned. A

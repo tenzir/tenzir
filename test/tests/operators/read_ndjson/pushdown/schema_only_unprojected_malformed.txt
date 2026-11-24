@@ -1,0 +1,16 @@
+warning: failed to parse a JSON boolean
+ --> tests/operators/read_ndjson/pushdown/schema_only_unprojected_malformed.tql:4:3
+  |
+4 |   read_ndjson schema="suricata.alert", schema_only=true
+  |   ~~~~~~~~~~~
+  |
+
+warning: failed to parse a JSON null
+ --> tests/operators/read_ndjson/pushdown/schema_only_unprojected_malformed.tql:4:3
+  |
+4 |   read_ndjson schema="suricata.alert", schema_only=true
+  |   ~~~~~~~~~~~
+  |
+{
+  event_type: "alert",
+}

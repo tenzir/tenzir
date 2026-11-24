@@ -1,0 +1,4 @@
+{
+  schema: "suricata.alert",
+  dest_port: 443,
+}
