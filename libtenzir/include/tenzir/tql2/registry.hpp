@@ -150,6 +150,11 @@ public:
   /// constructing a new snapshot of the registry.
   void add(const entity_pkg& package, std::string_view name, entity_def def);
 
+  /// Replace (or create) an operator definition at the given path, creating
+  /// parent modules as necessary.
+  void replace_operator(const entity_pkg& package, std::string_view name,
+                        operator_def def);
+
   /// Create a deep copy of this registry. Used for snapshot-style updates.
   auto clone() const -> std::unique_ptr<registry>;
 

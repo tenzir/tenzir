@@ -313,6 +313,26 @@ void registry::add(const entity_pkg& package, std::string_view name,
     });
 }
 
+void registry::replace_operator(const entity_pkg& package,
+                                std::string_view name, operator_def def) {
+  TENZIR_ASSERT(not name.empty());
+  auto path = detail::split(name, "::");
+  TENZIR_ASSERT(not path.empty());
+  auto* mod = &root(package);
+  for (auto& segment : path) {
+    if (&segment == &path.back()) {
+      break;
+    }
+    auto& set = mod->defs[std::string{segment}];
+    if (not set.mod) {
+      set.mod = std::make_unique<module_def>();
+    }
+    mod = set.mod.get();
+  }
+  auto& set = mod->defs[std::string{path.back()}];
+  set.op = std::move(def);
+}
+
 void registry::add_module(const entity_pkg& package, std::string_view name,
                           std::unique_ptr<module_def> mod) {
   TENZIR_ASSERT(not name.empty());
