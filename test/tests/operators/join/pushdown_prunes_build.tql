@@ -1,0 +1,10 @@
+// Pushed right-side filters and equivalence-class predicates prune right rows
+// before BuildIndex retains them, allowing the join to stay within max_memory.
+from {tenant: "acme", id: 1}
+join tenant == org, id == uid, into=asset, max_memory=10000 {
+  from {org: "acme", uid: 1, role: "web", pad: "ok"},
+       {org: "beta", uid: 1, role: "web", pad: "x".repeat(50000)},
+       {org: "acme", uid: 2, role: "db", pad: "y".repeat(50000)}
+}
+where tenant == "acme" and asset.role == "web"
+select id, role=asset.role, pad=asset.pad

@@ -1,0 +1,10 @@
+// Left outer join pushes left filters (including fallible ones when nothing
+// stays behind), propagates left key filters to right, and forwards head limit
+// to the left leg only.
+export
+join tenant == org_id, kind="left", into=asset {
+  export
+}
+where tenant == "acme" and payload.int() > 0
+select id, role=asset.role?
+head 10

@@ -1,0 +1,8 @@
+// Nested into=a.b preserves sibling fields on left, keeps parent a.b on left
+// for scalar-parent diagnostics, and projects right under a.b.* plus its keys.
+export
+join id == uid, kind="left", into=a.b {
+  export
+}
+select a.keep, role=a.b.role
+discard

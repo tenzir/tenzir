@@ -1,0 +1,9 @@
+// Left outer join must not push right-side predicates into the right leg, and
+// keeping a filter behind join prevents pushing head limit upstream.
+export
+join id == uid, kind="left", into=asset {
+  export
+}
+where asset?.role? == "web"
+select id, role=asset?.role?
+head 10

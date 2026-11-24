@@ -1,0 +1,9 @@
+// Non-congruent predicates (such as formatting `id` into a string) must not
+// propagate across `id == uid` because `1` and `1.0` match under `nova::equal`
+// but stringify differently. Congruent comparisons (`id == 1`) still propagate.
+export
+join id == uid, into=r {
+  export
+}
+where f"{id}" == "1" and id == 1
+select id, tag=r.tag

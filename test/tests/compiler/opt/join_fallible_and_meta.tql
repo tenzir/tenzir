@@ -1,0 +1,8 @@
+// Inner join must not push fallible predicates to either side, and metadata
+// predicates belong to the left side (never the right subpipeline).
+export
+join id == uid, into=r {
+  export
+}
+where @name == "left.event" and left_raw.int() > 0 and r.right_raw.int() > 0
+select id, v=r.v

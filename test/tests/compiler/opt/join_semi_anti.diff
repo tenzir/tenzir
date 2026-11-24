@@ -1,0 +1,317 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "export",
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:200..206 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+-        
+-      ],
+-      order: "ordered"
++        binary_expr {
++          left: root_field {
++            id: `tenant` @ [1]:280..286 from 0,
++            has_question_mark: false
++          },
++          op: "eq",
++          right: constant string "acme" @ [1]:290..296 from 0,
++          location: [1]:280..296 from 0
++        },
++        binary_expr {
++          left: root_field {
++            id: `bytes` @ [1]:301..306 from 0,
++            has_question_mark: false
++          },
++          op: "gt",
++          right: constant int64 0 @ [1]:309..310 from 0,
++          location: [1]:301..310 from 0
++        }
++      ],
++      order: "ordered",
++      projection: [
++        {
++          expr: root_field {
++            id: `bytes` @ [1]:326..331 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `bytes` @ [1]:326..331 from 0,
++              has_question_mark: false
++            }
++          ]
++        },
++        {
++          expr: root_field {
++            id: `src_ip` @ [1]:318..324 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `src_ip` @ [1]:318..324 from 0,
++              has_question_mark: false
++            }
++          ]
++        },
++        {
++          expr: root_field {
++            id: `tenant` @ [1]:280..286 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `tenant` @ [1]:280..286 from 0,
++              has_question_mark: false
++            }
++          ]
++        }
++      ]
+     },
+     join_ir {
+       op: {
+         path: [
+           `join` @ [1]:207..211 from 0
+         ],
+         ref: std::join/op
+       },
+       args: [
+         expression binary_expr {
+           left: root_field {
+             id: `tenant` @ [1]:212..218 from 0,
+             has_question_mark: false
+           },
+           op: "eq",
+           right: root_field {
+             id: `org_id` @ [1]:222..228 from 0,
+             has_question_mark: false
+           },
+           location: [1]:212..228 from 0
+         },
+         expression binary_expr {
+           left: root_field {
+             id: `src_ip` @ [1]:230..236 from 0,
+             has_question_mark: false
+           },
+           op: "eq",
+           right: root_field {
+             id: `host_ip` @ [1]:240..247 from 0,
+             has_question_mark: false
+           },
+           location: [1]:230..247 from 0
+         }
+       ],
+       named_args: [
+         {
+           index: 0,
+           value: located "semi" @ [1]:254..260 from 0
+         }
+       ],
+       pipeline: {
+         pipeline: {
+           lets: [
+             
+           ],
+           operators: [
+             GenericIr {
+               desc: "export",
+               store: {
+                 op: {
+                   path: [
+                     `export` @ [1]:265..271 from 0
+                   ],
+                   ref: std::export/op
+                 },
+                 args: [
+                   
+                 ],
+                 named_args: [
+                   
+                 ]
+               },
+               filter: [
+-                
++                binary_expr {
++                  left: root_field {
++                    id: `org_id` @ [1]:222..228 from 0,
++                    has_question_mark: false
++                  },
++                  op: "eq",
++                  right: constant string "acme" @ [1]:290..296 from 0,
++                  location: [1]:280..296 from 0
++                }
+               ],
+-              order: "ordered"
++              order: "unordered",
++              projection: [
++                {
++                  expr: root_field {
++                    id: `org_id` @ [1]:222..228 from 0,
++                    has_question_mark: false
++                  },
++                  has_this: false,
++                  path: [
++                    {
++                      id: `org_id` @ [1]:222..228 from 0,
++                      has_question_mark: false
++                    }
++                  ]
++                },
++                {
++                  expr: root_field {
++                    id: `host_ip` @ [1]:240..247 from 0,
++                    has_question_mark: false
++                  },
++                  has_this: false,
++                  path: [
++                    {
++                      id: `host_ip` @ [1]:240..247 from 0,
++                      has_question_mark: false
++                    }
++                  ]
++                }
++              ]
+             }
+           ],
+           definition_location: [1]:265..271 from 0
+         } @ [1]:261..273 from 0,
+         let_ids: {
+           
+         }
+       }
+-    },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:274..279 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
+-          left: binary_expr {
+-            left: root_field {
+-              id: `tenant` @ [1]:280..286 from 0,
+-              has_question_mark: false
+-            },
+-            op: "eq",
+-            right: constant string "acme" @ [1]:290..296 from 0,
+-            location: [1]:280..296 from 0
+-          },
+-          op: "and_",
+-          right: binary_expr {
+-            left: root_field {
+-              id: `bytes` @ [1]:301..306 from 0,
+-              has_question_mark: false
+-            },
+-            op: "gt",
+-            right: constant int64 0 @ [1]:309..310 from 0,
+-            location: [1]:301..310 from 0
+-          },
+-          location: [1]:280..310 from 0
+-        }
+-      ],
+-      named_args: [
+-        
+-      ]
+     },
+     SetIr {
+       assignments: [
+         {
+           left: this_ [0]:0..0 from 0,
+           right: record {
+             begin: [0]:0..0 from 0,
+             items: [
+               
+             ],
+             end: [0]:0..0 from 0
+           },
+           location: [0]:0..0 from 0
+         },
+         {
+           left: root_field {
+             id: `src_ip` @ [1]:318..324 from 0,
+             has_question_mark: false
+           },
+           right: root_field {
+             id: `src_ip` @ [1]:318..324 from 0,
+             has_question_mark: false
+           },
+           location: [1]:318..324 from 0
+         },
+         {
+           left: root_field {
+             id: `bytes` @ [1]:326..331 from 0,
+             has_question_mark: false
+           },
+           right: root_field {
+             id: `bytes` @ [1]:326..331 from 0,
+             has_question_mark: false
+           },
+           location: [1]:326..331 from 0
+         }
+       ],
+       order: "ordered"
+     },
+     GenericIr {
+       desc: "head",
+       store: {
+         op: {
+           path: [
+             `head` @ [1]:332..336 from 0
+           ],
+           ref: std::head/op
+         },
+         args: [
+           located 5 @ [1]:337..338 from 0
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:338..338 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ],
+   definition_location: [1]:200..338 from 0
+ }

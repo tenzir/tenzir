@@ -1,0 +1,5 @@
+{
+  id: 2,
+  role: "web",
+  name: "left.stream",
+}

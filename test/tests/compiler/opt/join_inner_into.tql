@@ -1,0 +1,10 @@
+// Inner join with into= pushes infallible left filters upstream, right filters
+// into the subpipeline, propagates plain-key equivalences both ways, and splits
+// projections while keeping join keys.
+export
+join tenant == org_id, src_ip == host_ip, into=asset {
+  export
+}
+where tenant == "acme" and asset.role == "web" and asset.host_ip == 10.0.0.1 and bytes > 100
+select src_ip, role=asset.role
+head 5

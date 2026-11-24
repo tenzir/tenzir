@@ -1,0 +1,10 @@
+// End-to-end semantic check: left outer join keeps unmatched rows when
+// filtering on right, and @name predicates filter on left metadata.
+from {id: 1, k: "a"}, {id: 2, k: "b"}
+@name = "left.stream"
+join id == uid, kind="left", into=r {
+  from {uid: 1, role: "db"}, {uid: 2, role: "web"}
+  @name = "right.stream"
+}
+where @name == "left.stream" and r?.role? == "web"
+select id, role=r?.role?, name=@name

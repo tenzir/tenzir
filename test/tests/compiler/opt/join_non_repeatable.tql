@@ -1,0 +1,10 @@
+// Inner and left joins can emit several rows per input row, so a
+// non-repeatable predicate such as `random() < 0.5` must stay behind the join
+// to sample each output row independently. Repeatable predicates still move
+// into the legs, and the left join keeps the infallible `id == 1` upstream.
+export
+join id == uid, kind="left", into=r {
+  export
+}
+where random() < 0.5 and id == 1
+select id, tag=r.tag

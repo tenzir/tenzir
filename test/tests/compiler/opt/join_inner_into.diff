@@ -1,0 +1,410 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "export",
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:201..207 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+-        
+-      ],
+-      order: "ordered"
++        binary_expr {
++          left: root_field {
++            id: `tenant` @ [1]:280..286 from 0,
++            has_question_mark: false
++          },
++          op: "eq",
++          right: constant string "acme" @ [1]:290..296 from 0,
++          location: [1]:280..296 from 0
++        },
++        binary_expr {
++          left: root_field {
++            id: `bytes` @ [1]:355..360 from 0,
++            has_question_mark: false
++          },
++          op: "gt",
++          right: constant int64 100 @ [1]:363..366 from 0,
++          location: [1]:355..366 from 0
++        },
++        binary_expr {
++          left: root_field {
++            id: `src_ip` @ [1]:231..237 from 0,
++            has_question_mark: false
++          },
++          op: "eq",
++          right: constant ip 10.0.0.1 @ [1]:342..350 from 0,
++          location: [1]:325..350 from 0
++        }
++      ],
++      order: "ordered",
++      projection: [
++        {
++          expr: root_field {
++            id: `src_ip` @ [1]:374..380 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `src_ip` @ [1]:374..380 from 0,
++              has_question_mark: false
++            }
++          ]
++        },
++        {
++          expr: root_field {
++            id: `tenant` @ [1]:280..286 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `tenant` @ [1]:280..286 from 0,
++              has_question_mark: false
++            }
++          ]
++        },
++        {
++          expr: root_field {
++            id: `bytes` @ [1]:355..360 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `bytes` @ [1]:355..360 from 0,
++              has_question_mark: false
++            }
++          ]
++        }
++      ]
+     },
+     join_ir {
+       op: {
+         path: [
+           `join` @ [1]:208..212 from 0
+         ],
+         ref: std::join/op
+       },
+       args: [
+         expression binary_expr {
+           left: root_field {
+             id: `tenant` @ [1]:213..219 from 0,
+             has_question_mark: false
+           },
+           op: "eq",
+           right: root_field {
+             id: `org_id` @ [1]:223..229 from 0,
+             has_question_mark: false
+           },
+           location: [1]:213..229 from 0
+         },
+         expression binary_expr {
+           left: root_field {
+             id: `src_ip` @ [1]:231..237 from 0,
+             has_question_mark: false
+           },
+           op: "eq",
+           right: root_field {
+             id: `host_ip` @ [1]:241..248 from 0,
+             has_question_mark: false
+           },
+           location: [1]:231..248 from 0
+         }
+       ],
+       named_args: [
+         {
+           index: 1,
+           value: field_path {
+             expr: root_field {
+               id: `asset` @ [1]:255..260 from 0,
+               has_question_mark: false
+             },
+             has_this: false,
+             path: [
+               {
+                 id: `asset` @ [1]:255..260 from 0,
+                 has_question_mark: false
+               }
+             ]
+           }
+         }
+       ],
+       pipeline: {
+         pipeline: {
+           lets: [
+             
+           ],
+           operators: [
+             GenericIr {
+               desc: "export",
+               store: {
+                 op: {
+                   path: [
+                     `export` @ [1]:265..271 from 0
+                   ],
+                   ref: std::export/op
+                 },
+                 args: [
+                   
+                 ],
+                 named_args: [
+                   
+                 ]
+               },
+               filter: [
+-                
++                binary_expr {
++                  left: root_field {
++                    id: `role` @ [1]:307..311 from 0,
++                    has_question_mark: false
++                  },
++                  op: "eq",
++                  right: constant string "web" @ [1]:315..320 from 0,
++                  location: [1]:301..320 from 0
++                },
++                binary_expr {
++                  left: root_field {
++                    id: `host_ip` @ [1]:331..338 from 0,
++                    has_question_mark: false
++                  },
++                  op: "eq",
++                  right: constant ip 10.0.0.1 @ [1]:342..350 from 0,
++                  location: [1]:325..350 from 0
++                },
++                binary_expr {
++                  left: root_field {
++                    id: `org_id` @ [1]:223..229 from 0,
++                    has_question_mark: false
++                  },
++                  op: "eq",
++                  right: constant string "acme" @ [1]:290..296 from 0,
++                  location: [1]:280..296 from 0
++                }
+               ],
+-              order: "ordered"
++              order: "ordered",
++              projection: [
++                {
++                  expr: root_field {
++                    id: `role` @ [1]:393..397 from 0,
++                    has_question_mark: false
++                  },
++                  has_this: false,
++                  path: [
++                    {
++                      id: `role` @ [1]:393..397 from 0,
++                      has_question_mark: false
++                    }
++                  ]
++                },
++                {
++                  expr: root_field {
++                    id: `host_ip` @ [1]:331..338 from 0,
++                    has_question_mark: false
++                  },
++                  has_this: false,
++                  path: [
++                    {
++                      id: `host_ip` @ [1]:331..338 from 0,
++                      has_question_mark: false
++                    }
++                  ]
++                },
++                {
++                  expr: root_field {
++                    id: `org_id` @ [1]:223..229 from 0,
++                    has_question_mark: false
++                  },
++                  has_this: false,
++                  path: [
++                    {
++                      id: `org_id` @ [1]:223..229 from 0,
++                      has_question_mark: false
++                    }
++                  ]
++                }
++              ]
+             }
+           ],
+           definition_location: [1]:265..271 from 0
+         } @ [1]:261..273 from 0,
+         let_ids: {
+           
+         }
+       }
+-    },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:274..279 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
+-          left: binary_expr {
+-            left: binary_expr {
+-              left: binary_expr {
+-                left: root_field {
+-                  id: `tenant` @ [1]:280..286 from 0,
+-                  has_question_mark: false
+-                },
+-                op: "eq",
+-                right: constant string "acme" @ [1]:290..296 from 0,
+-                location: [1]:280..296 from 0
+-              },
+-              op: "and_",
+-              right: binary_expr {
+-                left: field_access {
+-                  left: root_field {
+-                    id: `asset` @ [1]:301..306 from 0,
+-                    has_question_mark: false
+-                  },
+-                  has_question_mark: false,
+-                  name: `role` @ [1]:307..311 from 0,
+-                  location: [1]:301..311 from 0
+-                },
+-                op: "eq",
+-                right: constant string "web" @ [1]:315..320 from 0,
+-                location: [1]:301..320 from 0
+-              },
+-              location: [1]:280..320 from 0
+-            },
+-            op: "and_",
+-            right: binary_expr {
+-              left: field_access {
+-                left: root_field {
+-                  id: `asset` @ [1]:325..330 from 0,
+-                  has_question_mark: false
+-                },
+-                has_question_mark: false,
+-                name: `host_ip` @ [1]:331..338 from 0,
+-                location: [1]:325..338 from 0
+-              },
+-              op: "eq",
+-              right: constant ip 10.0.0.1 @ [1]:342..350 from 0,
+-              location: [1]:325..350 from 0
+-            },
+-            location: [1]:280..350 from 0
+-          },
+-          op: "and_",
+-          right: binary_expr {
+-            left: root_field {
+-              id: `bytes` @ [1]:355..360 from 0,
+-              has_question_mark: false
+-            },
+-            op: "gt",
+-            right: constant int64 100 @ [1]:363..366 from 0,
+-            location: [1]:355..366 from 0
+-          },
+-          location: [1]:280..366 from 0
+-        }
+-      ],
+-      named_args: [
+-        
+-      ]
+     },
+     SetIr {
+       assignments: [
+         {
+           left: this_ [0]:0..0 from 0,
+           right: record {
+             begin: [0]:0..0 from 0,
+             items: [
+               
+             ],
+             end: [0]:0..0 from 0
+           },
+           location: [0]:0..0 from 0
+         },
+         {
+           left: root_field {
+             id: `src_ip` @ [1]:374..380 from 0,
+             has_question_mark: false
+           },
+           right: root_field {
+             id: `src_ip` @ [1]:374..380 from 0,
+             has_question_mark: false
+           },
+           location: [1]:374..380 from 0
+         },
+         {
+           left: root_field {
+             id: `role` @ [1]:382..386 from 0,
+             has_question_mark: false
+           },
+           right: field_access {
+             left: root_field {
+               id: `asset` @ [1]:387..392 from 0,
+               has_question_mark: false
+             },
+             has_question_mark: false,
+             name: `role` @ [1]:393..397 from 0,
+             location: [1]:387..397 from 0
+           },
+           location: [1]:382..397 from 0
+         }
+       ],
+       order: "ordered"
+     },
+     GenericIr {
+       desc: "head",
+       store: {
+         op: {
+           path: [
+             `head` @ [1]:398..402 from 0
+           ],
+           ref: std::head/op
+         },
+         args: [
+           located 5 @ [1]:403..404 from 0
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:404..404 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ],
+   definition_location: [1]:201..404 from 0
+ }

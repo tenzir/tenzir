@@ -1,0 +1,285 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "export",
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:238..244 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+-        
+-      ],
+-      order: "ordered"
++        binary_expr {
++          left: format_expr {
++            segments: [
++              replacement root_field {
++                id: `id` @ [1]:290..292 from 0,
++                has_question_mark: false
++              }
++            ],
++            location: [1]:287..294 from 0
++          },
++          op: "eq",
++          right: constant string "1" @ [1]:298..301 from 0,
++          location: [1]:287..301 from 0
++        },
++        binary_expr {
++          left: root_field {
++            id: `id` @ [1]:306..308 from 0,
++            has_question_mark: false
++          },
++          op: "eq",
++          right: constant int64 1 @ [1]:312..313 from 0,
++          location: [1]:306..313 from 0
++        }
++      ],
++      order: "ordered",
++      projection: [
++        {
++          expr: root_field {
++            id: `id` @ [1]:321..323 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `id` @ [1]:321..323 from 0,
++              has_question_mark: false
++            }
++          ]
++        }
++      ]
+     },
+     join_ir {
+       op: {
+         path: [
+           `join` @ [1]:245..249 from 0
+         ],
+         ref: std::join/op
+       },
+       args: [
+         expression binary_expr {
+           left: root_field {
+             id: `id` @ [1]:250..252 from 0,
+             has_question_mark: false
+           },
+           op: "eq",
+           right: root_field {
+             id: `uid` @ [1]:256..259 from 0,
+             has_question_mark: false
+           },
+           location: [1]:250..259 from 0
+         }
+       ],
+       named_args: [
+         {
+           index: 1,
+           value: field_path {
+             expr: root_field {
+               id: `r` @ [1]:266..267 from 0,
+               has_question_mark: false
+             },
+             has_this: false,
+             path: [
+               {
+                 id: `r` @ [1]:266..267 from 0,
+                 has_question_mark: false
+               }
+             ]
+           }
+         }
+       ],
+       pipeline: {
+         pipeline: {
+           lets: [
+             
+           ],
+           operators: [
+             GenericIr {
+               desc: "export",
+               store: {
+                 op: {
+                   path: [
+                     `export` @ [1]:272..278 from 0
+                   ],
+                   ref: std::export/op
+                 },
+                 args: [
+                   
+                 ],
+                 named_args: [
+                   
+                 ]
+               },
+               filter: [
+-                
++                binary_expr {
++                  left: root_field {
++                    id: `uid` @ [1]:256..259 from 0,
++                    has_question_mark: false
++                  },
++                  op: "eq",
++                  right: constant int64 1 @ [1]:312..313 from 0,
++                  location: [1]:306..313 from 0
++                }
+               ],
+-              order: "ordered"
++              order: "ordered",
++              projection: [
++                {
++                  expr: root_field {
++                    id: `tag` @ [1]:331..334 from 0,
++                    has_question_mark: false
++                  },
++                  has_this: false,
++                  path: [
++                    {
++                      id: `tag` @ [1]:331..334 from 0,
++                      has_question_mark: false
++                    }
++                  ]
++                },
++                {
++                  expr: root_field {
++                    id: `uid` @ [1]:256..259 from 0,
++                    has_question_mark: false
++                  },
++                  has_this: false,
++                  path: [
++                    {
++                      id: `uid` @ [1]:256..259 from 0,
++                      has_question_mark: false
++                    }
++                  ]
++                }
++              ]
+             }
+           ],
+           definition_location: [1]:272..278 from 0
+         } @ [1]:268..280 from 0,
+         let_ids: {
+           
+         }
+       }
+-    },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:281..286 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
+-          left: binary_expr {
+-            left: format_expr {
+-              segments: [
+-                replacement root_field {
+-                  id: `id` @ [1]:290..292 from 0,
+-                  has_question_mark: false
+-                }
+-              ],
+-              location: [1]:287..294 from 0
+-            },
+-            op: "eq",
+-            right: constant string "1" @ [1]:298..301 from 0,
+-            location: [1]:287..301 from 0
+-          },
+-          op: "and_",
+-          right: binary_expr {
+-            left: root_field {
+-              id: `id` @ [1]:306..308 from 0,
+-              has_question_mark: false
+-            },
+-            op: "eq",
+-            right: constant int64 1 @ [1]:312..313 from 0,
+-            location: [1]:306..313 from 0
+-          },
+-          location: [1]:287..313 from 0
+-        }
+-      ],
+-      named_args: [
+-        
+-      ]
+     },
+     SetIr {
+       assignments: [
+         {
+           left: this_ [0]:0..0 from 0,
+           right: record {
+             begin: [0]:0..0 from 0,
+             items: [
+               
+             ],
+             end: [0]:0..0 from 0
+           },
+           location: [0]:0..0 from 0
+         },
+         {
+           left: root_field {
+             id: `id` @ [1]:321..323 from 0,
+             has_question_mark: false
+           },
+           right: root_field {
+             id: `id` @ [1]:321..323 from 0,
+             has_question_mark: false
+           },
+           location: [1]:321..323 from 0
+         },
+         {
+           left: root_field {
+             id: `tag` @ [1]:325..328 from 0,
+             has_question_mark: false
+           },
+           right: field_access {
+             left: root_field {
+               id: `r` @ [1]:329..330 from 0,
+               has_question_mark: false
+             },
+             has_question_mark: false,
+             name: `tag` @ [1]:331..334 from 0,
+             location: [1]:329..334 from 0
+           },
+           location: [1]:325..334 from 0
+         }
+       ],
+       order: "ordered"
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:334..334 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ],
+   definition_location: [1]:238..334 from 0
+ }

@@ -1,0 +1,10 @@
+// Semi/anti joins project the right subpipeline to only its join keys, relax
+// right order to unordered, push infallible left filters upstream, and
+// propagate key equivalences into the right leg.
+export
+join tenant == org_id, src_ip == host_ip, kind="semi" {
+  export
+}
+where tenant == "acme" and bytes > 0
+select src_ip, bytes
+head 5

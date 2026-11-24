@@ -1,0 +1,9 @@
+// Inner join without into= strips left./right. prefixes for filter and
+// projection pushdown, keeps cross-side predicates behind join, and retains
+// their referenced fields in both projections.
+export
+join id == uid {
+  export
+}
+where left.score >= 50 and right.tag == "high" and left.x == right.y
+select score=left.score, tag=right.tag

@@ -1,0 +1,8 @@
+// Regression test: `f"{id}" == "1"` must NOT be rewritten onto `uid` (where
+// `uid: 1.0` matches `id: 1` under join equality but stringifies as `"1.0"`).
+from {id: 1}, {id: 2}
+join id == uid, into=r {
+  from {uid: 1.0, tag: "float_one"}, {uid: 2.0, tag: "float_two"}
+}
+where f"{id}" == "1"
+select id, uid=r.uid, tag=r.tag
