@@ -1,0 +1,9 @@
+// Fan-out exceeds one output chunk (16384 rows); head must stop promptly.
+from {id: 1, l: "first"}, {id: 1, l: "second"}
+batch 2
+join id, into=r {
+  from {id: 1}
+  repeat 20000
+  enumerate n
+}
+head 3

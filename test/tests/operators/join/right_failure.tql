@@ -1,0 +1,13 @@
+---
+error: true
+---
+
+// Right subpipeline fails after emitting data: no output may be emitted.
+from {id: 1}
+join id, kind="left" {
+  strict {
+    from {id: 1}, {id: 2}
+    batch 1
+    assert id < 2
+  }
+}

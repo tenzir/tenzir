@@ -1,0 +1,24 @@
+{
+  tag: "int1",
+  v: "one",
+}
+{
+  tag: "uint1",
+  v: "one",
+}
+{
+  tag: "float1",
+  v: "one",
+}
+{
+  tag: "neg_zero",
+  v: "zero",
+}
+{
+  tag: "int_precise",
+  v: null,
+}
+{
+  tag: "int_exact",
+  v: "2pow53",
+}

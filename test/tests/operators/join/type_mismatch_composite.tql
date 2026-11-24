@@ -1,0 +1,5 @@
+// Points directly at the incompatible key component in asymmetric composite joins.
+from {tenant: "acme", src_ip: 1.2.3.4}
+join tenant, src_ip == host_ip {
+  from {tenant: "acme", host_ip: "1.2.3.4"}
+}

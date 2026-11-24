@@ -1,0 +1,6 @@
+error: join key must reference at least one event field
+ --> tests/operators/join/error_constant_call_key.tql:8:6
+  |
+8 | join "x".repeat(1) == [1, 2].map(x => x + 1) {
+  |      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |

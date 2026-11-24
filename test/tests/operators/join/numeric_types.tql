@@ -1,0 +1,13 @@
+// Exact numeric value matching across int, uint, and float.
+from {tag: "int1", k: 1},
+     {tag: "uint1", k: uint(1)},
+     {tag: "float1", k: 1.0},
+     {tag: "neg_zero", k: -0.0},
+     {tag: "int_precise", k: 9007199254740993},
+     {tag: "int_exact", k: 9007199254740992}
+join k, kind="left", into=r {
+  from {k: 1.0, v: "one"},
+       {k: 0, v: "zero"},
+       {k: 9007199254740992.0, v: "2pow53"}
+}
+select tag, v=r.v?

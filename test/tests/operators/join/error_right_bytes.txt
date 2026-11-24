@@ -1,0 +1,6 @@
+error: `join` subpipeline must be a source producing events
+ --> tests/operators/join/error_right_bytes.tql:6:9
+  |
+6 | join id {
+  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |

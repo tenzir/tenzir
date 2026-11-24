@@ -1,0 +1,8 @@
+{
+  src: "10.0.0.1",
+  bytes: 100,
+  asset: {
+    host_ip: 10.0.0.1,
+    role: "web",
+  },
+}

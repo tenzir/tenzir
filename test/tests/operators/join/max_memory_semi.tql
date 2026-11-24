@@ -1,0 +1,7 @@
+// Semi join drops non-key right payloads so a large constant payload fits.
+from {id: 1}, {id: 2}
+join id, kind="semi", max_memory=50000 {
+  let $pad = "x".repeat(200000)
+  from {id: 1}
+  pad = $pad
+}

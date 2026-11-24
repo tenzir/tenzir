@@ -1,0 +1,10 @@
+---
+error: true
+---
+
+// Deterministic function calls with only constant arguments (including method
+// calls and lambdas) are rejected as constant-only join keys.
+from {a: 1}
+join "x".repeat(1) == [1, 2].map(x => x + 1) {
+  from {b: 1}
+}

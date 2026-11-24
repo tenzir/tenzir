@@ -1,0 +1,6 @@
+// Empty right side short-circuits inner join cleanly.
+from {id: 1}, {id: 2}
+join id, kind="inner" {
+  from {id: 1}
+  where false
+}

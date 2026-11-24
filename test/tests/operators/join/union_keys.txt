@@ -1,0 +1,28 @@
+{
+  tag: "i",
+  v: "num",
+}
+{
+  tag: "u",
+  v: "num",
+}
+{
+  tag: "f",
+  v: "num",
+}
+{
+  tag: "nan",
+  v: null,
+}
+{
+  tag: "null",
+  v: null,
+}
+{
+  tag: "str",
+  v: "text",
+}
+{
+  tag: "nested_nan",
+  v: null,
+}

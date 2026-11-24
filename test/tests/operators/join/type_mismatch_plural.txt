@@ -1,0 +1,7 @@
+warning: `join` matched no events due to incompatible key types
+ --> tests/operators/join/type_mismatch_plural.tql:4:6
+  |
+4 | join k {
+  |      ~
+  |
+  = note: input key has types number, string, source key has types bool, ip

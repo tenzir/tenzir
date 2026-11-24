@@ -1,0 +1,8 @@
+---
+error: true
+---
+
+from {a: 1, b: 2}
+join [a, b] {
+  from {a: 1, b: 2}
+}

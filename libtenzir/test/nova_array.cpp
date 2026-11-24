@@ -5174,3 +5174,34 @@ TEST("secrets are equivalent in generic data paths") {
   CHECK_EQUAL(hash(values.get(0)), hash(values.get(1)));
   CHECK(not equal(values.get(0), RowView<Data>{RowView<String>{"***"}}));
 }
+
+TEST("constant storage approx_bytes accounts for Arc-backed payloads") {
+  auto const text = std::string(65'536, 'x');
+  auto const str_arr = repeat(Data{text}, 4);
+  CHECK_GREATER_EQUAL(str_arr.approx_bytes(), text.size());
+  auto list = List{};
+  list.push_back(Data{text});
+  auto const list_arr = repeat(Data{list}, 4);
+  CHECK_GREATER_EQUAL(list_arr.approx_bytes(), text.size());
+  auto rec = Record{};
+  rec["short"] = Data{String{"x"}};
+  rec["payload"] = Data{std::move(list)};
+  auto const rec_storage
+    = storage::ConstantStorage<Record, RowView<Record>>{4, std::move(rec)};
+  auto const aliased = rec_storage.alias<String, std::string_view>(
+    tenzir::as<String>(rec_storage.value().at("short")));
+  CHECK_GREATER_EQUAL(rec_storage.approx_bytes(), text.size());
+  CHECK_EQUAL(aliased.approx_bytes(), rec_storage.approx_bytes());
+  auto builder = ArrayBuilder<Record>{};
+  builder.record().field(text).data(Int{1});
+  auto const wide_name = builder.finish();
+  CHECK_GREATER_EQUAL(wide_name.approx_bytes(), text.size());
+  auto shapes = ShapeTable{};
+  auto wide_fields = std::vector<storage::Index>(256);
+  std::iota(wide_fields.begin(), wide_fields.end(), storage::Index{0});
+  auto const base_shape_bytes = shapes.approx_bytes();
+  std::ignore = shapes.with_fields(wide_fields);
+  CHECK_GREATER_EQUAL(shapes.approx_bytes(),
+                      base_shape_bytes
+                        + (wide_fields.size() * sizeof(storage::Index)));
+}

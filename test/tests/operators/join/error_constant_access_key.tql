@@ -1,0 +1,10 @@
+---
+error: true
+---
+
+// Constant field access (`{k: 1}.k`) and constant indexing (`[1][0]`) must be
+// rejected by `is_pure_constant()`.
+from {a: 1}
+join {k: 1}.k == [1][0] {
+  from {b: 1}
+}

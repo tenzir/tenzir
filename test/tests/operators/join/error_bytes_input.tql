@@ -1,0 +1,10 @@
+---
+error: true
+---
+
+// Bytes input is rejected at compile time.
+from {id: 1}
+write_json
+join id {
+  from {id: 1}
+}

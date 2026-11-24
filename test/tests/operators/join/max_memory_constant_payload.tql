@@ -1,0 +1,11 @@
+---
+error: true
+---
+
+// Constant non-key payloads stored in ConstantStorage are charged to max_memory.
+from {id: 1}
+join id, max_memory=10000 {
+  let $pad = "x".repeat(200000)
+  from {id: 1}
+  pad = $pad
+}

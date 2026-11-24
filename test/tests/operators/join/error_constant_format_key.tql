@@ -1,0 +1,8 @@
+---
+error: true
+---
+
+from {a: 1}
+join f"{1 + 2}" {
+  from {b: 1}
+}

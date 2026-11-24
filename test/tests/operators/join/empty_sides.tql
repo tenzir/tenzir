@@ -1,0 +1,10 @@
+// Empty right side with left and anti joins skips hashing cleanly.
+from {id: 1}, {id: 2}
+join id, kind="left", into=r {
+  from {id: 1}
+  where false
+}
+join id, kind="anti" {
+  from {id: 1}
+  where false
+}

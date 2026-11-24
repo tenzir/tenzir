@@ -1,0 +1,6 @@
+// Preserves sibling fields under a nested target and warns on scalar parents.
+from {id: 1, a: {keep: "yes"}}, {id: 2, a: 42}
+batch 4
+join id, kind="left", into=a.joined {
+  from {id: 1, v: "hit"}, {id: 2, v: "hit2"}
+}

@@ -1,0 +1,12 @@
+// Single left batch fans out to 20001 rows (>16384 chunk size), verifying
+// asynchronous drain across chunk boundaries in exact order.
+from {id: 1, l: "a"}, {id: 2, l: "b"}, {id: 1, l: "c"}
+batch 4
+join id, kind="left", into=r {
+  from {id: 1}
+  repeat 10000
+  enumerate n
+}
+enumerate out_idx
+where out_idx in [0, 9999, 10000, 10001, 16383, 16384, 20000]
+select out_idx, l, n=r.n?

@@ -1,0 +1,33 @@
+{
+  tenant: "t1",
+  a: 1,
+  b: "x",
+  n: 1,
+  r: {
+    tenant: "t1",
+    k1: 1,
+    k2: "x",
+    hit: true,
+  },
+}
+{
+  tenant: "t1",
+  a: 1,
+  b: "y",
+  n: 2,
+  r: null,
+}
+{
+  tenant: "t1",
+  a: 1,
+  b: null,
+  n: 3,
+  r: null,
+}
+{
+  tenant: "t1",
+  a: null,
+  b: "x",
+  n: 4,
+  r: null,
+}

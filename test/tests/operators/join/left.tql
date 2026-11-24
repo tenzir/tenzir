@@ -1,0 +1,5 @@
+// Left outer join distinguishes matched empty right record from unmatched null.
+from {id: 1, msg: "unmatched-1"}, {id: 2, msg: "empty-right"}, {id: 3, msg: "unmatched-3"}
+join id == 2, kind="left" {
+  from {}
+}

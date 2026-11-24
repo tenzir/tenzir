@@ -1,0 +1,11 @@
+// Wide left row fanning out past the 64 MiB chunk byte budget splits cleanly
+// across multiple chunks and preserves every match in order.
+let $wide = "x".repeat(1000000)
+from {id: 1}
+pad = $wide
+join id, into=r {
+  from {id: 1}
+  repeat 80
+  enumerate n
+}
+summarize matches=count(), first_n=min(r.n), last_n=max(r.n), pad_len=min(pad.length_bytes())

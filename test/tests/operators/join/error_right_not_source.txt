@@ -1,0 +1,6 @@
+error: operator expects events
+ --> tests/operators/join/error_right_not_source.tql:7:3
+  |
+7 |   where id > 0
+  |   ^^^^^
+  |

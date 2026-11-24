@@ -1,0 +1,10 @@
+// One eligible row out of three (< 50%) must trigger sparse compaction so the
+// two large ineligible rows are dropped before charging max_memory.
+from {id: 1}
+join id, max_memory=50000, into=r {
+  from {id: null, pad: "a".repeat(100000)},
+       {id: null, pad: "b".repeat(100000)},
+       {id: 1, pad: "ok"}
+  batch 3
+}
+select id, pad=r.pad

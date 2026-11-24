@@ -1,0 +1,7 @@
+error: ambiguous `==` inside `else` join key
+ --> tests/operators/join/error_else_rhs_eq.tql:6:6
+  |
+6 | join a else b == c {
+  |      ^^^^^^^^^^^^^
+  |
+  = hint: wrap the conditional operand in parentheses, e.g. `a == (b else c)` or `(a else b) == c`

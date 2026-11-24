@@ -1,0 +1,14 @@
+// Outer let bindings (including options), nested join, and join() function.
+let $min_id = 2
+let $join_kind = "inner"
+let $budget = 64Mi
+from {id: 1, tags: ["a", "b"]}, {id: 2, tags: ["c", "d"]}, {id: 3, tags: ["e"]}
+label = tags.join("-")
+join id, kind=$join_kind, into=u, max_memory=$budget {
+  from {id: 1, org_id: 10}, {id: 2, org_id: 10}, {id: 3, org_id: 20}
+  where id >= $min_id
+  join org_id == oid, into=org {
+    from {oid: 10, org_name: "acme"}
+  }
+}
+select id, label, org_name=u.org.org_name

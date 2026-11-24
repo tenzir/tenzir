@@ -1,0 +1,4 @@
+from {src: "10.0.0.1", bytes: 100}, {src: "10.0.0.2", bytes: 200}
+join src.ip() == host_ip, into=asset {
+  from {host_ip: 10.0.0.1, role: "web"}, {host_ip: 10.0.0.3, role: "db"}
+}

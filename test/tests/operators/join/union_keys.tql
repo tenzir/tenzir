@@ -1,0 +1,14 @@
+// Mixed-type UnionArray key column in a single batch.
+from {tag: "i", k: 1},
+     {tag: "u", k: uint(1)},
+     {tag: "f", k: 1.0},
+     {tag: "nan", k: float("nan")},
+     {tag: "null", k: null},
+     {tag: "str", k: "one"},
+     {tag: "nested_nan", k: [float("nan")]}
+batch 16
+join k, kind="left", into=r {
+  from {k: 1, v: "num"}, {k: "one", v: "text"}, {k: float("nan"), v: "bad"}
+  batch 16
+}
+select tag, v=r?.v?

@@ -1,0 +1,4 @@
+from {id: 1, msg: "a"}, {id: 2, msg: "b"}, {id: 3, msg: "c"}
+join id, kind="left", into=user {
+  from {id: 1, name: "alice"}, {id: 3, name: "carol"}
+}

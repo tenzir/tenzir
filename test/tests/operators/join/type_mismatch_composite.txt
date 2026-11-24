@@ -1,0 +1,9 @@
+warning: `join` matched no events due to incompatible key types
+ --> tests/operators/join/type_mismatch_composite.tql:3:14
+  |
+3 | join tenant, src_ip == host_ip {
+  |              ~~~~~~ input key has type ip
+  ⋮
+3 | join tenant, src_ip == host_ip {
+  |                        ------- source key has type string
+  |

@@ -10,6 +10,7 @@
 
 #include "tenzir/arc.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/detail/saturating_arithmetic.hpp"
 #include "tenzir/nova/shared_owner.hpp"
 #include "tenzir/nova/storage_fwd.hpp"
 
@@ -109,17 +110,14 @@ public:
     return length_;
   }
 
-  /// The constant's own size plus the static size of its entries when it is a
-  /// container. Heap owned by those entries is deliberately not walked.
+  /// Approximate heap bytes owned by this constant, including the `Arc`
+  /// control block and nested heap allocations for non-trivial values.
   auto approx_bytes() const noexcept -> std::size_t {
-    auto result = sizeof(StorageT);
-    if constexpr (requires {
-                    value_.size();
-                    typename StorageT::value_type;
-                  }) {
-      result += value_.size() * sizeof(typename StorageT::value_type);
+    if constexpr (inline_value) {
+      return sizeof(StorageT);
+    } else {
+      return approx_bytes_;
     }
-    return result;
   }
 
   auto get(Index i) const -> ViewType {
@@ -138,7 +136,9 @@ public:
   }
 
   ConstantStorage(Index length, StorageT value)
-    : length_{length}, value_(std::move(value)) {
+    : length_{length},
+      value_(std::move(value)),
+      approx_bytes_{make_cached_bytes()} {
   }
 
   /// The same constant at another length, sharing the value.
@@ -161,18 +161,52 @@ public:
       auto shared = std::shared_ptr<T const>{std::move(owner).into_shared(),
                                              std::addressof(value)};
       return ConstantStorage<T, V>{
-        length_, Arc<T const>::from_non_null(std::move(shared)), std::in_place};
+        length_, Arc<T const>::from_non_null(std::move(shared)), approx_bytes_,
+        std::in_place};
     }
   }
 
 private:
-  ConstantStorage(Index length, Arc<StorageT const> value, std::in_place_t)
+  struct Empty {};
+  using CachedBytes = std::conditional_t<inline_value, Empty, std::size_t>;
+
+  auto make_cached_bytes() const noexcept -> CachedBytes {
+    if constexpr (inline_value) {
+      return Empty{};
+    } else {
+      constexpr auto arc_control_block = std::size_t{3 * sizeof(void*)};
+      auto result = arc_control_block + sizeof(StorageT);
+      auto const& val = *value_;
+      if constexpr (requires { val.approx_heap_bytes(); }) {
+        result = detail::saturating_add(result, val.approx_heap_bytes());
+      } else if constexpr (requires {
+                             val.capacity();
+                             typename StorageT::value_type;
+                           }) {
+        result = detail::saturating_add(
+          result, val.capacity() * sizeof(typename StorageT::value_type));
+      } else if constexpr (requires {
+                             val.size();
+                             typename StorageT::value_type;
+                           }) {
+        result = detail::saturating_add(
+          result, val.size() * sizeof(typename StorageT::value_type));
+      } else if constexpr (requires { val.data.size(); }) {
+        result = detail::saturating_add(result, val.data.size());
+      }
+      return result;
+    }
+  }
+
+  ConstantStorage(Index length, Arc<StorageT const> value,
+                  std::size_t approx_bytes, std::in_place_t)
     requires(not inline_value)
-    : length_{length}, value_{std::move(value)} {
+    : length_{length}, value_{std::move(value)}, approx_bytes_{approx_bytes} {
   }
 
   Index length_ = 0;
   Value value_;
+  [[no_unique_address]] CachedBytes approx_bytes_{};
 };
 static_assert(storage<ConstantStorage<int>>);
 

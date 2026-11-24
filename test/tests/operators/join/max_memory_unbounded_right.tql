@@ -1,0 +1,10 @@
+---
+error: true
+---
+
+// An unbounded right-hand source terminates promptly once max_memory is exceeded.
+from {id: 1}
+join id, max_memory=10000 {
+  from {id: 1, pad: "x".repeat(1000)}
+  repeat
+}

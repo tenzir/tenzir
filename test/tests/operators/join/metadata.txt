@@ -1,0 +1,18 @@
+{
+  id: 1,
+  x: "a",
+  name: "custom.left",
+  import_time: 2025-01-02T03:04:05Z,
+}
+{
+  id: 1,
+  x: "b",
+  name: "custom.left",
+  import_time: 2025-01-02T03:04:05Z,
+}
+{
+  id: 2,
+  x: null,
+  name: "custom.left",
+  import_time: 2025-01-02T03:04:05Z,
+}

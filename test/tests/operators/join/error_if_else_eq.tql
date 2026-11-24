@@ -1,0 +1,8 @@
+---
+error: true
+---
+
+from {a: 1, flag: true}
+join a == b if flag else 0 {
+  from {b: 1}
+}

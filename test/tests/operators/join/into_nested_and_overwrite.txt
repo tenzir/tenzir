@@ -1,0 +1,20 @@
+{
+  id: 1,
+  meta: {
+    id: 1,
+    role: "admin",
+  },
+  enrichment: {
+    geo: {
+      id: 1,
+      country: "DE",
+    },
+  },
+}
+{
+  id: 2,
+  meta: null,
+  enrichment: {
+    geo: null,
+  },
+}

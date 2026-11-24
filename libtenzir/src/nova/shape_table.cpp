@@ -20,17 +20,19 @@ auto ShapeTable::EdgeCache::find(storage::Index field) const -> ShapeId {
 }
 
 auto ShapeTable::EdgeCache::insert(storage::Index field, ShapeId shape)
-  -> void {
+  -> std::size_t {
   if (first.field == field
       or std::ranges::find(overflow, field, &ShapeEdge::field)
            != overflow.end()) {
-    return;
+    return 0;
   }
   if (first.field < 0) {
     first = ShapeEdge{field, shape};
-    return;
+    return 0;
   }
+  auto const old_cap = overflow.capacity();
   overflow.push_back(ShapeEdge{field, shape});
+  return (overflow.capacity() - old_cap) * sizeof(ShapeEdge);
 }
 
 ShapeTable::ShapeTable() {
@@ -50,7 +52,7 @@ auto ShapeTable::with_field(ShapeId id, storage::Index field,
     return cached;
   }
   if (std::ranges::find(node.fields, field) != node.fields.end()) {
-    edges.insert(field, id);
+    overflow_bytes_ += edges.insert(field, id);
     return id;
   }
   auto candidate = node.fields;
@@ -63,8 +65,9 @@ auto ShapeTable::with_field(ShapeId id, storage::Index field,
   auto& updated = nodes_[static_cast<std::size_t>(id)];
   auto& updated_edges = position == FieldPosition::front ? updated.prepend_edges
                                                          : updated.add_edges;
-  updated_edges.insert(field, new_id);
-  nodes_[static_cast<std::size_t>(new_id)].remove_edges.insert(field, id);
+  overflow_bytes_ += updated_edges.insert(field, new_id);
+  overflow_bytes_
+    += nodes_[static_cast<std::size_t>(new_id)].remove_edges.insert(field, id);
   return new_id;
 }
 
@@ -81,7 +84,7 @@ auto ShapeTable::without_field(ShapeId id, storage::Index field) -> ShapeId {
     return cached;
   }
   if (std::ranges::find(node.fields, field) == node.fields.end()) {
-    node.remove_edges.insert(field, id);
+    overflow_bytes_ += node.remove_edges.insert(field, id);
     return id;
   }
   auto candidate = FieldsType{};
@@ -92,7 +95,8 @@ auto ShapeTable::without_field(ShapeId id, storage::Index field) -> ShapeId {
     }
   }
   const auto new_id = find_or_add(std::move(candidate));
-  nodes_[static_cast<std::size_t>(id)].remove_edges.insert(field, new_id);
+  overflow_bytes_
+    += nodes_[static_cast<std::size_t>(id)].remove_edges.insert(field, new_id);
   // Removing an arbitrary field is not the inverse of appending or prepending.
   // Let insertion compute the transition for its requested position.
   return new_id;
@@ -113,10 +117,10 @@ auto ShapeTable::size() const noexcept -> std::size_t {
 }
 
 auto ShapeTable::approx_bytes() const noexcept -> std::size_t {
-  // Static entry sizes only: per-node overflow vectors are not walked.
   return (nodes_.capacity() * sizeof(ShapeNode))
          + (ids_by_hash_.bucket_count()
-            * sizeof(decltype(ids_by_hash_)::value_type));
+            * sizeof(decltype(ids_by_hash_)::value_type))
+         + overflow_bytes_;
 }
 
 auto ShapeTable::fields(ShapeId id) const -> std::span<const storage::Index> {
@@ -176,9 +180,16 @@ auto ShapeTable::find_or_add(FieldsType candidate) -> ShapeId {
                              .add_edges = {},
                              .prepend_edges = {},
                              .remove_edges = {}});
+  if (auto const cap = nodes_.back().fields.capacity();
+      cap > FieldsType::static_capacity) {
+    overflow_bytes_ += cap * sizeof(storage::Index);
+  }
   auto [it, inserted] = ids_by_hash_.try_emplace(digest, ShapeIds{new_id, {}});
   if (not inserted) {
+    auto const old_cap = it->second.overflow.capacity();
     it->second.overflow.push_back(new_id);
+    overflow_bytes_
+      += (it->second.overflow.capacity() - old_cap) * sizeof(ShapeId);
   }
   return new_id;
 }

@@ -1,0 +1,10 @@
+// Preserves left @name and @import_time on both 1:1 and N:M paths and without into=.
+from {id: 1}, {id: 2}
+@name = "custom.left"
+@import_time = 2025-01-02T03:04:05Z
+join id, kind="left" {
+  from {id: 1, x: "a"}, {id: 1, x: "b"}
+  @name = "custom.right"
+  @import_time = 2020-01-01T00:00:00Z
+}
+select id=left.id, x=right.x?, name=@name, import_time=@import_time

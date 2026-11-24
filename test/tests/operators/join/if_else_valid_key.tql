@@ -1,0 +1,7 @@
+// Valid conditional shared key and event field named into.
+from {flag: 1, a: "x", b: "y", into: "foo"},
+     {flag: 0, a: "x", b: "y", into: "bar"}
+join a if flag == 1 else b, into == "foo", kind="left", into=matched {
+  from {flag: 1, a: "x", b: "z", ok: true}
+}
+select flag, matched=matched?.ok?

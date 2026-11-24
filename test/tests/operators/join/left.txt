@@ -1,0 +1,21 @@
+{
+  left: {
+    id: 1,
+    msg: "unmatched-1",
+  },
+  right: null,
+}
+{
+  left: {
+    id: 2,
+    msg: "empty-right",
+  },
+  right: {},
+}
+{
+  left: {
+    id: 3,
+    msg: "unmatched-3",
+  },
+  right: null,
+}

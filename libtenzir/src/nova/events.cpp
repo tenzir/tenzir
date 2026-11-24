@@ -65,9 +65,8 @@ auto Events::approx_active_bytes() const noexcept -> std::size_t {
 }
 
 auto Events::approx_held_storage() const noexcept -> std::size_t {
-  // Counts rows that `mask` deselects. Omits nested heap allocations in
-  // constants, shape-table overflow, and record field names, and includes
-  // unused capacity only partly. Shared buffers count once per reference.
+  // Counts rows that `mask` deselects and includes unused capacity where
+  // tracked. Shared buffers count once per reference.
   return sizeof(Events) + data.approx_bytes() + mask.approx_bytes()
          + meta.name.approx_bytes() + meta.import_time.approx_bytes()
          + meta.internal.approx_bytes();

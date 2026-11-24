@@ -1,0 +1,8 @@
+// Dynamically bound $group variables inside join keys validate once bound.
+from {id: 1}, {id: 2}
+group id {
+  join id == $group, into=r {
+    from {v: "ok"}
+  }
+}
+sort id

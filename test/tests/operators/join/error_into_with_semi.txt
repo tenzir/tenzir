@@ -1,0 +1,6 @@
+error: `into` cannot be used with `kind="semi"`
+ --> tests/operators/join/error_into_with_semi.tql:6:28
+  |
+6 | join id, kind="semi", into=r {
+  |                            ^
+  |

@@ -1,0 +1,5 @@
+// Anti join returns unmatched left rows, including rows with null keys.
+from {id: 1, v: "a"}, {id: 2, v: "b"}, {id: 3, v: "c"}, {id: null, v: "d"}
+join id, kind="anti" {
+  from {id: 2}, {id: 2}, {id: null}
+}

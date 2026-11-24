@@ -1,0 +1,8 @@
+---
+error: true
+---
+
+from {id: 1}
+join {
+  from {id: 1}
+}

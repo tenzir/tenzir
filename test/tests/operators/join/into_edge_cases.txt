@@ -1,0 +1,26 @@
+warning: implicit record for `joined` field overwrites `int` value
+ --> tests/operators/join/into_edge_cases.tql:4:30
+  |
+4 | join id, kind="left", into=a.joined {
+  |                              ~~~~~~
+  |
+  = hint: if this is intentional, drop the parent field before
+{
+  id: 1,
+  a: {
+    keep: "yes",
+    joined: {
+      id: 1,
+      v: "hit",
+    },
+  },
+}
+{
+  id: 2,
+  a: {
+    joined: {
+      id: 2,
+      v: "hit2",
+    },
+  },
+}

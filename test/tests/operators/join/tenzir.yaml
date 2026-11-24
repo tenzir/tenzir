@@ -1,0 +1,4 @@
+tenzir:
+  nova: true
+  secrets:
+    join-tok: s3cr3t

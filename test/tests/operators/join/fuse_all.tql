@@ -1,0 +1,7 @@
+// parallelism: 1, fuse=all
+
+// Explicit fusing must preserve join behavior across build and probe phases.
+from {id: 1, x: "a"}, {id: 2, x: "b"}, {id: 3, x: "c"}
+join id, kind="left", into=r {
+  from {id: 1, y: 10}, {id: 3, y: 30}
+}

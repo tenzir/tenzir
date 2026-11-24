@@ -1,0 +1,6 @@
+error: chained comparisons are not supported in join keys
+ --> tests/operators/join/error_chained_eq.tql:6:6
+  |
+6 | join a == b == c {
+  |      ^^^^^^^^^^^
+  |

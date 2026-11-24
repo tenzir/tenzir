@@ -1,0 +1,8 @@
+---
+error: true
+---
+
+from {id: 1}
+join id, max_memory=0 {
+  from {id: 1}
+}

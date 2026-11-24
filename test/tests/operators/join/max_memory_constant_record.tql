@@ -1,0 +1,11 @@
+---
+error: true
+---
+
+// Constant Record/List payloads are measured without copying and enforced.
+from {id: 1}
+join id, max_memory=10000 {
+  let $big = {payload: ["x".repeat(50000)]}
+  from {id: 1}
+  meta = $big
+}

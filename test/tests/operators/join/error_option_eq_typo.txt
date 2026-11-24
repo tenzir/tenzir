@@ -1,0 +1,7 @@
+error: unexpected `==` with option name `kind`
+ --> tests/operators/join/error_option_eq_typo.tql:6:10
+  |
+6 | join id, kind == "left" {
+  |          ^^^^^^^^^^^^^^
+  |
+  = hint: use `=` instead of `==` to pass the `kind` option

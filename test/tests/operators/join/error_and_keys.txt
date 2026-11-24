@@ -1,0 +1,7 @@
+error: cannot combine join keys with `and`
+ --> tests/operators/join/error_and_keys.tql:6:6
+  |
+6 | join a == b and c == d {
+  |      ^^^^^^^^^^^^^^^^^
+  |
+  = hint: separate join keys with a comma, e.g. `join a == b, c == d { ... }`

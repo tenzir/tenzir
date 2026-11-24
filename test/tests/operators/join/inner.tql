@@ -1,0 +1,4 @@
+from {id: 1, msg: "a"}, {id: 2, msg: "b"}, {id: 3, msg: "c"}
+join id {
+  from {id: 2, user: "bob"}, {id: 1, user: "alice"}, {id: 4, user: "dave"}
+}

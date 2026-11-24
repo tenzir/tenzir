@@ -1,0 +1,7 @@
+error: composite join keys must be comma-separated, not wrapped in a list
+ --> tests/operators/join/error_list_key_literal.tql:6:6
+  |
+6 | join [a, b] {
+  |      ^^^^^^
+  |
+  = hint: write `join a, b { ... }` instead of `join [a, b] { ... }`

@@ -1,0 +1,8 @@
+---
+error: true
+---
+
+from {id: 1}
+join id, kind="outer" {
+  from {id: 1}
+}

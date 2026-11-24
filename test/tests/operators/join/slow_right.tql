@@ -1,0 +1,7 @@
+// Left input arrives immediately while right takes time to finish building.
+from {id: 1, l: "a"}, {id: 2, l: "b"}
+join id, into=r {
+  from {id: 1, ts: 0ms.from_epoch()}, {id: 2, ts: 25ms.from_epoch()}
+  delay ts
+}
+select id, l, r_id=r.id

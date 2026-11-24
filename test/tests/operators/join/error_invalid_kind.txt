@@ -1,0 +1,6 @@
+error: `kind` must be one of `"inner"`, `"left"`, `"semi"`, or `"anti"`
+ --> tests/operators/join/error_invalid_kind.tql:6:15
+  |
+6 | join id, kind="outer" {
+  |               ^^^^^^^
+  |

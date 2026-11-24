@@ -1,0 +1,8 @@
+---
+error: true
+---
+
+from {a: null, b: 1}
+join a else b == c {
+  from {c: 1}
+}

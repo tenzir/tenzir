@@ -1,0 +1,19 @@
+// Top-level null, top-level NaN, and nested NaN never match.
+// Nested null inside a record or list compares structurally.
+from {tag: "top_null", k: null},
+     {tag: "top_nan", k: float("nan")},
+     {tag: "nested_nan_list", k: [1.0, float("nan")]},
+     {tag: "nested_nan_rec", k: {a: float("nan")}},
+     {tag: "nested_null_list", k: [1.0, null]},
+     {tag: "nested_null_rec", k: {a: null}},
+     {tag: "num", k: 1.0}
+join k, kind="left", into=r {
+  from {k: null, hit: "null"},
+       {k: float("nan"), hit: "nan"},
+       {k: [1.0, float("nan")], hit: "nested_nan_list"},
+       {k: {a: float("nan")}, hit: "nested_nan_rec"},
+       {k: [1.0, null], hit: "nested_null_list"},
+       {k: {a: null}, hit: "nested_null_rec"},
+       {k: 1.0, hit: "num"}
+}
+select tag, hit=r.hit?

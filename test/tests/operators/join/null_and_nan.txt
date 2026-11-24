@@ -1,0 +1,28 @@
+{
+  tag: "top_null",
+  hit: null,
+}
+{
+  tag: "top_nan",
+  hit: null,
+}
+{
+  tag: "nested_nan_list",
+  hit: null,
+}
+{
+  tag: "nested_nan_rec",
+  hit: null,
+}
+{
+  tag: "nested_null_list",
+  hit: "nested_null_list",
+}
+{
+  tag: "nested_null_rec",
+  hit: "nested_null_rec",
+}
+{
+  tag: "num",
+  hit: "num",
+}

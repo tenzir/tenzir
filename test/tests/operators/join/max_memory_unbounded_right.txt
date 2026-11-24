@@ -1,0 +1,7 @@
+error: `join` exceeded memory limit of 10000 bytes
+ --> tests/operators/join/max_memory_unbounded_right.tql:7:21
+  |
+7 | join id, max_memory=10000 {
+  |                     ^^^^^
+  |
+  = hint: increase `max_memory` or filter the right-hand pipeline

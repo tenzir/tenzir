@@ -1,0 +1,10 @@
+// Comma-separated mixed shared and asymmetric keys; partial nulls never match.
+from {tenant: "t1", a: 1, b: "x", n: 1},
+     {tenant: "t1", a: 1, b: "y", n: 2},
+     {tenant: "t1", a: 1, b: null, n: 3},
+     {tenant: "t1", a: null, b: "x", n: 4}
+join tenant, a == k1, b == k2, kind="left", into=r {
+  from {tenant: "t1", k1: 1, k2: "x", hit: true},
+       {tenant: "t1", k1: 1, k2: null, hit: false},
+       {tenant: "t1", k1: null, k2: "x", hit: false}
+}

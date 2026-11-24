@@ -1,0 +1,8 @@
+---
+error: true
+---
+
+from {id: 1}
+join id, kind="semi", into=r {
+  from {id: 1}
+}

@@ -1,0 +1,7 @@
+error: only `==` is supported in join key conditions
+ --> tests/operators/join/error_non_equi.tql:6:6
+  |
+6 | join a != b {
+  |      ^^^^^^
+  |
+  = note: non-equi join conditions are not supported

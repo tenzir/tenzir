@@ -1,0 +1,6 @@
+error: join key must reference at least one event field
+ --> tests/operators/join/error_constant_access_key.tql:8:6
+  |
+8 | join {k: 1}.k == [1][0] {
+  |      ^^^^^^^^^^^^^^^^^^
+  |

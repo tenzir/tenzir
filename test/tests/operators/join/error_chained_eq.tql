@@ -1,0 +1,8 @@
+---
+error: true
+---
+
+from {a: 1}
+join a == b == c {
+  from {b: 1, c: 1}
+}

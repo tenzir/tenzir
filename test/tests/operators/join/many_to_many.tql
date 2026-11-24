@@ -1,0 +1,7 @@
+// Preserves left arrival order and, per left row, right arrival order.
+from {id: 1, l: "L1"}, {id: 1, l: "L2"}, {id: 2, l: "L3"}, {id: 3, l: "L4"}
+batch 2
+join id, kind="left", into=r {
+  from {id: 1, r: "R1"}, {id: 1, r: "R2"}, {id: 2, r: "R3"}
+  batch 1
+}

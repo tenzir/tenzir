@@ -1,0 +1,20 @@
+{
+  left: {
+    id: 1,
+    msg: "a",
+  },
+  right: {
+    id: 1,
+    user: "alice",
+  },
+}
+{
+  left: {
+    id: 2,
+    msg: "b",
+  },
+  right: {
+    id: 2,
+    user: "bob",
+  },
+}

@@ -40,8 +40,8 @@ public:
   auto without_fields(ShapeId id, std::span<const storage::Index> fields)
     -> ShapeId;
   auto size() const noexcept -> std::size_t;
-  /// Heap bytes of the node and hash tables, counting only their entries'
-  /// static sizes.
+  /// Heap bytes of the node and hash tables, including per-node field, edge,
+  /// and hash-bucket overflow allocations.
   auto approx_bytes() const noexcept -> std::size_t;
   auto fields(ShapeId id) const -> std::span<const storage::Index>;
   auto import_shapes(ShapeTable const& source,
@@ -56,7 +56,8 @@ private:
 
   struct EdgeCache {
     auto find(storage::Index field) const -> ShapeId;
-    auto insert(storage::Index field, ShapeId shape) -> void;
+    /// Inserts an edge and returns any increase in overflow buffer bytes.
+    auto insert(storage::Index field, ShapeId shape) -> std::size_t;
 
     ShapeEdge first;
     storage::Vector<ShapeEdge> overflow;
@@ -80,6 +81,7 @@ private:
 
   storage::Vector<ShapeNode> nodes_;
   storage::UnorderedFlatMap<std::uint64_t, ShapeIds> ids_by_hash_;
+  std::size_t overflow_bytes_ = 0;
 };
 
 } // namespace tenzir::nova

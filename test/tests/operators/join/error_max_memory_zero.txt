@@ -1,0 +1,6 @@
+error: `max_memory` must be greater than zero
+ --> tests/operators/join/error_max_memory_zero.tql:6:21
+  |
+6 | join id, max_memory=0 {
+  |                     ^
+  |

@@ -1,0 +1,10 @@
+---
+error: true
+---
+
+// Semi join still enforces max_memory on unique right key materialization.
+from {k: "a"}
+join k, kind="semi", max_memory=10000 {
+  let $big = "x".repeat(50000)
+  from {k: $big}
+}

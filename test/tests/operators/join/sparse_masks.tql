@@ -1,0 +1,16 @@
+// Batch before filtering so both inputs arrive as genuine sparse-masked batches
+// and the right batch triggers >50% ineligible compaction.
+from {id: 1}, {id: 2}, {id: 3}, {id: 4}, {id: 5}, {id: 6}
+batch 16
+where id == 2 or id == 4 or id == 6
+join id, kind="left", into=r {
+  from {id: null, v: "n1"},
+       {id: null, v: "n2"},
+       {id: null, v: "n3"},
+       {id: null, v: "n4"},
+       {id: 2, v: "two"},
+       {id: 4, v: "four"},
+       {id: 6, v: "six"}
+  batch 16
+  where v != "four"
+}

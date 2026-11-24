@@ -1,0 +1,6 @@
+error: `into` must be a field path, not `this`
+ --> tests/operators/join/error_into_this.tql:6:15
+  |
+6 | join id, into=this {
+  |               ^^^^
+  |

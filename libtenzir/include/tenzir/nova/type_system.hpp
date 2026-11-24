@@ -67,11 +67,19 @@ auto hash_of(Record const& value) noexcept -> std::size_t;
 class List : public std::vector<Data> {
 public:
   using vector::vector;
+
+  /// Approximate out-of-line heap bytes owned by this list, excluding
+  /// `sizeof(List)` itself.
+  auto approx_heap_bytes() const noexcept -> std::size_t;
 };
 class Record : public detail::stable_map<std::string, Data> {
 public:
   using Base = detail::stable_map<std::string, Data>;
   using Base::Base;
+
+  /// Approximate out-of-line heap bytes owned by this record, excluding
+  /// `sizeof(Record)` itself.
+  auto approx_heap_bytes() const noexcept -> std::size_t;
 
   template <class HashAlgorithm>
   friend auto hash_append(HashAlgorithm& h, Record const& value) -> void {
@@ -116,6 +124,10 @@ class Data : public data_type_list::apply<variant> {
 public:
   using Base = data_type_list::apply<variant>;
   using Base::Base;
+
+  /// Approximate out-of-line heap bytes owned by this value, excluding
+  /// `sizeof(Data)` itself.
+  auto approx_heap_bytes() const noexcept -> std::size_t;
 
   /// Equal the way `nova::equal` says: numbers by value whatever their type,
   /// and a NaN never equal to itself.

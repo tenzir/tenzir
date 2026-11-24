@@ -1,0 +1,6 @@
+error: join key must reference at least one event field
+ --> tests/operators/join/error_constant_format_key.tql:6:6
+  |
+6 | join f"{1 + 2}" {
+  |      ^^^^^^^^^^
+  |

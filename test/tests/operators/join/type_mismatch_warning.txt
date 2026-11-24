@@ -1,0 +1,7 @@
+warning: `join` matched no events due to incompatible key types
+ --> tests/operators/join/type_mismatch_warning.tql:2:6
+  |
+2 | join ip {
+  |      ~~
+  |
+  = note: input key has type ip, source key has type string

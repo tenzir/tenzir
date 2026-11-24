@@ -1,0 +1,7 @@
+// Disjoint mixed key types format plural "types" cleanly.
+from {k: 1}, {k: "a"}
+batch 4
+join k {
+  from {k: 1.2.3.4}, {k: true}
+  batch 4
+}

@@ -1,0 +1,4 @@
+from {ip: 1.2.3.4}
+join ip {
+  from {ip: "1.2.3.4", host: "web"}
+}

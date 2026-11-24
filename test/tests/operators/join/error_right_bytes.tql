@@ -1,0 +1,9 @@
+---
+error: true
+---
+
+from {id: 1}
+join id {
+  from {id: 1}
+  write_json
+}

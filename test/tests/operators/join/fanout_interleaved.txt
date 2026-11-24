@@ -1,0 +1,18 @@
+{
+  batch_tag: "fan1",
+  total: 20000,
+  min_n: 0,
+  max_n: 19999,
+}
+{
+  batch_tag: "fan2",
+  total: 20000,
+  min_n: 0,
+  max_n: 19999,
+}
+{
+  batch_tag: "one1",
+  total: 1,
+  min_n: 42,
+  max_n: 42,
+}

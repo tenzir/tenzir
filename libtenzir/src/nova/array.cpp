@@ -1,3 +1,4 @@
+#include "tenzir/detail/saturating_arithmetic.hpp"
 #include "tenzir/hash/hash.hpp"
 #include "tenzir/nova/bitmap_iteration.hpp"
 #include "tenzir/nova/comparison.hpp"
@@ -179,6 +180,41 @@ auto hash_of(Data const& value) noexcept -> std::size_t {
 
 auto hash_of(Record const& value) noexcept -> std::size_t {
   return hash(RowView<Data>{RowView<Record>{value}});
+}
+
+auto List::approx_heap_bytes() const noexcept -> std::size_t {
+  auto total = capacity() * sizeof(Data);
+  for (auto const& item : *this) {
+    total = detail::saturating_add(total, item.approx_heap_bytes());
+  }
+  return total;
+}
+
+auto Record::approx_heap_bytes() const noexcept -> std::size_t {
+  auto total = as_vector(*this).capacity() * sizeof(Record::value_type);
+  for (auto const& [k, val] : *this) {
+    total = detail::saturating_add(total, k.capacity());
+    total = detail::saturating_add(total, val.approx_heap_bytes());
+  }
+  return total;
+}
+
+auto Data::approx_heap_bytes() const noexcept -> std::size_t {
+  return this->match([]<class T>(T const& v) noexcept -> std::size_t {
+    if constexpr (std::same_as<T, String>) {
+      return v.capacity();
+    } else if constexpr (std::same_as<T, Blob>) {
+      return v.capacity();
+    } else if constexpr (std::same_as<T, Secret>) {
+      return v.data.size();
+    } else if constexpr (std::same_as<T, List>) {
+      return v.approx_heap_bytes();
+    } else if constexpr (std::same_as<T, Record>) {
+      return v.approx_heap_bytes();
+    } else {
+      return 0;
+    }
+  });
 }
 
 auto hash_rows(Array<Data> const& column, storage::BitMap const& rows,

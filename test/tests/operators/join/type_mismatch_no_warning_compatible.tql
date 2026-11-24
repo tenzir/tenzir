@@ -1,0 +1,5 @@
+// Compatible key types with zero matches (or ineligible rows) emit no warning.
+from {a: 1, b: "x"}, {a: 2, b: null}
+join a, b {
+  from {a: 99, b: "y"}, {a: "str", b: null}
+}

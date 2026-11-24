@@ -1,0 +1,6 @@
+error: assertion failure
+  --> tests/operators/join/right_failure.tql:11:12
+   |
+11 |     assert id < 2
+   |            ^^^^^^
+   |

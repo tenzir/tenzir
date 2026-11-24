@@ -1,0 +1,15 @@
+// Alternates between fan-out drain (>16384 rows) and 1:1 fast-path batches.
+from {id: 1, batch_tag: "fan1"},
+     {id: 2, batch_tag: "one1"},
+     {id: 1, batch_tag: "fan2"}
+batch 1
+join id, kind="left", into=r {
+  from {id: 1}
+  repeat 20000
+  enumerate n
+  merge {
+    from {id: 2, n: 42}
+  }
+}
+summarize batch_tag, total=count(), min_n=min(r.n), max_n=max(r.n)
+sort batch_tag

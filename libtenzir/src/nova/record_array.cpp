@@ -32,10 +32,13 @@ RecordStorage::Storage::Storage(IndicesStorage indices, ShapeTable table,
 
 auto RecordStorage::Storage::refresh_approx_bytes() noexcept -> void {
   auto result = shape_indices.approx_bytes() + shape_table.approx_bytes();
-  // Node-based map: one bucket pointer per bucket, and per entry the value
-  // plus an estimated node header. Key string heap is not walked.
+  // Node-based map: one bucket pointer per bucket, and per entry the value,
+  // an estimated node header, and the key string's backing buffer.
   result += names.bucket_count() * sizeof(void*);
   result += names.size() * (sizeof(Names::value_type) + (2 * sizeof(void*)));
+  for (auto const& [name, _] : names) {
+    result += name.capacity();
+  }
   result += arrays.capacity() * sizeof(MaskedArray);
   for (auto const& field : arrays) {
     result += field.approx_bytes();

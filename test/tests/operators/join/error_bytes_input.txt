@@ -1,0 +1,7 @@
+error: operator does not accept bytes
+ --> tests/operators/join/error_bytes_input.tql:8:1
+  |
+8 | join id {
+  | ^^^^
+  |
+  = docs: https://tenzir.com/docs/reference/operators/join

@@ -1,0 +1,21 @@
+{
+  id: 1,
+  msg: "a",
+  user: {
+    id: 1,
+    name: "alice",
+  },
+}
+{
+  id: 2,
+  msg: "b",
+  user: null,
+}
+{
+  id: 3,
+  msg: "c",
+  user: {
+    id: 3,
+    name: "carol",
+  },
+}

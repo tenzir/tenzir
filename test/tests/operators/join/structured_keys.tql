@@ -1,0 +1,6 @@
+// Record keys are field-order independent.
+from {k: {b: 2, a: 1}}, {k: {a: 1, b: 3}}
+join k, kind="left", into=r {
+  from {k: {a: 1, b: 2}, hit: "rec"}
+}
+select k, hit=r.hit?

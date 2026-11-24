@@ -1,0 +1,7 @@
+error: missing join key
+ --> tests/operators/join/error_missing_key.tql:6:1
+  |
+6 | join {
+  | ^^^^
+  |
+  = hint: specify one or more key expressions, e.g. `join id { ... }` or `join left_id == right_id { ... }`
