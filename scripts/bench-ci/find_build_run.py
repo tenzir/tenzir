@@ -11,7 +11,13 @@ import time
 from pathlib import Path
 from typing import Any
 
-from common import TARGET_METADATA_ARTIFACTS, GhCommandError, gh_api, gh_json
+from common import (
+    TARGET_BUILD_JOBS,
+    TARGET_METADATA_ARTIFACTS,
+    GhCommandError,
+    gh_api,
+    gh_json,
+)
 
 HEX_SHA_RE = re.compile(r"^[0-9a-f]{7,40}$", re.IGNORECASE)
 
@@ -153,6 +159,31 @@ def list_artifacts(repo: str, run_id: int) -> list[dict[str, Any]]:
     return artifacts
 
 
+def _find_artifact(repo: str, run_id: int, artifact_name: str) -> dict[str, Any] | None:
+    for artifact in list_artifacts(repo, run_id):
+        if artifact.get("name") == artifact_name and not artifact.get("expired", False):
+            return artifact
+    return None
+
+
+def finished_build_jobs(run: dict[str, Any], build_job: str) -> list[str]:
+    """Describes the jobs named `build_job` if all of them have finished.
+
+    A reusable workflow shows up as `<caller> / <job>` once it runs, and as
+    just `<caller>` when it was skipped. Returns an empty list while one of
+    them still runs, or if the run has no such job.
+    """
+    jobs = [
+        job
+        for job in run.get("jobs") or []
+        if job.get("name") == build_job
+        or str(job.get("name", "")).startswith(f"{build_job} / ")
+    ]
+    if not jobs or any(job.get("status") != "completed" for job in jobs):
+        return []
+    return [f"`{job.get('name')}` {job.get('conclusion')}" for job in jobs]
+
+
 def wait_for_artifact(
     repo: str,
     run_id: int,
@@ -160,15 +191,13 @@ def wait_for_artifact(
     artifact_name: str,
     timeout_seconds: int,
     interval_seconds: int,
+    build_job: str | None = None,
 ) -> dict[str, Any]:
     deadline = time.monotonic() + timeout_seconds
     while True:
-        artifacts = list_artifacts(repo, run_id)
-        for artifact in artifacts:
-            if artifact.get("name") == artifact_name and not artifact.get(
-                "expired", False
-            ):
-                return artifact
+        artifact = _find_artifact(repo, run_id, artifact_name)
+        if artifact is not None:
+            return artifact
         run = gh_json(
             [
                 "run",
@@ -177,9 +206,20 @@ def wait_for_artifact(
                 "--repo",
                 repo,
                 "--json",
-                "status,conclusion,url",
+                "status,conclusion,url,jobs",
             ],
         )
+        if build_job is not None:
+            finished = finished_build_jobs(run, build_job)
+            # The job may have uploaded the artifact after the lookup above.
+            if finished:
+                artifact = _find_artifact(repo, run_id, artifact_name)
+                if artifact is not None:
+                    return artifact
+                raise ArtifactUnavailableError(
+                    f"Tenzir workflow run {run_id} did not build artifact "
+                    f"{artifact_name}: {', '.join(finished)}: {run.get('url')}",
+                )
         status = run.get("status")
         conclusion = run.get("conclusion")
         if status == "completed" and conclusion != "success":
@@ -249,6 +289,7 @@ def fetch_target_metadata(
             artifact_name=artifact_name,
             timeout_seconds=timeout_seconds,
             interval_seconds=interval_seconds,
+            build_job=TARGET_BUILD_JOBS.get(target),
         )
     except ArtifactUnavailableError as exc:
         if not allow_missing_artifact:

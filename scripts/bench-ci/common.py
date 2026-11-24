@@ -14,6 +14,14 @@ TARGET_METADATA_ARTIFACTS = {
     "static": "benchmark-target-static-x86_64-linux",
 }
 
+# The jobs of the pull request workflow that build each target and upload its
+# metadata artifact. Once such a job has finished or was skipped, the run will
+# not produce the artifact anymore.
+TARGET_BUILD_JOBS = {
+    "docker": "Dynamic (x64 Linux)",
+    "static": "Static (x64 Linux)",
+}
+
 TARGET_PACKAGE_ARTIFACTS = {
     "static": "tenzir-static-x86_64-linux",
 }

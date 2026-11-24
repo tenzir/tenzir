@@ -442,19 +442,32 @@ def cmd_compare(args: argparse.Namespace) -> int:
                 or (build.run_id is not None and build.artifact_name is not None)
             )
         ):
-            preflight_build = _to_compare_build(paths, build, materialize_static=False)
-            expected = expected_report_identities(
-                paths, preflight_build, benchmark_dirs
-            )
-            remote_reports = download_reference_reports(
-                destination=build.storage_prefix,
-                benchmarks=args.benchmark,
-                hardware_key=current_hardware_key(),
-            )
-            if filter_missing_reports(expected=expected, remote_reports=remote_reports):
+            if build.version is None:
+                # CI build metadata carries no version, and only the version
+                # tells which reports to expect. Download the build, so that
+                # its binary reports the version and can backfill any reports
+                # the reference lacks.
                 compare_build = _to_compare_build(paths, build, materialize_static=True)
             else:
-                compare_build = preflight_build
+                preflight_build = _to_compare_build(
+                    paths, build, materialize_static=False
+                )
+                expected = expected_report_identities(
+                    paths, preflight_build, benchmark_dirs
+                )
+                remote_reports = download_reference_reports(
+                    destination=build.storage_prefix,
+                    benchmarks=args.benchmark,
+                    hardware_key=current_hardware_key(),
+                )
+                if filter_missing_reports(
+                    expected=expected, remote_reports=remote_reports
+                ):
+                    compare_build = _to_compare_build(
+                        paths, build, materialize_static=True
+                    )
+                else:
+                    compare_build = preflight_build
         else:
             compare_build = _to_compare_build(paths, build, materialize_static=False)
         reports = prepare_compare_reports_for_build(

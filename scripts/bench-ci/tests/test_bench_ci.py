@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import sys
 import tempfile
 from pathlib import Path
@@ -56,11 +57,26 @@ def test_parse_command_uses_defaults_and_target_specific_refs() -> None:
         )
 
     assert parsed["benchmarks"] == ["from_kafka_route53"]
-    assert parsed["targets"] == ["docker", "static"]
+    assert parsed["targets"] == ["static", "docker"]
     assert parsed["refs"] == [
         {"target": "docker", "ref": "main"},
         {"target": "static", "ref": "abc1234"},
     ]
+
+
+def test_parse_command_benchmarks_the_static_target_by_default(
+    tmp_path: Path,
+) -> None:
+    benchmark_dir = tmp_path / "bench" / "benchmarks" / "from_kafka_route53"
+    benchmark_dir.mkdir(parents=True)
+    (benchmark_dir / "bench.yaml").write_text("name: example\n", encoding="utf-8")
+
+    parsed = parse_command(
+        "@tenzir-bot bench benchmarks=from_kafka_route53",
+        root=tmp_path / "bench",
+    )
+
+    assert parsed["targets"] == ["static"]
 
 
 def test_load_build_spec_allows_missing_version(tmp_path: Path) -> None:
@@ -998,3 +1014,96 @@ def test_cmd_compare_materializes_static_only_when_reference_backfill_is_needed(
 
     assert run_benchmarks_module.cmd_compare(args) == 0
     assert materialize_calls == [False]
+
+
+def test_wait_for_artifact_fails_once_the_build_job_was_skipped(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        find_build_run_module, "list_artifacts", lambda repo, run_id: []
+    )
+    monkeypatch.setattr(
+        find_build_run_module,
+        "gh_json",
+        lambda args: {
+            "status": "in_progress",
+            "conclusion": "",
+            "url": "https://example.invalid/run",
+            "jobs": [
+                {
+                    "name": "Dynamic (x64 Linux)",
+                    "status": "completed",
+                    "conclusion": "skipped",
+                },
+                {
+                    "name": "Static (x64 Linux) / Static (x64 Linux)",
+                    "status": "in_progress",
+                    "conclusion": "",
+                },
+            ],
+        },
+    )
+
+    # Without the build job check, this would time out instead.
+    with pytest.raises(
+        find_build_run_module.ArtifactUnavailableError,
+        match=r"`Dynamic \(x64 Linux\)` skipped",
+    ):
+        find_build_run_module.wait_for_artifact(
+            "tenzir/mono",
+            7,
+            artifact_name="benchmark-target-docker-amd64",
+            timeout_seconds=0,
+            interval_seconds=0,
+            build_job="Dynamic (x64 Linux)",
+        )
+
+
+def test_compare_downloads_a_storage_backed_build_without_version(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+    spec = tmp_path / "main.json"
+    spec.write_text(
+        json.dumps(
+            {
+                "label": "main static",
+                "kind": "static",
+                "target": "static",
+                "run_id": 42,
+                "artifact_name": "tenzir-static-x86_64-linux",
+                "storage_prefix": "s3://tenzir-bench-data/runs/refs/main/abc/static",
+            }
+        ),
+        encoding="utf-8",
+    )
+    binary = tmp_path / "download" / "bin" / "tenzir"
+    # Stand in for downloading the artifact and running benchmarks.
+    monkeypatch.setattr(
+        run_benchmarks_module,
+        "_materialize_static_artifact",
+        lambda paths, build: binary,
+    )
+    monkeypatch.setattr(
+        run_benchmarks_module, "resolve_entry", lambda paths, value: Path(value)
+    )
+    compared = []
+
+    def fake_prepare(paths, build, benchmark_dirs, **kwargs):
+        compared.append(build)
+        return {}
+
+    monkeypatch.setattr(
+        run_benchmarks_module, "prepare_compare_reports_for_build", fake_prepare
+    )
+    (tmp_path / "bench" / "benchmarks").mkdir(parents=True)
+    args = argparse.Namespace(
+        bench_root=str(tmp_path / "bench"),
+        build=[str(spec)],
+        benchmark=None,
+        markdown_output=str(tmp_path / "comment.md"),
+    )
+
+    assert run_benchmarks_module.cmd_compare(args) == 0
+    assert [build.binary for build in compared] == [binary]

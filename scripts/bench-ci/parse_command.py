@@ -117,7 +117,7 @@ def resolve_targets(
     targets = (
         [item.strip() for item in value.split(",") if item.strip()]
         if value is not None
-        else ["docker"]
+        else ["static"]
     )
     for selector in refs or []:
         target = selector["target"]
