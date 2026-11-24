@@ -169,6 +169,7 @@ pkgs.mkShell (
     env.TENZIR_TEST_DISABLE_INLINE_DEPENDENCY_INSTALL = 1;
 
     shellHook = ''
+      ${builtins.readFile ./nix/build-tools.sh}
       tenzir_source_dir="$(cd "${sourceSubdir}" && pwd)"
       ccache_s3_dir="/tmp/tenzir-ccache"
       ccache_s3_sock="$ccache_s3_dir/s3.sock"
