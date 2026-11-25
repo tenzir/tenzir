@@ -1,0 +1,6 @@
+error: assertion failure
+ --> tests/operators/join/streaming_right_failure.tql:8:12
+  |
+8 |     assert false
+  |            ^^^^^
+  |

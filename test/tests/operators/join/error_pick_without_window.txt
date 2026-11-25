@@ -1,0 +1,6 @@
+error: `pick` requires `before`, `after`, or `within`
+ --> tests/operators/join/error_pick_without_window.tql:5:15
+  |
+5 | join id, pick="latest" {
+  |               ^^^^^^^^
+  |

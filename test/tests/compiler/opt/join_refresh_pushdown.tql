@@ -1,0 +1,6 @@
+export
+join tenant == org_id, refresh=5m, kind="inner", into=asset {
+  export
+}
+where tenant == "acme" and asset.role == "web"
+select tenant, role=asset.role

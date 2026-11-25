@@ -1,0 +1,12 @@
+every 25ms {
+  from {id: 1}
+}
+join id, refresh=60ms, into=snap {
+  from {id: 1}
+  set snap_ts = now()
+}
+select snap_ts = snap.snap_ts
+deduplicate snap_ts
+head 2
+summarize distinct_snapshots = count()
+select refreshed = distinct_snapshots >= 2

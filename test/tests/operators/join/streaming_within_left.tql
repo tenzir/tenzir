@@ -1,0 +1,9 @@
+from {id: 1, ts: 2026-01-01T10:00:00Z},
+     {id: 2, ts: 2026-01-01T10:01:00Z},
+     {id: null, ts: 2026-01-01T10:02:00Z},
+     {id: 3, ts: null}
+join id, within=5m, on=ts, kind="left", into=r {
+  from {id: 1, ok: true, ts: 2026-01-01T10:02:00Z},
+       {id: 2, ok: false, ts: 2026-01-01T10:10:00Z}
+}
+sort id, ts

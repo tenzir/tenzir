@@ -1,0 +1,9 @@
+// Event-time streaming join keeps both left-side and right-side filters behind
+// join so filtered rows on both legs still advance watermarks, while still
+// pushing projections into both sources.
+export
+join tenant == org_id, within=5m, on=ts, kind="inner", into=asset {
+  export
+}
+where tenant == "acme" and asset.role == "web"
+select tenant, role=asset.role

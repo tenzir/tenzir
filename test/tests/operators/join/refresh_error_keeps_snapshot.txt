@@ -1,0 +1,12 @@
+warning: assertion failure
+ --> tests/operators/join/refresh_error_keeps_snapshot.tql:9:12
+  |
+9 |     assert now() - $start < 500ms
+  |            ~~~~~~~~~~~~~~~~~~~~~~
+  |
+{
+  total: 4,
+  tags: [
+    "initial",
+  ],
+}

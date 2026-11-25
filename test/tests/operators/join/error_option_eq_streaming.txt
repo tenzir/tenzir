@@ -1,0 +1,7 @@
+error: unexpected `==` with option name `within`
+ --> tests/operators/join/error_option_eq_streaming.tql:5:10
+  |
+5 | join id, within == 5m {
+  |          ^^^^^^^^^^^^
+  |
+  = hint: use `=` instead of `==` to pass the `within` option

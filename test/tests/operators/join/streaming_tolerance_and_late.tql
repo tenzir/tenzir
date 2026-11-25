@@ -1,0 +1,8 @@
+// Out-of-order events within tolerance match with zero warnings.
+from {id: 1, ts: 2026-01-01T10:10:00Z},
+     {id: 2, ts: 2026-01-01T10:05:00Z}
+join id, within=2m, on=ts, tolerance=10m, kind="left", into=r {
+  from {id: 1, tag: "r1", ts: 2026-01-01T10:11:00Z},
+       {id: 2, tag: "r2", ts: 2026-01-01T10:04:00Z}
+}
+sort id

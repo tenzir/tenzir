@@ -1,0 +1,14 @@
+warning: `join` refresh exceeded memory limit of 4 KiB
+ --> tests/operators/join/refresh_max_memory_keeps_snapshot.tql:6:36
+  |
+6 | join id, refresh=700ms, max_memory=4Ki, into=snap {
+  |                                    ~~~
+  |
+  = note: keeping the previous snapshot
+  = hint: increase `max_memory` or filter the right-hand pipeline
+{
+  total: 4,
+  lens: [
+    10,
+  ],
+}

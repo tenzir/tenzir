@@ -1,0 +1,6 @@
+export
+join tenant == org_id, within=5m, on=ts, kind="left", into=asset {
+  export
+}
+where tenant == "acme"
+select tenant, role=asset.role?

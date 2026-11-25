@@ -21,8 +21,6 @@
        },
        filter: [
 -        
--      ],
--      order: "ordered"
 +        binary_expr {
 +          left: root_field {
 +            id: `tenant` @ [1]:255..261 from 0,
@@ -53,7 +51,8 @@
 +          right: constant int64 0 @ [1]:292..293 from 0,
 +          location: [1]:276..293 from 0
 +        }
-+      ],
+       ],
+-      order: "ordered"
 +      order: "ordered",
 +      limit: 10,
 +      projection: [
@@ -99,121 +98,123 @@
 +      ]
      },
      join_ir {
-       op: {
-         path: [
-           `join` @ [1]:189..193 from 0
-         ],
-         ref: std::join/op
-       },
-       args: [
-         expression binary_expr {
-           left: root_field {
-             id: `tenant` @ [1]:194..200 from 0,
-             has_question_mark: false
-           },
-           op: "eq",
-           right: root_field {
-             id: `org_id` @ [1]:204..210 from 0,
-             has_question_mark: false
-           },
-           location: [1]:194..210 from 0
-         }
-       ],
-       named_args: [
-         {
-           index: 0,
-           value: located "left" @ [1]:217..223 from 0
+       args: {
+         op: {
+           path: [
+             `join` @ [1]:189..193 from 0
+           ],
+           ref: std::join/op
          },
-         {
-           index: 1,
-           value: field_path {
-             expr: root_field {
-               id: `asset` @ [1]:230..235 from 0,
+         args: [
+           expression binary_expr {
+             left: root_field {
+               id: `tenant` @ [1]:194..200 from 0,
                has_question_mark: false
              },
-             has_this: false,
-             path: [
-               {
+             op: "eq",
+             right: root_field {
+               id: `org_id` @ [1]:204..210 from 0,
+               has_question_mark: false
+             },
+             location: [1]:194..210 from 0
+           }
+         ],
+         named_args: [
+           {
+             index: 0,
+             value: located "left" @ [1]:217..223 from 0
+           },
+           {
+             index: 1,
+             value: field_path {
+               expr: root_field {
                  id: `asset` @ [1]:230..235 from 0,
                  has_question_mark: false
-               }
-             ]
-           }
-         }
-       ],
-       pipeline: {
-         pipeline: {
-           lets: [
-             
-           ],
-           operators: [
-             GenericIr {
-               desc: "export",
-               store: {
-                 op: {
-                   path: [
-                     `export` @ [1]:240..246 from 0
-                   ],
-                   ref: std::export/op
-                 },
-                 args: [
-                   
-                 ],
-                 named_args: [
-                   
-                 ]
                },
-               filter: [
--                
-+                binary_expr {
-+                  left: root_field {
-+                    id: `org_id` @ [1]:204..210 from 0,
-+                    has_question_mark: false
-+                  },
-+                  op: "eq",
-+                  right: constant string "acme" @ [1]:265..271 from 0,
-+                  location: [1]:255..271 from 0
-+                }
-               ],
--              order: "ordered"
-+              order: "ordered",
-+              projection: [
-+                {
-+                  expr: root_field {
-+                    id: `role` @ [1]:316..320 from 0,
-+                    has_question_mark: true
-+                  },
-+                  has_this: false,
-+                  path: [
-+                    {
-+                      id: `role` @ [1]:316..320 from 0,
-+                      has_question_mark: true
-+                    }
-+                  ]
-+                },
-+                {
-+                  expr: root_field {
-+                    id: `org_id` @ [1]:204..210 from 0,
-+                    has_question_mark: false
-+                  },
-+                  has_this: false,
-+                  path: [
-+                    {
+               has_this: false,
+               path: [
+                 {
+                   id: `asset` @ [1]:230..235 from 0,
+                   has_question_mark: false
+                 }
+               ]
+             }
+           }
+         ],
+         pipeline: {
+           pipeline: {
+             lets: [
+               
+             ],
+             operators: [
+               GenericIr {
+                 desc: "export",
+                 store: {
+                   op: {
+                     path: [
+                       `export` @ [1]:240..246 from 0
+                     ],
+                     ref: std::export/op
+                   },
+                   args: [
+                     
+                   ],
+                   named_args: [
+                     
+                   ]
+                 },
+                 filter: [
+-                  
++                  binary_expr {
++                    left: root_field {
 +                      id: `org_id` @ [1]:204..210 from 0,
 +                      has_question_mark: false
-+                    }
-+                  ]
-+                }
-+              ]
-             }
-           ],
-           definition_location: [1]:240..246 from 0
-         } @ [1]:236..248 from 0,
-         let_ids: {
-           
++                    },
++                    op: "eq",
++                    right: constant string "acme" @ [1]:265..271 from 0,
++                    location: [1]:255..271 from 0
++                  }
+                 ],
+-                order: "ordered"
++                order: "ordered",
++                projection: [
++                  {
++                    expr: root_field {
++                      id: `role` @ [1]:316..320 from 0,
++                      has_question_mark: true
++                    },
++                    has_this: false,
++                    path: [
++                      {
++                        id: `role` @ [1]:316..320 from 0,
++                        has_question_mark: true
++                      }
++                    ]
++                  },
++                  {
++                    expr: root_field {
++                      id: `org_id` @ [1]:204..210 from 0,
++                      has_question_mark: false
++                    },
++                    has_this: false,
++                    path: [
++                      {
++                        id: `org_id` @ [1]:204..210 from 0,
++                        has_question_mark: false
++                      }
++                    ]
++                  }
++                ]
+               }
+             ],
+             definition_location: [1]:240..246 from 0
+           } @ [1]:236..248 from 0,
+           let_ids: {
+             
+           }
          }
        }
--    },
+     },
 -    where_ir {
 -      op: {
 -        path: [
@@ -260,7 +261,7 @@
 -      named_args: [
 -        
 -      ]
-     },
+-    },
      SetIr {
        assignments: [
          {
@@ -315,15 +316,15 @@
          },
          args: [
            located 10 @ [1]:327..329 from 0
-         ],
-         named_args: [
-           
-         ]
-       },
-       filter: [
-         
-       ],
-       order: "ordered"
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
 +    },
 +    GenericIr {
 +      desc: "to_stdout",
@@ -336,15 +337,15 @@
 +        },
 +        args: [
 +          
-+        ],
-+        named_args: [
-+          
-+        ]
-+      },
-+      filter: [
-+        
-+      ],
-+      order: "ordered"
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
      }
    ],
    definition_location: [1]:182..329 from 0

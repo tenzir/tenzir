@@ -1,0 +1,20 @@
+// Event-time eviction must reclaim matched and expired state as both streams
+// advance. There is no cross-stream flow control, so when one side runs ahead
+// of the other, that side stays buffered until the other watermark catches up.
+// The limit therefore covers one fully buffered side (~500 KiB) with headroom,
+// regardless of left/right scheduling order.
+from {i: 0}
+repeat 500
+enumerate n
+set ts = 2026-01-01T00:00:00Z + n * 1m
+set payload = "x".repeat(350)
+batch 10
+join n, before=1m, after=0s, on=ts, max_memory=1Mi, into=r {
+  from {i: 0}
+  repeat 500
+  enumerate n
+  set ts = 2026-01-01T00:00:00Z + n * 1m
+  set rpayload = "y".repeat(350)
+  batch 10
+}
+summarize count=count()

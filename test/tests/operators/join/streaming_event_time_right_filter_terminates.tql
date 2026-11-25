@@ -1,0 +1,10 @@
+// Event-time inner join with a post-join right filter must NOT push the right
+// filter into the right source, so non-matching right rows still advance the
+// right watermark and allow the infinite right source to terminate cleanly.
+from {id: 1, ts: 2026-01-01T10:00:00Z}
+join id, before=5s, after=0s, on=ts, into=asset {
+  every 10ms {
+    from {id: 1, role: "db", ts: 2026-01-01T10:05:00Z}
+  }
+}
+where asset.role == "web"

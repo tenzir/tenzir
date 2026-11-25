@@ -1,0 +1,7 @@
+from {id: 1}, {id: 2}
+join id, within=250ms, kind="left", into=r {
+  every 10s {
+    from {id: 1, tag: "ok"}
+  }
+}
+sort id

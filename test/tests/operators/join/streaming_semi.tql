@@ -1,0 +1,11 @@
+// Semi emits each matching left row at most once even with multiple right matches.
+from {id: 1, ts: 2026-01-01T10:00:00Z},
+     {id: 2, ts: 2026-01-01T10:00:00Z},
+     {id: 3, ts: 2026-01-01T10:00:00Z},
+     {id: null, ts: 2026-01-01T10:00:00Z}
+join id, within=5m, on=ts, kind="semi" {
+  from {id: 1, ts: 2026-01-01T10:00:00Z},
+       {id: 1, ts: 2026-01-01T10:02:00Z},
+       {id: 2, ts: 2026-01-01T10:06:00Z}
+}
+sort id

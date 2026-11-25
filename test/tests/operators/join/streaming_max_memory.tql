@@ -1,0 +1,11 @@
+---
+error: true
+---
+every 10ms {
+  from {id: 1, ts: 2026-01-01T10:00:00Z, pad: "a".repeat(2000)}
+}
+join id, within=1h, on=ts, max_memory=1Ki {
+  every 10ms {
+    from {id: 1, ts: 2026-01-01T10:00:00Z, pad: "b".repeat(2000)}
+  }
+}

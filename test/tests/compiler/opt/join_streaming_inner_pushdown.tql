@@ -1,0 +1,8 @@
+// Processing-time inner streaming join pushes right filters and equivalence
+// predicates because watermarks advance via wall-clock timers, not right rows.
+export
+join tenant == org_id, within=5m, kind="inner", into=asset {
+  export
+}
+where tenant == "acme" and asset.role == "web"
+select tenant, role=asset.role

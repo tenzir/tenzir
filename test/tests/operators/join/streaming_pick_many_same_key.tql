@@ -1,0 +1,15 @@
+// Many same-key right rows in a single batch improving many open left rows
+// under `pick="latest"` must keep staging memory O(left_rows), not
+// O(right_rows * left_rows), and pick the single latest right row for each left.
+from {k: 1, ts: 2026-01-01T10:20:00Z}
+repeat 500
+enumerate l
+batch 500
+join k, before=25m, on=ts, pick="latest", max_memory=256Ki, into=r {
+  from {k: 1}
+  repeat 1000
+  enumerate r
+  set ts = 2026-01-01T10:00:00Z + r * 1s
+  batch 1000
+}
+summarize total = count(), min_r = min(r.r), max_r = max(r.r)

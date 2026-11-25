@@ -1,0 +1,3 @@
+{
+  swapped_to_empty: true,
+}

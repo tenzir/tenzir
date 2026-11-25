@@ -1,0 +1,12 @@
+let $start = now()
+every 350ms {
+  from {id: 1}
+}
+head 4
+join id, refresh=700ms, into=snap {
+  strict {
+    from {id: 1, tag: "initial"}
+    assert now() - $start < 500ms
+  }
+}
+summarize total = count(), tags = distinct(snap.tag)

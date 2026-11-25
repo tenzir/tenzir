@@ -1,0 +1,7 @@
+---
+error: true
+---
+from {id: 1, ts: 2026-01-01T00:00:00Z}
+join id, on=ts {
+  from {id: 1, ts: 2026-01-01T00:00:00Z}
+}

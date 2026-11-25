@@ -1,0 +1,11 @@
+// Streaming N:M fan-out exceeding output_chunk_rows (16,384) drains
+// incrementally in bounded chunks without losing or duplicating matches.
+from {k: 1, ts: 2026-01-01T10:00:00Z}
+repeat 200
+enumerate l
+join k, within=1m, on=ts, into=r {
+  from {k: 1, ts: 2026-01-01T10:00:00Z}
+  repeat 200
+  enumerate r
+}
+summarize total = count(), min_l = min(l), max_l = max(l), min_r = min(r.r), max_r = max(r.r)

@@ -1,0 +1,13 @@
+let $start = now()
+every 25ms {
+  from {id: 1}
+}
+join id, refresh=700ms, kind="left", into=snap {
+  from {id: 1, tag: "initial"}
+  where now() - $start < 600ms
+}
+select has_snap = snap != null
+deduplicate has_snap
+head 2
+summarize transitions = count(), saw_match = any(has_snap), saw_empty = any(not has_snap)
+select swapped_to_empty = (transitions == 2 and saw_match and saw_empty)

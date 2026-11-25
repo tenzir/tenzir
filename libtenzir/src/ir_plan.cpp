@@ -147,9 +147,15 @@ auto ir::instantiate(pipeline pipe, base_ctx ctx) -> failure_or<pipeline> {
   return pipe;
 }
 
-auto ir::optimize(pipeline pipe, OptimizeCtx octx) -> pipeline {
+auto ir::optimize(pipeline pipe, OptimizeCtx octx,
+                  Option<OptimizeProjection> projection) -> pipeline {
   TENZIR_ASSERT(pipe.lets.empty());
-  auto request = OptimizeRequest{.filter = {}, .order = EventOrder::ordered};
+  auto request = OptimizeRequest{
+    .filter = {},
+    .order = EventOrder::ordered,
+    .limit = None{},
+    .projection = std::move(projection),
+  };
   auto opt = std::move(pipe).optimize(std::move(request), octx);
   TENZIR_ASSERT(opt.replacement.lets.empty());
   pipe = std::move(opt.replacement);
@@ -160,13 +166,15 @@ auto ir::optimize(pipeline pipe, OptimizeCtx octx) -> pipeline {
 }
 
 auto ir::make_plan(pipeline pipe, element_type_tag input, base_ctx ctx,
-                   Parallelism parallelism) -> failure_or<Plan> {
+                   Parallelism parallelism,
+                   Option<OptimizeProjection> projection) -> failure_or<Plan> {
   TRY(pipe, instantiate(std::move(pipe), ctx));
-  pipe
-    = optimize(std::move(pipe), OptimizeCtx{
-                                  .reg = ctx.reg(),
-                                  .can_any_op_reorder = parallelism.degree > 1,
-                                });
+  pipe = optimize(std::move(pipe),
+                  OptimizeCtx{
+                    .reg = ctx.reg(),
+                    .can_any_op_reorder = parallelism.degree > 1,
+                  },
+                  std::move(projection));
   // construct plan
   auto plan = Plan{};
   plan.definition_location = pipe.definition_location;

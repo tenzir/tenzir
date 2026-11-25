@@ -64,118 +64,120 @@
 +      ]
      },
      join_ir {
-       op: {
-         path: [
-           `join` @ [1]:153..157 from 0
-         ],
-         ref: std::join/op
-       },
-       args: [
-         expression binary_expr {
-           left: root_field {
-             id: `id` @ [1]:158..160 from 0,
-             has_question_mark: false
-           },
-           op: "eq",
-           right: root_field {
-             id: `uid` @ [1]:164..167 from 0,
-             has_question_mark: false
-           },
-           location: [1]:158..167 from 0
-         }
-       ],
-       named_args: [
-         {
-           index: 1,
-           value: field_path {
-             expr: root_field {
-               id: `r` @ [1]:174..175 from 0,
+       args: {
+         op: {
+           path: [
+             `join` @ [1]:153..157 from 0
+           ],
+           ref: std::join/op
+         },
+         args: [
+           expression binary_expr {
+             left: root_field {
+               id: `id` @ [1]:158..160 from 0,
                has_question_mark: false
              },
-             has_this: false,
-             path: [
-               {
+             op: "eq",
+             right: root_field {
+               id: `uid` @ [1]:164..167 from 0,
+               has_question_mark: false
+             },
+             location: [1]:158..167 from 0
+           }
+         ],
+         named_args: [
+           {
+             index: 1,
+             value: field_path {
+               expr: root_field {
                  id: `r` @ [1]:174..175 from 0,
                  has_question_mark: false
-               }
-             ]
+               },
+               has_this: false,
+               path: [
+                 {
+                   id: `r` @ [1]:174..175 from 0,
+                   has_question_mark: false
+                 }
+               ]
+             }
            }
-         }
-       ],
-       pipeline: {
+         ],
          pipeline: {
-           lets: [
-             
-           ],
-           operators: [
-             GenericIr {
-               desc: "export",
-               store: {
-                 op: {
-                   path: [
-                     `export` @ [1]:180..186 from 0
+           pipeline: {
+             lets: [
+               
+             ],
+             operators: [
+               GenericIr {
+                 desc: "export",
+                 store: {
+                   op: {
+                     path: [
+                       `export` @ [1]:180..186 from 0
+                     ],
+                     ref: std::export/op
+                   },
+                   args: [
+                     
                    ],
-                   ref: std::export/op
+                   named_args: [
+                     
+                   ]
                  },
-                 args: [
+                 filter: [
                    
                  ],
-                 named_args: [
-                   
-                 ]
-               },
-               filter: [
-                 
-               ],
--              order: "ordered"
-+              order: "ordered",
-+              projection: [
-+                {
-+                  expr: root_field {
-+                    id: `v` @ [1]:281..282 from 0,
-+                    has_question_mark: false
-+                  },
-+                  has_this: false,
-+                  path: [
-+                    {
+-                order: "ordered"
++                order: "ordered",
++                projection: [
++                  {
++                    expr: root_field {
 +                      id: `v` @ [1]:281..282 from 0,
 +                      has_question_mark: false
-+                    }
-+                  ]
-+                },
-+                {
-+                  expr: root_field {
-+                    id: `right_raw` @ [1]:246..255 from 0,
-+                    has_question_mark: false
++                    },
++                    has_this: false,
++                    path: [
++                      {
++                        id: `v` @ [1]:281..282 from 0,
++                        has_question_mark: false
++                      }
++                    ]
 +                  },
-+                  has_this: false,
-+                  path: [
-+                    {
++                  {
++                    expr: root_field {
 +                      id: `right_raw` @ [1]:246..255 from 0,
 +                      has_question_mark: false
-+                    }
-+                  ]
-+                },
-+                {
-+                  expr: root_field {
-+                    id: `uid` @ [1]:164..167 from 0,
-+                    has_question_mark: false
++                    },
++                    has_this: false,
++                    path: [
++                      {
++                        id: `right_raw` @ [1]:246..255 from 0,
++                        has_question_mark: false
++                      }
++                    ]
 +                  },
-+                  has_this: false,
-+                  path: [
-+                    {
++                  {
++                    expr: root_field {
 +                      id: `uid` @ [1]:164..167 from 0,
 +                      has_question_mark: false
-+                    }
-+                  ]
-+                }
-+              ]
-             }
-           ],
-           definition_location: [1]:180..186 from 0
-         } @ [1]:176..188 from 0,
-         let_ids: {
-           
++                    },
++                    has_this: false,
++                    path: [
++                      {
++                        id: `uid` @ [1]:164..167 from 0,
++                        has_question_mark: false
++                      }
++                    ]
++                  }
++                ]
+               }
+             ],
+             definition_location: [1]:180..186 from 0
+           } @ [1]:176..188 from 0,
+           let_ids: {
+             
+           }
          }
        }
      },
@@ -200,14 +202,7 @@
 -              op: "eq",
 -              right: constant string "left.event" @ [1]:204..216 from 0,
 -              location: [1]:195..216 from 0
-+        Incomplete binary_expr {
-+          left: function_call {
-+            fn: {
-+              path: [
-+                `int` @ [1]:230..233 from 0
-+              ],
-+              ref: std::int/fn
-             },
+-            },
 -            op: "and_",
 -            right: binary_expr {
 -              left: function_call {
@@ -216,6 +211,14 @@
 -                    `int` @ [1]:230..233 from 0
 -                  ],
 -                  ref: std::int/fn
++        Incomplete binary_expr {
++          left: function_call {
++            fn: {
++              path: [
++                `int` @ [1]:230..233 from 0
++              ],
++              ref: std::int/fn
++            },
 +            args: [
 +              root_field {
 +                id: `left_raw` @ [1]:221..229 from 0,

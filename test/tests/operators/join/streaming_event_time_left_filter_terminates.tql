@@ -1,0 +1,10 @@
+// Event-time streaming join keeps left-side predicates behind join so
+// non-matching left rows still advance left_watermark_, allowing expired right
+// rows to evict and an inner join with a finished right source to terminate.
+every 10ms {
+  from {tenant: "other", id: 2, ts: 2026-01-01T10:10:00Z}
+}
+join id, before=5s, after=0s, on=ts, into=asset {
+  from {id: 1, role: "web", ts: 2026-01-01T10:00:00Z}
+}
+where tenant == "acme"

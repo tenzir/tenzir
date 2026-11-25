@@ -989,7 +989,12 @@ auto instantiate(pipeline pipe, base_ctx ctx) -> failure_or<pipeline>;
 /// predicate pushdown and operator elision. Any filter left over after
 /// optimization is reinserted as leading `where` operators. Expects the
 /// pipeline to be instantiated, i.e., to have no remaining `let` bindings.
-auto optimize(pipeline pipe, OptimizeCtx octx) -> pipeline;
+///
+/// `projection` is an optional hint naming the only output fields the consumer
+/// of the pipeline reads, as in `OptimizeRequest::projection`. `None` means the
+/// consumer may read every field.
+auto optimize(pipeline pipe, OptimizeCtx octx,
+              Option<OptimizeProjection> projection = None{}) -> pipeline;
 
 /// A digest of what a compiled pipeline does and what its diagnostics show,
 /// the same for two compiles of one definition against the same entities.
@@ -1011,9 +1016,10 @@ auto fingerprint(pipeline const& pipe, SourceMap const& sources) -> std::string;
 /// non-deterministic arguments), optimizes it, threads element types starting
 /// from `input`, and records one node per operator with its parallelism and
 /// partition keys. The operators are not spawned yet; spawning is deferred to
-/// the executor.
+/// the executor. `projection` is forwarded to `optimize`.
 auto make_plan(pipeline pipe, element_type_tag input, base_ctx ctx,
-               Parallelism parallelism = parallelism::disabled)
+               Parallelism parallelism = parallelism::disabled,
+               Option<OptimizeProjection> projection = None{})
   -> failure_or<Plan>;
 
 /// Incrementally builds a `Plan` while lowering a pipeline. Operators receive

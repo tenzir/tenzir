@@ -1,0 +1,11 @@
+// A `refresh=` join plans its right-hand subpipeline anew on every reload.
+// That planning must still receive the downstream projection, so that
+// `read_json` skips the unused `payload` field. Without it, the ~32 KiB of
+// payload alone would exceed the 16 KiB limit.
+from {id: 1}, {id: 7}
+join id, refresh=1h, max_memory=16Ki, into=r {
+  from_file f"{env("TENZIR_INPUTS")}/json/join-wide-payload.ndjson" {
+    read_json
+  }
+}
+select id, host=r.host

@@ -1,0 +1,9 @@
+let $start = now()
+every 350ms {
+  from {id: 1}
+}
+head 4
+join id, refresh=700ms, max_memory=4Ki, into=snap {
+  from {id: 1, pad: "x".repeat(10 if now() - $start < 500ms else 8000)}
+}
+summarize total = count(), lens = distinct(snap.pad.length_bytes())

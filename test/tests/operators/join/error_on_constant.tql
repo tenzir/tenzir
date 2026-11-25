@@ -1,0 +1,7 @@
+---
+error: true
+---
+from {id: 1}
+join id, within=5m, on=2026-01-01T00:00:00Z {
+  from {id: 1}
+}

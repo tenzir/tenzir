@@ -1,0 +1,6 @@
+error: `idle_timeout` requires `on`
+ --> tests/operators/join/error_idle_timeout_without_on.tql:5:34
+  |
+5 | join id, within=5m, idle_timeout=30s {
+  |                                  ^^^
+  |

@@ -1,0 +1,9 @@
+// Late left row behind watermark warns once and is still emitted in kind="left".
+from {id: 1, ts: 2026-01-01T10:20:00Z},
+     {id: 2, ts: 2026-01-01T10:05:00Z}
+batch 1
+join id, before=1m, on=ts, kind="left", into=r {
+  from {id: 1, ok: true, ts: 2026-01-01T10:19:30Z}
+}
+sort id
+select id, ok=r.ok?

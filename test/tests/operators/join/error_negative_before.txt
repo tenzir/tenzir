@@ -1,0 +1,6 @@
+error: `before` cannot be negative
+ --> tests/operators/join/error_negative_before.tql:5:17
+  |
+5 | join id, before=-5s {
+  |                 ^^^
+  |

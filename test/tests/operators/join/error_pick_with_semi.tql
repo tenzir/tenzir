@@ -1,0 +1,7 @@
+---
+error: true
+---
+from {id: 1}
+join id, within=5m, kind="semi", pick="latest" {
+  from {id: 1}
+}

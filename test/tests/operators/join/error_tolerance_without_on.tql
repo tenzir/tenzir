@@ -1,0 +1,7 @@
+---
+error: true
+---
+from {id: 1}
+join id, within=5m, tolerance=30s {
+  from {id: 1}
+}

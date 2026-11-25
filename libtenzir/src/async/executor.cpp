@@ -278,6 +278,9 @@ struct SubPipeline {
   bool from_sub_done = false;
   /// Set when process(SubMessage) observes the to_control channel drain.
   bool to_control_done = false;
+  /// Set by `SubHandle::cancel()`. A cancelled subpipeline always completes
+  /// through the `failure` overload of `finish_sub`, never as a clean EOF.
+  bool cancelled = false;
   /// Handle that is given out to the operator implementation.
   AnySubHandle handle;
 };
@@ -306,6 +309,19 @@ auto SubHandle<Input>::close() -> Task<void>
   co_return;
 }
 
+template <class Input>
+auto SubHandle<Input>::cancel() -> Task<void> {
+  self_.cancelled = true;
+  self_.closed_data = true;
+  self_.push = None{};
+  if (self_.from_control_sender) {
+    co_await self_.from_control_sender->send(HardStop{});
+    self_.from_control_sender = None{};
+  }
+  co_return;
+}
+
+template class SubHandle<void>;
 template class SubHandle<chunk_ptr>;
 template class SubHandle<table_slice>;
 template class SubHandle<nova::Events>;
@@ -1672,10 +1688,15 @@ private:
         co_return;
       }
       auto sub_failure = sub.sub_dh->failure();
+      auto const cancelled = sub.cancelled;
       subpipelines_.erase(it);
       if (phase_ != Phase::stopping_forced) {
         if (sub_failure.is_error()) {
           co_await call_finish_sub(make_view(message.key), sub_failure.error());
+        } else if (cancelled) {
+          // A cancelled subpipeline may drain both channels just like a clean
+          // EOF. Never report it as a successful completion.
+          co_await call_finish_sub(make_view(message.key), failure::promise());
         } else {
           co_await call_finish_sub(make_view(message.key));
         }

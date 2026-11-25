@@ -1,0 +1,10 @@
+error: `refresh` cannot be combined with `within`
+ --> tests/operators/join/error_refresh_with_within.tql:5:29
+  |
+5 | join id, refresh=5m, within=1m {
+  |                             ^^
+  ⋮
+5 | join id, refresh=5m, within=1m {
+  |                  -- `refresh` specified here
+  |
+  = note: `refresh` selects periodic snapshot mode, but `within` only applies to streaming windowed mode

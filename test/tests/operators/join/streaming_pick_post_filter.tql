@@ -1,0 +1,13 @@
+// Post-join filter on picked right field must NOT be pushed into the right leg:
+// latest match for id=1 has role="db", so downstream where asset.role == "web"
+// must drop id=1 instead of falling back to the older role="web" row.
+from {id: 1, ts: 2026-01-01T10:10:00Z},
+     {id: 2, ts: 2026-01-01T10:10:00Z}
+join id, before=10m, on=ts, pick="latest", into=asset {
+  from {id: 1, role: "web", ts: 2026-01-01T10:01:00Z},
+       {id: 2, role: "db",  ts: 2026-01-01T10:01:00Z},
+       {id: 1, role: "db",  ts: 2026-01-01T10:09:00Z},
+       {id: 2, role: "web", ts: 2026-01-01T10:09:00Z}
+}
+where asset.role == "web"
+select id, role=asset.role

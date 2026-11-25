@@ -86,117 +86,119 @@
 +      ]
      },
      join_ir {
-       op: {
-         path: [
-           `join` @ [1]:207..211 from 0
-         ],
-         ref: std::join/op
-       },
-       args: [
-         expression binary_expr {
-           left: root_field {
-             id: `tenant` @ [1]:212..218 from 0,
-             has_question_mark: false
-           },
-           op: "eq",
-           right: root_field {
-             id: `org_id` @ [1]:222..228 from 0,
-             has_question_mark: false
-           },
-           location: [1]:212..228 from 0
-         },
-         expression binary_expr {
-           left: root_field {
-             id: `src_ip` @ [1]:230..236 from 0,
-             has_question_mark: false
-           },
-           op: "eq",
-           right: root_field {
-             id: `host_ip` @ [1]:240..247 from 0,
-             has_question_mark: false
-           },
-           location: [1]:230..247 from 0
-         }
-       ],
-       named_args: [
-         {
-           index: 0,
-           value: located "semi" @ [1]:254..260 from 0
-         }
-       ],
-       pipeline: {
-         pipeline: {
-           lets: [
-             
+       args: {
+         op: {
+           path: [
+             `join` @ [1]:207..211 from 0
            ],
-           operators: [
-             GenericIr {
-               desc: "export",
-               store: {
-                 op: {
-                   path: [
-                     `export` @ [1]:265..271 from 0
+           ref: std::join/op
+         },
+         args: [
+           expression binary_expr {
+             left: root_field {
+               id: `tenant` @ [1]:212..218 from 0,
+               has_question_mark: false
+             },
+             op: "eq",
+             right: root_field {
+               id: `org_id` @ [1]:222..228 from 0,
+               has_question_mark: false
+             },
+             location: [1]:212..228 from 0
+           },
+           expression binary_expr {
+             left: root_field {
+               id: `src_ip` @ [1]:230..236 from 0,
+               has_question_mark: false
+             },
+             op: "eq",
+             right: root_field {
+               id: `host_ip` @ [1]:240..247 from 0,
+               has_question_mark: false
+             },
+             location: [1]:230..247 from 0
+           }
+         ],
+         named_args: [
+           {
+             index: 0,
+             value: located "semi" @ [1]:254..260 from 0
+           }
+         ],
+         pipeline: {
+           pipeline: {
+             lets: [
+               
+             ],
+             operators: [
+               GenericIr {
+                 desc: "export",
+                 store: {
+                   op: {
+                     path: [
+                       `export` @ [1]:265..271 from 0
+                     ],
+                     ref: std::export/op
+                   },
+                   args: [
+                     
                    ],
-                   ref: std::export/op
+                   named_args: [
+                     
+                   ]
                  },
-                 args: [
-                   
-                 ],
-                 named_args: [
-                   
-                 ]
-               },
-               filter: [
--                
-+                binary_expr {
-+                  left: root_field {
-+                    id: `org_id` @ [1]:222..228 from 0,
-+                    has_question_mark: false
-+                  },
-+                  op: "eq",
-+                  right: constant string "acme" @ [1]:290..296 from 0,
-+                  location: [1]:280..296 from 0
-+                }
-               ],
--              order: "ordered"
-+              order: "unordered",
-+              projection: [
-+                {
-+                  expr: root_field {
-+                    id: `org_id` @ [1]:222..228 from 0,
-+                    has_question_mark: false
-+                  },
-+                  has_this: false,
-+                  path: [
-+                    {
+                 filter: [
+-                  
++                  binary_expr {
++                    left: root_field {
 +                      id: `org_id` @ [1]:222..228 from 0,
 +                      has_question_mark: false
-+                    }
-+                  ]
-+                },
-+                {
-+                  expr: root_field {
-+                    id: `host_ip` @ [1]:240..247 from 0,
-+                    has_question_mark: false
++                    },
++                    op: "eq",
++                    right: constant string "acme" @ [1]:290..296 from 0,
++                    location: [1]:280..296 from 0
++                  }
+                 ],
+-                order: "ordered"
++                order: "unordered",
++                projection: [
++                  {
++                    expr: root_field {
++                      id: `org_id` @ [1]:222..228 from 0,
++                      has_question_mark: false
++                    },
++                    has_this: false,
++                    path: [
++                      {
++                        id: `org_id` @ [1]:222..228 from 0,
++                        has_question_mark: false
++                      }
++                    ]
 +                  },
-+                  has_this: false,
-+                  path: [
-+                    {
++                  {
++                    expr: root_field {
 +                      id: `host_ip` @ [1]:240..247 from 0,
 +                      has_question_mark: false
-+                    }
-+                  ]
-+                }
-+              ]
-             }
-           ],
-           definition_location: [1]:265..271 from 0
-         } @ [1]:261..273 from 0,
-         let_ids: {
-           
++                    },
++                    has_this: false,
++                    path: [
++                      {
++                        id: `host_ip` @ [1]:240..247 from 0,
++                        has_question_mark: false
++                      }
++                    ]
++                  }
++                ]
+               }
+             ],
+             definition_location: [1]:265..271 from 0
+           } @ [1]:261..273 from 0,
+           let_ids: {
+             
+           }
          }
        }
--    },
+     },
 -    where_ir {
 -      op: {
 -        path: [
@@ -231,7 +233,7 @@
 -      named_args: [
 -        
 -      ]
-     },
+-    },
      SetIr {
        assignments: [
          {

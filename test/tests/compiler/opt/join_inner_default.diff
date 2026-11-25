@@ -77,112 +77,114 @@
 +      ]
      },
      join_ir {
-       op: {
-         path: [
-           `join` @ [1]:204..208 from 0
-         ],
-         ref: std::join/op
-       },
-       args: [
-         expression binary_expr {
-           left: root_field {
-             id: `id` @ [1]:209..211 from 0,
-             has_question_mark: false
-           },
-           op: "eq",
-           right: root_field {
-             id: `uid` @ [1]:215..218 from 0,
-             has_question_mark: false
-           },
-           location: [1]:209..218 from 0
-         }
-       ],
-       named_args: [
-         
-       ],
-       pipeline: {
-         pipeline: {
-           lets: [
-             
+       args: {
+         op: {
+           path: [
+             `join` @ [1]:204..208 from 0
            ],
-           operators: [
-             GenericIr {
-               desc: "export",
-               store: {
-                 op: {
-                   path: [
-                     `export` @ [1]:223..229 from 0
+           ref: std::join/op
+         },
+         args: [
+           expression binary_expr {
+             left: root_field {
+               id: `id` @ [1]:209..211 from 0,
+               has_question_mark: false
+             },
+             op: "eq",
+             right: root_field {
+               id: `uid` @ [1]:215..218 from 0,
+               has_question_mark: false
+             },
+             location: [1]:209..218 from 0
+           }
+         ],
+         named_args: [
+           
+         ],
+         pipeline: {
+           pipeline: {
+             lets: [
+               
+             ],
+             operators: [
+               GenericIr {
+                 desc: "export",
+                 store: {
+                   op: {
+                     path: [
+                       `export` @ [1]:223..229 from 0
+                     ],
+                     ref: std::export/op
+                   },
+                   args: [
+                     
                    ],
-                   ref: std::export/op
+                   named_args: [
+                     
+                   ]
                  },
-                 args: [
-                   
+                 filter: [
+-                  
++                  binary_expr {
++                    left: root_field {
++                      id: `tag` @ [1]:265..268 from 0,
++                      has_question_mark: false
++                    },
++                    op: "eq",
++                    right: constant string "high" @ [1]:272..278 from 0,
++                    location: [1]:259..278 from 0
++                  }
                  ],
-                 named_args: [
-                   
-                 ]
-               },
-               filter: [
--                
-+                binary_expr {
-+                  left: root_field {
-+                    id: `tag` @ [1]:265..268 from 0,
-+                    has_question_mark: false
-+                  },
-+                  op: "eq",
-+                  right: constant string "high" @ [1]:272..278 from 0,
-+                  location: [1]:259..278 from 0
-+                }
-               ],
--              order: "ordered"
-+              order: "ordered",
-+              projection: [
-+                {
-+                  expr: root_field {
-+                    id: `tag` @ [1]:336..339 from 0,
-+                    has_question_mark: false
-+                  },
-+                  has_this: false,
-+                  path: [
-+                    {
+-                order: "ordered"
++                order: "ordered",
++                projection: [
++                  {
++                    expr: root_field {
 +                      id: `tag` @ [1]:336..339 from 0,
 +                      has_question_mark: false
-+                    }
-+                  ]
-+                },
-+                {
-+                  expr: root_field {
-+                    id: `y` @ [1]:299..300 from 0,
-+                    has_question_mark: false
++                    },
++                    has_this: false,
++                    path: [
++                      {
++                        id: `tag` @ [1]:336..339 from 0,
++                        has_question_mark: false
++                      }
++                    ]
 +                  },
-+                  has_this: false,
-+                  path: [
-+                    {
++                  {
++                    expr: root_field {
 +                      id: `y` @ [1]:299..300 from 0,
 +                      has_question_mark: false
-+                    }
-+                  ]
-+                },
-+                {
-+                  expr: root_field {
-+                    id: `uid` @ [1]:215..218 from 0,
-+                    has_question_mark: false
++                    },
++                    has_this: false,
++                    path: [
++                      {
++                        id: `y` @ [1]:299..300 from 0,
++                        has_question_mark: false
++                      }
++                    ]
 +                  },
-+                  has_this: false,
-+                  path: [
-+                    {
++                  {
++                    expr: root_field {
 +                      id: `uid` @ [1]:215..218 from 0,
 +                      has_question_mark: false
-+                    }
-+                  ]
-+                }
-+              ]
-             }
-           ],
-           definition_location: [1]:223..229 from 0
-         } @ [1]:219..231 from 0,
-         let_ids: {
-           
++                    },
++                    has_this: false,
++                    path: [
++                      {
++                        id: `uid` @ [1]:215..218 from 0,
++                        has_question_mark: false
++                      }
++                    ]
++                  }
++                ]
+               }
+             ],
+             definition_location: [1]:223..229 from 0
+           } @ [1]:219..231 from 0,
+           let_ids: {
+             
+           }
          }
        }
      },

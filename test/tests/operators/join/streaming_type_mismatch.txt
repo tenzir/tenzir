@@ -1,0 +1,7 @@
+warning: `join` matched no events due to incompatible key types
+ --> tests/operators/join/streaming_type_mismatch.tql:2:6
+  |
+2 | join id, within=5m, on=ts {
+  |      ~~
+  |
+  = note: input key has type number, source key has type string

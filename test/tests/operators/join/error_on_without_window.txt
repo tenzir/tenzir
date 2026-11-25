@@ -1,0 +1,6 @@
+error: `on` requires `before`, `after`, or `within`
+ --> tests/operators/join/error_on_without_window.tql:5:13
+  |
+5 | join id, on=ts {
+  |             ^^
+  |

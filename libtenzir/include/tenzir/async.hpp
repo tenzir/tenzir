@@ -107,6 +107,18 @@ public:
   auto close() -> Task<void>
     requires(not std::same_as<Input, void>);
 
+  /// Immediately stops the subpipeline by sending `HardStop`.
+  ///
+  /// A cancelled subpipeline always completes through the `failure` overload
+  /// of `finish_sub`, never through the success overload, so callers cannot
+  /// mistake a cancellation for a clean end of input. The failure carries the
+  /// subpipeline's own error if it emitted one, and is a bare
+  /// `failure::promise()` otherwise. Operators that call `cancel()` must
+  /// override the `failure` overload, because its default implementation
+  /// forwards to the success overload. Calling `cancel()` more than once is a
+  /// no-op.
+  auto cancel() -> Task<void>;
+
 private:
   SubPipeline& self_;
 };

@@ -1,0 +1,9 @@
+from {ip: "10.0.0.1", flow_ts: 2026-01-01T10:10:00Z}
+join ip, before=10m, after=2m, on=flow_ts == lease_ts, into=lease {
+  from {ip: "10.0.0.1", label: "too_old",  lease_ts: 2026-01-01T09:59:59Z},
+       {ip: "10.0.0.1", label: "at_lo",    lease_ts: 2026-01-01T10:00:00Z},
+       {ip: "10.0.0.1", label: "at_now",   lease_ts: 2026-01-01T10:10:00Z},
+       {ip: "10.0.0.1", label: "at_hi",    lease_ts: 2026-01-01T10:12:00Z},
+       {ip: "10.0.0.1", label: "too_new",  lease_ts: 2026-01-01T10:12:01Z}
+}
+sort lease.lease_ts

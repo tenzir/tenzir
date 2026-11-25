@@ -1,0 +1,10 @@
+---
+error: true
+---
+from {id: 1}
+join id, refresh=1s {
+  strict {
+    from {id: 1}
+    assert false
+  }
+}

@@ -1,0 +1,6 @@
+error: `on` timestamp expression must reference an event field
+ --> tests/operators/join/error_on_constant.tql:5:24
+  |
+5 | join id, within=5m, on=2026-01-01T00:00:00Z {
+  |                        ^^^^^^^^^^^^^^^^^^^^
+  |

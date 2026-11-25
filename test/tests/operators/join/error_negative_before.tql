@@ -1,0 +1,7 @@
+---
+error: true
+---
+from {id: 1}
+join id, before=-5s {
+  from {id: 1}
+}

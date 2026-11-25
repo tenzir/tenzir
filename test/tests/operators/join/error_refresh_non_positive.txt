@@ -1,0 +1,6 @@
+error: `refresh` must be positive
+ --> tests/operators/join/error_refresh_non_positive.tql:5:18
+  |
+5 | join id, refresh=0s {
+  |                  ^^
+  |

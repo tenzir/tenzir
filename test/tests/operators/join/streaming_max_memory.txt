@@ -1,0 +1,7 @@
+error: `join` exceeded memory limit of 1 KiB
+ --> tests/operators/join/streaming_max_memory.tql:7:39
+  |
+7 | join id, within=1h, on=ts, max_memory=1Ki {
+  |                                       ^^^
+  |
+  = hint: increase `max_memory`, narrow the time window, or filter the inputs

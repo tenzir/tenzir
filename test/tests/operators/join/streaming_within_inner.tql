@@ -1,0 +1,11 @@
+from {id: 1, tag: "l1", ts: 2026-01-01T10:05:00Z},
+     {id: 2, tag: "l2", ts: 2026-01-01T10:05:00Z}
+join id, within=5m, on=ts {
+  from {id: 1, rtag: "too_early", ts: 2026-01-01T09:59:59Z},
+       {id: 1, rtag: "exact_lo",  ts: 2026-01-01T10:00:00Z},
+       {id: 1, rtag: "exact_mid", ts: 2026-01-01T10:05:00Z},
+       {id: 1, rtag: "exact_hi",  ts: 2026-01-01T10:10:00Z},
+       {id: 1, rtag: "too_late",  ts: 2026-01-01T10:10:01Z},
+       {id: 2, rtag: "out",       ts: 2026-01-01T10:20:00Z}
+}
+sort left.id, right.ts

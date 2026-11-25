@@ -51,118 +51,120 @@
 +      ]
      },
      join_ir {
-       op: {
-         path: [
-           `join` @ [1]:306..310 from 0
-         ],
-         ref: std::join/op
-       },
-       args: [
-         expression binary_expr {
-           left: root_field {
-             id: `id` @ [1]:311..313 from 0,
-             has_question_mark: false
-           },
-           op: "eq",
-           right: root_field {
-             id: `uid` @ [1]:317..320 from 0,
-             has_question_mark: false
-           },
-           location: [1]:311..320 from 0
-         }
-       ],
-       named_args: [
-         {
-           index: 0,
-           value: located "left" @ [1]:327..333 from 0
+       args: {
+         op: {
+           path: [
+             `join` @ [1]:306..310 from 0
+           ],
+           ref: std::join/op
          },
-         {
-           index: 1,
-           value: field_path {
-             expr: root_field {
-               id: `r` @ [1]:340..341 from 0,
+         args: [
+           expression binary_expr {
+             left: root_field {
+               id: `id` @ [1]:311..313 from 0,
                has_question_mark: false
              },
-             has_this: false,
-             path: [
-               {
+             op: "eq",
+             right: root_field {
+               id: `uid` @ [1]:317..320 from 0,
+               has_question_mark: false
+             },
+             location: [1]:311..320 from 0
+           }
+         ],
+         named_args: [
+           {
+             index: 0,
+             value: located "left" @ [1]:327..333 from 0
+           },
+           {
+             index: 1,
+             value: field_path {
+               expr: root_field {
                  id: `r` @ [1]:340..341 from 0,
                  has_question_mark: false
-               }
-             ]
-           }
-         }
-       ],
-       pipeline: {
-         pipeline: {
-           lets: [
-             
-           ],
-           operators: [
-             GenericIr {
-               desc: "export",
-               store: {
-                 op: {
-                   path: [
-                     `export` @ [1]:346..352 from 0
-                   ],
-                   ref: std::export/op
-                 },
-                 args: [
-                   
-                 ],
-                 named_args: [
-                   
-                 ]
                },
-               filter: [
--                
-+                binary_expr {
-+                  left: root_field {
-+                    id: `uid` @ [1]:317..320 from 0,
-+                    has_question_mark: false
-+                  },
-+                  op: "eq",
-+                  right: constant int64 1 @ [1]:386..387 from 0,
-+                  location: [1]:380..387 from 0
-+                }
-               ],
--              order: "ordered"
-+              order: "ordered",
-+              projection: [
-+                {
-+                  expr: root_field {
-+                    id: `tag` @ [1]:405..408 from 0,
-+                    has_question_mark: false
-+                  },
-+                  has_this: false,
-+                  path: [
-+                    {
-+                      id: `tag` @ [1]:405..408 from 0,
-+                      has_question_mark: false
-+                    }
-+                  ]
-+                },
-+                {
-+                  expr: root_field {
-+                    id: `uid` @ [1]:317..320 from 0,
-+                    has_question_mark: false
-+                  },
-+                  has_this: false,
-+                  path: [
-+                    {
+               has_this: false,
+               path: [
+                 {
+                   id: `r` @ [1]:340..341 from 0,
+                   has_question_mark: false
+                 }
+               ]
+             }
+           }
+         ],
+         pipeline: {
+           pipeline: {
+             lets: [
+               
+             ],
+             operators: [
+               GenericIr {
+                 desc: "export",
+                 store: {
+                   op: {
+                     path: [
+                       `export` @ [1]:346..352 from 0
+                     ],
+                     ref: std::export/op
+                   },
+                   args: [
+                     
+                   ],
+                   named_args: [
+                     
+                   ]
+                 },
+                 filter: [
+-                  
++                  binary_expr {
++                    left: root_field {
 +                      id: `uid` @ [1]:317..320 from 0,
 +                      has_question_mark: false
-+                    }
-+                  ]
-+                }
-+              ]
-             }
-           ],
-           definition_location: [1]:346..352 from 0
-         } @ [1]:342..354 from 0,
-         let_ids: {
-           
++                    },
++                    op: "eq",
++                    right: constant int64 1 @ [1]:386..387 from 0,
++                    location: [1]:380..387 from 0
++                  }
+                 ],
+-                order: "ordered"
++                order: "ordered",
++                projection: [
++                  {
++                    expr: root_field {
++                      id: `tag` @ [1]:405..408 from 0,
++                      has_question_mark: false
++                    },
++                    has_this: false,
++                    path: [
++                      {
++                        id: `tag` @ [1]:405..408 from 0,
++                        has_question_mark: false
++                      }
++                    ]
++                  },
++                  {
++                    expr: root_field {
++                      id: `uid` @ [1]:317..320 from 0,
++                      has_question_mark: false
++                    },
++                    has_this: false,
++                    path: [
++                      {
++                        id: `uid` @ [1]:317..320 from 0,
++                        has_question_mark: false
++                      }
++                    ]
++                  }
++                ]
+               }
+             ],
+             definition_location: [1]:346..352 from 0
+           } @ [1]:342..354 from 0,
+           let_ids: {
+             
+           }
          }
        }
      },
@@ -196,8 +198,7 @@
                ],
 -              method: false,
 -              location: [1]:361..369 from 0
-+              ref: std::random/fn
-             },
+-            },
 -            op: "lt",
 -            right: constant double 0.5 @ [1]:372..375 from 0,
 -            location: [1]:361..375 from 0
@@ -213,6 +214,8 @@
 -            location: [1]:380..387 from 0
 -          },
 -          location: [1]:361..387 from 0
++              ref: std::random/fn
++            },
 +            args: [
 +              
 +            ],

@@ -1,0 +1,6 @@
+export
+join id, before=5m, on=ts, pick="latest", into=asset {
+  export
+}
+where asset.role == "web"
+select id, role=asset.role

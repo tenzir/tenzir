@@ -1,0 +1,6 @@
+error: `pick` cannot be used with `kind="semi"`
+ --> tests/operators/join/error_pick_with_semi.tql:5:39
+  |
+5 | join id, within=5m, kind="semi", pick="latest" {
+  |                                       ^^^^^^^^
+  |

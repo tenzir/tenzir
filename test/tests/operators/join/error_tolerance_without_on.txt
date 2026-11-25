@@ -1,0 +1,6 @@
+error: `tolerance` requires `on`
+ --> tests/operators/join/error_tolerance_without_on.tql:5:31
+  |
+5 | join id, within=5m, tolerance=30s {
+  |                               ^^^
+  |

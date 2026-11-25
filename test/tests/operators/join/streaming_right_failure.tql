@@ -1,0 +1,10 @@
+---
+error: true
+---
+from {id: 1, ts: 2026-01-01T10:00:00Z}
+join id, within=1m, on=ts {
+  strict {
+    from {id: 1, ts: 2026-01-01T10:00:00Z}
+    assert false
+  }
+}

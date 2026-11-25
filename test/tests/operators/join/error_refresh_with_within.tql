@@ -1,0 +1,7 @@
+---
+error: true
+---
+from {id: 1}
+join id, refresh=5m, within=1m {
+  from {id: 1}
+}

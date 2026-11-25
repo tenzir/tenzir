@@ -1,0 +1,9 @@
+// Streaming fan-out preempts promptly on downstream head.
+from {k: 1, ts: 2026-01-01T10:00:00Z}
+repeat 500
+join k, within=1m, on=ts, into=r {
+  from {k: 1, ts: 2026-01-01T10:00:00Z}
+  repeat 500
+}
+head 5
+summarize total = count()

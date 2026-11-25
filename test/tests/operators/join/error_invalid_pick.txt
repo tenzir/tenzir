@@ -1,0 +1,6 @@
+error: `pick` must be one of `"all"`, `"latest"`, `"earliest"`, or `"nearest"`
+ --> tests/operators/join/error_invalid_pick.tql:5:26
+  |
+5 | join id, within=5m, pick="newest" {
+  |                          ^^^^^^^^
+  |

@@ -1,0 +1,7 @@
+---
+error: true
+---
+from {id: 1}
+join id, pick="latest" {
+  from {id: 1}
+}

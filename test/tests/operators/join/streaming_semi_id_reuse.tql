@@ -1,0 +1,26 @@
+// Regression test for reused left entry IDs after early retirement in semi join:
+// 1. Left id=1 (10:00) allocates slot 0 with expiry 10:05.
+// 2. Right id=1 (10:00) matches and retires slot 0 while its expiry remains queued.
+// 3. Left id=2 (10:20) reuses slot 0 with expiry 10:25.
+// 4. Right id=99 (10:10) advances watermark past 10:05; the stale expiry record
+//    must not discard the reused slot 0 before right id=2 (10:20) arrives.
+every 120ms {
+  from {step: 0}
+}
+enumerate s
+head 2
+set id = 1 if s == 0 else 2
+set ts = 2026-01-01T10:00:00Z if s == 0 else 2026-01-01T10:20:00Z
+select id, ts
+join id, before=0s, after=5m, on=ts, kind="semi" {
+  every 70ms {
+    from {step: 0}
+  }
+  enumerate s
+  head 4
+  where s > 0
+  set id = 1 if s == 1 else (99 if s == 2 else 2)
+  set ts = 2026-01-01T10:00:00Z if s == 1 else (2026-01-01T10:10:00Z if s == 2 else 2026-01-01T10:20:00Z)
+  select id, ts
+}
+sort id

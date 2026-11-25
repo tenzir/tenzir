@@ -1,0 +1,313 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "export",
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:0..6 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+-        
++        binary_expr {
++          left: root_field {
++            id: `tenant` @ [1]:86..92 from 0,
++            has_question_mark: false
++          },
++          op: "eq",
++          right: constant string "acme" @ [1]:96..102 from 0,
++          location: [1]:86..102 from 0
++        }
+       ],
+-      order: "ordered"
++      order: "ordered",
++      projection: [
++        {
++          expr: root_field {
++            id: `tenant` @ [1]:134..140 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `tenant` @ [1]:134..140 from 0,
++              has_question_mark: false
++            }
++          ]
++        }
++      ]
+     },
+     join_ir {
+       args: {
+         op: {
+           path: [
+             `join` @ [1]:7..11 from 0
+           ],
+           ref: std::join/op
+         },
+         args: [
+           expression binary_expr {
+             left: root_field {
+               id: `tenant` @ [1]:12..18 from 0,
+               has_question_mark: false
+             },
+             op: "eq",
+             right: root_field {
+               id: `org_id` @ [1]:22..28 from 0,
+               has_question_mark: false
+             },
+             location: [1]:12..28 from 0
+           }
+         ],
+         named_args: [
+           {
+             index: 3,
+             value: located "5min" @ [1]:38..40 from 0
+           },
+           {
+             index: 0,
+             value: located "inner" @ [1]:47..54 from 0
+           },
+           {
+             index: 1,
+             value: field_path {
+               expr: root_field {
+                 id: `asset` @ [1]:61..66 from 0,
+                 has_question_mark: false
+               },
+               has_this: false,
+               path: [
+                 {
+                   id: `asset` @ [1]:61..66 from 0,
+                   has_question_mark: false
+                 }
+               ]
+             }
+           }
+         ],
+         pipeline: {
+           pipeline: {
+             lets: [
+               
+             ],
+             operators: [
+               GenericIr {
+                 desc: "export",
+                 store: {
+                   op: {
+                     path: [
+                       `export` @ [1]:71..77 from 0
+                     ],
+                     ref: std::export/op
+                   },
+                   args: [
+                     
+                   ],
+                   named_args: [
+                     
+                   ]
+                 },
+                 filter: [
+                   
+                 ],
+                 order: "ordered"
++              },
++              where_ir {
++                op: {
++                  path: [
++                    
++                  ],
++                  ref: unresolved
++                },
++                args: [
++                  Incomplete binary_expr {
++                    left: root_field {
++                      id: `role` @ [1]:113..117 from 0,
++                      has_question_mark: false
++                    },
++                    op: "eq",
++                    right: constant string "web" @ [1]:121..126 from 0,
++                    location: [1]:107..126 from 0
++                  }
++                ],
++                named_args: [
++                  
++                ]
++              },
++              where_ir {
++                op: {
++                  path: [
++                    
++                  ],
++                  ref: unresolved
++                },
++                args: [
++                  Incomplete binary_expr {
++                    left: root_field {
++                      id: `org_id` @ [1]:22..28 from 0,
++                      has_question_mark: false
++                    },
++                    op: "eq",
++                    right: constant string "acme" @ [1]:96..102 from 0,
++                    location: [1]:86..102 from 0
++                  }
++                ],
++                named_args: [
++                  
++                ]
+               }
+             ],
+             definition_location: [1]:71..77 from 0
+           } @ [1]:67..79 from 0,
+           let_ids: {
+             
+           }
+         }
+-      }
+-    },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:80..85 from 0
+-        ],
+-        ref: std::where/op
+       },
+-      args: [
+-        expression binary_expr {
+-          left: binary_expr {
+-            left: root_field {
+-              id: `tenant` @ [1]:86..92 from 0,
+-              has_question_mark: false
+-            },
+-            op: "eq",
+-            right: constant string "acme" @ [1]:96..102 from 0,
+-            location: [1]:86..102 from 0
+-          },
+-          op: "and_",
+-          right: binary_expr {
+-            left: field_access {
+-              left: root_field {
+-                id: `asset` @ [1]:107..112 from 0,
+-                has_question_mark: false
+-              },
+-              has_question_mark: false,
+-              name: `role` @ [1]:113..117 from 0,
+-              location: [1]:107..117 from 0
+-            },
+-            op: "eq",
+-            right: constant string "web" @ [1]:121..126 from 0,
+-            location: [1]:107..126 from 0
+-          },
+-          location: [1]:86..126 from 0
+-        }
+-      ],
+-      named_args: [
+-        
++      refresh_right_projection: [
++        {
++          expr: root_field {
++            id: `role` @ [1]:153..157 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `role` @ [1]:153..157 from 0,
++              has_question_mark: false
++            }
++          ]
++        },
++        {
++          expr: root_field {
++            id: `org_id` @ [1]:22..28 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `org_id` @ [1]:22..28 from 0,
++              has_question_mark: false
++            }
++          ]
++        }
+       ]
+     },
+     SetIr {
+       assignments: [
+         {
+           left: this_ [0]:0..0 from 0,
+           right: record {
+             begin: [0]:0..0 from 0,
+             items: [
+               
+             ],
+             end: [0]:0..0 from 0
+           },
+           location: [0]:0..0 from 0
+         },
+         {
+           left: root_field {
+             id: `tenant` @ [1]:134..140 from 0,
+             has_question_mark: false
+           },
+           right: root_field {
+             id: `tenant` @ [1]:134..140 from 0,
+             has_question_mark: false
+           },
+           location: [1]:134..140 from 0
+         },
+         {
+           left: root_field {
+             id: `role` @ [1]:142..146 from 0,
+             has_question_mark: false
+           },
+           right: field_access {
+             left: root_field {
+               id: `asset` @ [1]:147..152 from 0,
+               has_question_mark: false
+             },
+             has_question_mark: false,
+             name: `role` @ [1]:153..157 from 0,
+             location: [1]:147..157 from 0
+           },
+           location: [1]:142..157 from 0
+         }
+       ],
+       order: "ordered"
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:157..157 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ],
+   definition_location: [1]:0..157 from 0
+ }

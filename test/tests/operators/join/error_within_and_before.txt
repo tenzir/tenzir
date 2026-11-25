@@ -1,0 +1,7 @@
+error: `within` cannot be combined with `before` or `after`
+ --> tests/operators/join/error_within_and_before.tql:5:17
+  |
+5 | join id, within=5m, before=1m {
+  |                 ^^
+  |
+  = hint: `within=D` is shorthand for `before=D, after=D`

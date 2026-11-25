@@ -1,0 +1,12 @@
+from {id: 1, ts: 2026-01-01T10:00:10Z},
+     {id: 2, ts: 2026-01-01T10:00:10Z},
+     {id: 3, ts: 2026-01-01T10:00:10Z}
+join id, within=10s, on=ts, tolerance=15s, pick="nearest", into=r {
+  from {id: 1, tag: "future", ts: 2026-01-01T10:00:15Z},
+       {id: 1, tag: "past",   ts: 2026-01-01T10:00:05Z},
+       {id: 2, tag: "first",  ts: 2026-01-01T10:00:10Z},
+       {id: 2, tag: "second", ts: 2026-01-01T10:00:10Z},
+       {id: 3, tag: "far",    ts: 2026-01-01T10:00:02Z},
+       {id: 3, tag: "close",  ts: 2026-01-01T10:00:12Z}
+}
+sort id

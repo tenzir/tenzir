@@ -85,118 +85,120 @@
 +      ]
      },
      join_ir {
-       op: {
-         path: [
-           `join` @ [1]:165..169 from 0
-         ],
-         ref: std::join/op
-       },
-       args: [
-         expression binary_expr {
-           left: root_field {
-             id: `id` @ [1]:170..172 from 0,
-             has_question_mark: false
-           },
-           op: "eq",
-           right: root_field {
-             id: `uid` @ [1]:176..179 from 0,
-             has_question_mark: false
-           },
-           location: [1]:170..179 from 0
-         }
-       ],
-       named_args: [
-         {
-           index: 0,
-           value: located "left" @ [1]:186..192 from 0
-         },
-         {
-           index: 1,
-           value: field_path {
-             expr: field_access {
-               left: root_field {
-                 id: `a` @ [1]:199..200 from 0,
-                 has_question_mark: false
-               },
-               has_question_mark: false,
-               name: `b` @ [1]:201..202 from 0,
-               location: [1]:199..202 from 0
-             },
-             has_this: false,
-             path: [
-               {
-                 id: `a` @ [1]:199..200 from 0,
-                 has_question_mark: false
-               },
-               {
-                 id: `b` @ [1]:201..202 from 0,
-                 has_question_mark: false
-               }
-             ]
-           }
-         }
-       ],
-       pipeline: {
-         pipeline: {
-           lets: [
-             
+       args: {
+         op: {
+           path: [
+             `join` @ [1]:165..169 from 0
            ],
-           operators: [
-             GenericIr {
-               desc: "export",
-               store: {
-                 op: {
-                   path: [
-                     `export` @ [1]:207..213 from 0
-                   ],
-                   ref: std::export/op
+           ref: std::join/op
+         },
+         args: [
+           expression binary_expr {
+             left: root_field {
+               id: `id` @ [1]:170..172 from 0,
+               has_question_mark: false
+             },
+             op: "eq",
+             right: root_field {
+               id: `uid` @ [1]:176..179 from 0,
+               has_question_mark: false
+             },
+             location: [1]:170..179 from 0
+           }
+         ],
+         named_args: [
+           {
+             index: 0,
+             value: located "left" @ [1]:186..192 from 0
+           },
+           {
+             index: 1,
+             value: field_path {
+               expr: field_access {
+                 left: root_field {
+                   id: `a` @ [1]:199..200 from 0,
+                   has_question_mark: false
                  },
-                 args: [
+                 has_question_mark: false,
+                 name: `b` @ [1]:201..202 from 0,
+                 location: [1]:199..202 from 0
+               },
+               has_this: false,
+               path: [
+                 {
+                   id: `a` @ [1]:199..200 from 0,
+                   has_question_mark: false
+                 },
+                 {
+                   id: `b` @ [1]:201..202 from 0,
+                   has_question_mark: false
+                 }
+               ]
+             }
+           }
+         ],
+         pipeline: {
+           pipeline: {
+             lets: [
+               
+             ],
+             operators: [
+               GenericIr {
+                 desc: "export",
+                 store: {
+                   op: {
+                     path: [
+                       `export` @ [1]:207..213 from 0
+                     ],
+                     ref: std::export/op
+                   },
+                   args: [
+                     
+                   ],
+                   named_args: [
+                     
+                   ]
+                 },
+                 filter: [
                    
                  ],
-                 named_args: [
-                   
-                 ]
-               },
-               filter: [
-                 
-               ],
--              order: "ordered"
-+              order: "unordered",
-+              projection: [
-+                {
-+                  expr: root_field {
-+                    id: `role` @ [1]:240..244 from 0,
-+                    has_question_mark: false
-+                  },
-+                  has_this: false,
-+                  path: [
-+                    {
+-                order: "ordered"
++                order: "unordered",
++                projection: [
++                  {
++                    expr: root_field {
 +                      id: `role` @ [1]:240..244 from 0,
 +                      has_question_mark: false
-+                    }
-+                  ]
-+                },
-+                {
-+                  expr: root_field {
-+                    id: `uid` @ [1]:176..179 from 0,
-+                    has_question_mark: false
++                    },
++                    has_this: false,
++                    path: [
++                      {
++                        id: `role` @ [1]:240..244 from 0,
++                        has_question_mark: false
++                      }
++                    ]
 +                  },
-+                  has_this: false,
-+                  path: [
-+                    {
++                  {
++                    expr: root_field {
 +                      id: `uid` @ [1]:176..179 from 0,
 +                      has_question_mark: false
-+                    }
-+                  ]
-+                }
-+              ]
-             }
-           ],
-           definition_location: [1]:207..213 from 0
-         } @ [1]:203..215 from 0,
-         let_ids: {
-           
++                    },
++                    has_this: false,
++                    path: [
++                      {
++                        id: `uid` @ [1]:176..179 from 0,
++                        has_question_mark: false
++                      }
++                    ]
++                  }
++                ]
+               }
+             ],
+             definition_location: [1]:207..213 from 0
+           } @ [1]:203..215 from 0,
+           let_ids: {
+             
+           }
          }
        }
      },

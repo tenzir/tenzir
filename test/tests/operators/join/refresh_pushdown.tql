@@ -1,0 +1,10 @@
+from {id: 1, tenant: "acme"},
+     {id: 2, tenant: "acme"},
+     {id: 3, tenant: "other"}
+join tenant == org_id, id, refresh=1s, into=snap {
+  from {org_id: "acme", id: 1, role: "web"},
+       {org_id: "acme", id: 2, role: "db"},
+       {org_id: "other", id: 3, role: "web"}
+}
+where tenant == "acme" and snap.role == "web"
+select id, tenant, role=snap.role

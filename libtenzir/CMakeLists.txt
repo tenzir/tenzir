@@ -433,6 +433,15 @@ set_property(
   APPEND
   PROPERTY INCLUDE_DIRECTORIES
            "${CMAKE_CURRENT_SOURCE_DIR}/builtins/operators/from_mysql/include")
+set_property(
+  SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/builtins/operators/join.cpp"
+         "${CMAKE_CURRENT_SOURCE_DIR}/builtins/operators/join/common.cpp"
+         "${CMAKE_CURRENT_SOURCE_DIR}/builtins/operators/join/finite.cpp"
+         "${CMAKE_CURRENT_SOURCE_DIR}/builtins/operators/join/refresh.cpp"
+         "${CMAKE_CURRENT_SOURCE_DIR}/builtins/operators/join/streaming.cpp"
+  APPEND
+  PROPERTY INCLUDE_DIRECTORIES
+           "${CMAKE_CURRENT_SOURCE_DIR}/builtins/operators/join/include")
 TenzirTargetEnableTooling(libtenzir_builtins)
 target_compile_definitions(libtenzir_builtins PRIVATE TENZIR_ENABLE_BUILTINS)
 set_property(

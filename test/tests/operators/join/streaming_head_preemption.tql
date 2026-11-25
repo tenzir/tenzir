@@ -1,0 +1,9 @@
+every 10ms {
+  from {id: 1, ts: 2026-01-01T10:00:00Z}
+}
+join id, within=1m, on=ts, into=r {
+  every 10ms {
+    from {id: 1, ts: 2026-01-01T10:00:00Z, ok: true}
+  }
+}
+head 1

@@ -1,0 +1,5 @@
+{
+  id: 1,
+  tenant: "acme",
+  role: "web",
+}

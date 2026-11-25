@@ -1,0 +1,36 @@
+{
+  left: {
+    id: 1,
+    tag: "l1",
+    ts: 2026-01-01T10:05:00Z,
+  },
+  right: {
+    id: 1,
+    rtag: "exact_lo",
+    ts: 2026-01-01T10:00:00Z,
+  },
+}
+{
+  left: {
+    id: 1,
+    tag: "l1",
+    ts: 2026-01-01T10:05:00Z,
+  },
+  right: {
+    id: 1,
+    rtag: "exact_mid",
+    ts: 2026-01-01T10:05:00Z,
+  },
+}
+{
+  left: {
+    id: 1,
+    tag: "l1",
+    ts: 2026-01-01T10:05:00Z,
+  },
+  right: {
+    id: 1,
+    rtag: "exact_hi",
+    ts: 2026-01-01T10:10:00Z,
+  },
+}
