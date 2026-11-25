@@ -20,6 +20,8 @@ let
     fileset = lib.fileset.unions [
       (src + "/bun.lock")
       (src + "/package.json")
+      # `bun.lock` names the dependency patches, which the node_modules build applies.
+      (src + "/patches")
       (src + "/services/shared")
       (src + "/tools/platform-cli")
     ];
