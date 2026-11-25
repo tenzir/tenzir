@@ -44,10 +44,18 @@ constexpr auto max_diagnostic_bytes = std::size_t{16} << 10;
 // How long a batch waits for the platform to take it, as it does while a
 // rollout of the platform takes it down. Past it, the batch counts as dropped.
 constexpr auto max_batch_age = std::chrono::minutes{2};
-// The wait between attempts to deliver a batch: short at first, for a lost
-// response, and then every few seconds while the platform is down.
-constexpr auto min_retry_delay = std::chrono::milliseconds{250};
+// The wait between attempts to deliver a batch: no shorter than the interval
+// at which batches are sent, so that retrying never sends faster than a
+// healthy deployment does, and then every few seconds while the platform is
+// down.
+constexpr auto min_retry_delay = std::chrono::seconds{1};
 constexpr auto max_retry_delay = std::chrono::seconds{5};
+// How long one attempt waits for the platform to answer. One batch is in
+// flight at a time, so a sender that waits for the answer slows down with the
+// platform rather than adding to its load. Well past the platform's usual
+// latency, which is a few hundred milliseconds even under load; the final
+// flush has its own, shorter deadline.
+constexpr auto request_timeout = std::chrono::seconds{10};
 // Room for the batches of `max_batch_age` at one a second, so that an outage
 // costs no resolution while they wait. At `max_batch_bytes` each, they take
 // at most 32 MiB, though a batch is usually a few KiB.
@@ -159,7 +167,7 @@ public:
       }
       transport
         = Box<Transport>::from_non_null(std::make_unique<BufferedHttpTransport>(
-          std::move(discovered).unwrap(), std::move(*key)));
+          std::move(discovered).unwrap(), std::move(*key), request_timeout));
     }
     auto identity = co_await connection.identity();
     if (identity.is_err()) {
@@ -175,7 +183,10 @@ public:
                   pending.body,
                   {{"content-type", "application/json"}}});
     if (response.is_err()) {
-      if (discover_transport) {
+      // Discover the platform again only when it may have moved. A timeout
+      // says it is slow, and discovering it again would only add a request.
+      if (discover_transport
+          and response.unwrap_err().kind != RequestError::Kind::timeout) {
         transport.reset();
       }
       co_return {};

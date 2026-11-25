@@ -286,7 +286,7 @@ public:
 #if LIBCURL_VERSION_NUM >= 0x086000
     queue_time_t = CURLINFO_QUEUE_TIME_T,
 #endif
-#if LIBCURL_VERSION_NUM >= 0x087000
+#if LIBCURL_VERSION_NUM >= 0x080700
     used_proxy = CURLINFO_USED_PROXY,
 #endif
     lastone = CURLINFO_LASTONE
@@ -442,6 +442,9 @@ X(easy::info::starttransfer_time_t, curl_off_t);
 X(easy::info::tls_ssl_ptr, curl_tlssessioninfo*);
 X(easy::info::total_time, double);
 X(easy::info::total_time_t, curl_off_t);
+#if LIBCURL_VERSION_NUM >= 0x080700
+X(easy::info::used_proxy, long);
+#endif
 #undef X
 
 template <easy::info what>

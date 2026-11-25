@@ -37,10 +37,24 @@ namespace tenzir {
 /// can say is up to whoever wrote one.
 class RequestError {
 public:
-  explicit RequestError(std::string message) : message{std::move(message)} {
+  /// How the request failed, as far as the caller should react to it.
+  enum class Kind {
+    /// The peer did not answer in time. It may still be working on the
+    /// request, so asking again at once adds to whatever slowed it down.
+    timeout,
+    /// The peer could not be reached: its name did not resolve, or nothing
+    /// accepted the connection. The address may have changed.
+    unreachable,
+    /// Anything else.
+    other,
+  };
+
+  explicit RequestError(std::string message, Kind kind = Kind::other)
+    : message{std::move(message)}, kind{kind} {
   }
 
   std::string message;
+  Kind kind;
 };
 
 /// Why a value did not decode.
