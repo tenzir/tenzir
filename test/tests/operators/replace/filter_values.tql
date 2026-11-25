@@ -1,0 +1,20 @@
+// Runtime equivalence for filters moving past chained whole-event `replace`
+// operators across missing, null, replaced, non-replaced, different-type,
+// record, and list values (lists are not descended into).
+from {id: 1, x: "-"},
+     {id: 2, x: ""},
+     {id: 3, x: "a"},
+     {id: 4, x: "b"},
+     {id: 5, x: null},
+     {id: 6},
+     {id: 7, x: 42},
+     {id: 8, x: true},
+     {id: 9, x: ["-"]},
+     {id: 10, x: {a: "-", b: 1}},
+     {id: 11, x: {a: "ok", b: "-"}}
+replace what="-", with=null
+replace what="", with=null
+expected = (x? == "a" or x? == null or x?.a? == "ok" or not (x? != null)) and x? != "b"
+where x? == "a" or x? == null or x?.a? == "ok" or not (x? != null)
+where x? != "b"
+select id, expected

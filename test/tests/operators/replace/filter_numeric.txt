@@ -1,0 +1,45 @@
+{
+  id: 1,
+  x: null,
+  expected: true,
+}
+{
+  id: 2,
+  x: null,
+  expected: true,
+}
+{
+  id: 3,
+  x: null,
+  expected: true,
+}
+{
+  id: 4,
+  x: 3,
+  expected: true,
+}
+{
+  id: 5,
+  x: 3,
+  expected: true,
+}
+{
+  id: 6,
+  x: 3,
+  expected: true,
+}
+{
+  id: 7,
+  x: 3,
+  expected: true,
+}
+{
+  id: 8,
+  x: null,
+  expected: true,
+}
+{
+  id: 9,
+  x: null,
+  expected: true,
+}

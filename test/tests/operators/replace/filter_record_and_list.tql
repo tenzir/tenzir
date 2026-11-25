@@ -1,0 +1,10 @@
+// Record comparisons stay behind `replace`; lists are not descended into.
+from {id: 1, x: "-", y: "-"},
+     {id: 2, x: null, y: null},
+     {id: 3, y: "missing"},
+     {id: 4, x: {a: "-", b: 1}, y: {a: null, b: 1}},
+     {id: 5, x: ["-"], y: ["-"]}
+replace x, what="-", with=null
+expected = x? == {a: null, b: 1} or x? == ["-"]
+where x? == {a: null, b: 1} or x? == ["-"]
+select id, x?, expected

@@ -6,10 +6,19 @@
 // SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/compile_ctx.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/ir.hpp"
+#include "tenzir/nova/array.hpp"
+#include "tenzir/nova/data_array_builder.hpp"
+#include "tenzir/nova/eval.hpp"
+#include "tenzir/nova/eval_ctx.hpp"
+#include "tenzir/nova/events.hpp"
+#include "tenzir/nova/instantiate_ctx.hpp"
+#include "tenzir/pipeline.hpp"
 #include "tenzir/secret.hpp"
 #include "tenzir/session.hpp"
+#include "tenzir/substitute_ctx.hpp"
 #include "tenzir/test/registry.hpp"
 #include "tenzir/test/test.hpp"
 #include "tenzir/tql2/ast.hpp"
@@ -714,4 +723,160 @@ TEST("simplify keeps fields of call results that it cannot rewrite") {
               render("drop_matching(this, \"(\").a == 1"));
   // A call without a rewrite stays.
   CHECK_EQUAL(simplify("merge(x, y).a == 1"), render("merge(x, y).a == 1"));
+}
+
+TEST("split_filter_by_rewrite enforces rejection, size bound, and "
+     "infallibility") {
+  // Rejected predicates stay unchanged; infallible predicates after them move
+  // while fallible ones stay behind.
+  auto const rewrite
+    = [](ast::expression const& expr) -> Option<ast::expression> {
+    if (auto const* field = try_as<ast::root_field>(expr);
+        field and field->id.name == "c") {
+      return None{};
+    }
+    return expr;
+  };
+  auto split = ir::split_filter_by_rewrite(
+    parse_chain({"c", R"(x.slice(stride=-1) == "")", "y == 1"}), rewrite);
+  CHECK_EQUAL(render_chain(split.independent), render_filter({"y == 1"}));
+  CHECK_EQUAL(render_chain(split.dependent),
+              render_filter({"c", R"(x.slice(stride=-1) == "")"}));
+  // Repeated growth stops at `max_rewritten_predicate_size`.
+  auto const guard_step
+    = [](ast::expression const& expr) -> Option<ast::expression> {
+    return ast::binary_expr{
+      ast::binary_expr{ast::constant{false, location::unknown},
+                       ast::binary_op::if_, parse(R"(x == "-")")},
+      ast::binary_op::else_, expr};
+  };
+  auto predicate = parse("x != null");
+  auto steps = size_t{0};
+  while (true) {
+    auto step = ir::split_filter_by_rewrite({predicate}, guard_step);
+    if (step.independent.empty()) {
+      break;
+    }
+    predicate = std::move(step.independent.front());
+    ++steps;
+  }
+  CHECK_GREATER(steps, size_t{0});
+  CHECK_LESS_EQUAL(ir::expression_size(predicate),
+                   ir::max_rewritten_predicate_size);
+  // A non-growing rewrite is allowed even above the bound.
+  auto large = parse("x");
+  for (auto i = 0; i < 12; ++i) {
+    large = ast::binary_expr{large, ast::binary_op::add, large};
+  }
+  large = ast::binary_expr{large, ast::binary_op::eq, parse("1")};
+  REQUIRE_GREATER(ir::expression_size(large), ir::max_rewritten_predicate_size);
+  split = ir::split_filter_by_rewrite({large}, rewrite);
+  REQUIRE_EQUAL(split.independent.size(), size_t{1});
+  CHECK_EQUAL(ir::expression_size(split.independent.front()),
+              ir::expression_size(large));
+}
+
+TEST("long chains of replace operators stay within the size bound") {
+  auto const optimize = [](std::string_view source) -> ir::OptimizeResult {
+    auto dh = collecting_diagnostic_handler{};
+    auto const& reg = test::builtin_registry();
+    auto provider = session_provider::make(dh, reg);
+    auto ctx = base_ctx{dh, reg};
+    auto ast = parse_pipeline_with_location_override(source, location::unknown,
+                                                     provider.as_session());
+    REQUIRE(ast);
+    REQUIRE(resolve_entities(*ast, ExternPrelude::empty(), ctx));
+    auto compiled = std::move(*ast).compile(compile_ctx::make_root(ctx));
+    REQUIRE(compiled);
+    REQUIRE(compiled->substitute(substitute_ctx{ctx, nullptr}, true));
+    return std::move(*compiled).optimize(
+      {.filter = {}, .order = EventOrder::ordered}, {.reg = reg});
+  };
+  // Distinct `what` values grow `x != null` linearly (+6 nodes per step) and
+  // stop at `max_rewritten_predicate_size`.
+  auto make_distinct = [](int count) {
+    auto source = std::string{};
+    for (auto i = 0; i < count; ++i) {
+      source += fmt::format("replace x, what=\"s{}\", with=null\n", i);
+    }
+    source += "where x != null\n";
+    return source;
+  };
+  auto opt = optimize(make_distinct(100));
+  REQUIRE_EQUAL(opt.filter.size(), size_t{1});
+  CHECK_LESS_EQUAL(ir::expression_size(opt.filter.front()),
+                   ir::max_rewritten_predicate_size);
+  opt = optimize(make_distinct(750));
+  CHECK(opt.filter.empty());
+  CHECK_GREATER(opt.replacement.operators.size(), size_t{750});
+  // Identical `what` values also stay bounded and stop before blowing up.
+  auto identical = std::string{};
+  for (auto i = 0; i < 30; ++i) {
+    identical += "replace x, what=\"-\", with=null\n";
+  }
+  identical += "where x != null\n";
+  opt = optimize(identical);
+  CHECK(opt.filter.empty());
+  CHECK_GREATER(opt.replacement.operators.size(), size_t{30});
+  // A comparison against an unaffected constant folds to unchanged size across
+  // any chain length.
+  auto folding = std::string{};
+  for (auto i = 0; i < 50; ++i) {
+    folding += fmt::format("replace x, what=\"s{}\", with=null\n", i);
+  }
+  folding += "where x == \"a\"\n";
+  opt = optimize(folding);
+  REQUIRE_EQUAL(opt.filter.size(), size_t{1});
+  CHECK_EQUAL(ir::expression_size(opt.filter.front()), size_t{3});
+}
+
+TEST("replace guarded conditionals preserve secret and cross-type semantics") {
+  auto builder = nova::ArrayBuilder<nova::Data>{};
+  builder.null();
+  builder.data(std::string_view{"-"});
+  builder.data(std::string_view{"a"});
+  builder.data(nova::Int{0});
+  builder.data(nova::Float{0.0});
+  auto bytes
+    = std::array<std::byte, 3>{std::byte{'s'}, std::byte{'e'}, std::byte{'c'}};
+  builder.data(nova::SecretView{bytes.begin(), bytes.end()});
+  auto col = builder.finish();
+  auto const length = col.length();
+  auto present = nova::storage::BitMap{length, true};
+  auto records
+    = nova::Array<nova::Record>::make_empty(length).with_field_overwrite(
+      "x", {std::move(col), present});
+  auto events = nova::Events{std::move(records), present,
+                             nova::Events::Meta::make_empty(length)};
+  auto const& reg = test::builtin_registry();
+  auto const eval_expr = [&](std::string_view source) {
+    auto dh = null_diagnostic_handler{};
+    auto evaluator
+      = nova::Evaluator::make(parse(source), nova::InstantiateCtx{dh, reg});
+    REQUIRE(evaluator);
+    return evaluator->eval(events, nova::EvalCtx{dh});
+  };
+  auto const pairs
+    = std::array<std::pair<std::string_view, std::string_view>, 8>{
+      {{R"((null if x == "-" else x) == "a")", R"(x == "a")"},
+       {R"((null if x == "-" else x) != "a")", R"(x != "a")"},
+       {R"((null if x == "-" else x) == null)",
+        R"(true if x == "-" else x == null)"},
+       {R"((null if x == "-" else x) != null)",
+        R"(false if x == "-" else x != null)"},
+       {R"((null if x == "-" else x) == "-")",
+        R"(false if x == "-" else x == "-")"},
+       {R"(not ((null if x == "-" else x) == "-"))",
+        R"(not (false if x == "-" else x == "-"))"},
+       {R"((null if x == 0 else x) == 0.0)",
+        R"(false if x == 0 else x == 0.0)"},
+       {R"((null if x == 0 else x) == 1.0)", R"(x == 1.0)"}}};
+  for (auto [original, rewritten] : pairs) {
+    auto const expected = eval_expr(original);
+    auto const actual = eval_expr(rewritten);
+    REQUIRE_EQUAL(actual.length(), expected.length());
+    for (auto row = nova::storage::Index{0}; row < length; ++row) {
+      CHECK(nova::equal(actual.get(row), expected.get(row)));
+    }
+  }
 }

@@ -1,0 +1,28 @@
+{
+  id: 1,
+  a: null,
+  expected: true,
+}
+{
+  id: 3,
+  a: {
+    b: "ok",
+    c: null,
+  },
+  expected: true,
+}
+{
+  id: 4,
+  a: "ok",
+  expected: true,
+}
+{
+  id: 5,
+  a: null,
+  expected: true,
+}
+{
+  id: 6,
+  a: null,
+  expected: true,
+}

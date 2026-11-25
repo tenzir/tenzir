@@ -1,0 +1,15 @@
+{
+  id: 4,
+  x: {
+    a: null,
+    b: 1,
+  },
+  expected: true,
+}
+{
+  id: 5,
+  x: [
+    "-",
+  ],
+  expected: true,
+}

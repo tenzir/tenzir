@@ -1,0 +1,327 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "export",
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:183..189 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+-        
+-      ],
+-      order: "ordered"
+-    },
+-    GenericIr {
+-      desc: "replace",
+-      store: {
+-        op: {
+-          path: [
+-            `replace` @ [1]:190..197 from 0
+-          ],
+-          ref: std::replace/op
+-        },
+-        args: [
+-          
+-        ],
+-        named_args: [
+-          {
+-            index: 0,
+-            value: located string "-" @ [1]:203..206 from 0
+-          },
+-          {
+-            index: 1,
+-            value: located none_t {
+-              
+-            } @ [1]:213..217 from 0
+-          }
+-        ]
+-      },
+-      filter: [
+-        
+-      ],
+-      order: "ordered"
+-    },
+-    GenericIr {
+-      desc: "replace",
+-      store: {
+-        op: {
+-          path: [
+-            `replace` @ [1]:218..225 from 0
+-          ],
+-          ref: std::replace/op
+-        },
+-        args: [
+-          
+-        ],
+-        named_args: [
+-          {
+-            index: 0,
+-            value: located string "" @ [1]:231..233 from 0
+-          },
+-          {
+-            index: 1,
+-            value: located none_t {
+-              
+-            } @ [1]:240..244 from 0
+-          }
+-        ]
+-      },
+-      filter: [
+-        
+-      ],
+-      order: "ordered"
+-    },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:245..250 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
++        binary_expr {
+           left: root_field {
+             id: `a` @ [1]:251..252 from 0,
+             has_question_mark: false
+           },
+           op: "eq",
+           right: constant string "ok" @ [1]:256..260 from 0,
+           location: [1]:251..260 from 0
+-        }
+-      ],
+-      named_args: [
+-        
+-      ]
+-    },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:261..266 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
+-          left: root_field {
+-            id: `a` @ [1]:267..268 from 0,
+-            has_question_mark: false
+-          },
+-          op: "neq",
+-          right: constant none_t {} @ [1]:272..276 from 0,
++        },
++        binary_expr {
++          left: binary_expr {
++            left: constant bool false @ [1]:267..268 from 0,
++            op: "if_",
++            right: binary_expr {
++              left: root_field {
++                id: `a` @ [1]:267..268 from 0,
++                has_question_mark: false
++              },
++              op: "eq",
++              right: constant string "" @ [1]:267..268 from 0,
++              location: [1]:267..268 from 0
++            },
++            location: [1]:267..268 from 0
++          },
++          op: "else_",
++          right: binary_expr {
++            left: binary_expr {
++              left: constant bool false @ [1]:267..268 from 0,
++              op: "if_",
++              right: binary_expr {
++                left: root_field {
++                  id: `a` @ [1]:267..268 from 0,
++                  has_question_mark: false
++                },
++                op: "eq",
++                right: constant string "-" @ [1]:267..268 from 0,
++                location: [1]:267..268 from 0
++              },
++              location: [1]:267..268 from 0
++            },
++            op: "else_",
++            right: binary_expr {
++              left: root_field {
++                id: `a` @ [1]:267..268 from 0,
++                has_question_mark: false
++              },
++              op: "neq",
++              right: constant none_t {} @ [1]:272..276 from 0,
++              location: [1]:267..276 from 0
++            },
++            location: [1]:267..276 from 0
++          },
+           location: [1]:267..276 from 0
+-        }
+-      ],
+-      named_args: [
+-        
+-      ]
+-    },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:277..282 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
++        },
++        binary_expr {
+           left: root_field {
+             id: `a` @ [1]:283..284 from 0,
+             has_question_mark: false
+           },
+           op: "in",
+           right: list {
+             begin: [1]:288..289 from 0,
+             items: [
+               expression constant string "x" @ [1]:289..292 from 0,
+               expression constant string "y" @ [1]:294..297 from 0
+             ],
+             end: [1]:297..298 from 0
+           },
+           location: [1]:283..298 from 0
+-        }
+-      ],
+-      named_args: [
+-        
+-      ]
+-    },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:299..304 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
++        },
++        binary_expr {
+           left: binary_expr {
+             left: root_field {
+               id: `a` @ [1]:305..306 from 0,
+               has_question_mark: false
+             },
+             op: "eq",
+             right: constant string "x" @ [1]:310..313 from 0,
+             location: [1]:305..313 from 0
+           },
+           op: "or_",
+           right: binary_expr {
+             left: root_field {
+               id: `a` @ [1]:317..318 from 0,
+               has_question_mark: false
+             },
+             op: "eq",
+             right: constant string "y" @ [1]:322..325 from 0,
+             location: [1]:317..325 from 0
+           },
+           location: [1]:305..325 from 0
+         }
+       ],
+-      named_args: [
++      order: "ordered"
++    },
++    GenericIr {
++      desc: "replace",
++      store: {
++        op: {
++          path: [
++            `replace` @ [1]:190..197 from 0
++          ],
++          ref: std::replace/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          {
++            index: 0,
++            value: located string "-" @ [1]:203..206 from 0
++          },
++          {
++            index: 1,
++            value: located none_t {
++              
++            } @ [1]:213..217 from 0
++          }
++        ]
++      },
++      filter: [
+         
+-      ]
++      ],
++      order: "ordered"
++    },
++    GenericIr {
++      desc: "replace",
++      store: {
++        op: {
++          path: [
++            `replace` @ [1]:218..225 from 0
++          ],
++          ref: std::replace/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          {
++            index: 0,
++            value: located string "" @ [1]:231..233 from 0
++          },
++          {
++            index: 1,
++            value: located none_t {
++              
++            } @ [1]:240..244 from 0
++          }
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:325..325 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ],
+   definition_location: [1]:183..325 from 0
+ }

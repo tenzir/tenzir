@@ -13,15 +13,19 @@
 #include "tenzir/async.hpp"
 #include "tenzir/collect.hpp"
 #include "tenzir/detail/enumerate.hpp"
+#include "tenzir/ir.hpp"
 #include "tenzir/nova/array_merge.hpp"
 #include "tenzir/nova/bitmap_iteration.hpp"
+#include "tenzir/nova/const_eval.hpp"
 #include "tenzir/nova/eval.hpp"
+#include "tenzir/nova/instantiate_ctx.hpp"
 #include "tenzir/operator_plugin.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/plugin/register.hpp"
 #include "tenzir/series.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/plugin.hpp"
+#include "tenzir/tql2/registry.hpp"
 
 #include <arrow/array/data.h>
 #include <arrow/array/util.h>
@@ -29,6 +33,11 @@
 #include <arrow/type_fwd.h>
 #include <arrow/util/bit_util.h>
 #include <arrow/util/bitmap_ops.h>
+
+#include <algorithm>
+#include <cmath>
+#include <ranges>
+#include <span>
 
 namespace tenzir::plugins::replace {
 
@@ -426,6 +435,222 @@ private:
   Option<nova::Evaluator> with_;
 };
 
+/// Returns whether `value` is an evaluable scalar (including `null`, excluding
+/// `NaN`, records, lists, and non-evaluable constants such as `secret`).
+auto is_scalar(auto const& value) -> bool {
+  return match(
+    value,
+    [](double x) {
+      return not std::isnan(x);
+    },
+    []<class T>(T const&) {
+      return concepts::one_of<T, caf::none_t, bool, int64_t, uint64_t, duration,
+                              time, std::string, ip, subnet, blob>;
+    });
+}
+
+auto is_scalar_constant(ast::expression const& expr) -> bool {
+  auto const* constant = try_as<ast::constant>(expr);
+  return constant and is_scalar(constant->value);
+}
+
+auto is_scalar_constant_list(ast::expression const& expr) -> bool {
+  if (auto const* constant = try_as<ast::constant>(expr)) {
+    auto const* items = try_as<list>(constant->value);
+    return items and std::ranges::all_of(*items, [](data const& item) {
+             return is_scalar(item);
+           });
+  }
+  auto const* items = try_as<ast::list>(expr);
+  return items
+         and std::ranges::all_of(items->items, [](ast::list::item const& item) {
+               auto const* elem = try_as<ast::expression>(item);
+               return elem and is_scalar_constant(*elem);
+             });
+}
+
+/// Returns the top-level root segment of a non-empty target path. `replace`
+/// checks every ancestor along a target path and can replace it (including
+/// turning a scalar ancestor into a record), so conservative dependency
+/// tracking and projection must cover the top-level root.
+auto root_field_path(ast::field_path const& path) -> ast::field_path {
+  TENZIR_ASSERT(not path.path().empty());
+  auto const& root = path.path().front();
+  auto segment = ast::field_path::segment{root.id, false};
+  return ast::field_path::make(ast::root_field{root.id, false}, false,
+                               {segment});
+}
+
+auto overlaps_any_target(std::span<ast::field_path const> targets,
+                         bool replace_all, ast::field_path const& path)
+  -> bool {
+  if (replace_all) {
+    return true;
+  }
+  return std::ranges::any_of(targets, [&](ast::field_path const& target) {
+    return ir::is_field_path_prefix(target, path)
+           or ir::is_field_path_prefix(path, target);
+  });
+}
+
+auto eval_bool_constant(ast::expression const& expr, registry const& reg)
+  -> Option<bool> {
+  auto dh = collecting_diagnostic_handler{};
+  auto value = nova::const_eval(expr, nova::InstantiateCtx{dh, reg});
+  if (not value or not dh.empty()) {
+    return None{};
+  }
+  if (auto const* result = try_as<nova::Bool>(&*value)) {
+    return *result;
+  }
+  return None{};
+}
+
+/// Rewrites an atom `P(p)` (`p == k`, `p != k`, `k == p`, `k != p`, or
+/// `p in [k1, ...]`, with non-empty static `field_path` `p` and scalar
+/// constant(s) `k`) for an eligible scalar `replace` (`what` non-null scalar,
+/// `with` scalar or `null`).
+///
+/// For any `p` overlapping a target (including ancestors of a nested target,
+/// which `replace` also checks and replaces when non-record), evaluating
+/// `P(what)` and `P(with)` gives:
+/// - `P(p)` unchanged when `P(what) == P(with)`,
+/// - `P(with) if p == what else P(p)` otherwise.
+///
+/// Because `k` is a scalar (never a record or list), record values compare
+/// identically before and after `replace`, lists are not descended into,
+/// absent and `null` values stay unchanged (`what != null`), cross-type
+/// numeric equality matches `nova::const_eval`, and `secret` values (where
+/// `p == what` yields `null`) fall through to `P(p)`.
+auto rewrite_atom(ast::binary_expr const& expr,
+                  std::span<ast::field_path const> targets, bool replace_all,
+                  data const& what, data const& with, registry const& reg)
+  -> Option<ast::expression> {
+  auto path = Option<ast::field_path>{};
+  auto field_on_left = true;
+  if (expr.op == ast::binary_op::eq or expr.op == ast::binary_op::neq) {
+    if (is_scalar_constant(expr.right)) {
+      path = ast::field_path::try_from(expr.left);
+      field_on_left = true;
+    } else if (is_scalar_constant(expr.left)) {
+      path = ast::field_path::try_from(expr.right);
+      field_on_left = false;
+    } else {
+      return None{};
+    }
+  } else if (expr.op == ast::binary_op::in) {
+    if (not is_scalar_constant_list(expr.right)) {
+      return None{};
+    }
+    path = ast::field_path::try_from(expr.left);
+    field_on_left = true;
+  } else {
+    return None{};
+  }
+  if (not path or path->path().empty()) {
+    return None{};
+  }
+  if (not overlaps_any_target(targets, replace_all, *path)) {
+    return ast::expression{expr};
+  }
+  auto const source = path->get_location();
+  auto const make_probe = [&](data const& value) -> ast::expression {
+    auto constant
+      = ast::expression{ast::constant::make(located{value, source})};
+    if (field_on_left) {
+      return ast::binary_expr{std::move(constant), expr.op, expr.right};
+    }
+    return ast::binary_expr{expr.left, expr.op, std::move(constant)};
+  };
+  TRY(auto at_what, eval_bool_constant(make_probe(what), reg));
+  TRY(auto at_with, eval_bool_constant(make_probe(with), reg));
+  if (at_what == at_with) {
+    return ast::expression{expr};
+  }
+  auto what_const = ast::expression{ast::constant::make(located{what, source})};
+  auto cond = ast::expression{
+    ast::binary_expr{path->inner(), ast::binary_op::eq, std::move(what_const)}};
+  auto guarded = ast::expression{ast::binary_expr{
+    ast::constant{at_with, source}, ast::binary_op::if_, std::move(cond)}};
+  return ast::expression{
+    ast::binary_expr{std::move(guarded), ast::binary_op::else_, expr}};
+}
+
+/// Rewrites an affected predicate if it belongs to the positive grammar:
+/// boolean/null constants, `and`, `or`, `not`, `if/else` (so chained replaces
+/// compose), and scalar comparison atoms (`rewrite_atom`).
+auto rewrite_predicate(ast::expression const& expr,
+                       std::span<ast::field_path const> targets,
+                       bool replace_all, data const& what, data const& with,
+                       registry const& reg) -> Option<ast::expression> {
+  return expr.match(
+    [&](ast::constant const& x) -> Option<ast::expression> {
+      if (is<bool>(x.value) or is<caf::none_t>(x.value)) {
+        return expr;
+      }
+      return None{};
+    },
+    [&](ast::unary_expr const& x) -> Option<ast::expression> {
+      if (x.op != ast::unary_op::not_) {
+        return None{};
+      }
+      TRY(auto inner,
+          rewrite_predicate(x.expr, targets, replace_all, what, with, reg));
+      return ast::expression{
+        ast::unary_expr{located{x.op, x.location}, std::move(inner)}};
+    },
+    [&](ast::binary_expr const& x) -> Option<ast::expression> {
+      switch (x.op) {
+        case ast::binary_op::and_:
+        case ast::binary_op::or_: {
+          TRY(auto left,
+              rewrite_predicate(x.left, targets, replace_all, what, with, reg));
+          TRY(auto right, rewrite_predicate(x.right, targets, replace_all, what,
+                                            with, reg));
+          return ast::expression{
+            ast::binary_expr{std::move(left), x.op, std::move(right)}};
+        }
+        case ast::binary_op::else_: {
+          auto const* cond = try_as<ast::binary_expr>(x.left);
+          if (not cond or cond->op != ast::binary_op::if_) {
+            return None{};
+          }
+          TRY(auto then_branch,
+              rewrite_predicate(cond->left, targets, replace_all, what, with,
+                                reg));
+          TRY(auto cond_branch,
+              rewrite_predicate(cond->right, targets, replace_all, what, with,
+                                reg));
+          TRY(auto else_branch, rewrite_predicate(x.right, targets, replace_all,
+                                                  what, with, reg));
+          auto guarded = ast::expression{
+            ast::binary_expr{std::move(then_branch), ast::binary_op::if_,
+                             std::move(cond_branch)}};
+          return ast::expression{ast::binary_expr{
+            std::move(guarded), ast::binary_op::else_, std::move(else_branch)}};
+        }
+        case ast::binary_op::eq:
+        case ast::binary_op::neq:
+        case ast::binary_op::in:
+          return rewrite_atom(x, targets, replace_all, what, with, reg);
+        case ast::binary_op::add:
+        case ast::binary_op::sub:
+        case ast::binary_op::mul:
+        case ast::binary_op::div:
+        case ast::binary_op::gt:
+        case ast::binary_op::geq:
+        case ast::binary_op::lt:
+        case ast::binary_op::leq:
+        case ast::binary_op::if_:
+          return None{};
+      }
+      TENZIR_UNREACHABLE();
+    },
+    [](auto const&) -> Option<ast::expression> {
+      return None{};
+    });
+}
+
 struct replace : public virtual OperatorPlugin {
 public:
   auto name() const -> std::string override {
@@ -454,23 +679,77 @@ public:
       return {};
     });
     // `replace` rewrites values in place: it neither drops, creates, nor
-    // reorders events, and fields keep their identity. Predicates that
-    // reference replaced fields must stay behind us; without explicit fields,
-    // every field may change, so all predicates stay. Target fields stay
-    // projected because their values determine replacement and the resulting
-    // schema/slice boundaries.
-    return d.field_local(
-      [=](DescribeCtx& ctx) -> Option<std::vector<ast::field_path>> {
-        auto touched_fields = std::vector<ast::field_path>{};
+    // reorders events, and fields keep their identity. Target roots stay
+    // projected because `replace` checks every ancestor along each target path.
+    // For scalar non-null `what` and scalar/null `with`, affected predicates in
+    // the scalar-comparison grammar rewrite and fold in place; unaffected
+    // predicates pass unchanged; everything else stays behind `replace`.
+    return d.optimize(
+      [=](DescribeCtx& ctx, ir::OptimizeRequest req) -> Optimization {
+        auto what_value = ctx.get(what);
+        auto with_value = ctx.get(with);
+        TENZIR_ASSERT(what_value);
+        TENZIR_ASSERT(with_value);
+        auto targets = std::vector<ast::field_path>{};
         for (auto& field : ctx.get_all(fields)) {
           TENZIR_ASSERT(field);
-          touched_fields.push_back(std::move(*field));
+          targets.push_back(std::move(*field));
         }
-        if (touched_fields.empty()) {
-          // Without explicit targets, every field participates in replacement.
-          return None{};
+        auto const replace_all
+          = targets.empty()
+            or std::ranges::any_of(targets, [](ast::field_path const& path) {
+                 return path.path().empty();
+               });
+        auto roots = std::vector<ast::field_path>{};
+        auto projection = std::move(req.projection);
+        if (replace_all) {
+          projection = None{};
+        } else {
+          for (auto const& target : targets) {
+            auto root = root_field_path(target);
+            ir::add_to_projection(projection, root);
+            roots.push_back(std::move(root));
+          }
         }
-        return touched_fields;
+        auto const touched = ast::ExprRefs{.field_paths = std::move(roots)};
+        auto const eligible = is_scalar(what_value->inner)
+                              and not is<caf::none_t>(what_value->inner)
+                              and is_scalar(with_value->inner);
+        auto split = ir::split_filter_result{};
+        if (not eligible) {
+          if (replace_all) {
+            split.dependent = std::move(req.filter);
+          } else {
+            split
+              = ir::split_filter_by_dependents(std::move(req.filter), touched);
+          }
+        } else {
+          split = ir::split_filter_by_rewrite(
+            std::move(req.filter),
+            [&](ast::expression const& expr) -> Option<ast::expression> {
+              auto refs = ast::collect_refs(expr);
+              if (not refs) {
+                return None{};
+              }
+              if (replace_all ? refs->field_paths.empty()
+                              : not refs->overlaps(touched)) {
+                return expr;
+              }
+              return rewrite_predicate(expr, targets, replace_all,
+                                       what_value->inner, with_value->inner,
+                                       ctx.reg());
+            });
+        }
+        // A carried limit counts events after the whole filter chain. If we
+        // keep predicates behind us, upstream can no longer honor it.
+        auto limit = split.dependent.empty() ? req.limit : Option<uint64_t>{};
+        return {
+          .order = req.order,
+          .filter_upstream = std::move(split.independent),
+          .filter_self = std::move(split.dependent),
+          .limit_upstream = limit,
+          .projection_upstream = std::move(projection),
+        };
       });
   }
 };

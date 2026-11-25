@@ -1,0 +1,12 @@
+// Predicates outside the scalar-comparison grammar (function calls, record
+// comparisons, field-to-field equality) stay behind `replace`. Conservative
+// replacements treat the target's top-level root as touched and project it.
+export
+replace a, what="-", with=null
+replace c.d, what="-", with={e: 1}
+where a.int() == 42
+where a == {k: "-"}
+where a == b
+where c.e? == 1
+where untouched == "ok"
+select untouched

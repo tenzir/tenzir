@@ -1,0 +1,10 @@
+// Scalar comparisons move past chained whole-event `replace` operators:
+// comparisons with unaffected constants stay unchanged, while `null` checks
+// emit linear `if/else` guards.
+export
+replace what="-", with=null
+replace what="", with=null
+where a == "ok"
+where a != null
+where a in ["x", "y"]
+where a == "x" or a == "y"

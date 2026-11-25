@@ -1,0 +1,20 @@
+// Runtime equivalence for cross-type numeric equality (0, 0.0, uint(0)) and
+// transitive replacement chains (1 -> 2 -> 3).
+from {id: 1, x: 0},
+     {id: 2, x: 0.0},
+     {id: 3, x: uint(0)},
+     {id: 4, x: 1},
+     {id: 5, x: 1.0},
+     {id: 6, x: 2},
+     {id: 7, x: 3},
+     {id: 8, x: null},
+     {id: 9},
+     {id: 10, x: "0"},
+     {id: 11, x: {a: 0}},
+     {id: 12, x: [0]}
+replace x, what=0, with=null
+replace x, what=1, with=2
+replace x, what=2, with=3
+expected = x? == 3 or x? == null
+where x? == 3 or x? == null
+select id, x?, expected

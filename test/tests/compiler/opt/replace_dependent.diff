@@ -20,9 +20,38 @@
          ]
        },
        filter: [
-         
+-        
++        binary_expr {
++          left: binary_expr {
++            left: constant bool true @ [1]:41..44 from 0,
++            op: "if_",
++            right: binary_expr {
++              left: root_field {
++                id: `foo` @ [1]:41..44 from 0,
++                has_question_mark: false
++              },
++              op: "eq",
++              right: constant int64 1 @ [1]:41..44 from 0,
++              location: [1]:41..44 from 0
++            },
++            location: [1]:41..44 from 0
++          },
++          op: "else_",
++          right: binary_expr {
++            left: root_field {
++              id: `foo` @ [1]:41..44 from 0,
++              has_question_mark: false
++            },
++            op: "eq",
++            right: constant int64 2 @ [1]:48..49 from 0,
++            location: [1]:41..49 from 0
++          },
++          location: [1]:41..49 from 0
++        }
        ],
-       order: "ordered"
+-      order: "ordered"
++      order: "ordered",
++      limit: 3
      },
      GenericIr {
        desc: "replace",
@@ -64,31 +93,28 @@
        ],
        order: "ordered"
      },
-     where_ir {
-       op: {
-         path: [
+-    where_ir {
+-      op: {
+-        path: [
 -          `where` @ [1]:35..40 from 0
-+          
-         ],
+-        ],
 -        ref: std::where/op
-+        ref: unresolved
-       },
-       args: [
+-      },
+-      args: [
 -        expression binary_expr {
-+        Incomplete binary_expr {
-           left: root_field {
-             id: `foo` @ [1]:41..44 from 0,
-             has_question_mark: false
-           },
-           op: "eq",
-           right: constant int64 2 @ [1]:48..49 from 0,
-           location: [1]:41..49 from 0
-         }
-       ],
-       named_args: [
-         
-       ]
-     },
+-          left: root_field {
+-            id: `foo` @ [1]:41..44 from 0,
+-            has_question_mark: false
+-          },
+-          op: "eq",
+-          right: constant int64 2 @ [1]:48..49 from 0,
+-          location: [1]:41..49 from 0
+-        }
+-      ],
+-      named_args: [
+-        
+-      ]
+-    },
      GenericIr {
        desc: "head",
        store: {

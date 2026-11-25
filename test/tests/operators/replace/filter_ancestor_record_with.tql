@@ -1,0 +1,10 @@
+// Regression: `replace a.b, what="-", with={c: 1}` replaces scalar ancestor `a`
+// with `{c: 1}`, so `where a.c? == 1` must stay behind `replace`.
+from {id: 1, a: "-"},
+     {id: 2, a: {b: "-", c: 2}},
+     {id: 3, a: {c: 1}},
+     {id: 4}
+replace a.b, what="-", with={c: 1}
+expected = a?.c? == 1
+where a?.c? == 1
+select id, a?, expected

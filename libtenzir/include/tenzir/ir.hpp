@@ -613,6 +613,17 @@ auto split_filter_by_dependents(ir::OptimizeFilter filter,
 /// exponentially.
 inline constexpr auto max_rewritten_predicate_size = size_t{4096};
 
+/// Splits a filter chain by rewriting each predicate with `rewrite`, which
+/// returns an equivalent predicate over the operator's input or `None` if it
+/// cannot rewrite the predicate. Rewritten predicates move to `independent`;
+/// the others stay in `dependent` unchanged, including those that the rewrite
+/// would grow beyond `max_rewritten_predicate_size` and those behind a
+/// dependent predicate whose rewritten form could fail, as for `is_infallible`.
+auto split_filter_by_rewrite(
+  OptimizeFilter filter,
+  std::function<auto(ast::expression const&)->Option<ast::expression>> const&
+    rewrite) -> split_filter_result;
+
 /// Splits a filter chain by substituting the references of every predicate,
 /// as in `ast::substitute_refs`, and simplifying the result as in
 /// `simplify_predicate`. The substituted predicates are independent. The

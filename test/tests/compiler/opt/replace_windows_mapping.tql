@@ -1,0 +1,24 @@
+// Reduced Windows-mapping pipeline: whole-event sentinel replaces and a
+// per-field SID replace precede a `match` dispatch. Filters on Windows OCSF
+// fields clear every `replace` and reach `export`.
+export
+this = {windows: this, ocsf: {}}
+replace windows, what="-", with=null
+replace windows, what="{00000000-0000-0000-0000-000000000000}", with=null
+replace windows, what="", with=null
+replace windows.EventData.SubjectUserSid, what="S-1-0-0", with=null
+match windows.System.EventID {
+  4624 | 4625 => {
+    ocsf.class_uid = 3002
+    ocsf.user = {name: move windows.EventData.TargetUserName?}
+  }
+  4688 => {
+    ocsf.class_uid = 1007
+    ocsf.process = {cmd_line: move windows.EventData.CommandLine?}
+  }
+  _ => {
+    ocsf.class_uid = 0
+  }
+}
+this = {...ocsf, unmapped: windows}
+where class_uid == 3002 and user.name == "alice"

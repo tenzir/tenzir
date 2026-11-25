@@ -87,6 +87,34 @@ auto ir::split_filter_by_dependents(ir::OptimizeFilter filter,
   });
 }
 
+auto ir::split_filter_by_rewrite(
+  OptimizeFilter filter,
+  std::function<auto(ast::expression const&)->Option<ast::expression>> const&
+    rewrite) -> split_filter_result {
+  auto result = split_filter_result{};
+  for (auto& expr : filter) {
+    auto rewritten = rewrite(expr);
+    if (not rewritten) {
+      result.dependent.push_back(std::move(expr));
+      continue;
+    }
+    // A predicate that grows past the bound stays behind the operator.
+    auto const size = expression_size(*rewritten);
+    if (size > max_rewritten_predicate_size and size > expression_size(expr)) {
+      result.dependent.push_back(std::move(expr));
+      continue;
+    }
+    // As in `split_filter`, a predicate must not move past one that stays if
+    // it could fail for the events that the other one drops.
+    if (not result.dependent.empty() and not is_infallible(*rewritten)) {
+      result.dependent.push_back(std::move(expr));
+      continue;
+    }
+    result.independent.push_back(std::move(*rewritten));
+  }
+  return result;
+}
+
 namespace {
 
 /// Identifies the value that a replacement computes. Replacements for

@@ -1,0 +1,12 @@
+// `replace a.b` also replaces scalar ancestor `a`, while leaving sibling
+// `a.c` untouched when `a` is a record.
+from {id: 1, a: "-"},
+     {id: 2, a: {b: "-", c: "-"}},
+     {id: 3, a: {b: "ok", c: null}},
+     {id: 4, a: "ok"},
+     {id: 5, a: null},
+     {id: 6}
+replace a.b, what="-", with=null
+expected = a? == null or a?.c? == null
+where a? == null or a?.c? == null
+select id, a?, expected

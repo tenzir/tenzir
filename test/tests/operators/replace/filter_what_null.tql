@@ -1,0 +1,10 @@
+// `replace x, what=null, with="r"` turns explicit `null` into `"r"` while
+// leaving missing `x` absent.
+from {id: 1},
+     {id: 2, x: null},
+     {id: 3, x: "r"},
+     {id: 4, x: "other"}
+replace x, what=null, with="r"
+expected = x? == "r"
+where x? == "r"
+select id, x?, expected
