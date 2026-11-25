@@ -1,0 +1,258 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "export",
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:154..160 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
+     },
+     Match {
+       match_keyword: [1]:161..166 from 0,
+       scrutinee: binary_expr {
+         left: root_field {
+           id: `y` @ [1]:167..168 from 0,
+           has_question_mark: false
+         },
+         op: "add",
+         right: constant int64 1 @ [1]:171..172 from 0,
+         location: [1]:167..172 from 0
+       },
+       arms: [
+         {
+           source: [1]:177..178 from 0,
+           pattern_exprs: [
+             {
+               kind: expression_pattern {
+                 expr: constant int64 1 @ [1]:177..178 from 0
+               }
+             }
+           ],
+           patterns: [
+             {
+               kind: Constant {
+                 value: int64 1
+               }
+             }
+           ],
+           pipeline: {
+             lets: [
+               
+             ],
+             operators: [
+               SetIr {
+                 assignments: [
+                   {
+                     left: root_field {
+                       id: `class_uid` @ [1]:184..193 from 0,
+                       has_question_mark: false
+                     },
+                     right: constant int64 3002 @ [1]:196..200 from 0,
+                     location: [1]:184..200 from 0
+                   }
+                 ],
+                 order: "ordered"
+               }
+             ],
+             definition_location: [1]:184..200 from 0
+           },
+           wildcard: false
+         },
+         {
+           source: [1]:205..206 from 0,
+           pattern_exprs: [
+             {
+               kind: expression_pattern {
+                 expr: constant int64 2 @ [1]:205..206 from 0
+               }
+             }
+           ],
+           patterns: [
+             {
+               kind: Constant {
+                 value: int64 2
+               }
+             }
+           ],
+           pipeline: {
+             lets: [
+               
+             ],
+             operators: [
++              where_ir {
++                op: {
++                  path: [
++                    
++                  ],
++                  ref: unresolved
++                },
++                args: [
++                  Incomplete constant bool false @ [1]:292..309 from 0
++                ],
++                named_args: [
++                  
++                ]
++              },
+               SetIr {
+                 assignments: [
+                   {
+                     left: root_field {
+                       id: `class_uid` @ [1]:212..221 from 0,
+                       has_question_mark: false
+                     },
+                     right: constant int64 2004 @ [1]:224..228 from 0,
+                     location: [1]:212..228 from 0
+                   }
+                 ],
+                 order: "ordered"
+               }
+             ],
+             definition_location: [1]:212..228 from 0
+           },
+           wildcard: false
+         },
+         {
+           source: [1]:233..234 from 0,
+           pattern_exprs: [
+             {
+               kind: expression_pattern {
+                 expr: constant int64 3 @ [1]:233..234 from 0
+               }
+             }
+           ],
+           patterns: [
+             {
+               kind: Constant {
+                 value: int64 3
+               }
+             }
+           ],
+           pipeline: {
+             lets: [
+               
+             ],
+             operators: [
+               SetIr {
+                 assignments: [
+                   {
+                     left: root_field {
+                       id: `class_uid` @ [1]:240..249 from 0,
+                       has_question_mark: false
+                     },
+                     right: constant int64 3002 @ [1]:252..256 from 0,
+                     location: [1]:240..256 from 0
+                   }
+                 ],
+                 order: "ordered"
+               }
+             ],
+             definition_location: [1]:240..256 from 0
+           },
+           wildcard: false
+         },
+         {
+           source: [1]:261..262 from 0,
+           pattern_exprs: [
+             
+           ],
+           patterns: [
+             
+           ],
+           pipeline: {
+             lets: [
+               
+             ],
+             operators: [
++              where_ir {
++                op: {
++                  path: [
++                    
++                  ],
++                  ref: unresolved
++                },
++                args: [
++                  Incomplete constant bool false @ [1]:292..309 from 0
++                ],
++                named_args: [
++                  
++                ]
++              },
+               SetIr {
+                 assignments: [
+                   {
+                     left: root_field {
+                       id: `class_uid` @ [1]:268..277 from 0,
+                       has_question_mark: false
+                     },
+                     right: constant int64 0 @ [1]:280..281 from 0,
+                     location: [1]:268..281 from 0
+                   }
+                 ],
+                 order: "ordered"
+               }
+             ],
+             definition_location: [1]:268..281 from 0
+           },
+           wildcard: true
+         }
+       ]
+     },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:286..291 from 0
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:309..309 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
+         ],
+-        ref: std::where/op
++        named_args: [
++          
++        ]
+       },
+-      args: [
+-        expression binary_expr {
+-          left: root_field {
+-            id: `class_uid` @ [1]:292..301 from 0,
+-            has_question_mark: false
+-          },
+-          op: "eq",
+-          right: constant int64 3002 @ [1]:305..309 from 0,
+-          location: [1]:292..309 from 0
+-        }
++      filter: [
++        
+       ],
+-      named_args: [
+-        
+-      ]
++      order: "ordered"
+     }
+   ],
+   definition_location: [1]:154..309 from 0
+ }

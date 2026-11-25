@@ -1033,30 +1033,6 @@ private:
     if (not ir::is_repeatable(args_.scrutinee, reg)) {
       return None{};
     }
-    // The lifted filter compares the scrutinee with every pattern, once for a
-    // constant and twice for a range, and `match` evaluates it again. An
-    // expensive function call, such as a parser, would repeat expensive work,
-    // and so would copying other computations several times.
-    if (not ir::is_plain(args_.scrutinee)) {
-      auto comparisons = size_t{0};
-      for (auto const& arm : args_.arms) {
-        if (arm.wildcard) {
-          continue;
-        }
-        for (auto const& pattern : arm.patterns) {
-          comparisons += pattern.kind.match(
-            [](MatchPattern::Range const&) {
-              return size_t{2};
-            },
-            [](auto const&) {
-              return size_t{1};
-            });
-        }
-      }
-      if (not ir::is_cheap(args_.scrutinee, reg) or comparisons > 1) {
-        return None{};
-      }
-    }
     // Every arm but the wildcard arm, which takes the remaining events, needs
     // a condition. This also makes `are_disjoint` exact for their patterns.
     auto conditions = std::vector<Option<ast::expression>>{};
@@ -1088,6 +1064,35 @@ private:
           removable = removed[j] or are_disjoint(args_.arms[k], args_.arms[j]);
         }
         removed[k] = removable;
+      }
+    }
+    // The lifted filter compares the scrutinee with every pattern of each
+    // surviving arm, once for a constant and twice for a range, and `match`
+    // evaluates it again. An expensive function call, such as a parser, would
+    // repeat expensive work, and so would copying other computations several
+    // times.
+    if (not ir::is_plain(args_.scrutinee)) {
+      auto comparisons = size_t{0};
+      for (auto i = size_t{0}; i < args_.arms.size(); ++i) {
+        if (removed[i] or args_.arms[i].wildcard) {
+          continue;
+        }
+        for (auto const& pattern : args_.arms[i].patterns) {
+          comparisons += pattern.kind.match(
+            [](MatchPattern::Wildcard const&) {
+              return size_t{0};
+            },
+            [](MatchPattern::Range const&) {
+              return size_t{2};
+            },
+            [](auto const&) {
+              return size_t{1};
+            });
+        }
+      }
+      if (comparisons > 1
+          or (comparisons > 0 and not ir::is_cheap(args_.scrutinee, reg))) {
+        return None{};
       }
     }
     auto branches = std::vector<ir::RoutedBranch>{};

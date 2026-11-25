@@ -1,0 +1,10 @@
+// Dead-arm pruning runs before counting comparisons on a non-plain cheap
+// scrutinee, so a filter that leaves only one surviving arm lifts above `match`.
+export
+match y + 1 {
+  1 => { class_uid = 1007 }
+  2 => { class_uid = 2004 }
+  3 => { class_uid = 3002 }
+  _ => { class_uid = 0 }
+}
+where class_uid == 2004

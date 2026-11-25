@@ -1,0 +1,10 @@
+// When more than one arm still survives pruning, a non-plain scrutinee still
+// keeps the arm filters inside `match` to avoid repeating the computation.
+export
+match y + 1 {
+  1 => { class_uid = 3002 }
+  2 => { class_uid = 2004 }
+  3 => { class_uid = 3002 }
+  _ => { class_uid = 0 }
+}
+where class_uid == 3002
