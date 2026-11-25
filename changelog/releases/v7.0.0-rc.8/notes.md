@@ -26,6 +26,22 @@ A migration path from Tenzir Node to the new deployment model is planned, but no
 
 ## 🚀 Features
 
+### Add timestamp, label, cache, and variable options to Axiom operators
+
+`to_axiom` now accepts `timestamp_field`, `timestamp_format`, and `labels` to control how Axiom extracts `_time` (including dotted field paths and custom Go reference time layouts) and attaches event labels via `X-Axiom-Event-Labels`.
+
+`from_axiom` now accepts `nocache` to bypass Axiom's query cache and `variables` to pass typed parameters into `query=` APL queries. For example:
+
+```tql
+from_file "ocsf-events.ndjson"
+to_axiom "security-events",
+  token=secret("axiom_token"),
+  timestamp_field="time",
+  labels={env: "prod"}
+```
+
+*By @mavam.*
+
 ### Get help with tenzir help
 
 Run `tenzir help` to list all commands, and `tenzir help <command>` for the flags and examples of one, such as `tenzir help config apply`. This works the same as `tenzir --help` and `tenzir <command> --help`, except for `run`: `tenzir help run` describes local and remote runs, and `tenzir run --help` lists the options of a local run.
@@ -37,6 +53,96 @@ The examples in the help now show what you can do with each command, starting wi
 ### Homebrew puts tenzir on PATH
 
 Installing Tenzir with `brew install --cask tenzir/tenzir/tenzir` now links the `tenzir` command into Homebrew's `bin` directory, so it is on your `PATH` without adding `/opt/tenzir/bin` by hand. Uninstalling the cask removes the link.
+
+*By @mavam.*
+
+### More pipeline stages run in SentinelOne
+
+`from_sentinelone_data_lake` now computes more of the pipeline after it in SentinelOne: arithmetic, computed group keys and arguments, the aggregation functions `count_if`, `count_distinct`, `min`, `max`, `sum`, `mean`, `stddev`, `variance`, `all`, and `any`, and the functions `abs`, `ceil`, `floor`, `sqrt`, `exp`, `log`, `to_lower`, `to_upper`, `length_chars`, `trim`, `trim_start`, `trim_end`, `slice`, `is_empty`, `year`, `month`, `day`, `hour`, and `minute`. For example:
+
+```tql
+from_sentinelone_data_lake "https://example.sentinelone.net",
+  token=secret("sentinelone-token")
+where event.type == "File Rename"
+hour = timestamp.hour()
+summarize hour, files=count_distinct(tgt.file.name),
+  large=count_if(tgt.file.size, v => v > 1000),
+  avg_kb=mean(tgt.file.size / 1024)
+```
+
+This pipeline runs as a single PowerQuery:
+
+```
+| filter (event.type == "File Rename")
+| let __tenzir_column_0 = number(strftime(timestamp, "%H", "UTC")),
+      __tenzir_column_3 = (tgt.file.size / 1024)
+| group __tenzir_part_0 = count(((tgt.file.size != null) and (tgt.file.size > 1000))),
+        __tenzir_part_1 = sum(__tenzir_column_3),
+        __tenzir_part_2 = count(__tenzir_column_3)
+  by __tenzir_column_0, __tenzir_distinct_0 = tgt.file.name
+| group __tenzir_column_1 = count(__tenzir_distinct_0),
+        __tenzir_column_2 = sum(__tenzir_part_0),
+        __tenzir_column_4 = (sum(__tenzir_part_1) / sum(__tenzir_part_2))
+  by __tenzir_column_0
+| limit 1600000
+```
+
+Population `stddev` and `variance` rescale PowerQuery's sample `stddev` with `count`, `all` and `any` use conditional counts, and a single `count_distinct` uses two `group` stages excluding `null` (falling back to approximate `estimate_distinct` alongside `stddev`, `variance`, or a second distinct field). These stages run with SentinelOne's semantics: functions and arithmetic treat `null` as `0` or `""`, numbers are doubles, and an aggregation without a group key returns no event for empty input. Use `pushdown=false` to compute them in Tenzir instead.
+
+*By @mavam.*
+
+### OCSF 1.10.0 support
+
+Tenzir now supports OCSF `1.10.0`, the latest stable release, in addition to all earlier stable versions. It also includes preview support for the upcoming OCSF `1.11.0-dev`.
+
+*By @tenzir-bot.*
+
+### Read and write Axiom datasets with APL pushdown
+
+The new `from_axiom` and `to_axiom` operators query and ingest events through Axiom's regional edge APIs.
+
+`to_axiom` sends gzip-compressed NDJSON batches to an Axiom dataset and reports rejected events and ingest warnings returned in HTTP 200 responses.
+
+`from_axiom` reads from a dataset or a raw APL query and pushes downstream `where`, `select`, `drop`, `summarize`, `sort`, and `head` stages into Axiom Processing Language (APL). For example:
+
+```tql
+from_axiom "http-logs", token=secret("axiom_token")
+where status >= 400 and uri.starts_with("/api/")
+bucket = _time.floor(5min)
+summarize bucket, method, errors = count(), unique_ips = count_distinct(src_ip)
+sort -errors
+head 10
+```
+
+This runs directly in Axiom as:
+
+```kusto
+['http-logs']
+| where (['status'] >= 400)
+| where (['uri'] startswith_cs "/api/")
+| extend ['__tenzir_column_0'] = bin(['_time'], timespan(300000000000ns))
+| summarize ['__tenzir_part_0'] = count() by ['__tenzir_column_0'], ['method'], ['src_ip']
+| summarize ['__tenzir_column_1'] = sum(['__tenzir_part_0']), ['__tenzir_column_2'] = countif(isnotnull(['src_ip'])) by ['__tenzir_column_0'], ['method']
+| sort by ['__tenzir_column_1'] desc
+| take 10
+```
+
+Pushed stages run with APL's native semantics; pass `pushdown=false` to evaluate them in Tenzir instead.
+
+*By @mavam.*
+
+### Relational join operator
+
+The new `join` operator combines events from the pipeline input with events produced by a finite right-hand source subpipeline using a hash join.
+
+Specify one or more positional key expressions (`key` for a shared expression, or `lhs == rhs` when the left and right expressions differ). Supported `kind` values are `"inner"` (default), `"left"`, `"semi"`, and `"anti"`. The right-hand source must finish and fit within `max_memory` (default `512 MiB`) before output begins. By default, `"inner"` and `"left"` joins emit `{left: ..., right: ...}` records; pass `into=<field>` to attach the matched right event onto the left event instead. Top-level `null` keys and any `NaN` keys (including nested `NaN`) never match.
+
+```tql
+from_file "alerts.json" { read_json }
+join src_ip == ip, kind="left", into=asset {
+  from_file "assets.json" { read_json }
+}
+```
 
 *By @mavam.*
 
@@ -94,6 +200,36 @@ Proxy and web server rules read the URL, path, query, host, method, user agent, 
 
 *By @mavam.*
 
+### Site-provided tools for Nix builds
+
+Nix builders can mount their build tools at `/run/tenzir-build-tools/bin` to use them when building Tenzir. Set `TENZIR_BUILD_TOOLS` before entering a development shell to select a different directory.
+
+*By @tobim.*
+
+### Streaming windowed and periodic snapshot joins
+
+The `join` operator now also joins two live streams and enriches a stream against a periodically reloaded snapshot, in addition to joining against a finite right-hand source.
+
+Set `refresh=<duration>` to reload the right-hand subpipeline in the background on a schedule. The operator waits for the initial snapshot, then atomically swaps in each reload that completes cleanly. If a reload fails or exceeds `max_memory`, the operator emits a warning and keeps the previous snapshot:
+
+```tql
+subscribe "flows"
+join src_ip == ip, kind="left", refresh=15m, into=asset {
+  from_file "assets.json" { read_json }
+}
+```
+
+Set `before`, `after`, or `within` to correlate events from two unbounded streams within a time window. By default, the window uses arrival time. With `on=<expr>` or `on=<left> == <right>`, it uses event time with per-side watermarks, and `tolerance` absorbs out-of-order events. Use `idle_timeout` to finalize rows when one stream goes quiet, and `pick="latest"`, `"earliest"`, or `"nearest"` to emit a single matching right event per left event, for example for backward as-of lookups:
+
+```tql
+subscribe "flows"
+join ip, kind="left", before=1h, on=ts, pick="latest", into=lease {
+  subscribe "dhcp"
+}
+```
+
+*By @mavam.*
+
 ## 🔧 Changes
 
 ### Content-skipping filters and limits after from_microsoft_365_activity
@@ -137,6 +273,50 @@ KQL computes `accounts` exactly with `count_distinctif(Account, isnotempty(Accou
 
 *By @mavam.*
 
+### Faster JSON reads with projection pushdown
+
+The `read_json`, `read_ndjson`, `read_gelf`, `read_suricata`, and `read_zeek_json` operators now decode only the fields that the rest of the pipeline uses, such as the fields of a downstream `select` and the fields that a `where` references.
+
+For example:
+
+```tql
+from_file "events.ndjson" {
+  read_ndjson
+}
+where status == 500
+select id, nested.x
+```
+
+Unselected JSON fields are skipped without decoding their values, and pipelines that need no fields at all, such as `summarize count()`, count events without decoding them. Validation warnings and schema-mismatch diagnostics for unselected fields may no longer appear, matching `read_parquet` and `read_feather`.
+
+*By @mavam and @IyeOnline.*
+
+### Fewer columns read for filters that call functions
+
+The `read_parquet` and `read_feather` operators now read only the columns that a downstream filter needs, even when the filter calls a function, such as `where string(id) == "1"`. Previously, such a filter made them read every column.
+
+*By @mavam.*
+
+### Filters move past match statements that dispatch on computed values
+
+A `where` after a `match` whose scrutinee is a computed expression, such as `match (name if ready else "")`, now moves above the `match` when it selects a single arm. Previously, such filters stayed behind the `match` as soon as it had more than one arm.
+
+*By @mavam.*
+
+### Filters move past replace
+
+Filters after `replace` now move upstream instead of stopping at it, so sources can apply them. This matters for mappings that clean up sentinel values first, such as the Windows OCSF mappings:
+
+```tql
+from_file "events.json"
+replace what="-", with=null
+where user.name == "alice"
+```
+
+The `where` now runs before `replace` as `user.name == "alice"`, where a source that supports filter pushdown can apply it. This covers scalar comparisons (`==`, `!=`, `in`) combined with `and`, `or`, and `not` over scalar `replace` operations; other filters—such as function calls, record comparisons, or replacements with records or `what=null`—stay behind `replace` so results stay the same.
+
+*By @mavam.*
+
 ### Improved performance downstream of read operators
 
 We tuned the size of batches produced by parsers such as `read_json`, `read_csv`, and `read_syslog`. This improves the throughput of the operators that process events downstream of a parser.
@@ -166,7 +346,7 @@ from_microsoft_sql table="events", host="db", user="u", password=secret("p"), da
 summarize big=count_if(n, v => v > 0), kinds=count_distinct(n), total=sum(id), avg=mean(id)
 ```
 
-SQL Server computes this as `COUNT_BIG(CASE WHEN (([n] IS NOT NULL) AND ([n] > 0)) THEN [n] END)`, `COUNT_BIG(DISTINCT [n])`, `SUM([id])`, and `AVG(CAST([id] AS float))`. DuckDB and MySQL compute all but `sum`, ClickHouse and Hydrolix all four, Splunk all four with `count(eval(...))`, `dc`, `sum`, and `avg`, and Microsoft Defender and Azure Log Analytics `count_if` with `countif`. SentinelOne computes `count_distinct` with the approximate `estimate_distinct`, since PowerQuery has no exact distinct count.
+SQL Server computes this as `COUNT_BIG(CASE WHEN (([n] IS NOT NULL) AND ([n] > 0)) THEN [n] END)`, `COUNT_BIG(DISTINCT [n])`, `SUM([id])`, and `AVG(CAST([id] AS float))`. DuckDB and MySQL compute all but `sum`, ClickHouse and Hydrolix all four, Splunk all four with `count(eval(...))`, `dc`, `sum`, and `avg`, and Microsoft Defender and Azure Log Analytics `count_if` with `countif`. SentinelOne computes `count_distinct` exactly via two `group` stages, falling back to approximate `estimate_distinct` alongside `stddev`, `variance`, or a second distinct field.
 
 *By @mavam.*
 
@@ -295,6 +475,30 @@ Splunk computes the key with `| eval tenzir_column_0=upper('action')` before its
 
 *By @mavam.*
 
+### Push more functions and aggregations across remote sources
+
+Federated Search sources now push more TQL functions and aggregations into their target databases and query languages:
+
+- **MySQL and SQL Server** push `all(x)` and `any(x)` (via `MIN`/`MAX` over `0`/`1`) and predicate expressions as group keys or values (via `CASE WHEN ... THEN 1 ELSE 0 END`), decoding results back to booleans. SQL Server also pushes `length_bytes` (`DATALENGTH`) and `hash_md5`/`hash_sha1`/`hash_sha256` (`HASHBYTES`).
+- **ClickHouse and DuckDB** push `since_epoch(x)` (`toUnixTimestamp64Nano` in ClickHouse, `to_microseconds(epoch_us(x))` in DuckDB).
+- **KQL** pushes `length_bytes(x)` (`string_size(x)`).
+- **Splunk (SPL and SPL2)** pushes `all`/`any`, predicates as values (`if(p, "true", "false")`), `capitalize`, `replace` (with a constant literal needle), `slice`, `year`/`month`/`day`/`hour`/`minute`/`second` (`tonumber(strftime(...))`), and whole-second `floor` time buckets.
+- **SentinelOne Data Lake** pushes `match_regex` (`matches:matchcase`), `capitalize`, `replace` (case-insensitive regex with a constant literal needle and replacement), millisecond-precision `second` (`number(strftime(x, "%S.%f", "UTC"))`), and predicates as native boolean values in PowerQuery.
+
+For example, `from_splunk` now computes `b = floor(_time, 1h)` and `a = all(ok)` directly in Splunk as `strftime(floor('_time' / 3600) * 3600, "%Y-%m-%dT%H:%M:%S%z")` and `min(eval(case('ok'=="true", 1, 'ok'=="false", 0)))`, and `from_microsoft_sql` computes `h = s.hash_sha256()` as `LOWER(CONVERT(varchar(64), HASHBYTES('SHA2_256', [s]), 2))`.
+
+Pushed expressions run with the target's native semantics; pass `pushdown=false` to evaluate them in Tenzir instead.
+
+*By @mavam.*
+
+### Pushed-down aggregations follow the target's semantics
+
+The aggregations and functions that `from_azure_log_analytics` and `from_microsoft_defender` compute in KQL now follow KQL's semantics instead of imitating TQL's. For example, `summarize total=sum(x)` now runs as `sum(['x'])`, which yields `0` without values, and `mean` runs as `avg`, which yields `NaN`. `sqrt` and `log` yield `NaN` and `-Infinity` outside their domain, `count_distinct` counts empty strings as values, and `count(x)` counts the values that are not `null`, including empty strings.
+
+The same holds for ClickHouse, DuckDB, and SQL Server: without values, ClickHouse's `min`, `max`, and `sum` yield the default value of their type, `all` and `any` yield `null` in ClickHouse and DuckDB, and DuckDB and SQL Server fail a query that takes the root of a negative number or the logarithm of zero. Use `pushdown=false` to compute these in Tenzir instead.
+
+*By @mavam.*
+
 ### Sink byte metrics count the delivered payload
 
 Sink operators now report the bytes they write consistently: the payload before any compression they apply, counted once it was delivered, and once however many retries it took. Together with sources, which report the bytes they read, this makes the bytes going into and out of a pipeline comparable.
@@ -416,6 +620,14 @@ The warning repeats at most once every five minutes.
 
 ## 🐞 Bug fixes
 
+### A `where` after `from_http` sees every event
+
+A `where` after `from_http` now also applies to the events that `error_field` produces. Previously, these events passed the filter unchecked.
+
+Lambda and OData pagination no longer stop early when a downstream `where` drops the events of a page. Previously, `from_http` stopped fetching further pages because the filtered page appeared to have no events to paginate from.
+
+*By @mavam and @IyeOnline.*
+
 ### accept_tcp closes connections to vanished peers
 
 The `accept_tcp` operator now detects clients that disappeared without closing their connection, for example because a NAT gateway or firewall dropped the connection state or the client host lost power. Previously, such connections stayed open indefinitely and kept occupying one of the `max_connections` slots, so the operator could eventually stop accepting new clients.
@@ -429,6 +641,14 @@ The operator now enables TCP keepalive on accepted connections and closes a conn
 On Linux, the `processes` operator reported `utime` and `stime` in whole seconds, which showed a mostly idle process as using no CPU at all, and left `startup` empty. It also reported `peak_mem` and `swap` in kilobytes rather than bytes, unlike `rsize` and `vsize`. The operator now reports CPU times to the millisecond, the time each process started, and all memory sizes in bytes.
 
 *By @mavam.*
+
+### Count shared import batches once against the buffer limit
+
+The `tenzir.max-buffered-bytes` limit now counts each batch of imported events once. Previously, a batch with events of several shapes counted once per shape, so the node flushed partitions long before the limit was actually reached and created many small partitions.
+
+The node now creates fewer, larger partitions. Because the limit now reflects the memory that buffered events actually use, the node holds more events in memory before writing them to disk. To keep imports flowing, the node starts writing partitions at 80% of the limit and only slows down imports once the limit itself is reached.
+
+*By @tobim.*
 
 ### Exact fractional seconds in parsed times
 
@@ -501,6 +721,40 @@ Tenzir now runs on x86-64 CPUs that lack AVX2, such as Intel Ivy Bridge. Previou
 Tenzir still requires SSE4.2, which Intel CPUs support since Nehalem (2008) and AMD CPUs since Bulldozer (2011). On CPUs that support AVX2, performance-critical code paths still detect and use it at runtime.
 
 *By @tobim.*
+
+### Syslog keeps repeated structured-data parameters
+
+The `read_syslog` operator and the `parse_syslog` function again collect the values of a structured-data parameter that repeats within an element into a list, as RFC 5424 allows. Since the move to the new event builder, only the last value survived. Check Point repeats its match-table fields, such as `layer_name` and `rule_action`, once per matching policy layer:
+
+```tql
+from {
+  line: r#"<134>1 2026-11-22T10:00:00Z gw CheckPoint 1 - [layer_name:"Network"; layer_name:"Application"]"#,
+}
+select sd = line.parse_syslog().structured_data
+```
+
+```tql
+{
+  sd: {
+    checkpoint_2620: {
+      layer_name: [
+        "Network",
+        "Application",
+      ],
+    },
+  },
+}
+```
+
+A parameter that occurs once stays a single value, so the same field can be a single value in one event and a list in another. Parameters under a repeated SD-ID also collect into a list instead of keeping the last value. A schema that declares such a field as a list receives all values. A schema that declares it as a single value receives `null` and a warning.
+
+The Check Point dialect also accepts records that it previously rejected:
+
+- Keys of 32 or more characters, such as `script_value_for_one_time_scripts`.
+- A final `;` or spaces before the closing `]`, as in Harmony Endpoint exports.
+- A tab between a structured-data element and the message.
+
+*By @zedoraps.*
 
 ### Zeek TSV round trip with write_zeek_tsv and read_zeek_tsv
 
