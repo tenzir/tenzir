@@ -10,8 +10,8 @@
   folly = {
     owner = "tenzir";
     repo = "folly";
-    rev = "97ac253cfda970472a9e087ad7da631dbbeeadde";
-    hash = "sha256-yFo5FVhpSN5ZYHLfs+U5synjIb1+FMt2zGJuBfbFLCs=";
+    rev = "0314f22551034e6acbf894d531a140918d7709ce";
+    hash = "sha256-0LAaKMVavXbeqSFMoPr0AdBPC2Wj4HsDyGwoiEc6V4k=";
   };
   fizz = {
     owner = "facebookincubator";
