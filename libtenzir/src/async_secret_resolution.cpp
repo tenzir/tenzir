@@ -12,7 +12,6 @@
 
 #include <folly/coro/Sleep.h>
 #include <folly/executors/GlobalExecutor.h>
-#include <folly/futures/ThreadWheelTimekeeper.h>
 
 #include <chrono>
 #include <mutex>
@@ -22,7 +21,10 @@ namespace tenzir {
 namespace {
 
 auto run_secret_cache_cleanup(SharedMutex<SecretCache>& state) -> Task<void> {
-  auto timekeeper = folly::ThreadWheelTimekeeper{};
+  // The sleep uses folly's process-wide timekeeper. A timekeeper of our own
+  // would start a thread here and join it when the task ends, and a thread
+  // that exits while the process runs on can crash in the static build
+  // (TNZ-2197).
   while (true) {
     co_await folly::coro::co_safe_point;
     auto wait = duration{};
@@ -31,7 +33,7 @@ auto run_secret_cache_cleanup(SharedMutex<SecretCache>& state) -> Task<void> {
       wait = cache->cleanup();
     }
     co_await folly::coro::sleep(
-      std::chrono::duration_cast<folly::HighResDuration>(wait), &timekeeper);
+      std::chrono::duration_cast<folly::HighResDuration>(wait));
   }
 }
 
