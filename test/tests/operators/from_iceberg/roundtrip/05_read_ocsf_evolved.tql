@@ -1,0 +1,6 @@
+// Read back both initial and evolved snapshots; earlier rows carry null
+// for evolved columns and nested fields.
+from_iceberg "testns.ocsf", catalog=env("ICEBERG_REST_URI")
+assert @name == "iceberg.testns.ocsf"
+schema = @name
+sort id

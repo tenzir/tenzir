@@ -1,0 +1,5 @@
+// Reading explicitly by commit 1's snapshot_id returns only commit 1's rows.
+let $s = file_contents(f"{env("ICEBERG_WAREHOUSE_DIR")}/snapshots.json").string().parse_json()
+from_iceberg "ttns.events", catalog=env("ICEBERG_REST_URI"),
+  snapshot_id=$s.s1_id
+sort id

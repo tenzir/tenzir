@@ -1,0 +1,5 @@
+// Second data file with ids 4..6 so file-level metrics pruning is active.
+from {id: 4, time: 2026-01-02T00:00:00Z, host: "db-01", score: 40, opt: null, meta: {env: "staging", priority: 1}},
+     {id: 5, time: 2026-01-02T00:00:01Z, host: "web-03", score: 50, opt: "e", meta: {env: "prod", priority: 2}},
+     {id: 6, time: 2026-01-02T00:00:02Z, host: "cache-01", score: 60, opt: null, meta: {env: "dev", priority: 3}}
+to_iceberg "optns.events", catalog=env("ICEBERG_REST_URI")

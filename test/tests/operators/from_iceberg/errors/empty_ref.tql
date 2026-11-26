@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from_iceberg "ns.events", catalog="https://example.invalid/iceberg",
+  ref=""

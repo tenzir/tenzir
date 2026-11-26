@@ -1,0 +1,7 @@
+// Partitioned table containing null partition keys across identity and day transforms.
+from {id: 1, key: "alpha", ts: 2026-03-01T10:00:00Z, msg: "full"},
+     {id: 2, key: null, ts: 2026-03-01T12:00:00Z, msg: "null_key"},
+     {id: 3, key: "beta", ts: null, msg: "null_ts"},
+     {id: 4, key: null, ts: null, msg: "both_null"}
+to_iceberg "partns.nullkeys", catalog=env("ICEBERG_REST_URI"),
+  partition_by=[key, day(ts)]

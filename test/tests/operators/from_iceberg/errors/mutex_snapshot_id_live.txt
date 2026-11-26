@@ -1,0 +1,9 @@
+error: `snapshot_id` and `live=true` are mutually exclusive
+ --> tests/operators/from_iceberg/errors/mutex_snapshot_id_live.tql:6:15
+  |
+6 |   snapshot_id=1, live=true
+  |               ^
+  ⋮
+6 |   snapshot_id=1, live=true
+  |                       ----
+  |

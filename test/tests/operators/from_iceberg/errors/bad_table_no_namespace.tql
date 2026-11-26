@@ -1,0 +1,5 @@
+---
+error: true
+---
+
+from_iceberg "events", catalog="https://example.invalid/iceberg"

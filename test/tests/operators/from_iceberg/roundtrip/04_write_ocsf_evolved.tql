@@ -1,0 +1,21 @@
+// Schema-evolved heterogeneous OCSF-like events: new top-level fields,
+// new nested struct field (actor.uid), and heterogeneous endpoint structs.
+from {
+       id: 3,
+       class_uid: 4001,
+       time: 2026-02-01T00:02:00Z,
+       severity_id: 2,
+       actor: {user: "carol", uid: 1003},
+       src_endpoint: {ip: "10.0.0.1", port: 443},
+       msg: "net_conn",
+     },
+     {
+       id: 4,
+       class_uid: 4001,
+       time: 2026-02-01T00:03:00Z,
+       severity_id: 4,
+       actor: {user: "dave", uid: 1004},
+       dst_endpoint: {ip: "10.0.0.2", port: 80},
+       msg: "net_drop",
+     }
+to_iceberg "testns.ocsf", catalog=env("ICEBERG_REST_URI")

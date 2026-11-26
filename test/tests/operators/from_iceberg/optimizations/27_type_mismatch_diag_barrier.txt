@@ -1,0 +1,6 @@
+warning: binary operator `<` does not accept the argument type combination `(int, string)`
+ --> tests/operators/from_iceberg/optimizations/27_type_mismatch_diag_barrier.tql:3:7
+  |
+3 | where id < "not-an-int"
+  |       ~~~~~~~~~~~~~~~~~
+  |

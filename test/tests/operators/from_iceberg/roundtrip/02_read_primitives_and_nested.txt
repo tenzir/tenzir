@@ -1,0 +1,62 @@
+{
+  id: 1,
+  flag: true,
+  score: 3.5,
+  label: "alpha",
+  raw: b"hello",
+  time: 2026-01-01T00:00:00Z,
+  src_ip: "192.168.0.1",
+  net: "10.0.0.0/8",
+  dur: 90000000000,
+  meta: {
+    level: "info",
+    count: 10,
+    tags: [
+      "a",
+      "b",
+    ],
+  },
+  items: [
+    {
+      k: "x",
+      v: 1,
+    },
+    {
+      k: "y",
+      v: 2,
+    },
+  ],
+  schema: "iceberg.testns.events",
+}
+{
+  id: 2,
+  flag: false,
+  score: -0.25,
+  label: null,
+  raw: b"",
+  time: 2026-01-01T00:00:01.123456Z,
+  src_ip: "::1",
+  net: "192.168.0.0/16",
+  dur: 1000000,
+  meta: {
+    level: "warn",
+    count: null,
+    tags: [],
+  },
+  items: [],
+  schema: "iceberg.testns.events",
+}
+{
+  id: 3,
+  flag: null,
+  score: null,
+  label: "gamma",
+  raw: null,
+  time: 2026-01-02T12:34:56Z,
+  src_ip: null,
+  net: null,
+  dur: null,
+  meta: null,
+  items: null,
+  schema: "iceberg.testns.events",
+}

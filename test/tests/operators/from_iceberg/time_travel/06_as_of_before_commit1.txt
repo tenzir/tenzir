@@ -1,0 +1,6 @@
+error: failed to plan Iceberg scan for `ttns.events`: Cannot find a snapshot older than 2020-01-01 00:00:00.000 UTC
+ --> tests/operators/from_iceberg/time_travel/06_as_of_before_commit1.tql:6:1
+  |
+6 | from_iceberg "ttns.events", catalog=env("ICEBERG_REST_URI"),
+  | ^^^^^^^^^^^^
+  |

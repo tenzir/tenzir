@@ -1,0 +1,102 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "from_iceberg",
+       store: {
+         op: {
+           path: [
+             `from_iceberg` @ [1]:0..12 from 0
+           ],
+           ref: std::from_iceberg/op
+         },
+         args: [
+           located "optns.events" @ [1]:13..27 from 0
+         ],
+         named_args: [
+           {
+             index: 0,
+             value: expression constant string "http://127.0.0.1:1" @ [1]:37..57 from 0
+           }
+         ]
+       },
+       filter: [
+         
+       ],
+-      order: "ordered"
++      order: "ordered",
++      projection: [
++        
++      ]
+     },
+     summarize {
+       self: [1]:58..67 from 0,
+       cfg: {
+         aggregates: [
+           {
+             dest: {
+               expr: root_field {
+                 id: `n` @ [1]:68..69 from 0,
+                 has_question_mark: false
+               },
+               has_this: false,
+               path: [
+                 {
+                   id: `n` @ [1]:68..69 from 0,
+                   has_question_mark: false
+                 }
+               ]
+             },
+             call: {
+               fn: {
+                 path: [
+                   `count` @ [1]:70..75 from 0
+                 ],
+                 ref: std::count/fn
+               },
+               args: [
+                 
+               ],
+               method: false,
+               location: [1]:70..77 from 0
+             }
+           }
+         ],
+         groups: [
+           
+         ],
+         indices: [
+           0
+         ],
+         emission: "final",
+         mode: "reset",
+         output: "summary",
+         emit_every: 1
+       }
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:77..77 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ],
+   definition_location: [1]:0..77 from 0
+ }

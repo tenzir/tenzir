@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from_iceberg "ns.events", catalog="https://example.invalid/iceberg",
+  token="secret", gcp_service_account_key="{}"

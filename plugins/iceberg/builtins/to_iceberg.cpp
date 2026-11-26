@@ -7,19 +7,16 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/plugins/iceberg/catalog.hpp"
+#include "tenzir/plugins/iceberg/catalog_args.hpp"
 #include "tenzir/plugins/iceberg/detail/projection.hpp"
 #include "tenzir/plugins/iceberg/restore.hpp"
 
-#include <tenzir/amazon.hpp>
 #include <tenzir/any.hpp>
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/async.hpp>
 #include <tenzir/async/blocking_executor.hpp>
-#include <tenzir/aws_credentials.hpp>
-#include <tenzir/aws_iam.hpp>
 #include <tenzir/co_match.hpp>
 #include <tenzir/detail/enum.hpp>
-#include <tenzir/detail/string.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/nova/arrow_export.hpp>
 #include <tenzir/nova/censor.hpp>
@@ -101,50 +98,20 @@ constexpr auto max_open_partitions = size_t{4096};
 constexpr auto max_pending_files = size_t{1024};
 
 TENZIR_ENUM(mode, create_append, create, append);
-TENZIR_ENUM(aws_catalog_service, glue, s3tables);
 
 /// The column that becomes the table's registered sort order when a created
 /// table has a matching top-level timestamp (the OCSF event time convention).
 constexpr auto default_sort_column = std::string_view{"time"};
 
-struct ToIcebergArgs {
-  located<std::string> table_id;
-  /// The REST catalog endpoint. Deliberately named `catalog` instead of the
-  /// database-operator contract's `uri`: the operator involves three
-  /// endpoints (catalog, warehouse, S3), so the generic name would not say
-  /// which one it is, and the Iceberg ecosystem universally configures "a
-  /// catalog". `table` and `mode` follow the contract.
-  StartupArgument<nova::Secret> catalog
-    = StartupArgument<nova::Secret>::constant("");
+struct ToIcebergArgs : CatalogArgs {
   Option<located<std::string>> mode;
-  Option<StartupArgument<nova::Secret>> warehouse;
   Option<StartupArgument<nova::Secret>> table_location;
-  Option<StartupArgument<nova::Record>> aws_iam;
-  Option<located<std::string>> catalog_aws_service;
-  Option<StartupArgument<nova::Secret>> s3_endpoint;
-  Option<located<bool>> s3_path_style;
-  Option<StartupArgument<nova::Secret>> token;
-  Option<located<bool>> gcp_auth;
-  Option<StartupArgument<nova::Secret>> gcp_service_account_key;
-  Option<located<std::string>> gcp_project;
   Option<ast::expression> partition_by;
   Option<located<uint64_t>> max_size;
   Option<located<uint64_t>> buffer_size;
   Option<located<duration>> timeout;
   location operator_location;
 };
-
-/// Splits "ns.sub_ns.table" into namespace levels and the table name.
-auto split_table_id(std::string_view table_id)
-  -> std::pair<std::vector<std::string>, std::string> {
-  auto parts = detail::split(table_id, ".");
-  auto ns = std::vector<std::string>{};
-  ns.reserve(parts.size() - 1);
-  for (auto const& part : parts | std::views::take(parts.size() - 1)) {
-    ns.emplace_back(part);
-  }
-  return {std::move(ns), std::string{parts.back()}};
-}
 
 /// The partition transforms addressable from `partition_by`, by their
 /// Iceberg names. These are matched symbolically and never evaluated, so
@@ -495,147 +462,19 @@ public:
       = ctx.make_counter(MetricsLabel{"operator", "to_iceberg"},
                          MetricsDirection::write, MetricsVisibility::external_,
                          MetricsUnit::bytes);
-    auto config = CatalogConfig{};
-    auto warehouse = std::string{};
-    auto s3_endpoint = std::string{};
-    auto token = std::string{};
-    auto reveal = [&](Option<StartupArgument<nova::Secret>> const& arg,
-                      std::string_view name, std::string& out) -> Task<bool> {
-      if (not arg) {
-        co_return true;
-      }
-      auto value = co_await arg->evaluate_string(ctx, name);
-      if (not value) {
-        co_return false;
-      }
-      out = std::move(*value);
-      co_return true;
-    };
-    auto catalog_uri = co_await args_.catalog.evaluate_string(ctx, "catalog");
-    if (not catalog_uri
-        or not co_await reveal(args_.warehouse, "warehouse", warehouse)
-        or not co_await reveal(args_.table_location, "location",
-                               table_location_)
-        or not co_await reveal(args_.s3_endpoint, "s3_endpoint", s3_endpoint)
-        or not co_await reveal(args_.token, "token", token)
-        or not co_await reveal(args_.gcp_service_account_key,
-                               "gcp_service_account_key",
-                               config.gcp_credentials_json)) {
+    auto config = co_await resolve_catalog_config(args_, "to_iceberg", ctx);
+    if (not config) {
       done_ = true;
       co_return;
     }
-    config.uri = std::move(*catalog_uri);
-    auto auth = co_await resolve_aws_iam_auth(args_.aws_iam, None{}, ctx);
-    if (not auth) {
-      done_ = true;
-      co_return;
-    }
-    config.warehouse = std::move(warehouse);
-    auto const uses_managed_aws_catalog
-      = static_cast<bool>(args_.catalog_aws_service);
-    config.use_s3_file_io
-      = auth->credentials.has_value() or uses_managed_aws_catalog;
-    if (args_.catalog_aws_service) {
-      auto const service = from_string<enum aws_catalog_service>(
-        args_.catalog_aws_service->inner);
-      TENZIR_ASSERT(service);
-      config.aws_catalog_signing_name
-        = *service == aws_catalog_service::glue ? "glue" : "s3tables";
-    }
-    if (not uses_managed_aws_catalog and auth->credentials
-        and not auth->credentials->region.empty()) {
-      config.properties["client.region"] = auth->credentials->region;
-    }
-    if (not token.empty()) {
-      config.properties["rest.auth.type"] = "oauth2";
-      config.properties["token"] = std::move(token);
-    }
-    config.gcp_auth = (args_.gcp_auth and args_.gcp_auth->inner)
-                      or static_cast<bool>(args_.gcp_service_account_key);
-    if (args_.gcp_project) {
-      config.gcp_user_project = args_.gcp_project->inner;
-    }
-    auto const needs_provider
-      = uses_managed_aws_catalog
-        or (auth->credentials
-            and (not auth->credentials->role.empty()
-                 or not auth->credentials->profile.empty()
-                 or auth->credentials->web_identity.has_value()));
-    if (needs_provider) {
-      // Profile, assume-role, and web-identity providers talk to STS and
-      // the shared config machinery, so the AWS SDK must be initialized
-      // for every provider, not just for managed AWS catalogs.
-      auto initialized = co_await spawn_blocking([] {
-        return ensure_aws_sdk_initialized();
-      });
-      if (not initialized) {
-        auto const source = args_.aws_iam ? args_.aws_iam->get_location()
-                                          : args_.catalog_aws_service->source;
-        diagnostic::error("failed to initialize AWS authentication: {}",
-                          initialized.error().message)
-          .primary(source)
-          .emit(dh);
+    if (args_.table_location) {
+      auto loc
+        = co_await args_.table_location->evaluate_string(ctx, "location");
+      if (not loc) {
         done_ = true;
         co_return;
       }
-      // Region resolution consults a named profile's config file, which
-      // requires the initialized SDK; that is why it happens here and not
-      // alongside the other catalog properties above. It runs for every
-      // provider-backed configuration, not just managed AWS catalogs: the
-      // S3 FileIO would otherwise sign with the SDK's ambient region
-      // instead of the selected profile's region.
-      auto credentials = Option<resolved_aws_credentials>{None{}};
-      if (auth->credentials) {
-        credentials = *auth->credentials;
-      }
-      auto resolved_region
-        = co_await spawn_blocking([credentials = std::move(credentials)]() {
-            return amazon::resolve_region(None{}, credentials);
-          });
-      if (uses_managed_aws_catalog) {
-        config.aws_signing_region = resolved_region;
-      }
-      if (not resolved_region.empty()) {
-        config.properties["client.region"] = resolved_region;
-      }
-      // Use the shared live provider for catalog signing and S3 access. The
-      // default chain and STS-backed providers refresh expiring credentials,
-      // including profiles backed by credential_process.
-      auto region = Option<std::string>{};
-      if (not resolved_region.empty()) {
-        region = resolved_region;
-      }
-      auto provider = co_await spawn_blocking(
-        [credentials = auth->credentials, region = std::move(region)]() {
-          return make_aws_credentials_provider(credentials, region);
-        });
-      if (not provider) {
-        auto const source = args_.aws_iam ? args_.aws_iam->get_location()
-                                          : args_.catalog_aws_service->source;
-        diagnostic::error(provider.error()).primary(source).emit(dh);
-        done_ = true;
-        co_return;
-      }
-      config.aws_credentials_provider = std::move(*provider);
-    } else if (auth->credentials) {
-      auto const& creds = *auth->credentials;
-      if (not creds.access_key_id.empty()) {
-        config.properties["s3.access-key-id"] = creds.access_key_id;
-      }
-      if (not creds.secret_access_key.empty()) {
-        config.properties["s3.secret-access-key"] = creds.secret_access_key;
-      }
-      if (not creds.session_token.empty()) {
-        config.properties["s3.session-token"] = creds.session_token;
-      }
-    }
-    if (not s3_endpoint.empty()) {
-      config.properties["s3.endpoint"] = std::move(s3_endpoint);
-      // Custom S3-compatible endpoints practically always require path-style
-      // addressing; virtual-hosted style remains opt-out via `s3_path_style`.
-      auto const path_style
-        = not args_.s3_path_style or args_.s3_path_style->inner;
-      config.properties["s3.path-style-access"] = path_style ? "true" : "false";
+      table_location_ = std::move(*loc);
     }
     if (args_.mode) {
       auto const parsed = from_string<enum mode>(args_.mode->inner);
@@ -652,7 +491,7 @@ public:
     }
     std::tie(ns_, table_name_) = split_table_id(args_.table_id.inner);
     auto catalog
-      = co_await spawn_blocking([config = std::move(config)]() mutable {
+      = co_await spawn_blocking([config = std::move(*config)]() mutable {
           return open_catalog(std::move(config));
         });
     if (not catalog) {
@@ -2412,22 +2251,9 @@ public:
   auto describe() const -> Description override {
     auto d = Describer<ToIcebergArgs, ToIceberg<table_slice>,
                        ToIceberg<nova::Events>>{};
-    auto table_arg = d.positional("table", &ToIcebergArgs::table_id);
-    d.named("catalog", &ToIcebergArgs::catalog);
+    auto catalog_args = register_catalog_args(d);
     auto mode_arg = d.named("mode", &ToIcebergArgs::mode);
-    d.named("warehouse", &ToIcebergArgs::warehouse);
     d.named("location", &ToIcebergArgs::table_location);
-    d.named("aws_iam", &ToIcebergArgs::aws_iam);
-    auto aws_catalog_arg
-      = d.named("catalog_aws_service", &ToIcebergArgs::catalog_aws_service);
-    auto endpoint_arg = d.named("s3_endpoint", &ToIcebergArgs::s3_endpoint);
-    auto path_style_arg
-      = d.named("s3_path_style", &ToIcebergArgs::s3_path_style);
-    auto token_arg = d.named("token", &ToIcebergArgs::token);
-    auto gcp_auth_arg = d.named("gcp_auth", &ToIcebergArgs::gcp_auth);
-    auto gcp_key_arg = d.named("gcp_service_account_key",
-                               &ToIcebergArgs::gcp_service_account_key);
-    auto gcp_project_arg = d.named("gcp_project", &ToIcebergArgs::gcp_project);
     auto partition_by_arg
       = d.named("partition_by", &ToIcebergArgs::partition_by, "list<any>");
     auto max_size_arg = d.named("max_size", &ToIcebergArgs::max_size);
@@ -2435,18 +2261,7 @@ public:
     auto timeout_arg = d.named("timeout", &ToIcebergArgs::timeout);
     d.operator_location(&ToIcebergArgs::operator_location);
     d.validate([=](DescribeCtx& ctx) -> Empty {
-      if (auto table = ctx.get(table_arg)) {
-        auto parts = detail::split(table->inner, ".");
-        auto const valid
-          = parts.size() >= 2
-            and std::ranges::none_of(parts, &std::string_view::empty);
-        if (not valid) {
-          diagnostic::error(
-            "`table` must be of the form `namespace.table_name`")
-            .primary(table->source, "got `{}`", table->inner)
-            .emit(ctx);
-        }
-      }
+      validate_catalog_args(catalog_args, "to_iceberg", ctx);
       if (auto mode_opt = ctx.get(mode_arg)) {
         if (not from_string<enum mode>(mode_opt->inner)) {
           diagnostic::error(
@@ -2479,68 +2294,6 @@ public:
             .emit(ctx);
         }
       }
-      if (ctx.get(path_style_arg) and not ctx.get(endpoint_arg)) {
-        diagnostic::error("`s3_path_style` requires `s3_endpoint`")
-          .primary(*ctx.get_location(path_style_arg))
-          .emit(ctx);
-      }
-      if (auto service = ctx.get(aws_catalog_arg)) {
-        if (not from_string<enum aws_catalog_service>(service->inner)) {
-          diagnostic::error(
-            "`catalog_aws_service` must be `glue` or `s3tables`")
-            .primary(service->source, "got `{}`", service->inner)
-            .emit(ctx);
-        }
-        if (ctx.get(token_arg)) {
-          diagnostic::error(
-            "`catalog_aws_service` cannot be combined with `token`")
-            .primary(service->source)
-            .emit(ctx);
-        }
-      }
-      auto const gcp_auth_opt = ctx.get(gcp_auth_arg);
-      auto const uses_gcp = (gcp_auth_opt and gcp_auth_opt->inner)
-                            or static_cast<bool>(ctx.get(gcp_key_arg));
-      if (ctx.get(aws_catalog_arg) and uses_gcp) {
-        diagnostic::error("`catalog_aws_service` cannot be combined with "
-                          "Google authentication")
-          .primary(*ctx.get_location(aws_catalog_arg))
-          .emit(ctx);
-      }
-      if (ctx.get(token_arg) and uses_gcp) {
-        diagnostic::error("`token` cannot be combined with Google "
-                          "authentication")
-          .primary(*ctx.get_location(token_arg))
-          .note("`gcp_auth` and `gcp_service_account_key` mint and refresh "
-                "tokens automatically")
-          .emit(ctx);
-      }
-      if (gcp_auth_opt and not gcp_auth_opt->inner and ctx.get(gcp_key_arg)) {
-        diagnostic::error("`gcp_service_account_key` requires `gcp_auth` to "
-                          "be enabled")
-          .primary(gcp_auth_opt->source)
-          .emit(ctx);
-      }
-      if (ctx.get(gcp_project_arg) and not uses_gcp) {
-        diagnostic::error("`gcp_project` requires `gcp_auth` or "
-                          "`gcp_service_account_key`")
-          .primary(*ctx.get_location(gcp_project_arg))
-          .emit(ctx);
-      }
-#ifndef TENZIR_ICEBERG_GCS
-      if (uses_gcp) {
-        auto location = ctx.get_location(gcp_auth_arg);
-        if (not location) {
-          location = ctx.get_location(gcp_key_arg);
-        }
-        diagnostic::error("this build of `to_iceberg` lacks Google Cloud "
-                          "support")
-          .primary(*location)
-          .note("rebuild against an Arrow with `ARROW_GCS=ON` and "
-                "google-cloud-cpp installed")
-          .emit(ctx);
-      }
-#endif
       return {};
     });
     return d.without_optimize();

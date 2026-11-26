@@ -1,0 +1,6 @@
+// The empty string is both the lower and the upper bound of the partition
+// summary.
+from {id: 1, k: "", msg: "first"},
+     {id: 2, k: "", msg: "second"}
+to_iceberg "partns.onlyempty", catalog=env("ICEBERG_REST_URI"),
+  partition_by=[k]

@@ -1,0 +1,207 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "from_iceberg",
+       store: {
+         op: {
+           path: [
+             `from_iceberg` @ [1]:0..12 from 0
+           ],
+           ref: std::from_iceberg/op
+         },
+         args: [
+           located "optns.events" @ [1]:13..27 from 0
+         ],
+         named_args: [
+           {
+             index: 0,
+             value: expression constant string "http://127.0.0.1:1" @ [1]:37..57 from 0
+           }
+         ]
+       },
+       filter: [
+-        
+-      ],
+-      order: "ordered"
+-    },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:58..63 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
+-          left: binary_expr {
+-            left: root_field {
+-              id: `id` @ [1]:64..66 from 0,
++        binary_expr {
++          left: root_field {
++            id: `id` @ [1]:64..66 from 0,
++            has_question_mark: false
++          },
++          op: "geq",
++          right: constant int64 2 @ [1]:70..71 from 0,
++          location: [1]:64..71 from 0
++        },
++        function_call {
++          fn: {
++            path: [
++              `starts_with` @ [1]:81..92 from 0
++            ],
++            ref: std::starts_with/fn
++          },
++          args: [
++            root_field {
++              id: `host` @ [1]:76..80 from 0,
+               has_question_mark: false
+             },
+-            op: "geq",
+-            right: constant int64 2 @ [1]:70..71 from 0,
+-            location: [1]:64..71 from 0
+-          },
+-          op: "and_",
+-          right: function_call {
+-            fn: {
+-              path: [
+-                `starts_with` @ [1]:81..92 from 0
+-              ],
+-              ref: std::starts_with/fn
+-            },
+-            args: [
+-              root_field {
+-                id: `host` @ [1]:76..80 from 0,
+-                has_question_mark: false
+-              },
+-              constant string "web" @ [1]:93..98 from 0
+-            ],
+-            method: true,
+-            location: [1]:76..99 from 0
+-          },
+-          location: [1]:64..99 from 0
++            constant string "web" @ [1]:93..98 from 0
++          ],
++          method: true,
++          location: [1]:76..99 from 0
+         }
+       ],
+-      named_args: [
+-        
++      order: "ordered",
++      limit: 3,
++      projection: [
++        {
++          expr: root_field {
++            id: `host` @ [1]:111..115 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `host` @ [1]:111..115 from 0,
++              has_question_mark: false
++            }
++          ]
++        },
++        {
++          expr: root_field {
++            id: `id` @ [1]:107..109 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `id` @ [1]:107..109 from 0,
++              has_question_mark: false
++            }
++          ]
++        }
+       ]
+     },
+     SetIr {
+       assignments: [
+         {
+           left: this_ [0]:0..0 from 0,
+           right: record {
+             begin: [0]:0..0 from 0,
+             items: [
+               
+             ],
+             end: [0]:0..0 from 0
+           },
+           location: [0]:0..0 from 0
+         },
+         {
+           left: root_field {
+             id: `id` @ [1]:107..109 from 0,
+             has_question_mark: false
+           },
+           right: root_field {
+             id: `id` @ [1]:107..109 from 0,
+             has_question_mark: false
+           },
+           location: [1]:107..109 from 0
+         },
+         {
+           left: root_field {
+             id: `host` @ [1]:111..115 from 0,
+             has_question_mark: false
+           },
+           right: root_field {
+             id: `host` @ [1]:111..115 from 0,
+             has_question_mark: false
+           },
+           location: [1]:111..115 from 0
+         }
+       ],
+       order: "ordered"
+     },
+     GenericIr {
+       desc: "head",
+       store: {
+         op: {
+           path: [
+             `head` @ [1]:116..120 from 0
+           ],
+           ref: std::head/op
+         },
+         args: [
+           located 3 @ [1]:121..122 from 0
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+       order: "ordered"
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:122..122 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ],
+   definition_location: [1]:0..122 from 0
+ }

@@ -1,0 +1,21 @@
+{
+  path: "/partns/escaped/data/key=",
+}
+{
+  path: "/partns/escaped/data/key=%C3%A4%25%23%3F",
+}
+{
+  path: "/partns/escaped/data/key=..",
+}
+{
+  path: "/partns/escaped/data/key=a%20b",
+}
+{
+  path: "/partns/escaped/data/key=a%2Fb",
+}
+{
+  path: "/partns/escaped/data/key=a%3Db%26c",
+}
+{
+  path: "/partns/escaped/data/key=null",
+}

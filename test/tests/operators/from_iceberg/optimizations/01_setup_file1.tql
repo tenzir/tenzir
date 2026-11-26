@@ -1,0 +1,5 @@
+// First data file with ids 1..3 and distinct min/max stats.
+from {id: 1, time: 2026-01-01T00:00:00Z, host: "web-01", score: 10, opt: "a", meta: {env: "prod", priority: 1}},
+     {id: 2, time: 2026-01-01T00:00:01Z, host: "web-02", score: 20, opt: null, meta: {env: "staging", priority: 2}},
+     {id: 3, time: 2026-01-01T00:00:02Z, host: "api-01", score: 30, opt: "c", meta: {env: "prod", priority: 3}}
+to_iceberg "optns.events", catalog=env("ICEBERG_REST_URI")

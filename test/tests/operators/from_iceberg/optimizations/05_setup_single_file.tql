@@ -1,0 +1,7 @@
+// Single-file table with deterministic row order for limit pushdown tests.
+from {id: 1, host: "web-01", tag: "a"},
+     {id: 2, host: "web-02", tag: "b"},
+     {id: 3, host: "api-01", tag: "c"},
+     {id: 4, host: "web-03", tag: "d"},
+     {id: 5, host: "db-01", tag: "e"}
+to_iceberg "optns.single", catalog=env("ICEBERG_REST_URI")

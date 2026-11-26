@@ -1,0 +1,12 @@
+// Identity partition on a string column whose values include the empty
+// string. The empty string serializes to zero bytes, which the manifest list
+// must record as a present partition bound instead of a missing one: readers
+// take a missing lower bound to mean that every value is null and skip the
+// manifest for every comparison.
+from {id: 1, k: "", msg: "empty"},
+     {id: 2, k: null, msg: "null"},
+     {id: 3, k: "..", msg: "dots"},
+     {id: 4, k: "b", msg: "plain"},
+     {id: 5, k: "", msg: "empty_again"}
+to_iceberg "partns.emptykey", catalog=env("ICEBERG_REST_URI"),
+  partition_by=[k]

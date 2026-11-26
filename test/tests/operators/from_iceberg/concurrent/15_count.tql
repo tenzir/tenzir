@@ -1,0 +1,3 @@
+// A count needs no columns and uses the table metadata fast path.
+from_iceberg "concns.events", catalog=env("ICEBERG_REST_URI")
+summarize n=count()

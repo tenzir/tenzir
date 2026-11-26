@@ -1,0 +1,6 @@
+error: `poll_interval` requires `live=true`
+ --> tests/operators/from_iceberg/errors/poll_interval_without_live.tql:6:17
+  |
+6 |   poll_interval=5s
+  |                 ^^
+  |

@@ -1,0 +1,6 @@
+error: `ref` must not be empty
+ --> tests/operators/from_iceberg/errors/empty_ref.tql:6:7
+  |
+6 |   ref=""
+  |       ^^
+  |

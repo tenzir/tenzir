@@ -1,0 +1,10 @@
+{
+  id: 1,
+  k: "",
+  msg: "empty",
+}
+{
+  id: 5,
+  k: "",
+  msg: "empty_again",
+}

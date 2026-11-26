@@ -1,0 +1,6 @@
+warning: expected `bool`
+ --> tests/operators/from_iceberg/optimizations/28_non_bool_diag.tql:2:7
+  |
+2 | where id
+  |       ~~
+  |

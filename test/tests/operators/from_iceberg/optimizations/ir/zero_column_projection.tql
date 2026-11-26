@@ -1,0 +1,2 @@
+from_iceberg "optns.events", catalog="http://127.0.0.1:1"
+summarize n=count()

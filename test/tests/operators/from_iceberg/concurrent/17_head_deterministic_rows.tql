@@ -1,0 +1,6 @@
+// Concurrent prefetch drains slots strictly in planning order, so `head`
+// returns the exact first rows of the pruned partition file.
+from_iceberg "concns.events", catalog=env("ICEBERG_REST_URI")
+where part == 4
+head 2
+select id, part

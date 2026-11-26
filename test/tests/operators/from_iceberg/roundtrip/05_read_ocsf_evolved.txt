@@ -1,0 +1,62 @@
+{
+  id: 1,
+  class_uid: 3002,
+  time: 2026-02-01T00:00:00Z,
+  actor: {
+    user: "alice",
+    uid: null,
+  },
+  msg: "auth_ok",
+  severity_id: null,
+  src_endpoint: null,
+  dst_endpoint: null,
+  schema: "iceberg.testns.ocsf",
+}
+{
+  id: 2,
+  class_uid: 3002,
+  time: 2026-02-01T00:01:00Z,
+  actor: {
+    user: "bob",
+    uid: null,
+  },
+  msg: "auth_fail",
+  severity_id: null,
+  src_endpoint: null,
+  dst_endpoint: null,
+  schema: "iceberg.testns.ocsf",
+}
+{
+  id: 3,
+  class_uid: 4001,
+  time: 2026-02-01T00:02:00Z,
+  actor: {
+    user: "carol",
+    uid: 1003,
+  },
+  msg: "net_conn",
+  severity_id: 2,
+  src_endpoint: {
+    ip: "10.0.0.1",
+    port: 443,
+  },
+  dst_endpoint: null,
+  schema: "iceberg.testns.ocsf",
+}
+{
+  id: 4,
+  class_uid: 4001,
+  time: 2026-02-01T00:03:00Z,
+  actor: {
+    user: "dave",
+    uid: 1004,
+  },
+  msg: "net_drop",
+  severity_id: 4,
+  src_endpoint: null,
+  dst_endpoint: {
+    ip: "10.0.0.2",
+    port: 80,
+  },
+  schema: "iceberg.testns.ocsf",
+}

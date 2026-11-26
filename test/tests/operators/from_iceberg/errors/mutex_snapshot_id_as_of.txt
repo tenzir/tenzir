@@ -1,0 +1,9 @@
+error: `snapshot_id` and `as_of` are mutually exclusive
+ --> tests/operators/from_iceberg/errors/mutex_snapshot_id_as_of.tql:6:15
+  |
+6 |   snapshot_id=1, as_of=2026-01-01T00:00:00Z
+  |               ^
+  ⋮
+6 |   snapshot_id=1, as_of=2026-01-01T00:00:00Z
+  |                        --------------------
+  |

@@ -35,6 +35,56 @@ the same patch (see nix/iceberg-cpp/default.nix).
   conflict, and the retry's re-Apply deletes manifests the server-side
   committed snapshot references. Fresh connections make a lost response
   surface as the transport error it is.
+- manifest_adapter.cc: a partition summary dropped a bound that serializes
+  to zero bytes, which is the bound of an empty string or binary value, and
+  wrote null instead. Readers take a null lower bound to mean that every
+  value is null and skip the manifest, so equality filters on such a table
+  found no rows. Write every present bound, like the Java reference.
+- json_serde.cc: a CreateTableRequest omitted `stage-create` unless it was
+  true. The REST spec leaves the field optional, but Amazon S3 Tables
+  rejects a request without it ("stage-create is a required field and
+  cannot be null"), so no table could be created there. Always send the
+  field, like the Java reference client.
+- arrow_io.cc: ArrowFileSystemFileIO::ResolvePath percent-decoded every
+  location, through Arrow's URI parser and again explicitly for foreign
+  schemes. An Iceberg location is a literal string: the partition path
+  percent-encodes partition values, so a data file of the partition
+  `k=a b` is the object `.../k=a%20b/...`, and Java's S3URI, PyIceberg and
+  DuckDB open that name without decoding it. Keep the text after the scheme
+  literal for reading and writing alike, so that a file is stored under
+  exactly the location that the table metadata records and is found there.
+  A file that a decoding writer stored under the decoded name remains
+  readable: reads resolve through ResolveInputPath, which uses the decoded
+  name if and only if the filesystem reports (GetFileInfo) that the literal
+  name does not exist and that the decoded name is a file. Any other
+  answer, including a failed lookup, keeps the literal name, so opening it
+  reports the actual error. The lookup happens only for locations that
+  contain a percent escape. Writing and deleting never use the decoded
+  name.
+- incremental_append_scan.cc: an incremental append scan read the manifest
+  list of every append snapshot in its range one after the other, also when
+  the scan has a plan executor, so a range of several hundred snapshots
+  spent minutes there. Read the manifest lists with the plan executor, like
+  the manifests themselves. Collect from each list only the manifests that
+  its own snapshot added, instead of every manifest that any snapshot of the
+  range added: a snapshot's manifest list contains the manifests that the
+  snapshot adds and never changes afterwards, so both find the same set, but
+  the latter holds each manifest once per later list that still carries it
+  (about N * N / 2 entries for N appends) until they are deduplicated.
+- manifest_evaluator.cc: a partition field summary without a lower or upper
+  bound was taken to mean that all values are null, so the manifest was
+  skipped. Writers exist that drop a bound that serializes to zero bytes
+  (the empty string), which leaves an inconsistent summary: one bound
+  without the other, or no bound while reporting no null and no NaN values.
+  Such a summary proves that non-null values exist, so treat the missing
+  bound as unknown instead of pruning the manifest. The same writers leave
+  no bound and contains_null for a manifest that holds both null and empty
+  values, which nothing tells apart from a manifest that holds only null
+  values. So for a type whose bound can serialize to zero bytes (string,
+  binary, fixed(0)), a summary without bounds never proves that all values
+  are null and never prunes; contains_null itself stays reliable, so IsNull
+  still prunes on it. For every other type a consistent summary (no bounds
+  and contains_null, or only NaN values) prunes as before.
 
 diff --git a/cmake_modules/IcebergThirdpartyToolchain.cmake b/cmake_modules/IcebergThirdpartyToolchain.cmake
 index fef63f6..97069ae 100644
@@ -158,6 +208,136 @@ index fef63f6..97069ae 100644
  if(ICEBERG_BUILD_REST)
    resolve_cpr_dependency()
  endif()
+diff --git a/src/iceberg/arrow/arrow_io.cc b/src/iceberg/arrow/arrow_io.cc
+index 998f8c5..473293a 100644
+--- a/src/iceberg/arrow/arrow_io.cc
++++ b/src/iceberg/arrow/arrow_io.cc
+@@ -489,21 +489,74 @@ Result<std::string> ArrowFileSystemFileIO::ResolvePath(const std::string& file_l
+     return file_location;
+   }
+ 
++  // An Iceberg location is a literal string, not a percent-encoded URI: the
++  // partition path percent-encodes partition values, and those escapes are part
++  // of the object name (Java's S3URI and PyIceberg do not decode them either).
++  std::string literal = file_location.substr(pos + 3);
++  literal = literal.substr(0, literal.find_first_of("?#"));
++
+   auto path = arrow_fs_->PathFromUri(file_location);
+   if (path.ok()) {
+-    return std::move(path).ValueOrDie();
++    auto resolved = std::move(path).ValueOrDie();
++    if (literal.find('%') != std::string::npos) {
++      // Arrow percent-decoded the path; put the literal text back. Only the
++      // part after the scheme can differ, and it is the tail of the result.
++      const auto decoded = ::arrow::util::UriUnescape(literal);
++      if (resolved.ends_with(decoded)) {
++        resolved.replace(resolved.size() - decoded.size(), decoded.size(), literal);
++      }
++    }
++    return resolved;
+   }
+ 
+-  // Foreign alias (s3a/s3n): validate via Arrow's parser, then percent-decode the
++  // Foreign alias (s3a/s3n): validate via Arrow's parser, then use the
+   // scheme-less key (substring keeps a Windows drive letter's ':' that host() drops).
+   if (auto parsed = ::arrow::util::Uri::FromString(file_location); !parsed.ok()) {
+     const auto& status = parsed.status();
+     return ::iceberg::unexpected<Error>{
+         {.kind = ToErrorKind(status), .message = status.ToString()}};
+   }
+-  std::string bucket_key = file_location.substr(pos + 3);
+-  bucket_key = bucket_key.substr(0, bucket_key.find_first_of("?#"));
+-  return ::arrow::util::UriUnescape(bucket_key);
++  return literal;
++}
++
++Result<std::string> ArrowFileSystemFileIO::ResolveInputPath(
++    const std::string& file_location) {
++  ICEBERG_ASSIGN_OR_RAISE(auto literal, ResolvePath(file_location));
++  const auto pos = file_location.find("://");
++  if (pos == std::string::npos || literal.find('%') == std::string::npos) {
++    return literal;
++  }
++
++  // A writer that percent-decodes locations, as this function's predecessor
++  // did, stores a file whose location contains an escape under the decoded
++  // name. Compute that name.
++  std::string legacy;
++  if (auto path = arrow_fs_->PathFromUri(file_location); path.ok()) {
++    legacy = std::move(path).ValueOrDie();
++  } else {
++    std::string bucket_key = file_location.substr(pos + 3);
++    bucket_key = bucket_key.substr(0, bucket_key.find_first_of("?#"));
++    legacy = ::arrow::util::UriUnescape(bucket_key);
++  }
++  if (legacy == literal) {
++    return literal;
++  }
++
++  // Use the decoded name only on positive evidence: the filesystem reports
++  // that the literal name does not exist and that the decoded name is a file.
++  // Any failure to find that out, such as a permission or network error, keeps
++  // the literal name, so that opening it reports the actual error.
++  auto literal_info = arrow_fs_->GetFileInfo(literal);
++  if (!literal_info.ok() ||
++      literal_info.ValueUnsafe().type() != ::arrow::fs::FileType::NotFound) {
++    return literal;
++  }
++  auto legacy_info = arrow_fs_->GetFileInfo(legacy);
++  if (!legacy_info.ok() ||
++      legacy_info.ValueUnsafe().type() != ::arrow::fs::FileType::File) {
++    return literal;
++  }
++  return legacy;
+ }
+ 
+ Result<std::shared_ptr<::arrow::io::RandomAccessFile>> OpenArrowInputStream(
+@@ -512,7 +565,7 @@ Result<std::shared_ptr<::arrow::io::RandomAccessFile>> OpenArrowInputStream(
+   ICEBERG_PRECHECK(io != nullptr, "FileIO cannot be null");
+ 
+   if (auto arrow_io = std::dynamic_pointer_cast<ArrowFileSystemFileIO>(io)) {
+-    ICEBERG_ASSIGN_OR_RAISE(auto resolved_path, arrow_io->ResolvePath(path));
++    ICEBERG_ASSIGN_OR_RAISE(auto resolved_path, arrow_io->ResolveInputPath(path));
+     ::arrow::fs::FileInfo file_info(resolved_path, ::arrow::fs::FileType::File);
+     if (length.has_value()) {
+       ICEBERG_ASSIGN_OR_RAISE(auto size, ToInt64Length(*length));
+@@ -568,7 +621,7 @@ Result<std::shared_ptr<::arrow::io::OutputStream>> OpenArrowOutputStream(
+ 
+ Result<std::unique_ptr<InputFile>> ArrowFileSystemFileIO::NewInputFile(
+     std::string file_location) {
+-  ICEBERG_ASSIGN_OR_RAISE(auto path, ResolvePath(file_location));
++  ICEBERG_ASSIGN_OR_RAISE(auto path, ResolveInputPath(file_location));
+   return std::make_unique<ArrowInputFile>(arrow_fs_, std::move(file_location),
+                                           std::move(path), std::nullopt);
+ }
+@@ -576,7 +629,7 @@ Result<std::unique_ptr<InputFile>> ArrowFileSystemFileIO::NewInputFile(
+ Result<std::unique_ptr<InputFile>> ArrowFileSystemFileIO::NewInputFile(
+     std::string file_location, size_t length) {
+   ICEBERG_ASSIGN_OR_RAISE(auto size, ToInt64Length(length));
+-  ICEBERG_ASSIGN_OR_RAISE(auto path, ResolvePath(file_location));
++  ICEBERG_ASSIGN_OR_RAISE(auto path, ResolveInputPath(file_location));
+   return std::make_unique<ArrowInputFile>(arrow_fs_, std::move(file_location),
+                                           std::move(path), size);
+ }
+diff --git a/src/iceberg/arrow/arrow_io_internal.h b/src/iceberg/arrow/arrow_io_internal.h
+index f3007b0..c49b4ce 100644
+--- a/src/iceberg/arrow/arrow_io_internal.h
++++ b/src/iceberg/arrow/arrow_io_internal.h
+@@ -116,6 +116,14 @@ class ICEBERG_BUNDLE_EXPORT ArrowFileSystemFileIO : public FileIO {
+   /// \brief Resolve a file location to a filesystem path.
+   Result<std::string> ResolvePath(const std::string& file_location);
+ 
++  /// \brief Resolve a file location to the filesystem path to read it from.
++  ///
++  /// Like ResolvePath, except for a location with a percent escape whose
++  /// literal name does not exist while its percent-decoded name is a file,
++  /// which is where a writer that decodes locations stored it. Never use the
++  /// result to create or delete a file.
++  Result<std::string> ResolveInputPath(const std::string& file_location);
++
+   std::shared_ptr<::arrow::fs::FileSystem> arrow_fs_;
+ };
+ 
 diff --git a/src/iceberg/arrow/s3/arrow_s3_file_io.cc b/src/iceberg/arrow/s3/arrow_s3_file_io.cc
 index 24b89bd..d674145 100644
 --- a/src/iceberg/arrow/s3/arrow_s3_file_io.cc
@@ -244,6 +424,316 @@ index d48471c..c674943 100644
  
    ICEBERG_RETURN_UNEXPECTED(HandleFailureResponse(response, error_handler));
    HttpResponse http_response;
+diff --git a/src/iceberg/catalog/rest/json_serde.cc b/src/iceberg/catalog/rest/json_serde.cc
+index 7e90bf3..c5bf281 100644
+--- a/src/iceberg/catalog/rest/json_serde.cc
++++ b/src/iceberg/catalog/rest/json_serde.cc
+@@ -738,9 +738,9 @@ Result<nlohmann::json> ToJson(const CreateTableRequest& request) {
+   if (request.write_order) {
+     json[kWriteOrder] = ToJson(*request.write_order);
+   }
+-  if (request.stage_create) {
+-    json[kStageCreate] = request.stage_create;
+-  }
++  // Always sent, like the Java reference client: the REST spec leaves the
++  // field optional, but Amazon S3 Tables rejects a request without it.
++  json[kStageCreate] = request.stage_create;
+   SetContainerField(json, kProperties, request.properties);
+   return json;
+ }
+diff --git a/src/iceberg/expression/manifest_evaluator.cc b/src/iceberg/expression/manifest_evaluator.cc
+index bc7d0bf..758ea14 100644
+--- a/src/iceberg/expression/manifest_evaluator.cc
++++ b/src/iceberg/expression/manifest_evaluator.cc
+@@ -26,6 +26,8 @@
+ #include "iceberg/manifest/manifest_list.h"
+ #include "iceberg/row/struct_like.h"
+ #include "iceberg/schema.h"
++#include "iceberg/type.h"
++#include "iceberg/util/checked_cast.h"
+ #include "iceberg/util/macros.h"
+ 
+ namespace iceberg {
+@@ -70,7 +72,7 @@ class ManifestEvalVisitor : public BoundVisitor<bool> {
+   Result<bool> NotNull(const std::shared_ptr<Bound>& expr) override {
+     const auto& ref = expr->reference();
+     ICEBERG_ASSIGN_OR_RAISE(auto pos, GetPosition(*ref));
+-    if (AllValuesAreNull(stats_.at(pos), ref->type()->type_id())) {
++    if (AllValuesAreNull(stats_.at(pos), *ref->type())) {
+       return kRowCannotMatch;
+     }
+ 
+@@ -83,7 +85,7 @@ class ManifestEvalVisitor : public BoundVisitor<bool> {
+     if (stats_.at(pos).contains_nan.has_value() && !stats_.at(pos).contains_nan.value()) {
+       return kRowCannotMatch;
+     }
+-    if (AllValuesAreNull(stats_.at(pos), ref->type()->type_id())) {
++    if (AllValuesAreNull(stats_.at(pos), *ref->type())) {
+       return kRowCannotMatch;
+     }
+ 
+@@ -97,7 +99,8 @@ class ManifestEvalVisitor : public BoundVisitor<bool> {
+     // if containsNaN is true, containsNull is false and lowerBound is null, all values
+     // are NaN
+     if (summary.contains_nan.has_value() && summary.contains_nan.value() &&
+-        !summary.contains_null && !summary.lower_bound.has_value()) {
++        !summary.contains_null && !summary.lower_bound.has_value() &&
++        !summary.upper_bound.has_value()) {
+       return kRowCannotMatch;
+     }
+ 
+@@ -109,7 +112,8 @@ class ManifestEvalVisitor : public BoundVisitor<bool> {
+     ICEBERG_ASSIGN_OR_RAISE(auto pos, GetPosition(*ref));
+     const auto& summary = stats_.at(pos);
+     if (!summary.lower_bound.has_value()) {
+-      return kRowCannotMatch;  // values are all null
++      // values are all null, unless the summary is inconsistent
++      return BoundsAreUnknown(summary, *ref->type()) ? kRowsMightMatch : kRowCannotMatch;
+     }
+     ICEBERG_ASSIGN_OR_RAISE(
+         auto lower, DeserializeBoundLiteral(summary.lower_bound.value(), ref->type()));
+@@ -124,7 +128,8 @@ class ManifestEvalVisitor : public BoundVisitor<bool> {
+     ICEBERG_ASSIGN_OR_RAISE(auto pos, GetPosition(*ref));
+     const auto& summary = stats_.at(pos);
+     if (!summary.lower_bound.has_value()) {
+-      return kRowCannotMatch;  // values are all null
++      // values are all null, unless the summary is inconsistent
++      return BoundsAreUnknown(summary, *ref->type()) ? kRowsMightMatch : kRowCannotMatch;
+     }
+     ICEBERG_ASSIGN_OR_RAISE(
+         auto lower, DeserializeBoundLiteral(summary.lower_bound.value(), ref->type()));
+@@ -139,7 +144,8 @@ class ManifestEvalVisitor : public BoundVisitor<bool> {
+     ICEBERG_ASSIGN_OR_RAISE(auto pos, GetPosition(*ref));
+     const auto& summary = stats_.at(pos);
+     if (!summary.upper_bound.has_value()) {
+-      return kRowCannotMatch;  // values are all null
++      // values are all null, unless the summary is inconsistent
++      return BoundsAreUnknown(summary, *ref->type()) ? kRowsMightMatch : kRowCannotMatch;
+     }
+     ICEBERG_ASSIGN_OR_RAISE(
+         auto upper, DeserializeBoundLiteral(summary.upper_bound.value(), ref->type()));
+@@ -154,7 +160,8 @@ class ManifestEvalVisitor : public BoundVisitor<bool> {
+     ICEBERG_ASSIGN_OR_RAISE(auto pos, GetPosition(*ref));
+     const auto& summary = stats_.at(pos);
+     if (!summary.upper_bound.has_value()) {
+-      return kRowCannotMatch;  // values are all null
++      // values are all null, unless the summary is inconsistent
++      return BoundsAreUnknown(summary, *ref->type()) ? kRowsMightMatch : kRowCannotMatch;
+     }
+     ICEBERG_ASSIGN_OR_RAISE(
+         auto upper,
+@@ -169,19 +176,25 @@ class ManifestEvalVisitor : public BoundVisitor<bool> {
+     const auto& ref = expr->reference();
+     ICEBERG_ASSIGN_OR_RAISE(auto pos, GetPosition(*ref));
+     const auto& summary = stats_.at(pos);
+-    if (!summary.lower_bound.has_value() || !summary.upper_bound.has_value()) {
++    if (!summary.lower_bound.has_value() && !summary.upper_bound.has_value() &&
++        !BoundsAreUnknown(summary, *ref->type())) {
+       return kRowCannotMatch;  // values are all null and literal cannot contain null
+     }
+-    ICEBERG_ASSIGN_OR_RAISE(
+-        auto lower, DeserializeBoundLiteral(summary.lower_bound.value(), ref->type()));
+-    if (lower > lit) {
+-      return kRowCannotMatch;
++    // A missing bound of an inconsistent summary is unbounded.
++    if (summary.lower_bound.has_value()) {
++      ICEBERG_ASSIGN_OR_RAISE(
++          auto lower, DeserializeBoundLiteral(summary.lower_bound.value(), ref->type()));
++      if (lower > lit) {
++        return kRowCannotMatch;
++      }
+     }
+ 
+-    ICEBERG_ASSIGN_OR_RAISE(
+-        auto upper, DeserializeBoundLiteral(summary.upper_bound.value(), ref->type()));
+-    if (upper < lit) {
+-      return kRowCannotMatch;
++    if (summary.upper_bound.has_value()) {
++      ICEBERG_ASSIGN_OR_RAISE(
++          auto upper, DeserializeBoundLiteral(summary.upper_bound.value(), ref->type()));
++      if (upper < lit) {
++        return kRowCannotMatch;
++      }
+     }
+ 
+     return kRowsMightMatch;
+@@ -199,8 +212,9 @@ class ManifestEvalVisitor : public BoundVisitor<bool> {
+     ICEBERG_ASSIGN_OR_RAISE(auto pos, GetPosition(*ref));
+     const auto& summary = stats_.at(pos);
+     if (!summary.lower_bound.has_value() || !summary.upper_bound.has_value()) {
+-      // values are all null and literalSet cannot contain null.
+-      return kRowCannotMatch;
++      // values are all null and literalSet cannot contain null, unless the
++      // summary is inconsistent: then the bounds are unknown.
++      return BoundsAreUnknown(summary, *ref->type()) ? kRowsMightMatch : kRowCannotMatch;
+     }
+     if (literal_set.size() > kInPredicateLimit) {
+       // skip evaluating the predicate if the number of values is too big
+@@ -236,7 +250,7 @@ class ManifestEvalVisitor : public BoundVisitor<bool> {
+     ICEBERG_ASSIGN_OR_RAISE(auto pos, GetPosition(*ref));
+     const auto& summary = stats_.at(pos);
+     if (!summary.lower_bound.has_value() || !summary.upper_bound.has_value()) {
+-      return kRowCannotMatch;
++      return BoundsAreUnknown(summary, *ref->type()) ? kRowsMightMatch : kRowCannotMatch;
+     }
+     if (lit.type()->type_id() != TypeId::kString) {
+       return InvalidExpression("Invalid literal: not a string, cannot use StartsWith");
+@@ -321,11 +335,58 @@ class ManifestEvalVisitor : public BoundVisitor<bool> {
+     return pos;
+   }
+ 
+-  bool AllValuesAreNull(const PartitionFieldSummary& summary, TypeId typeId) {
++  // Whether a bound of this type can serialize to zero bytes: the empty string,
++  // the empty binary value, and the only value of fixed(0).
++  static bool BoundCanBeEmpty(const Type& type) {
++    switch (type.type_id()) {
++      case TypeId::kString:
++      case TypeId::kBinary:
++        return true;
++      case TypeId::kFixed:
++        return internal::checked_cast<const FixedType&>(type).length() == 0;
++      default:
++        return false;
++    }
++  }
++
++  // A missing bound means that no value is there to bound: all values are null
++  // (or NaN). That conclusion needs a summary that can be trusted. Writers
++  // exist that drop a bound that serializes to zero bytes (the empty string),
++  // which leaves a summary
++  // - with one bound but not the other, or
++  // - with no bound although it reports neither null nor NaN values, or
++  // - with no bound and contains_null, for a manifest that holds both null and
++  //   empty values. Nothing tells this summary apart from the one of a
++  //   manifest that holds only null values, so for a type whose bound can be
++  //   empty, a summary without bounds never proves that all values are null.
++  // In these cases a missing bound is unknown rather than absent.
++  static bool BoundsAreUnknown(const PartitionFieldSummary& summary, const Type& type) {
++    if (summary.lower_bound.has_value() != summary.upper_bound.has_value()) {
++      return true;
++    }
++    if (summary.lower_bound.has_value()) {
++      return false;
++    }
++    if (BoundCanBeEmpty(type)) {
++      return true;
++    }
++    return !summary.contains_null &&
++           !(summary.contains_nan.has_value() && summary.contains_nan.value());
++  }
++
++  bool AllValuesAreNull(const PartitionFieldSummary& summary, const Type& type) {
+     // containsNull encodes whether at least one partition value is null,
+-    // lowerBound is null if all partition values are null
+-    bool allNull = summary.contains_null && !summary.lower_bound.has_value();
++    // the bounds are null if all partition values are null
++    bool allNull = summary.contains_null && !summary.lower_bound.has_value() &&
++                   !summary.upper_bound.has_value();
++
++    if (allNull && BoundCanBeEmpty(type)) {
++      // The same summary describes a manifest with null and empty values whose
++      // writer dropped the empty bounds; see BoundsAreUnknown.
++      return false;
++    }
+ 
++    const auto typeId = type.type_id();
+     if (allNull && (typeId == TypeId::kDouble || typeId == TypeId::kFloat)) {
+       // floating point types may include NaN values, which we check separately.
+       // In case bounds don't include NaN value, containsNaN needs to be checked against.
+diff --git a/src/iceberg/incremental_append_scan.cc b/src/iceberg/incremental_append_scan.cc
+index cf01fe8..9534d4a 100644
+--- a/src/iceberg/incremental_append_scan.cc
++++ b/src/iceberg/incremental_append_scan.cc
+@@ -21,13 +21,16 @@
+ 
+ #include <algorithm>
+ #include <iterator>
++#include <memory>
+ #include <unordered_set>
+ #include <utility>
++#include <vector>
+ 
+ #include "iceberg/manifest/manifest_entry.h"
+ #include "iceberg/manifest/manifest_group.h"
+ #include "iceberg/snapshot.h"
+ #include "iceberg/table_metadata.h"
++#include "iceberg/util/executor_util_internal.h"
+ #include "iceberg/util/macros.h"
+ #include "iceberg/util/snapshot_util.h"
+ 
+@@ -72,17 +75,36 @@ Result<std::vector<std::shared_ptr<FileScanTask>>> IncrementalAppendScan::PlanFi
+                          std::inserter(snapshot_ids, snapshot_ids.end()),
+                          [](const auto& snapshot) { return snapshot->snapshot_id; });
+ 
+-  std::unordered_set<ManifestFile> data_manifests;
+-  for (const auto& snapshot : append_snapshots) {
+-    SnapshotReader snapshot_reader(snapshot.get());
+-    ICEBERG_ASSIGN_OR_RAISE(auto manifests, snapshot_reader.DataManifests(io_));
+-    std::ranges::copy_if(
+-        manifests, std::inserter(data_manifests, data_manifests.end()),
+-        [&snapshot_ids](const ManifestFile& manifest) {
+-          return manifest.added_snapshot_id.has_value() &&
+-                 snapshot_ids.contains(manifest.added_snapshot_id.value());
+-        });
+-  }
++  // Every append snapshot has its own manifest list. Read them with the plan
++  // executor, if any: a long snapshot range spends most of its planning time here.
++  //
++  // Keep from each list only the manifests that its own snapshot added. A
++  // manifest that a snapshot adds is written into that snapshot's manifest list,
++  // and a manifest list never changes, so this finds every manifest that any
++  // snapshot of the range added, exactly once. Keeping every manifest that any
++  // snapshot of the range added would find the same set, but each manifest once
++  // per list that still carries it: about N * N / 2 entries for N appends.
++  ICEBERG_ASSIGN_OR_RAISE(
++      auto added_manifests,
++      ParallelCollect(context_.plan_executor, append_snapshots,
++                      [this](const std::shared_ptr<Snapshot>& snapshot)
++                          -> Result<std::vector<ManifestFile>> {
++                        SnapshotReader snapshot_reader(snapshot.get());
++                        ICEBERG_ASSIGN_OR_RAISE(auto manifests,
++                                                snapshot_reader.DataManifests(io_));
++                        std::vector<ManifestFile> added;
++                        std::ranges::copy_if(
++                            manifests, std::back_inserter(added),
++                            [&snapshot](const ManifestFile& manifest) {
++                              return manifest.added_snapshot_id.has_value() &&
++                                     manifest.added_snapshot_id.value() ==
++                                         snapshot->snapshot_id;
++                            });
++                        return added;
++                      }));
++  std::unordered_set<ManifestFile> data_manifests(
++      std::make_move_iterator(added_manifests.begin()),
++      std::make_move_iterator(added_manifests.end()));
+   if (data_manifests.empty()) {
+     return std::vector<std::shared_ptr<FileScanTask>>{};
+   }
+diff --git a/src/iceberg/manifest/manifest_adapter.cc b/src/iceberg/manifest/manifest_adapter.cc
+index 766a27e..1a252e9 100644
+--- a/src/iceberg/manifest/manifest_adapter.cc
++++ b/src/iceberg/manifest/manifest_adapter.cc
+@@ -403,7 +403,10 @@ Status ManifestFileAdapter::AppendPartitionSummary(
+         case 510: {
+           // lower_bound (optional binary)
+           auto field_array = summary_array->children[2];
+-          if (summary.lower_bound.has_value() && !summary.lower_bound->empty()) {
++          // An empty bound is the serialized empty string or binary value,
++          // not a missing one; readers take a null bound to mean that every
++          // value is null and skip the manifest.
++          if (summary.lower_bound.has_value()) {
+             ICEBERG_RETURN_UNEXPECTED(
+                 AppendBytes(field_array, summary.lower_bound.value()));
+           } else {
+@@ -414,7 +417,7 @@ Status ManifestFileAdapter::AppendPartitionSummary(
+         case 511: {
+           // upper_bound (optional binary)
+           auto field_array = summary_array->children[3];
+-          if (summary.upper_bound.has_value() && !summary.upper_bound->empty()) {
++          if (summary.upper_bound.has_value()) {
+             ICEBERG_RETURN_UNEXPECTED(
+                 AppendBytes(field_array, summary.upper_bound.value()));
+           } else {
 diff --git a/src/iceberg/partition_summary.cc b/src/iceberg/partition_summary.cc
 index 2937ae2..8fef894 100644
 --- a/src/iceberg/partition_summary.cc

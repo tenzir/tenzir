@@ -1,0 +1,8 @@
+// Partitioned table with identity(class_uid) and day(time).
+from {id: 1, class_uid: 1001, time: 2026-01-01T10:00:00Z, msg: "a"},
+     {id: 2, class_uid: 1001, time: 2026-01-01T11:00:00Z, msg: "b"},
+     {id: 3, class_uid: 1001, time: 2026-01-02T10:00:00Z, msg: "c"},
+     {id: 4, class_uid: 4001, time: 2026-01-01T10:30:00Z, msg: "d"},
+     {id: 5, class_uid: 4001, time: 2026-01-03T00:00:00Z, msg: "e"}
+to_iceberg "partns.events", catalog=env("ICEBERG_REST_URI"),
+  partition_by=[class_uid, day(time)]

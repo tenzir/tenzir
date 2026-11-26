@@ -66,6 +66,7 @@
 #endif
 
 #include <algorithm>
+#include <charconv>
 #include <concepts>
 #include <filesystem>
 #include <mutex>
@@ -229,6 +230,40 @@ public:
 
 #endif
 
+/// Extracts the HTTP status code from iceberg-cpp's catch-all REST error,
+/// whose message reads `Unable to process (code: <status>, type: ...): ...`.
+/// The library folds every status without a dedicated error kind into
+/// `kRestError`, so the message is the only place that retains the code. A
+/// status of 0 means that no HTTP response arrived at all.
+auto rest_error_status(std::string_view message) -> Option<uint32_t> {
+  constexpr auto prefix = std::string_view{"Unable to process (code: "};
+  if (not message.starts_with(prefix)) {
+    return None{};
+  }
+  message.remove_prefix(prefix.size());
+  auto status = uint32_t{0};
+  auto const* const begin = message.data();
+  auto const* const end = begin + message.size();
+  auto const parsed = std::from_chars(begin, end, status);
+  if (parsed.ec != std::errc{} or parsed.ptr == begin) {
+    return None{};
+  }
+  return status;
+}
+
+/// Whether a REST status code reports a client error that repeating the same
+/// request cannot fix, such as 404 for a wrong catalog URL. Request timeouts
+/// (408), conflicts (409), misdirected requests (421), replay protection
+/// (425), and throttling (429) depend on the connection or on server state
+/// and stay retryable.
+auto is_permanent_rest_status(uint32_t status) -> bool {
+  if (status < 400 or status >= 500) {
+    return false;
+  }
+  return status != 408 and status != 409 and status != 421 and status != 425
+         and status != 429;
+}
+
 } // namespace
 
 auto translate_error(ice::Error const& error) -> Error {
@@ -237,9 +272,18 @@ auto translate_error(ice::Error const& error) -> Error {
     case ice::ErrorKind::kIOError:
     case ice::ErrorKind::kInternalServerError:
     case ice::ErrorKind::kServiceUnavailable:
-    case ice::ErrorKind::kRestError:
       kind = Error::Kind::transient;
       break;
+    case ice::ErrorKind::kRestError: {
+      // Connection failures, throttling, and 5xx responses are worth
+      // retrying; a permanent client error is not. Messages that carry no
+      // status code keep the retryable default.
+      auto const status = rest_error_status(error.message);
+      kind = status and is_permanent_rest_status(*status)
+               ? Error::Kind::permanent
+               : Error::Kind::transient;
+      break;
+    }
     case ice::ErrorKind::kCommitFailed:
     case ice::ErrorKind::kCommitStateUnknown:
       kind = Error::Kind::conflict;
@@ -337,7 +381,10 @@ public:
     }
     if (credentials_->GetAWSCredentials().IsEmpty()) {
       return ice::AuthenticationFailed(
-        "AWS credentials provider returned empty credentials");
+        "found no AWS credentials to sign catalog requests with: neither "
+        "`aws_iam` nor the default AWS credential chain (environment, shared "
+        "profile, web identity, container or instance metadata) returned "
+        "any");
     }
     return ice::rest::auth::SigV4AuthSession::Make(
       ice::rest::auth::AuthSession::MakeDefault({}), region_, service_,
@@ -471,8 +518,8 @@ auto ensure_registered() -> void {
     ice::avro::RegisterAll();
     ice::rest::auth::AuthManagers::Register(aws_auth_type,
                                             make_aws_auth_manager);
-    // Without an `accepts` callback, the custom FileIOs load only through an
-    // explicit `io-impl` and never take over scheme-based resolution.
+    // Without an `accepts` callback, the custom S3 FileIO loads only through
+    // an explicit `io-impl` and never takes over scheme-based resolution.
     ice::FileIORegistry::Register(
       std::string{s3_file_io}, {.create = make_s3_file_io, .accepts = nullptr});
 #ifdef TENZIR_ICEBERG_GCS
@@ -482,9 +529,14 @@ auto ensure_registered() -> void {
         -> ice::Result<std::unique_ptr<ice::rest::auth::AuthManager>> {
         return std::make_unique<GcpAuthManager>();
       });
+    // Register `gs` scheme resolution so `gs://` table locations automatically
+    // use native GCS FileIO even when a non-Google REST catalog backs a GCS
+    // bucket; explicit S3 configuration still overrides via `io-impl`.
     ice::FileIORegistry::Register(std::string{gcs_file_io},
                                   {.create = make_gcs_file_io,
-                                   .accepts = nullptr});
+                                   .accepts = [](std::string_view scheme) {
+                                     return scheme == "gs";
+                                   }});
 #endif
   });
 }
@@ -1057,9 +1109,108 @@ auto ensure_aws_sdk_initialized() -> Result<void> {
   return translate(ice::rest::auth::InitializeAwsSdk());
 }
 
+namespace {
+
+/// The parts of a REST catalog URL that points at an AWS-hosted Iceberg
+/// endpoint, such as `https://glue.eu-central-1.amazonaws.com/iceberg`.
+struct AwsCatalogEndpoint {
+  /// The SigV4 signing name that fits the host: `glue` or `s3tables`.
+  std::string service;
+  std::string region;
+};
+
+/// Recognizes `<service>[-fips].<region>.amazonaws.com[.cn]` hosts for the
+/// two AWS services that serve the Iceberg REST protocol. Everything else,
+/// including private endpoints and proxies, yields `None{}`.
+auto parse_aws_catalog_endpoint(std::string_view uri)
+  -> Option<AwsCatalogEndpoint> {
+  auto const scheme_end = uri.find("://");
+  if (scheme_end == std::string_view::npos) {
+    return None{};
+  }
+  auto authority = uri.substr(scheme_end + 3);
+  authority = authority.substr(0, authority.find_first_of("/?#"));
+  if (auto const at = authority.rfind('@'); at != std::string_view::npos) {
+    authority.remove_prefix(at + 1);
+  }
+  authority = authority.substr(0, authority.find(':'));
+  auto host = tenzir::detail::ascii_tolower(authority);
+  if (host.ends_with('.')) {
+    host.pop_back();
+  }
+  auto const service_end = host.find('.');
+  if (service_end == std::string::npos) {
+    return None{};
+  }
+  auto const region_end = host.find('.', service_end + 1);
+  if (region_end == std::string::npos) {
+    return None{};
+  }
+  auto const domain = std::string_view{host}.substr(region_end + 1);
+  if (domain != "amazonaws.com" and domain != "amazonaws.com.cn") {
+    return None{};
+  }
+  auto service = std::string_view{host}.substr(0, service_end);
+  if (service.ends_with("-fips")) {
+    service.remove_suffix(5);
+  }
+  if (service != "glue" and service != "s3tables") {
+    return None{};
+  }
+  auto region = host.substr(service_end + 1, region_end - service_end - 1);
+  if (region.empty()) {
+    return None{};
+  }
+  return AwsCatalogEndpoint{
+    .service = std::string{service},
+    .region = std::move(region),
+  };
+}
+
+} // namespace
+
+auto aws_catalog_hint(std::string_view uri, std::string_view signing_name,
+                      std::string_view signing_region) -> Option<std::string> {
+  auto const endpoint = parse_aws_catalog_endpoint(uri);
+  if (not endpoint) {
+    return None{};
+  }
+  if (signing_name.empty()) {
+    return fmt::format("the catalog URL names an AWS `{}` endpoint in region "
+                       "`{}`, which only accepts requests signed with AWS "
+                       "SigV4, but `catalog_aws_service` is not set; set "
+                       "`catalog_aws_service=\"{}\"`",
+                       endpoint->service, endpoint->region, endpoint->service);
+  }
+  auto hints = std::vector<std::string>{};
+  if (signing_name != endpoint->service) {
+    hints.push_back(fmt::format("`catalog_aws_service=\"{}\"` does not fit "
+                                "the catalog URL, which names an AWS `{}` "
+                                "endpoint; use `catalog_aws_service=\"{}\"`",
+                                signing_name, endpoint->service,
+                                endpoint->service));
+  }
+  if (not signing_region.empty() and signing_region != endpoint->region) {
+    // The configured region can come from a secret, so only the region that
+    // the URL's host names is printed.
+    hints.push_back(fmt::format("requests are signed for a different region "
+                                "than the one the catalog URL names, `{}`; "
+                                "set `region` in `aws_iam` to `{}` or use "
+                                "the catalog endpoint of your region",
+                                endpoint->region, endpoint->region));
+  }
+  if (hints.empty()) {
+    return None{};
+  }
+  return fmt::format("{}", fmt::join(hints, "; "));
+}
+
 auto open_catalog(CatalogConfig config)
   -> Result<std::shared_ptr<ice::Catalog>> {
   ensure_registered();
+  // Computed up front: the signing settings move into the property map below.
+  auto const aws_hint = aws_catalog_hint(
+    config.uri, config.aws_catalog_signing_name, config.aws_signing_region);
   if (config.gcp_auth) {
     config.properties[ice::rest::auth::AuthProperties::kAuthType]
       = std::string{gcp_auth_type};
@@ -1077,6 +1228,14 @@ auto open_catalog(CatalogConfig config)
   auto properties = ice::rest::RestCatalogProperties::default_properties();
   properties.Set(ice::rest::RestCatalogProperties::kUri, config.uri)
     .Set(ice::rest::RestCatalogProperties::kName, config.name);
+  // Ask for every snapshot explicitly. Some catalogs, such as Google BigLake,
+  // send `snapshot-loading-mode=refs` as a server default, which iceberg-cpp
+  // applies to every table load unless the client sets the property. The
+  // library cannot load the omitted snapshots later, so time travel,
+  // incremental reads, checkpoint resume, and the commit ancestry walk in
+  // `has_commit` would miss every snapshot that no branch or tag references.
+  properties.Set(ice::rest::RestCatalogProperties::kSnapshotLoadingMode,
+                 std::string{"ALL"});
   // Client configs take precedence over the REST server's defaults when
   // iceberg-cpp merges them, so an empty warehouse must stay unset or it
   // shadows a server-supplied default warehouse.
@@ -1140,8 +1299,8 @@ auto open_catalog(CatalogConfig config)
                      std::string{gcs_file_io});
       break;
 #else
-      // Unreachable: the operator rejects the `gcp_*` arguments at pipeline
-      // validation when the plugin is built without Google Cloud support.
+      // Unreachable: catalog argument validation and resolution reject Google
+      // authentication when the plugin is built without Google Cloud support.
       return std::unexpected{Error{
         Error::Kind::permanent,
         "this build of the iceberg plugin lacks Google Cloud support",
@@ -1153,7 +1312,33 @@ auto open_catalog(CatalogConfig config)
   }
   auto rest_catalog = ice::rest::RestCatalog::Make(properties);
   if (not rest_catalog.has_value()) {
-    return std::unexpected{translate_error(rest_catalog.error())};
+    auto error = translate_error(rest_catalog.error());
+    switch (rest_catalog.error().kind) {
+      case ice::ErrorKind::kForbidden:
+      case ice::ErrorKind::kNotAuthorized:
+        // AWS answers a missing or mismatched signature with a bare 403,
+        // which says nothing about the cause.
+        if (aws_hint) {
+          error.message = fmt::format("{} ({})", error.message, *aws_hint);
+        }
+        break;
+      case ice::ErrorKind::kRestError:
+        if (auto const status = rest_error_status(rest_catalog.error().message);
+            status and *status == 404) {
+          // The catalog answers `/v1/config` for a URL and a warehouse, so
+          // either of them can be wrong. Both can come from a secret, so they
+          // stay out of the message.
+          error.message
+            = fmt::format("{} (the `/v1/config` path of the configured URL "
+                          "answered with 404; check the `catalog` and "
+                          "`warehouse` options)",
+                          error.message);
+        }
+        break;
+      default:
+        break;
+    }
+    return std::unexpected{std::move(error)};
   }
   TRY(auto catalog, translate((*rest_catalog)->AsCatalog()));
   if (not aws_credentials_guard) {

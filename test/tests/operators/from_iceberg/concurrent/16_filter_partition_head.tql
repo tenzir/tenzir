@@ -1,0 +1,5 @@
+// Partition pruning leaves three data files; `head` reads all of them.
+from_iceberg "concns.events", catalog=env("ICEBERG_REST_URI")
+where part >= 9
+head 100
+summarize n=count(), parts=count_distinct(part), total=sum(id)

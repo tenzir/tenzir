@@ -1,0 +1,15 @@
+{
+  id: 1,
+  key: "a b",
+  msg: "space",
+}
+{
+  id: 5,
+  key: "..",
+  msg: "dots",
+}
+{
+  id: 6,
+  key: "",
+  msg: "empty",
+}

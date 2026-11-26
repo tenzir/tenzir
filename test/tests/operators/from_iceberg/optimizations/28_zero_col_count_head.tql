@@ -1,0 +1,5 @@
+// A limit in front of the count must cap the rows that come from table
+// metadata: the table has 6 rows.
+from_iceberg "optns.events", catalog=env("ICEBERG_REST_URI")
+head 4
+summarize n=count()

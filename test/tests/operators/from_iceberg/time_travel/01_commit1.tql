@@ -1,0 +1,4 @@
+// First snapshot commit.
+from {id: 1, batch: 1, msg: "first"},
+     {id: 2, batch: 1, msg: "second"}
+to_iceberg "ttns.events", catalog=env("ICEBERG_REST_URI")

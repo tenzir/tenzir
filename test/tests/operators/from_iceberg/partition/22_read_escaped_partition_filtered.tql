@@ -1,0 +1,5 @@
+// The manifest's partition summary must not prune these values, also if its
+// lower bound, the empty string, is missing.
+from_iceberg "partns.escaped", catalog=env("ICEBERG_REST_URI")
+where key == "a b" or key == ".." or key == ""
+sort id

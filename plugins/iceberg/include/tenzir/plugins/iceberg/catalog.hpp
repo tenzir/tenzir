@@ -31,6 +31,7 @@
 #include <memory>
 #include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace iceberg {
@@ -68,9 +69,25 @@ auto translate(ice::Result<T> result) -> Result<T> {
 /// Call before constructing credentials providers that may resolve eagerly.
 [[nodiscard]] auto ensure_aws_sdk_initialized() -> Result<void>;
 
+/// Explains how the AWS request signing settings fail to fit a catalog URL
+/// whose host is an AWS-hosted Iceberg endpoint (`glue.<region>.amazonaws.com`
+/// or `s3tables.<region>.amazonaws.com`): `signing_name` is empty or names the
+/// other service, or `signing_region` differs from the host's region. Returns
+/// `None{}` when the settings fit or the host is not such an endpoint. The
+/// result is advice for an error message, not a verdict: private endpoints
+/// and proxies in front of these services are not recognized. The URL and the
+/// signing region can come from secrets, so the text names only the service
+/// and the region that the host spells out, never the host or
+/// `signing_region` itself.
+auto aws_catalog_hint(std::string_view uri, std::string_view signing_name,
+                      std::string_view signing_region) -> Option<std::string>;
+
 /// Connects to a REST catalog. Fails fast on unreachable endpoints or
 /// rejected credentials. The returned pointer keeps the registered AWS
 /// credentials provider alive until the last catalog handle drops.
+///
+/// Requests all snapshots on every table load (`snapshot-loading-mode=ALL`),
+/// which outranks a server default but not a server override.
 auto open_catalog(CatalogConfig config)
   -> Result<std::shared_ptr<ice::Catalog>>;
 

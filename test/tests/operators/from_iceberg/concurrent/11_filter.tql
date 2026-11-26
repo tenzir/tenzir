@@ -1,0 +1,6 @@
+// A filter that no partition or column statistic can decide runs locally on
+// every data file.
+from_iceberg "concns.events", catalog=env("ICEBERG_REST_URI")
+where kind == "b" and id > 6
+select id, kind
+sort id

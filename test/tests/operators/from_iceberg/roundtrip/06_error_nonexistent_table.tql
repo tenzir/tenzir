@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+// Reading a table that does not exist fails with an error.
+from_iceberg "testns.does_not_exist", catalog=env("ICEBERG_REST_URI")

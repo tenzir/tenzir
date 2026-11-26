@@ -1,0 +1,12 @@
+{
+  id: 1,
+  key: "alpha",
+  ts: 2026-03-01T10:00:00Z,
+  msg: "full",
+}
+{
+  id: 3,
+  key: "beta",
+  ts: null,
+  msg: "null_ts",
+}

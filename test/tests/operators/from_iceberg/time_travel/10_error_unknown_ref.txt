@@ -1,0 +1,6 @@
+error: failed to plan Iceberg scan for `ttns.events`: reference `nonexistent_branch` not found in table `tenzir.ttns.events`
+ --> tests/operators/from_iceberg/time_travel/10_error_unknown_ref.tql:6:1
+  |
+6 | from_iceberg "ttns.events", catalog=env("ICEBERG_REST_URI"),
+  | ^^^^^^^^^^^^
+  |

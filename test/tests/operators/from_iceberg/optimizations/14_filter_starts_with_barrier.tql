@@ -1,0 +1,5 @@
+from_iceberg "optns.events", catalog=env("ICEBERG_REST_URI")
+optimize_barrier
+where host.starts_with("web")
+select id, host
+sort id

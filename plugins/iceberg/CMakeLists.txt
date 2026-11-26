@@ -40,7 +40,8 @@ endif ()
 # locations uses arrow's GcsFileSystem. Homebrew's apache-arrow ships with
 # ARROW_GCS=OFF and homebrew-core carries no google-cloud-cpp, so builds
 # without the prerequisites compile the plugin without Google Cloud support
-# and reject the `gcp_*` arguments at pipeline validation instead.
+# and reject `gcp_*` arguments at pipeline validation and Google Cloud
+# catalog URLs at pipeline startup instead.
 find_package(Arrow REQUIRED CONFIG)
 find_package(google_cloud_cpp_storage QUIET CONFIG)
 if (ARROW_GCS AND google_cloud_cpp_storage_FOUND)

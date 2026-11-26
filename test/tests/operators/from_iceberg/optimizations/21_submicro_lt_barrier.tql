@@ -1,0 +1,4 @@
+from_iceberg "optns.submicro", catalog=env("ICEBERG_REST_URI")
+optimize_barrier
+where time < 2026-01-01T00:00:00.000000500Z
+sort id

@@ -1,0 +1,6 @@
+error: failed to load table `testns.does_not_exist`: Table does not exist: testns.does_not_exist
+ --> tests/operators/from_iceberg/roundtrip/06_error_nonexistent_table.tql:6:14
+  |
+6 | from_iceberg "testns.does_not_exist", catalog=env("ICEBERG_REST_URI")
+  |              ^^^^^^^^^^^^^^^^^^^^^^^
+  |

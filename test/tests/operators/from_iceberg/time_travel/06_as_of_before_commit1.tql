@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+// Time travel before the first snapshot fails with an error.
+from_iceberg "ttns.events", catalog=env("ICEBERG_REST_URI"),
+  as_of=2020-01-01T00:00:00Z

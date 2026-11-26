@@ -1,0 +1,6 @@
+error: `snapshot_id` must be non-negative
+ --> tests/operators/from_iceberg/errors/negative_snapshot_id.tql:6:15
+  |
+6 |   snapshot_id=-1
+  |               ^^
+  |

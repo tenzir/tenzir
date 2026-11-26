@@ -59,6 +59,25 @@ stdenv.mkDerivation {
   #   field type, but LiteralCaster::CastTo refuses null literals, so any
   #   data file with a null partition value fails to commit. The stats
   #   themselves handle null fine (contains_null); feed it directly.
+  # - A partition summary in the manifest list dropped a bound that
+  #   serializes to zero bytes (the empty string or binary value) and wrote
+  #   null, which makes readers skip the manifest; write every present bound.
+  # - A CreateTableRequest omitted `stage-create` unless it was true, which
+  #   Amazon S3 Tables rejects; always send the field.
+  # - ArrowFileSystemFileIO percent-decoded every location, although the
+  #   escapes that the partition path puts into a data file location are
+  #   part of the object name; keep locations literal for reading and
+  #   writing. Reads fall back to the decoded name if only that one exists,
+  #   so a file stored under the decoded name remains readable.
+  # - The manifest evaluator pruned a manifest whose partition summary
+  #   lacks a bound, taking it to hold only null values. Writers that drop
+  #   zero-byte bounds leave such summaries for empty strings; treat a
+  #   missing bound as unknown if the summary is inconsistent or the type
+  #   can have an empty bound (string, binary).
+  # - An incremental append scan read the manifest list of every append
+  #   snapshot in its range one after the other; read them with the plan
+  #   executor, and keep from each list only the manifests that its own
+  #   snapshot added.
   # - url_encoder.cc uses int8_t without including <cstdint>.
   # - A commit POST whose response never arrives surfaced as a generic REST
   #   error, so Transaction::Commit's cleanup deleted the manifest list even

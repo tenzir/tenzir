@@ -1,0 +1,30 @@
+{
+  id: 1,
+  user: "alice",
+  host: "web-01",
+  region: "eu",
+}
+{
+  id: 2,
+  user: "bob",
+  host: "web-02",
+  region: "eu",
+}
+{
+  id: 3,
+  user: "carol",
+  host: "api-01",
+  region: "us",
+}
+{
+  id: 4,
+  user: "alice",
+  host: "api-02",
+  region: "us",
+}
+{
+  id: 5,
+  user: "dave",
+  host: "db-01",
+  region: "ap",
+}

@@ -1,0 +1,6 @@
+error: `catalog_aws_service` cannot be combined with `token`
+ --> tests/operators/from_iceberg/errors/auth_aws_service_token.tql:6:23
+  |
+6 |   catalog_aws_service="glue", token="secret"
+  |                       ^^^^^^
+  |

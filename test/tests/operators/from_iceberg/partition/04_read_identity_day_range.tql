@@ -1,0 +1,3 @@
+from_iceberg "partns.events", catalog=env("ICEBERG_REST_URI")
+where time >= 2026-01-01T10:30:00Z and time < 2026-01-02T00:00:00Z
+sort id

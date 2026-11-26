@@ -1,0 +1,3 @@
+// Reading explicitly from ref="main" returns the latest snapshot.
+from_iceberg "ttns.events", catalog=env("ICEBERG_REST_URI"), ref="main"
+sort id

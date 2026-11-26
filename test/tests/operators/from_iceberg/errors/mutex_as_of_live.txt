@@ -1,0 +1,9 @@
+error: `as_of` and `live=true` are mutually exclusive
+ --> tests/operators/from_iceberg/errors/mutex_as_of_live.tql:6:9
+  |
+6 |   as_of=2026-01-01T00:00:00Z, live=true
+  |         ^^^^^^^^^^^^^^^^^^^^
+  ⋮
+6 |   as_of=2026-01-01T00:00:00Z, live=true
+  |                                    ----
+  |

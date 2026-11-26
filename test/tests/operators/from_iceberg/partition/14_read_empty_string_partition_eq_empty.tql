@@ -1,0 +1,4 @@
+// The empty string is the lower bound of the partition summary.
+from_iceberg "partns.emptykey", catalog=env("ICEBERG_REST_URI")
+where k == ""
+sort id

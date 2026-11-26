@@ -1,0 +1,8 @@
+// The directories on disk are the percent-encoded partition paths, exactly as
+// the manifests record them. Other Iceberg implementations open data file
+// locations without decoding them.
+files f"{env("ICEBERG_WAREHOUSE_DIR")}/partns/escaped/data", recurse=true
+where type == "regular"
+path = path.replace(env("ICEBERG_WAREHOUSE_DIR"), "").parent_dir()
+select path
+sort path

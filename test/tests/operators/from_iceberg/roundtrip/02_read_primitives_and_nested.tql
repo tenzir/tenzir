@@ -1,0 +1,5 @@
+// Read back all primitives, nested records, lists, and nulls; verify @name.
+from_iceberg "testns.events", catalog=env("ICEBERG_REST_URI")
+assert @name == "iceberg.testns.events"
+schema = @name
+sort id

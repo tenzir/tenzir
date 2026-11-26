@@ -1,0 +1,4 @@
+// Verify live=true reads the initial snapshot and stops cleanly on `head 3`.
+from_iceberg "testns.live_events", catalog=env("ICEBERG_REST_URI"),
+  live=true, poll_interval=100ms
+head 3

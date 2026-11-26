@@ -1,0 +1,3 @@
+from_iceberg "partns.nullkeys", catalog=env("ICEBERG_REST_URI")
+where key == null
+sort id

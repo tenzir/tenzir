@@ -1,0 +1,5 @@
+// `head` returns exactly N rows deterministically across the concurrent
+// prefetch window.
+from_iceberg "concns.events", catalog=env("ICEBERG_REST_URI")
+head 5
+summarize n=count()

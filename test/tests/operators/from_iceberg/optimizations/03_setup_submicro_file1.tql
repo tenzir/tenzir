@@ -1,0 +1,3 @@
+// Dedicated single-row file at .000000Z for sub-microsecond boundary tests.
+from {id: 1, time: 2026-01-01T00:00:00.000000Z, label: "exact_zero"}
+to_iceberg "optns.submicro", catalog=env("ICEBERG_REST_URI")

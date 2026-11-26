@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+// Reading a nonexistent branch or tag fails with an error.
+from_iceberg "ttns.events", catalog=env("ICEBERG_REST_URI"),
+  ref="nonexistent_branch"

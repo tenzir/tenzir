@@ -1,0 +1,5 @@
+---
+error: true
+---
+
+from_iceberg "ns.", catalog="https://example.invalid/iceberg"

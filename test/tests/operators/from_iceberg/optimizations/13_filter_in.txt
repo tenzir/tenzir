@@ -1,0 +1,12 @@
+{
+  id: 1,
+  host: "web-01",
+}
+{
+  id: 4,
+  host: "db-01",
+}
+{
+  id: 6,
+  host: "cache-01",
+}

@@ -1,0 +1,8 @@
+// Partitioned table with bucket(user, 4) and truncate(host, 3).
+from {id: 1, user: "alice", host: "web-01", region: "eu"},
+     {id: 2, user: "bob", host: "web-02", region: "eu"},
+     {id: 3, user: "carol", host: "api-01", region: "us"},
+     {id: 4, user: "alice", host: "api-02", region: "us"},
+     {id: 5, user: "dave", host: "db-01", region: "ap"}
+to_iceberg "partns.hashed", catalog=env("ICEBERG_REST_URI"),
+  partition_by=[bucket(user, 4), truncate(host, 3)]

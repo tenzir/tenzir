@@ -1,0 +1,5 @@
+// Time travel as_of commit 2's timestamp sees both commits.
+let $s = file_contents(f"{env("ICEBERG_WAREHOUSE_DIR")}/snapshots.json").string().parse_json()
+from_iceberg "ttns.events", catalog=env("ICEBERG_REST_URI"),
+  as_of=from_epoch(milliseconds($s.s2_ts))
+sort id

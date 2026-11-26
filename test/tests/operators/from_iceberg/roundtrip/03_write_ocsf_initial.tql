@@ -1,0 +1,4 @@
+// Initial OCSF-like schema before evolution.
+from {id: 1, class_uid: 3002, time: 2026-02-01T00:00:00Z, actor: {user: "alice"}, msg: "auth_ok"},
+     {id: 2, class_uid: 3002, time: 2026-02-01T00:01:00Z, actor: {user: "bob"}, msg: "auth_fail"}
+to_iceberg "testns.ocsf", catalog=env("ICEBERG_REST_URI")

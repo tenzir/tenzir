@@ -1,0 +1,8 @@
+error: named argument `gcp_auth` does not exist
+ --> tests/operators/from_iceberg/errors/unknown_gcp_auth_to.tql:6:68
+  |
+6 | to_iceberg "ns.events", catalog="https://example.invalid/iceberg", gcp_auth=true
+  |                                                                    ^^^^^^^^
+  |
+  = usage: to_iceberg table:string, catalog=string, [warehouse=string, aws_iam=record, catalog_aws_service=string, s3_endpoint=string, s3_path_style=bool, token=string, gcp_service_account_key=string, gcp_project=string, mode=string, location=string, partition_by=list<any>, max_size=int, buffer_size=int, timeout=duration]
+  = docs: https://tenzir.com/docs/reference/operators/to_iceberg

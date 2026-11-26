@@ -1,0 +1,7 @@
+// Seed an Iceberg table for live-mode reading.
+from {id: 1, msg: "a"},
+     {id: 2, msg: "b"},
+     {id: 3, msg: "c"},
+     {id: 4, msg: "d"},
+     {id: 5, msg: "e"}
+to_iceberg "testns.live_events", catalog=env("ICEBERG_REST_URI")

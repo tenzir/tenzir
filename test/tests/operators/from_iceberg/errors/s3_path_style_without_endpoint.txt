@@ -1,0 +1,6 @@
+error: `s3_path_style` requires `s3_endpoint`
+ --> tests/operators/from_iceberg/errors/s3_path_style_without_endpoint.tql:6:17
+  |
+6 |   s3_path_style=true
+  |                 ^^^^
+  |

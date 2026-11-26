@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from_iceberg "ns.events", catalog="https://example.invalid/iceberg",
+  as_of=2026-01-01T00:00:00Z, from_snapshot_id=1

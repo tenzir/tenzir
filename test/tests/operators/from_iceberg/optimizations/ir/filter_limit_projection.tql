@@ -1,0 +1,4 @@
+from_iceberg "optns.events", catalog="http://127.0.0.1:1"
+where id >= 2 and host.starts_with("web")
+select id, host
+head 3

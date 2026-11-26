@@ -1,0 +1,4 @@
+// A limit larger than the table reads every data file.
+from_iceberg "concns.events", catalog=env("ICEBERG_REST_URI")
+head 100
+summarize n=count(), parts=count_distinct(part), total=sum(id)

@@ -1,0 +1,25 @@
+warning: event does not have field
+ --> tests/operators/from_iceberg/optimizations/24_missing_col_is_null.tql:2:7
+  |
+2 | where nonexistent == null
+  |       ~~~~~~~~~~~
+  |
+  = hint: append `?` to suppress this warning
+{
+  id: 1,
+}
+{
+  id: 2,
+}
+{
+  id: 3,
+}
+{
+  id: 4,
+}
+{
+  id: 5,
+}
+{
+  id: 6,
+}

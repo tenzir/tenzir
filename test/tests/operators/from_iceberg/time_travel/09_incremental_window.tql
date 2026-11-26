@@ -1,0 +1,5 @@
+// Bounded incremental append scan (s1, s2] returns only commit 2's rows.
+let $s = file_contents(f"{env("ICEBERG_WAREHOUSE_DIR")}/snapshots.json").string().parse_json()
+from_iceberg "ttns.events", catalog=env("ICEBERG_REST_URI"),
+  from_snapshot_id=$s.s1_id, to_snapshot_id=$s.s2_id
+sort id

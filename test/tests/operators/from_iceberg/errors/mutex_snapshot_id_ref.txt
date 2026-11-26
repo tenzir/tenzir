@@ -1,0 +1,9 @@
+error: `snapshot_id` and `ref` are mutually exclusive
+ --> tests/operators/from_iceberg/errors/mutex_snapshot_id_ref.tql:6:15
+  |
+6 |   snapshot_id=1, ref="main"
+  |               ^
+  ⋮
+6 |   snapshot_id=1, ref="main"
+  |                      ------
+  |

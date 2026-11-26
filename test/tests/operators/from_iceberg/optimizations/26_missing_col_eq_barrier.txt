@@ -1,0 +1,7 @@
+warning: event does not have field
+ --> tests/operators/from_iceberg/optimizations/26_missing_col_eq_barrier.tql:3:7
+  |
+3 | where nonexistent == 1
+  |       ~~~~~~~~~~~
+  |
+  = hint: append `?` to suppress this warning

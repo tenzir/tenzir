@@ -1,0 +1,12 @@
+{
+  id: 1,
+  host: "web-01",
+}
+{
+  id: 2,
+  host: "web-02",
+}
+{
+  id: 5,
+  host: "web-03",
+}

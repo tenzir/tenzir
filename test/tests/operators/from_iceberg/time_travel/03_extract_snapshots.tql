@@ -1,0 +1,14 @@
+// Read Iceberg's table metadata JSON to extract the exact snapshot IDs and
+// timestamps of commit 1 and commit 2 without relying on wall-clock sleeps.
+from_file f"{env("ICEBERG_WAREHOUSE_DIR")}/ttns/events/metadata/*.metadata.json" {
+  read_json
+}
+where snapshots.length() == 2
+assert snapshots[1]["timestamp-ms"] > snapshots[0]["timestamp-ms"]
+select s1_id=snapshots[0]["snapshot-id"],
+       s1_ts=snapshots[0]["timestamp-ms"],
+       s2_id=snapshots[1]["snapshot-id"],
+       s2_ts=snapshots[1]["timestamp-ms"]
+to_file f"{env("ICEBERG_WAREHOUSE_DIR")}/snapshots.json" {
+  write_json
+}

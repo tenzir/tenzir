@@ -1,0 +1,6 @@
+error: `table` must be of the form `namespace.table_name`
+ --> tests/operators/from_iceberg/errors/bad_table_empty_segment.tql:5:14
+  |
+5 | from_iceberg "ns.", catalog="https://example.invalid/iceberg"
+  |              ^^^^^ got `ns.`
+  |

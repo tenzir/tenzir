@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from_iceberg "ns.events", catalog="https://example.invalid/iceberg",
+  from_snapshot_id=1, to_snapshot_id=-1

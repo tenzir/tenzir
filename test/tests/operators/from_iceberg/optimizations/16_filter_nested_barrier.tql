@@ -1,0 +1,5 @@
+from_iceberg "optns.events", catalog=env("ICEBERG_REST_URI")
+optimize_barrier
+where meta.env == "prod" and meta.priority >= 2
+select id, meta
+sort id

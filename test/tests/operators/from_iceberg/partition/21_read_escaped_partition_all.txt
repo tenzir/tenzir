@@ -1,0 +1,35 @@
+{
+  id: 1,
+  key: "a b",
+  msg: "space",
+}
+{
+  id: 2,
+  key: "a/b",
+  msg: "slash",
+}
+{
+  id: 3,
+  key: "a=b&c",
+  msg: "reserved",
+}
+{
+  id: 4,
+  key: "ä%#?",
+  msg: "percent",
+}
+{
+  id: 5,
+  key: "..",
+  msg: "dots",
+}
+{
+  id: 6,
+  key: "",
+  msg: "empty",
+}
+{
+  id: 7,
+  key: null,
+  msg: "null",
+}

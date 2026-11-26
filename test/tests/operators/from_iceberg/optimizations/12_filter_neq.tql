@@ -1,0 +1,4 @@
+from_iceberg "optns.events", catalog=env("ICEBERG_REST_URI")
+where id != 3
+select id
+sort id

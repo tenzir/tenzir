@@ -1,0 +1,3 @@
+from_iceberg "partns.hashed", catalog=env("ICEBERG_REST_URI")
+where host.starts_with("web")
+sort id

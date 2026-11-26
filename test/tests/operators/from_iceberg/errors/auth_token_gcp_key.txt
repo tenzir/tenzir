@@ -1,0 +1,7 @@
+error: `token` cannot be combined with Google authentication
+ --> tests/operators/from_iceberg/errors/auth_token_gcp_key.tql:6:9
+  |
+6 |   token="secret", gcp_service_account_key="{}"
+  |         ^^^^^^^^
+  |
+  = note: `gcp_service_account_key` and `gcp_project` use Google authentication, which mints and refreshes tokens automatically

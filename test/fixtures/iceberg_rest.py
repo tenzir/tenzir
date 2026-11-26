@@ -18,6 +18,7 @@ from __future__ import annotations
 import logging
 import os
 import shutil
+import sys
 import tempfile
 import urllib.error
 import urllib.request
@@ -143,9 +144,16 @@ def iceberg_rest() -> Iterator[dict[str, str]]:
         )
     port = find_free_port()
     # Resolve symlinks (macOS /tmp -> /private/tmp) so the path recorded in
-    # the table metadata is identical inside and outside the container.
+    # the table metadata is identical inside and outside the container. On
+    # macOS, Colima only mounts $HOME into the Linux VM by default (not /tmp),
+    # whereas $HOME is shared across Colima, OrbStack, and Docker Desktop.
+    if sys.platform == "darwin":
+        base_dir = os.path.join(os.path.expanduser("~"), ".cache", "tenzir-test")
+        os.makedirs(base_dir, exist_ok=True)
+    else:
+        base_dir = "/tmp"
     warehouse_dir = os.path.realpath(
-        tempfile.mkdtemp(prefix="tenzir-iceberg-warehouse-", dir="/tmp")
+        tempfile.mkdtemp(prefix="tenzir-iceberg-warehouse-", dir=base_dir)
     )
     container: ManagedContainer | None = None
     try:

@@ -1,0 +1,4 @@
+// Second snapshot commit to the same table.
+from {id: 3, batch: 2, msg: "third"},
+     {id: 4, batch: 2, msg: "fourth"}
+to_iceberg "ttns.events", catalog=env("ICEBERG_REST_URI")
