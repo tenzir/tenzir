@@ -1,0 +1,8 @@
+error: expected variable name
+ --> tests/operators/load_balance/error_invalid_binding_target.tql:5:14
+  |
+5 | load_balance $a.b=["alpha"] {
+  |              ^^^^
+  |
+  = hint: use a variable name such as `$target`
+  = docs: https://tenzir.com/docs/reference/operators/load_balance

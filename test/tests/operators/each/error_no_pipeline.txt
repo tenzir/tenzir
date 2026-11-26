@@ -1,0 +1,8 @@
+error: required subpipeline was not provided
+ --> tests/operators/each/error_no_pipeline.tql:5:1
+  |
+5 | each $a=x
+  | ^^^^
+  |
+  = usage: each [$name=<expr>, ...] [parallel=<int>] { ... }
+  = docs: https://tenzir.com/docs/reference/operators/each

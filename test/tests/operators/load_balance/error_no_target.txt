@@ -1,0 +1,8 @@
+error: expected a list or binding `$name=<list>`
+ --> tests/operators/load_balance/error_no_target.tql:5:1
+  |
+5 | load_balance {
+  | ^^^^^^^^^^^^
+  |
+  = usage: load_balance $name=<list> { ... } or load_balance <list> { ... }
+  = docs: https://tenzir.com/docs/reference/operators/load_balance

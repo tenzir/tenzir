@@ -1,0 +1,7 @@
+error: unknown variable
+ --> tests/operators/each/error_sibling_ref.tql:5:15
+  |
+5 | each $a=x, $b=$a {
+  |               ^^
+  |
+  = hint: no variables are available here

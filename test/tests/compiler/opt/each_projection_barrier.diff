@@ -24,72 +24,56 @@
        ],
        order: "ordered"
      },
-     GenericIr {
-       desc: "each",
-       store: {
-         op: {
-           path: [
-             `each` @ [1]:161..165 from 0
-           ],
-           ref: std::each/op
-         },
-         args: [
+     each {
+       self: [1]:161..165 from 0,
+       bindings: [
+         {
+           expr: this_ [1]:161..165 from 0,
+           let: 1
+         }
+       ],
+       parallel: 10,
+       pipe: {
+         lets: [
            
          ],
-         named_args: [
-           
-         ],
-         pipeline: {
-           pipeline: {
-             lets: [
-               
+         operators: [
+           from_ir {
+             events: [
+               dollar_var `$this` -> 1 @ [1]:175..180 from 0
              ],
-             operators: [
-               from_ir {
-                 events: [
-                   dollar_var `$this` -> 1 @ [1]:175..180 from 0
-                 ],
-                 self: [1]:170..174 from 0
+             self: [1]:170..174 from 0
+           },
+           SetIr {
+             assignments: [
+               {
+                 left: this_ [0]:0..0 from 0,
+                 right: record {
+                   begin: [0]:0..0 from 0,
+                   items: [
+                     
+                   ],
+                   end: [0]:0..0 from 0
+                 },
+                 location: [0]:0..0 from 0
                },
-               SetIr {
-                 assignments: [
-                   {
-                     left: this_ [0]:0..0 from 0,
-                     right: record {
-                       begin: [0]:0..0 from 0,
-                       items: [
-                         
-                       ],
-                       end: [0]:0..0 from 0
-                     },
-                     location: [0]:0..0 from 0
-                   },
-                   {
-                     left: root_field {
-                       id: `payload` @ [1]:190..197 from 0,
-                       has_question_mark: false
-                     },
-                     right: root_field {
-                       id: `payload` @ [1]:190..197 from 0,
-                       has_question_mark: false
-                     },
-                     location: [1]:190..197 from 0
-                   }
-                 ],
-                 order: "ordered"
+               {
+                 left: root_field {
+                   id: `payload` @ [1]:190..197 from 0,
+                   has_question_mark: false
+                 },
+                 right: root_field {
+                   id: `payload` @ [1]:190..197 from 0,
+                   has_question_mark: false
+                 },
+                 location: [1]:190..197 from 0
                }
              ],
-             definition_location: [1]:170..197 from 0
-           } @ [1]:166..199 from 0,
-           let_ids: {
-             "0": 1
+             order: "ordered"
            }
-         }
-       },
-       filter: [
-         
-       ],
-       order: "ordered"
+         ],
+         definition_location: [1]:170..197 from 0
+       } @ [1]:166..199 from 0
      },
      SetIr {
        assignments: [

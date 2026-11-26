@@ -1,0 +1,12 @@
+{
+  ts: 2024-01-01T10:00:00Z,
+  src_ip: "10.0.0.5",
+  action: "login",
+  case_id: "C-1",
+}
+{
+  ts: 2024-01-01T10:05:00Z,
+  src_ip: "10.0.0.7",
+  action: "download",
+  case_id: "C-2",
+}

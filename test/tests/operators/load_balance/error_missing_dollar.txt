@@ -1,0 +1,8 @@
+error: binding must start with `$`
+ --> tests/operators/load_balance/error_missing_dollar.tql:5:14
+  |
+5 | load_balance target=["alpha"] {
+  |              ^^^^^^
+  |
+  = hint: use `$target=...` to bind `$target` in the subpipeline
+  = docs: https://tenzir.com/docs/reference/operators/load_balance

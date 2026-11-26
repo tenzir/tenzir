@@ -6,23 +6,31 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/async.hpp"
-#include "tenzir/detail/narrow.hpp"
-#include "tenzir/ir.hpp"
-#include "tenzir/operator_plugin.hpp"
-#include "tenzir/option.hpp"
-#include "tenzir/pipeline.hpp"
-#include "tenzir/source.hpp"
-#include "tenzir/tql2/exec.hpp"
-#include "tenzir/view.hpp"
-
+#include <tenzir/async.hpp>
+#include <tenzir/compile_ctx.hpp>
+#include <tenzir/detail/narrow.hpp>
+#include <tenzir/diagnostics.hpp>
+#include <tenzir/ir.hpp>
+#include <tenzir/let_id.hpp>
+#include <tenzir/location.hpp>
+#include <tenzir/operator_plugin.hpp>
+#include <tenzir/option.hpp>
+#include <tenzir/pipeline.hpp>
 #include <tenzir/plugin/register.hpp>
+#include <tenzir/source.hpp>
+#include <tenzir/substitute_ctx.hpp>
+#include <tenzir/tql2/ast.hpp>
+#include <tenzir/tql2/eval.hpp>
+#include <tenzir/tql2/exec.hpp>
 #include <tenzir/tql2/plugin.hpp>
-
-#include <caf/anon_mail.hpp>
+#include <tenzir/type.hpp>
+#include <tenzir/view.hpp>
 
 #include <algorithm>
 #include <deque>
+#include <string>
+#include <utility>
+#include <vector>
 
 namespace tenzir::plugins::load_balance {
 
@@ -41,7 +49,7 @@ auto as_constant_kind(data const& value) -> ast::constant::kind {
 struct LoadBalanceArgs {
   located<list> over;
   located<ir::pipeline> pipe;
-  let_id over_id;
+  let_id binding_id;
 };
 
 class LoadBalance final : public Operator<table_slice, void> {
@@ -63,7 +71,7 @@ public:
       workers_[i].active = true;
       ++active_workers_;
       auto pipe = args_.pipe.inner;
-      pipe.bind(args_.over_id, as_constant_kind(args_.over.inner[i]));
+      pipe.bind(args_.binding_id, as_constant_kind(args_.over.inner[i]));
       if (not co_await ctx.plan_and_spawn_sub<table_slice>(
             data{detail::narrow<int64_t>(i)}, std::move(pipe))) {
         done_ = true;
@@ -191,7 +199,7 @@ public:
         continue;
       }
       auto pipe = args_.pipe.inner;
-      pipe.bind(args_.over_id, as_constant_kind(args_.over.inner[i]));
+      pipe.bind(args_.binding_id, as_constant_kind(args_.over.inner[i]));
       if (not co_await ctx.plan_and_spawn_sub<nova::Events>(
             data{detail::narrow<int64_t>(i)}, std::move(pipe))) {
         done_ = true;
@@ -320,67 +328,258 @@ private:
   bool done_ = false;
 };
 
-class plugin final : public virtual OperatorPlugin {
+class LoadBalanceIr final : public ir::Operator {
+public:
+  LoadBalanceIr() = default;
+
+  LoadBalanceIr(location self, ast::expression over_expr, let_id binding_id,
+                located<ir::pipeline> pipe)
+    : self_{self},
+      over_expr_{std::move(over_expr)},
+      binding_id_{binding_id},
+      pipe_{std::move(pipe)} {
+  }
+
+  auto name() const -> std::string override {
+    return "load_balance";
+  }
+
+  auto main_location() const -> location override {
+    return self_;
+  }
+
+  auto copy() const -> Box<ir::Operator> override {
+    return LoadBalanceIr{*this};
+  }
+
+  auto move() && -> Box<ir::Operator> override {
+    return LoadBalanceIr{std::move(*this)};
+  }
+
+  auto max_parallelism() const -> size_t override {
+    // Each target belongs to one replica, so never spawn more replicas than
+    // targets. An idle sink replica would otherwise stop its upstream branch.
+    return over_ ? over_->inner.size() : 1;
+  }
+
+  auto substitute(substitute_ctx ctx, bool instantiate)
+    -> failure_or<void> override {
+    TRY(over_expr_.substitute(ctx));
+    // The subpipeline is instantiated per worker at runtime, once its target
+    // binding is known.
+    TRY(pipe_.inner.substitute(ctx, false));
+    if (instantiate) {
+      TRY(auto constant, const_eval(over_expr_, base_ctx{ctx, ctx.reg()}));
+      auto* entries = try_as<list>(constant.inner);
+      if (not entries) {
+        diagnostic::error("expected argument of type `list`, but got `{}`",
+                          type_kind_of_data(constant.inner))
+          .primary(over_expr_)
+          .emit(ctx);
+        return failure::promise();
+      }
+      if (entries->empty()) {
+        diagnostic::error("expected list to not be empty")
+          .primary(over_expr_)
+          .emit(ctx);
+        return failure::promise();
+      }
+      over_ = located{std::move(*entries), over_expr_.get_location()};
+    }
+    return {};
+  }
+
+  auto infer_type(element_type_tag input, base_ctx ctx) const
+    -> failure_or<element_type_tag> override {
+    if (input.is_not<table_slice>() and input.is_not<nova::Events>()) {
+      diagnostic::error("operator expects events").primary(self_).emit(ctx);
+      return failure::promise();
+    }
+    TRY(auto output, pipe_.inner.infer_type(input, ctx));
+    if (output.is_not<void>()) {
+      diagnostic::error("pipeline must currently end with a sink")
+        .primary(pipe_.source)
+        .emit(ctx);
+      return failure::promise();
+    }
+    return tag_v<void>;
+  }
+
+  auto spawn(element_type_tag input, registry const&) const
+    -> AnyOperator override {
+    TENZIR_ASSERT(over_);
+    auto args = LoadBalanceArgs{*over_, pipe_, binding_id_};
+    if (input.is<nova::Events>()) {
+      return LoadBalanceNova{std::move(args)}.with_name("load_balance");
+    }
+    TENZIR_ASSERT(input.is<table_slice>());
+    return LoadBalance{std::move(args)}.with_name("load_balance");
+  }
+
+  auto optimize(ir::OptimizeRequest req,
+                ir::OptimizeCtx const& octx) && -> ir::OptimizeResult override {
+    auto sub = std::move(pipe_.inner)
+                 .optimize(
+                   ir::OptimizeRequest{
+                     .filter = std::move(req.filter),
+                     .order = req.order,
+                     .limit = req.limit,
+                     .projection = std::move(req.projection),
+                   },
+                   octx);
+    pipe_.inner = std::move(sub.replacement);
+    auto touched = ast::ExprRefs{};
+    touched.let_ids.push_back(binding_id_);
+    for (auto const& let : pipe_.inner.lets) {
+      touched.let_ids.push_back(let.id);
+    }
+    auto [independent, dependent]
+      = ir::split_filter_by_dependents(std::move(sub.filter), touched);
+    for (auto const& expr : dependent) {
+      ir::add_refs_to_projection(sub.projection, expr);
+    }
+    pipe_.inner.prepend(std::move(dependent), octx.reg);
+    auto replacement = ir::pipeline{};
+    replacement.operators.push_back(std::move(*this).move());
+    return {
+      .filter = std::move(independent),
+      .order = EventOrder::unordered,
+      .replacement = std::move(replacement),
+      .limit = None{},
+      .projection = std::move(sub.projection),
+    };
+  }
+
+  friend auto inspect(auto& f, LoadBalanceIr& x) -> bool {
+    return f.object(x).fields(f.field("self", x.self_),
+                              f.field("over_expr", x.over_expr_),
+                              f.field("over", x.over_),
+                              f.field("binding_id", x.binding_id_),
+                              f.field("pipe", x.pipe_));
+  }
+
+private:
+  location self_;
+  ast::expression over_expr_;
+  Option<located<list>> over_;
+  let_id binding_id_;
+  located<ir::pipeline> pipe_;
+};
+
+class plugin final : public virtual operator_compiler_plugin {
 public:
   auto name() const -> std::string override {
     return "load_balance";
   }
 
-  auto describe() const -> Description override {
-    auto d = Describer<LoadBalanceArgs, LoadBalance, LoadBalanceNova>{};
-    auto over = d.positional("over", &LoadBalanceArgs::over, "list");
-    auto pipe = d.pipeline(&LoadBalanceArgs::pipe, SubOptimize::from_downstream,
-                           {{"over", &LoadBalanceArgs::over_id}});
-    // Each target belongs to one replica, so never spawn more replicas than
-    // targets. An idle sink replica would otherwise stop its upstream branch.
-    d.max_parallelism([](const LoadBalanceArgs& args) {
-      return args.over.inner.size();
-    });
-    d.validate([over](DescribeCtx& ctx) -> Empty {
-      if (auto entries = ctx.get(over); entries and entries->inner.empty()) {
-        diagnostic::error("expected list to not be empty")
-          .primary(entries->source)
-          .emit(ctx);
-      }
-      return {};
-    });
-    d.spawner([pipe]<class Input>(DescribeCtx& ctx)
-                -> failure_or<Option<SpawnWith<LoadBalanceArgs, Input>>> {
-      if constexpr (std::same_as<Input, table_slice>
-                    or std::same_as<Input, nova::Events>) {
-        TRY(auto p, ctx.get(pipe));
-        TRY(auto output, p.inner.infer_type(tag_v<Input>, ctx));
-        if (output.template is_not<void>()) {
-          diagnostic::error("pipeline must currently end with a sink")
-            .primary(p.source)
+  auto compile(ast::invocation inv, compile_ctx ctx) const
+    -> failure_or<ir::CompileResult> override {
+    // We use `operator_compiler_plugin` rather than `OperatorPlugin`/`Describer`
+    // because named bindings (`load_balance $target=<list> { ... }`) choose the
+    // subpipeline `let` binding name dynamically.
+    constexpr auto usage
+      = "load_balance $name=<list> { ... } or load_balance <list> { ... }";
+    constexpr auto docs
+      = "https://tenzir.com/docs/reference/operators/load_balance";
+    auto loc = inv.op.get_location();
+    auto var_name = Option<std::string>{};
+    auto over_expr = Option<ast::expression>{};
+    auto over_loc = Option<location>{};
+    auto pipe_expr = Option<ast::pipeline_expr>{};
+    auto saw_target_arg = false;
+    auto failed = false;
+    for (auto& arg : inv.args) {
+      if (auto* pe = try_as<ast::pipeline_expr>(arg)) {
+        if (pipe_expr) {
+          diagnostic::error("duplicate pipeline argument")
+            .primary(arg)
+            .secondary(pipe_expr->get_location(), "previously provided here")
             .emit(ctx);
-          return failure::promise();
+          failed = true;
+          continue;
         }
-        if constexpr (std::same_as<Input, table_slice>) {
-          return [](LoadBalanceArgs args) {
-            return LoadBalance{std::move(args)};
-          };
-        } else {
-          return [](LoadBalanceArgs args) {
-            return LoadBalanceNova{std::move(args)};
-          };
-        }
-      } else {
-        return {};
+        pipe_expr = std::move(*pe);
+        continue;
       }
-    });
-    return d.optimize(
-      [](DescribeCtx& ctx, ir::OptimizeRequest req) -> Optimization {
-        auto touched = ast::ExprRefs{.let_ids = ctx.pipeline_let_ids()};
-        auto [independent, dependent]
-          = ir::split_filter_by_dependents(std::move(req.filter), touched);
-        return {
-          .order = EventOrder::unordered,
-          .filter_upstream = std::move(independent),
-          .filter_self = std::move(dependent),
-          .projection_upstream = std::move(req.projection),
-        };
-      });
+      saw_target_arg = true;
+      if (over_expr) {
+        diagnostic::error("expected a single list to load-balance over")
+          .primary(arg)
+          .secondary(*over_loc, "previously provided here")
+          .docs(docs)
+          .emit(ctx);
+        failed = true;
+        continue;
+      }
+      if (auto* assignment = try_as<ast::assignment>(arg)) {
+        if (auto* var = try_as<ast::dollar_var>(assignment->left)) {
+          var_name = std::string{var->name_without_dollar()};
+          over_loc = arg.get_location();
+          over_expr = std::move(assignment->right);
+          continue;
+        }
+        if (auto* rf = try_as<ast::root_field>(assignment->left);
+            rf and not rf->has_question_mark) {
+          if (rf->id.name == "over") {
+            over_loc = arg.get_location();
+            over_expr = std::move(assignment->right);
+            continue;
+          }
+          diagnostic::error("binding must start with `$`")
+            .primary(assignment->left)
+            .hint("use `${}=...` to bind `${}` in the subpipeline", rf->id.name,
+                  rf->id.name)
+            .docs(docs)
+            .emit(ctx);
+          failed = true;
+          continue;
+        }
+        diagnostic::error("expected variable name")
+          .primary(assignment->left)
+          .hint("use a variable name such as `$target`")
+          .docs(docs)
+          .emit(ctx);
+        failed = true;
+        continue;
+      }
+      over_loc = arg.get_location();
+      over_expr = std::move(arg);
+    }
+    if (not saw_target_arg) {
+      diagnostic::error("expected a list or binding `$name=<list>`")
+        .primary(loc)
+        .usage(usage)
+        .docs(docs)
+        .emit(ctx);
+      failed = true;
+    }
+    if (not pipe_expr) {
+      diagnostic::error("required subpipeline was not provided")
+        .primary(loc)
+        .usage(usage)
+        .docs(docs)
+        .emit(ctx);
+      failed = true;
+    }
+    if (failed) {
+      return failure::promise();
+    }
+    TENZIR_ASSERT(over_expr);
+    // Bind the target list expression against the enclosing scope before
+    // opening the subpipeline scope, so `let $x = [...]; load_balance $x=$x`
+    // reads the outer list on the RHS and binds `$x` inside the subpipeline.
+    TRY(over_expr->bind(ctx));
+    auto scope = ctx.open_scope();
+    auto binding_id
+      = scope.let(var_name ? std::move(*var_name) : std::string{"over"});
+    auto pipe_loc = pipe_expr->get_location();
+    TRY(auto pipe_ir, std::move(pipe_expr->inner).compile(ctx));
+    return LoadBalanceIr{
+      loc,
+      std::move(*over_expr),
+      binding_id,
+      located{std::move(pipe_ir), pipe_loc},
+    };
   }
 };
 
@@ -389,3 +588,6 @@ public:
 } // namespace tenzir::plugins::load_balance
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::load_balance::plugin)
+TENZIR_REGISTER_PLUGIN(
+  tenzir::inspection_plugin<tenzir::ir::Operator,
+                            tenzir::plugins::load_balance::LoadBalanceIr>)

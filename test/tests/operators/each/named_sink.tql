@@ -1,0 +1,5 @@
+from {id: 1}, {id: 2}
+each $id=id {
+  from {id: $id}
+  discard
+}

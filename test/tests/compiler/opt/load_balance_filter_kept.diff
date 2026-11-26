@@ -25,85 +25,64 @@
 -      order: "ordered"
 +      order: "unordered"
      },
-     GenericIr {
-       desc: "load_balance",
-       store: {
-         op: {
-           path: [
-             `load_balance` @ [1]:120..132 from 0
-           ],
-           ref: std::load_balance/op
-         },
-         args: [
-           located [
-             string "a",
-             string "b"
-           ] @ [1]:133..138 from 0
-         ],
-         named_args: [
+     load_balance {
+       self: [1]:120..132 from 0,
+       over_expr: constant vector [string "a", string "b"] @ [1]:133..138 from 0,
+       over: [
+         string "a",
+         string "b"
+       ] @ [1]:133..138 from 0,
+       binding_id: 2,
+       pipe: {
+         lets: [
            
          ],
-         pipeline: {
-           pipeline: {
-             lets: [
-               
-             ],
-             operators: [
-               where_ir {
-                 op: {
-                   path: [
--                    `where` @ [1]:143..148 from 0
-+                    
-                   ],
--                  ref: std::where/op
-+                  ref: unresolved
-                 },
-                 args: [
-                   Incomplete binary_expr {
-                     left: dollar_var `$over` -> 2 @ [1]:149..154 from 0,
-                     op: "eq",
-                     right: constant string "a" @ [1]:158..161 from 0,
-                     location: [1]:149..161 from 0
-                   }
-                 ],
-                 named_args: [
-                   
-                 ]
-               },
-               GenericIr {
-                 desc: "discard",
-                 store: {
-                   op: {
-                     path: [
-                       `discard` @ [1]:164..171 from 0
-                     ],
-                     ref: std::discard/op
-                   },
-                   args: [
-                     
-                   ],
-                   named_args: [
-                     
-                   ]
-                 },
-                 filter: [
-                   
-                 ],
-                 order: "ordered"
+         operators: [
+           where_ir {
+             op: {
+               path: [
+-                `where` @ [1]:143..148 from 0
++                
+               ],
+-              ref: std::where/op
++              ref: unresolved
+             },
+             args: [
+               Incomplete binary_expr {
+                 left: dollar_var `$over` -> 2 @ [1]:149..154 from 0,
+                 op: "eq",
+                 right: constant string "a" @ [1]:158..161 from 0,
+                 location: [1]:149..161 from 0
                }
              ],
-             definition_location: [1]:143..171 from 0
-           } @ [1]:139..173 from 0,
-           let_ids: {
-             "0": 2
+             named_args: [
+               
+             ]
+           },
+           GenericIr {
+             desc: "discard",
+             store: {
+               op: {
+                 path: [
+                   `discard` @ [1]:164..171 from 0
+                 ],
+                 ref: std::discard/op
+               },
+               args: [
+                 
+               ],
+               named_args: [
+                 
+               ]
+             },
+             filter: [
+               
+             ],
+             order: "ordered"
            }
-         }
-       },
-       filter: [
-         
-       ],
--      order: "ordered"
-+      order: "unordered"
+         ],
+         definition_location: [1]:143..171 from 0
+       } @ [1]:139..173 from 0
      }
    ],
    definition_location: [1]:90..173 from 0

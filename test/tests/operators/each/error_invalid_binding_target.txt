@@ -1,0 +1,8 @@
+error: expected variable name
+ --> tests/operators/each/error_invalid_binding_target.tql:5:6
+  |
+5 | each $a.b=x {
+  |      ^^^^
+  |
+  = hint: use a variable name such as `$x`
+  = docs: https://tenzir.com/docs/reference/operators/each

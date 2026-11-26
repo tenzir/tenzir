@@ -1,0 +1,6 @@
+// Explicit field bindings let `each` push upstream field projections instead
+// of retaining the entire input event.
+export
+each $id=case_id, $ip=src.ip {
+  from {id: $id, ip: $ip}
+}

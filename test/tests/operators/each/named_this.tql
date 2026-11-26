@@ -1,0 +1,4 @@
+from {name: "alice", n: 1}, {name: "bob", n: 2}
+each $case=this, parallel=1 {
+  from $case
+}

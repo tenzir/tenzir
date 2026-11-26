@@ -1,0 +1,18 @@
+warning: division by zero
+ --> tests/operators/each/named_null_and_fallible.tql:4:9
+  |
+4 | each $q=10 / x, $y=y, parallel=1 {
+  |         ~~~~~~
+  |
+{
+  q: 5.0,
+  y: null,
+}
+{
+  q: null,
+  y: "zero",
+}
+{
+  q: 2.0,
+  y: "ok",
+}

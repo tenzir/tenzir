@@ -1,0 +1,5 @@
+from {ts: 2026-01-01T10:15:00Z, n: 3},
+     {ts: 2026-01-01T11:45:00Z, n: 5}
+each $hour=ts.floor(1h), $doubled=n * 2, parallel=1 {
+  from {hour: $hour, doubled: $doubled}
+}

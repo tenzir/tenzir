@@ -1,0 +1,10 @@
+error: expected a single list to load-balance over
+ --> tests/operators/load_balance/error_multiple_targets.tql:5:24
+  |
+5 | load_balance $a=["x"], $b=["y"] {
+  |                        ^^^^^^^^
+  ⋮
+5 | load_balance $a=["x"], $b=["y"] {
+  |              -------- previously provided here
+  |
+  = docs: https://tenzir.com/docs/reference/operators/load_balance

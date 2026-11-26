@@ -1,0 +1,6 @@
+from {x: 2, y: null},
+     {x: 0, y: "zero"},
+     {x: 5, y: "ok"}
+each $q=10 / x, $y=y, parallel=1 {
+  from {q: $q, y: $y}
+}

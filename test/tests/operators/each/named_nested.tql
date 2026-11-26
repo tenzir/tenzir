@@ -1,0 +1,7 @@
+from {outer: "a", offset: 10}, {outer: "b", offset: 20}
+each parallel=1 {
+  from {v: 1}, {v: 2}
+  each $scaled=v + $this.offset, parallel=1 {
+    from {outer: $this.outer, scaled: $scaled}
+  }
+}

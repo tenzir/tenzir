@@ -1,0 +1,7 @@
+---
+error: true
+---
+from {x: 1}
+each $a=x, $b=$a {
+  from {x: 1}
+}

@@ -1,0 +1,7 @@
+---
+error: true
+---
+from {x: 1}
+each parallel=1, parallel=2 {
+  from {x: 1}
+}

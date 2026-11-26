@@ -1,0 +1,8 @@
+error: unexpected positional argument
+ --> tests/operators/each/error_positional.tql:5:6
+  |
+5 | each this {
+  |      ^^^^
+  |
+  = hint: use `$name=<expr>` to bind a variable in the subpipeline
+  = docs: https://tenzir.com/docs/reference/operators/each

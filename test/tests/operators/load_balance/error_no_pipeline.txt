@@ -1,0 +1,8 @@
+error: required subpipeline was not provided
+ --> tests/operators/load_balance/error_no_pipeline.tql:5:1
+  |
+5 | load_balance $target=["alpha"]
+  | ^^^^^^^^^^^^
+  |
+  = usage: load_balance $name=<list> { ... } or load_balance <list> { ... }
+  = docs: https://tenzir.com/docs/reference/operators/load_balance

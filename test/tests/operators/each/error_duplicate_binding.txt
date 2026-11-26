@@ -1,0 +1,9 @@
+error: duplicate binding `$a`
+ --> tests/operators/each/error_duplicate_binding.tql:5:12
+  |
+5 | each $a=x, $a=y {
+  |            ^^
+  ⋮
+5 | each $a=x, $a=y {
+  |      -- previously bound here
+  |

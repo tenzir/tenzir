@@ -24,67 +24,51 @@
        ],
        order: "ordered"
      },
-     GenericIr {
-       desc: "each",
-       store: {
-         op: {
-           path: [
-             `each` @ [1]:117..121 from 0
-           ],
-           ref: std::each/op
-         },
-         args: [
-           
-         ],
-         named_args: [
-           
-         ],
-         pipeline: {
-           pipeline: {
-             lets: [
-               
-             ],
-             operators: [
-               from_ir {
-                 events: [
-                   dollar_var `$this` -> 1 @ [1]:131..136 from 0
-                 ],
-                 self: [1]:126..130 from 0
-+              },
-+              where_ir {
-+                op: {
-+                  path: [
-+                    
-+                  ],
-+                  ref: unresolved
-+                },
-+                args: [
-+                  Incomplete binary_expr {
-+                    left: root_field {
-+                      id: `x` @ [1]:145..146 from 0,
-+                      has_question_mark: false
-+                    },
-+                    op: "gt",
-+                    right: constant int64 1 @ [1]:149..150 from 0,
-+                    location: [1]:145..150 from 0
-+                  }
-+                ],
-+                named_args: [
-+                  
-+                ]
-               }
-             ],
-             definition_location: [1]:126..136 from 0
-           } @ [1]:122..138 from 0,
-           let_ids: {
-             "0": 1
-           }
+     each {
+       self: [1]:117..121 from 0,
+       bindings: [
+         {
+           expr: this_ [1]:117..121 from 0,
+           let: 1
          }
-       },
-       filter: [
-         
        ],
-       order: "ordered"
+       parallel: 10,
+       pipe: {
+         lets: [
+           
+         ],
+         operators: [
+           from_ir {
+             events: [
+               dollar_var `$this` -> 1 @ [1]:131..136 from 0
+             ],
+             self: [1]:126..130 from 0
++          },
++          where_ir {
++            op: {
++              path: [
++                
++              ],
++              ref: unresolved
++            },
++            args: [
++              Incomplete binary_expr {
++                left: root_field {
++                  id: `x` @ [1]:145..146 from 0,
++                  has_question_mark: false
++                },
++                op: "gt",
++                right: constant int64 1 @ [1]:149..150 from 0,
++                location: [1]:145..150 from 0
++              }
++            ],
++            named_args: [
++              
++            ]
+           }
+         ],
+         definition_location: [1]:126..136 from 0
+       } @ [1]:122..138 from 0
 -    },
 -    where_ir {
 -      op: {

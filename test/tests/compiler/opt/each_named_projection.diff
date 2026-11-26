@@ -1,0 +1,140 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "export",
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:118..124 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+         
+       ],
+-      order: "ordered"
++      order: "ordered",
++      projection: [
++        {
++          expr: root_field {
++            id: `case_id` @ [1]:134..141 from 0,
++            has_question_mark: false
++          },
++          has_this: false,
++          path: [
++            {
++              id: `case_id` @ [1]:134..141 from 0,
++              has_question_mark: false
++            }
++          ]
++        },
++        {
++          expr: field_access {
++            left: root_field {
++              id: `src` @ [1]:147..150 from 0,
++              has_question_mark: false
++            },
++            has_question_mark: false,
++            name: `ip` @ [1]:151..153 from 0,
++            location: [1]:147..153 from 0
++          },
++          has_this: false,
++          path: [
++            {
++              id: `src` @ [1]:147..150 from 0,
++              has_question_mark: false
++            },
++            {
++              id: `ip` @ [1]:151..153 from 0,
++              has_question_mark: false
++            }
++          ]
++        }
++      ]
+     },
+     each {
+       self: [1]:125..129 from 0,
+       bindings: [
+         {
+           expr: root_field {
+             id: `case_id` @ [1]:134..141 from 0,
+             has_question_mark: false
+           },
+           let: 1
+         },
+         {
+           expr: field_access {
+             left: root_field {
+               id: `src` @ [1]:147..150 from 0,
+               has_question_mark: false
+             },
+             has_question_mark: false,
+             name: `ip` @ [1]:151..153 from 0,
+             location: [1]:147..153 from 0
+           },
+           let: 2
+         }
+       ],
+       parallel: 10,
+       pipe: {
+         lets: [
+           
+         ],
+         operators: [
+           from_ir {
+             events: [
+               record {
+                 begin: [1]:163..164 from 0,
+                 items: [
+                   field {
+                     name: `id` @ [1]:164..166 from 0,
+                     expr: dollar_var `$id` -> 1 @ [1]:168..171 from 0
+                   },
+                   field {
+                     name: `ip` @ [1]:173..175 from 0,
+                     expr: dollar_var `$ip` -> 2 @ [1]:177..180 from 0
+                   }
+                 ],
+                 end: [1]:180..181 from 0
+               }
+             ],
+             self: [1]:158..162 from 0
+           }
+         ],
+         definition_location: [1]:158..181 from 0
+       } @ [1]:154..183 from 0
++    },
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:183..183 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
++      ],
++      order: "ordered"
+     }
+   ],
+   definition_location: [1]:118..183 from 0
+ }

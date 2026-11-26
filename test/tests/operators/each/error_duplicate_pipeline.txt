@@ -1,0 +1,9 @@
+error: duplicate pipeline argument
+ --> tests/operators/each/error_duplicate_pipeline.tql:5:29
+  |
+5 | each $a=x, { from {x: 1} }, { from {x: 2} }
+  |                             ^^^^^^^^^^^^^^^
+  ⋮
+5 | each $a=x, { from {x: 1} }, { from {x: 2} }
+  |            --------------- previously provided here
+  |

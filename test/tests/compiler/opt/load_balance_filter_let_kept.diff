@@ -25,94 +25,73 @@
 -      order: "ordered"
 +      order: "unordered"
      },
-     GenericIr {
-       desc: "load_balance",
-       store: {
-         op: {
-           path: [
-             `load_balance` @ [1]:289..301 from 0
-           ],
-           ref: std::load_balance/op
-         },
-         args: [
-           located [
-             string "a",
-             string "b"
-           ] @ [1]:302..307 from 0
-         ],
-         named_args: [
-           
-         ],
-         pipeline: {
-           pipeline: {
-             lets: [
-               {
-                 ident: `$x` @ [1]:316..318 from 0,
-                 expr: field_access {
-                   left: this_ [1]:321..325 from 0,
-                   has_question_mark: false,
-                   name: `n` @ [1]:326..327 from 0,
-                   location: [1]:321..327 from 0
-                 },
-                 id: 3
-               }
-             ],
-             operators: [
-               where_ir {
-                 op: {
-                   path: [
--                    `where` @ [1]:330..335 from 0
-+                    
-                   ],
--                  ref: std::where/op
-+                  ref: unresolved
-                 },
-                 args: [
-                   Incomplete binary_expr {
-                     left: dollar_var `$x` -> 3 @ [1]:336..338 from 0,
-                     op: "gt",
-                     right: constant int64 1 @ [1]:341..342 from 0,
-                     location: [1]:336..342 from 0
-                   }
-                 ],
-                 named_args: [
-                   
-                 ]
-               },
-               GenericIr {
-                 desc: "discard",
-                 store: {
-                   op: {
-                     path: [
-                       `discard` @ [1]:345..352 from 0
-                     ],
-                     ref: std::discard/op
-                   },
-                   args: [
-                     
-                   ],
-                   named_args: [
-                     
-                   ]
-                 },
-                 filter: [
-                   
-                 ],
-                 order: "ordered"
-               }
-             ],
-             definition_location: [1]:312..352 from 0
-           } @ [1]:308..354 from 0,
-           let_ids: {
-             "0": 2
+     load_balance {
+       self: [1]:289..301 from 0,
+       over_expr: constant vector [string "a", string "b"] @ [1]:302..307 from 0,
+       over: [
+         string "a",
+         string "b"
+       ] @ [1]:302..307 from 0,
+       binding_id: 2,
+       pipe: {
+         lets: [
+           {
+             ident: `$x` @ [1]:316..318 from 0,
+             expr: field_access {
+               left: this_ [1]:321..325 from 0,
+               has_question_mark: false,
+               name: `n` @ [1]:326..327 from 0,
+               location: [1]:321..327 from 0
+             },
+             id: 3
            }
-         }
-       },
-       filter: [
-         
-       ],
--      order: "ordered"
-+      order: "unordered"
+         ],
+         operators: [
+           where_ir {
+             op: {
+               path: [
+-                `where` @ [1]:330..335 from 0
++                
+               ],
+-              ref: std::where/op
++              ref: unresolved
+             },
+             args: [
+               Incomplete binary_expr {
+                 left: dollar_var `$x` -> 3 @ [1]:336..338 from 0,
+                 op: "gt",
+                 right: constant int64 1 @ [1]:341..342 from 0,
+                 location: [1]:336..342 from 0
+               }
+             ],
+             named_args: [
+               
+             ]
+           },
+           GenericIr {
+             desc: "discard",
+             store: {
+               op: {
+                 path: [
+                   `discard` @ [1]:345..352 from 0
+                 ],
+                 ref: std::discard/op
+               },
+               args: [
+                 
+               ],
+               named_args: [
+                 
+               ]
+             },
+             filter: [
+               
+             ],
+             order: "ordered"
+           }
+         ],
+         definition_location: [1]:312..352 from 0
+       } @ [1]:308..354 from 0
      }
    ],
    definition_location: [1]:259..354 from 0

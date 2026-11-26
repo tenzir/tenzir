@@ -1,0 +1,5 @@
+let $p = 1
+from {id: 1}, {id: 2}, {id: 3}
+each parallel=$p, $id=id {
+  from {id: $id}
+}

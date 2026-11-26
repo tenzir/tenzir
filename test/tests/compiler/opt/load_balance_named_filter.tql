@@ -1,0 +1,8 @@
+// A filter referencing the named target stays inside the subpipeline while an
+// independent filter pushes upstream.
+export
+load_balance $target=["a", "b"] {
+  where $target == "a"
+  where x > 1
+  discard
+}

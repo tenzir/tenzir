@@ -1,0 +1,7 @@
+error: unknown variable
+ --> tests/operators/load_balance/error_over_var_unbound.tql:6:12
+  |
+6 |   worker = $over
+  |            ^^^^^
+  |
+  = hint: available are `$target`

@@ -1,0 +1,7 @@
+---
+error: true
+---
+from {x: 1}
+each case=this {
+  from {x: 1}
+}

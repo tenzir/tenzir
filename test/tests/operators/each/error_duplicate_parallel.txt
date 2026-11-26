@@ -1,0 +1,9 @@
+error: duplicate argument `parallel`
+ --> tests/operators/each/error_duplicate_parallel.tql:5:18
+  |
+5 | each parallel=1, parallel=2 {
+  |                  ^^^^^^^^^^
+  ⋮
+5 | each parallel=1, parallel=2 {
+  |      ---------- previously provided here
+  |

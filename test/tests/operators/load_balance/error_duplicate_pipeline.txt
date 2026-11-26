@@ -1,0 +1,9 @@
+error: duplicate pipeline argument
+ --> tests/operators/load_balance/error_duplicate_pipeline.tql:5:46
+  |
+5 | load_balance $target=["alpha"], { discard }, { discard }
+  |                                              ^^^^^^^^^^^
+  ⋮
+5 | load_balance $target=["alpha"], { discard }, { discard }
+  |                                 ----------- previously provided here
+  |

@@ -1,0 +1,5 @@
+let $x = 10
+from {n: 1}, {n: 2}
+each $x=n + $x, parallel=1 {
+  from {v: $x}
+}

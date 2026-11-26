@@ -1,0 +1,8 @@
+error: unknown argument `case`
+ --> tests/operators/each/error_unknown_named.tql:5:6
+  |
+5 | each case=this {
+  |      ^^^^
+  |
+  = hint: use `$case=...` to bind `$case` in the subpipeline, or `parallel=<int>` to set concurrency
+  = docs: https://tenzir.com/docs/reference/operators/each

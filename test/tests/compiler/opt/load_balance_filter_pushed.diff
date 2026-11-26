@@ -34,86 +34,65 @@
 -      order: "ordered"
 +      order: "unordered"
      },
-     GenericIr {
-       desc: "load_balance",
-       store: {
-         op: {
-           path: [
-             `load_balance` @ [1]:125..137 from 0
-           ],
-           ref: std::load_balance/op
-         },
-         args: [
-           located [
-             string "a",
-             string "b"
-           ] @ [1]:138..143 from 0
-         ],
-         named_args: [
+     load_balance {
+       self: [1]:125..137 from 0,
+       over_expr: constant vector [string "a", string "b"] @ [1]:138..143 from 0,
+       over: [
+         string "a",
+         string "b"
+       ] @ [1]:138..143 from 0,
+       binding_id: 2,
+       pipe: {
+         lets: [
            
          ],
-         pipeline: {
-           pipeline: {
-             lets: [
+         operators: [
+-          where_ir {
+-            op: {
+-              path: [
+-                `where` @ [1]:148..153 from 0
+-              ],
+-              ref: std::where/op
+-            },
+-            args: [
+-              expression binary_expr {
+-                left: root_field {
+-                  id: `x` @ [1]:154..155 from 0,
+-                  has_question_mark: false
+-                },
+-                op: "gt",
+-                right: constant int64 1 @ [1]:158..159 from 0,
+-                location: [1]:154..159 from 0
+-              }
+-            ],
+-            named_args: [
+-              
+-            ]
+-          },
+           GenericIr {
+             desc: "discard",
+             store: {
+               op: {
+                 path: [
+                   `discard` @ [1]:162..169 from 0
+                 ],
+                 ref: std::discard/op
+               },
+               args: [
+                 
+               ],
+               named_args: [
+                 
+               ]
+             },
+             filter: [
                
              ],
-             operators: [
--              where_ir {
--                op: {
--                  path: [
--                    `where` @ [1]:148..153 from 0
--                  ],
--                  ref: std::where/op
--                },
--                args: [
--                  expression binary_expr {
--                    left: root_field {
--                      id: `x` @ [1]:154..155 from 0,
--                      has_question_mark: false
--                    },
--                    op: "gt",
--                    right: constant int64 1 @ [1]:158..159 from 0,
--                    location: [1]:154..159 from 0
--                  }
--                ],
--                named_args: [
--                  
--                ]
--              },
-               GenericIr {
-                 desc: "discard",
-                 store: {
-                   op: {
-                     path: [
-                       `discard` @ [1]:162..169 from 0
-                     ],
-                     ref: std::discard/op
-                   },
-                   args: [
-                     
-                   ],
-                   named_args: [
-                     
-                   ]
-                 },
-                 filter: [
-                   
-                 ],
-                 order: "ordered"
-               }
-             ],
-             definition_location: [1]:148..169 from 0
-           } @ [1]:144..171 from 0,
-           let_ids: {
-             "0": 2
+             order: "ordered"
            }
-         }
-       },
-       filter: [
-         
-       ],
--      order: "ordered"
-+      order: "unordered"
+         ],
+         definition_location: [1]:148..169 from 0
+       } @ [1]:144..171 from 0
      }
    ],
    definition_location: [1]:95..171 from 0

@@ -1,0 +1,7 @@
+error: unknown variable
+ --> tests/operators/each/error_this_var_unbound.tql:6:8
+  |
+6 |   from $this
+  |        ^^^^^
+  |
+  = hint: available are `$case`

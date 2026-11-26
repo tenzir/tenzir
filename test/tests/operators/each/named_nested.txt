@@ -1,0 +1,16 @@
+{
+  outer: "a",
+  scaled: 11,
+}
+{
+  outer: "a",
+  scaled: 12,
+}
+{
+  outer: "b",
+  scaled: 21,
+}
+{
+  outer: "b",
+  scaled: 22,
+}

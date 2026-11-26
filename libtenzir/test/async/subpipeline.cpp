@@ -12,6 +12,7 @@
 #include "tenzir/plugin.hpp"
 #include "tenzir/session.hpp"
 #include "tenzir/source.hpp"
+#include "tenzir/substitute_ctx.hpp"
 #include "tenzir/test/registry.hpp"
 #include "tenzir/test/test.hpp"
 #include "tenzir/tql2/parser.hpp"
@@ -102,4 +103,77 @@ TEST("named group IR round-trips through serialization with all partition "
   CHECK_EQUAL(restored->name(), "group");
   CHECK(restored->concurrent_output());
   CHECK_EQUAL(restored->partition_keys().size(), 2u);
+}
+
+TEST("named load_balance IR round-trips through serialization") {
+  auto dh = collecting_diagnostic_handler{};
+  auto const& reg = test::builtin_registry();
+  auto provider = session_provider::make(dh, reg);
+  auto session = provider.as_session();
+  auto source = Source::new_source("load_balance $target=[\"a\", \"b\"] { "
+                                   "worker = $target | discard }",
+                                   "<test>", false);
+  auto sources = SourceMap{};
+  sources.add_source(source);
+  auto tokens = tokenize_permissive(source->text);
+  auto parsed = parse(tokens, *source, session);
+  REQUIRE(parsed);
+  REQUIRE(resolve_entities(*parsed, ExternPrelude::empty(), session));
+  auto root = compile_ctx::make_root(base_ctx{dh, reg}, sources);
+  auto compiled = std::move(*parsed).compile(root);
+  REQUIRE(compiled);
+  REQUIRE(
+    compiled->substitute(substitute_ctx{base_ctx{dh, reg}, nullptr}, true));
+  REQUIRE_EQUAL(compiled->operators.size(), 1u);
+  auto const& op = *compiled->operators.front();
+  CHECK_EQUAL(op.name(), "load_balance");
+  CHECK_EQUAL(op.max_parallelism(), 2u);
+  auto const* ser
+    = plugins::find<serialization_plugin<ir::Operator>>("load_balance");
+  REQUIRE(ser);
+  auto buffer = caf::byte_buffer{};
+  auto writer = caf::binary_serializer{buffer};
+  REQUIRE(ser->serialize(writer, op));
+  auto reader = caf::binary_deserializer{buffer};
+  auto restored = std::unique_ptr<ir::Operator>{};
+  ser->deserialize(reader, restored);
+  REQUIRE(restored);
+  CHECK_EQUAL(restored->name(), "load_balance");
+  CHECK_EQUAL(restored->max_parallelism(), 2u);
+}
+
+TEST("named each IR round-trips through serialization") {
+  auto dh = collecting_diagnostic_handler{};
+  auto const& reg = test::builtin_registry();
+  auto provider = session_provider::make(dh, reg);
+  auto session = provider.as_session();
+  auto source = Source::new_source("each $id=case_id, $ip=ip, parallel=4 { "
+                                   "from {id: $id, ip: $ip} }",
+                                   "<test>", false);
+  auto sources = SourceMap{};
+  sources.add_source(source);
+  auto tokens = tokenize_permissive(source->text);
+  auto parsed = parse(tokens, *source, session);
+  REQUIRE(parsed);
+  REQUIRE(resolve_entities(*parsed, ExternPrelude::empty(), session));
+  auto root = compile_ctx::make_root(base_ctx{dh, reg}, sources);
+  auto compiled = std::move(*parsed).compile(root);
+  REQUIRE(compiled);
+  REQUIRE(
+    compiled->substitute(substitute_ctx{base_ctx{dh, reg}, nullptr}, true));
+  REQUIRE_EQUAL(compiled->operators.size(), 1u);
+  auto const& op = *compiled->operators.front();
+  CHECK_EQUAL(op.name(), "each");
+  CHECK(op.concurrent_output());
+  auto const* ser = plugins::find<serialization_plugin<ir::Operator>>("each");
+  REQUIRE(ser);
+  auto buffer = caf::byte_buffer{};
+  auto writer = caf::binary_serializer{buffer};
+  REQUIRE(ser->serialize(writer, op));
+  auto reader = caf::binary_deserializer{buffer};
+  auto restored = std::unique_ptr<ir::Operator>{};
+  ser->deserialize(reader, restored);
+  REQUIRE(restored);
+  CHECK_EQUAL(restored->name(), "each");
+  CHECK(restored->concurrent_output());
 }
