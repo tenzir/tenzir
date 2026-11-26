@@ -1059,6 +1059,37 @@ assertions:
                   valueType: DOUBLE
             method: POST
             path: /v3/projects/other-project/timeSeries
+        28_uncompressed.tql:
+          - method: GET
+            path: /v3/projects/test-project/metricDescriptors/custom.googleapis.com/tenzir/uncompressed
+          - body:
+              metricKind: GAUGE
+              type: custom.googleapis.com/tenzir/uncompressed
+              valueType: DOUBLE
+            method: POST
+            path: /v3/projects/test-project/metricDescriptors
+          - body:
+              timeSeries:
+                - metric:
+                    type: custom.googleapis.com/tenzir/uncompressed
+                  metricKind: GAUGE
+                  points:
+                    - interval:
+                        endTime: '2026-01-01T00:00:00Z'
+                      value:
+                        doubleValue: 1
+                  resource:
+                    labels:
+                      location: global
+                      namespace: tenzir
+                      node_id: n1
+                    type: generic_node
+                  valueType: DOUBLE
+            method: POST
+            path: /v3/projects/test-project/timeSeries
+      content_encodings:
+        01_gauge.tql: [gzip, gzip]
+        28_uncompressed.tql: [identity, identity]
       series_counts:
         05_batching.tql: [200, 1]
         22_label_value_length.tql: [1]

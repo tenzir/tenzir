@@ -18,6 +18,9 @@ types whose path contains a marker segment trigger special behavior:
 
 Descriptor creation also fails with HTTP 400 for the unit `invalid-unit`.
 
+Like Cloud Monitoring, the mock accepts request bodies with the content codings
+`identity` and `gzip` and answers HTTP 415 for other codings.
+
 Like Cloud Monitoring, the mock rejects time series that lack a label of their
 metric descriptor and adds new labels of written time series to it. It also
 rejects time series whose resource `project_id` differs from the project in the
@@ -27,6 +30,7 @@ request. Besides the project of the GCE instance, it accepts writes to
 
 from __future__ import annotations
 
+import gzip
 import json
 import re
 import shutil
@@ -75,6 +79,8 @@ class GoogleCloudMonitoringAssertions:
     series_counts: dict[str, list[int]] = dataclass_field(default_factory=dict)
     # Number of time series that the mock wrote, per test.
     written_series: dict[str, int] = dataclass_field(default_factory=dict)
+    # Content coding of each POST request body, per test, in arrival order.
+    content_encodings: dict[str, list[str]] = dataclass_field(default_factory=dict)
 
 
 @dataclass
@@ -185,8 +191,28 @@ def _make_handler(state: State):
             if self.headers.get("Content-Type") != "application/json":
                 self._error(400, "expected application/json")
                 return
+            encoding = self.headers.get("Content-Encoding", "identity")
+            if encoding not in ("identity", "gzip"):
+                self._error(
+                    415,
+                    "Unsupported Content-Encoding; only identity/gzip are supported.",
+                )
+                return
+            if encoding == "gzip":
+                try:
+                    body = gzip.decompress(body)
+                except (OSError, EOFError):
+                    self._error(400, "invalid gzip request body")
+                    return
             payload = json.loads(body)
-            state.record({"method": "POST", "path": self.path, "body": payload})
+            state.record(
+                {
+                    "method": "POST",
+                    "path": self.path,
+                    "body": payload,
+                    "encoding": encoding,
+                }
+            )
             match = _PROJECT_PATH.match(self.path)
             if match is None or match[1] not in _PROJECTS:
                 self._error(404, f"Project not found: {self.path}")
@@ -349,6 +375,13 @@ def run() -> FixtureHandle:
             state.capture.write_text("")
             written = state.written
             state.written = 0
+        encodings = [entry.pop("encoding") for entry in observed if "encoding" in entry]
+        expected_encodings = assertions.content_encodings.get(test.name)
+        if expected_encodings is not None and encodings != expected_encodings:
+            raise AssertionError(
+                "Cloud Monitoring content encoding mismatch\n"
+                f"expected: {expected_encodings}\nactual: {encodings}"
+            )
         expected = assertions.requests.get(test.name)
         if expected is not None and observed != expected:
             raise AssertionError(
