@@ -1053,6 +1053,14 @@ public:
   std::shared_ptr<const synopsis_map> synopses_per_type
     = std::make_shared<synopsis_map>();
 
+  /// Every partition in `synopses_per_type`, by ID. Without it, finding one
+  /// partition probes every schema, and maintenance does that for each
+  /// rebuild candidate: with hundreds of schemas and ~100k partitions, a
+  /// single pass blocked the catalog for over a second. Only the catalog
+  /// thread reads it, so it is a plain map rather than part of the shared
+  /// generations. `update_synopses` keeps it in sync.
+  std::unordered_map<uuid, partition_synopsis_ptr> synopsis_by_id = {};
+
   /// Publishes a new generation of the synopsis set: `mutate` receives a
   /// private copy of the outer map, and any per-schema map it wants to change
   /// must be cloned too (see `mutable_schema`), because readers -- the lookup
@@ -1060,8 +1068,15 @@ public:
   void update_synopses(auto&& mutate) {
     auto next = std::make_shared<synopsis_map>(*synopses_per_type);
     mutate(*next);
+    reindex_synopses(*synopses_per_type, *next);
     synopses_per_type = std::move(next);
   }
+
+  /// Brings `synopsis_by_id` from generation `before` to `after`. Per-schema
+  /// maps are immutable and replaced whenever they change, so pointer
+  /// identity finds the changed schemas without hashing any schema, and only
+  /// their entries are compared.
+  void reindex_synopses(const synopsis_map& before, const synopsis_map& after);
 
   /// Installs a mutable clone of one schema's synopses into an
   /// under-construction generation, creating the schema if needed, and

@@ -463,7 +463,9 @@ TEST("custom disk eviction needs a fresh measurement after each batch") {
                     -> catalog_actor::behavior_type {
         state = &self->state();
         state->self = self;
-        state->synopses_per_type = partitions.state.synopses_per_type;
+        state->update_synopses([&](tenzir::catalog_state::synopsis_map& map) {
+          map = *partitions.state.synopses_per_type;
+        });
         REQUIRE(not state->initialize_maintenance(partitions.clock).valid());
         state->maintenance.space.high_water_mark = 95;
         state->maintenance.space.low_water_mark = 90;

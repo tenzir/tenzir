@@ -630,6 +630,7 @@ auto catalog_state::initialize(std::vector<partition_synopsis_pair> partitions)
   }
   using flat_data_list = std::vector<std::pair<uuid, partition_synopsis_ptr>>;
   auto flat_data_map = std::unordered_map<tenzir::type, flat_data_list>{};
+  synopsis_by_id.reserve(synopsis_by_id.size() + partitions.size());
   for (auto& [uuid, synopsis] : partitions) {
     TENZIR_ASSERT(synopsis->get_reference_count() == 1ull);
     flat_data_map[synopsis->schema].emplace_back(uuid, std::move(synopsis));
@@ -729,17 +730,14 @@ void catalog_state::erase(std::span<const uuid> partitions,
     // Admissions identify accounted partitions, including while package
     // startup still holds back maintenance scheduling.
     auto containing = Option<type>{};
-    for (const auto& [schema, entries] : *synopses_per_type) {
-      if (const auto it = entries->find(partition); it != entries->end()) {
-        if (admissions.contains(partition)) {
-          const auto& synopsis = it->second;
-          catalog_bytes -= synopsis->store_file.size
-                           + synopsis->indexes_file.size
-                           + synopsis->sketches_file.size;
-        }
-        containing = schema;
-        break;
+    if (const auto it = synopsis_by_id.find(partition);
+        it != synopsis_by_id.end()) {
+      const auto& synopsis = it->second;
+      if (admissions.contains(partition)) {
+        catalog_bytes -= synopsis->store_file.size + synopsis->indexes_file.size
+                         + synopsis->sketches_file.size;
       }
+      containing = synopsis->schema;
     }
     ++storage_generation;
     admissions.erase(partition);
@@ -791,12 +789,83 @@ void catalog_state::erase(std::span<const uuid> partitions,
   });
 }
 
+void catalog_state::reindex_synopses(const synopsis_map& before,
+                                     const synopsis_map& after) {
+  auto unchanged = std::unordered_set<const schema_synopsis_map*>{};
+  unchanged.reserve(before.size());
+  for (const auto& [_, entries] : before) {
+    unchanged.insert(entries.get());
+  }
+  auto changed = std::unordered_set<const schema_synopsis_map*>{};
+  for (const auto& [_, entries] : after) {
+    if (not unchanged.erase(entries.get())) {
+      changed.insert(entries.get());
+    }
+  }
+  // Now `unchanged` holds only the maps that `after` replaced or dropped.
+  if (unchanged.empty() and changed.empty()) {
+    return;
+  }
+  auto insert = [&](const uuid& id, const partition_synopsis_ptr& synopsis) {
+    synopsis_by_id.insert_or_assign(id, synopsis);
+  };
+  // A partition may move between schemas within one generation. Erase only
+  // the entry that still points at the old synopsis, so the order in which
+  // schemas are visited cannot drop the new one.
+  auto erase = [&](const uuid& id, const partition_synopsis_ptr& synopsis) {
+    if (const auto it = synopsis_by_id.find(id);
+        it != synopsis_by_id.end() and it->second.get() == synopsis.get()) {
+      synopsis_by_id.erase(it);
+    }
+  };
+  for (const auto& [schema, old_entries] : before) {
+    if (not unchanged.contains(old_entries.get())) {
+      continue;
+    }
+    const auto it = after.find(schema);
+    if (it == after.end()) {
+      for (const auto& [id, synopsis] : *old_entries) {
+        erase(id, synopsis);
+      }
+      continue;
+    }
+    // Both maps are sorted by partition ID, so one pass finds the difference.
+    const auto& new_entries = *it->second;
+    changed.erase(&new_entries);
+    auto lhs = old_entries->begin();
+    auto rhs = new_entries.begin();
+    while (lhs != old_entries->end() or rhs != new_entries.end()) {
+      if (rhs == new_entries.end()
+          or (lhs != old_entries->end() and lhs->first < rhs->first)) {
+        erase(lhs->first, lhs->second);
+        ++lhs;
+      } else if (lhs == old_entries->end() or rhs->first < lhs->first) {
+        insert(rhs->first, rhs->second);
+        ++rhs;
+      } else {
+        if (lhs->second.get() != rhs->second.get()) {
+          insert(rhs->first, rhs->second);
+        }
+        ++lhs;
+        ++rhs;
+      }
+    }
+  }
+  // What remains are schemas that `before` did not have at all.
+  for (const auto& [_, entries] : after) {
+    if (changed.contains(entries.get())) {
+      for (const auto& [id, synopsis] : *entries) {
+        insert(id, synopsis);
+      }
+    }
+  }
+}
+
 auto catalog_state::find_synopsis(const uuid& partition) const
   -> partition_synopsis_ptr {
-  for (const auto& [schema, entries] : *synopses_per_type) {
-    if (const auto it = entries->find(partition); it != entries->end()) {
-      return it->second;
-    }
+  if (const auto it = synopsis_by_id.find(partition);
+      it != synopsis_by_id.end()) {
+    return it->second;
   }
   return {};
 }
@@ -2101,10 +2170,8 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
       return {};
     },
     [self](atom::get, uuid uuid) -> caf::result<partition_info> {
-      for (const auto& [type, synopses] : *self->state().synopses_per_type) {
-        if (auto it = synopses->find(uuid); it != synopses->end()) {
-          return partition_info{uuid, *it->second};
-        }
+      if (auto synopsis = self->state().find_synopsis(uuid)) {
+        return partition_info{uuid, *synopsis};
       }
       return caf::make_error(
         tenzir::ec::lookup_error,

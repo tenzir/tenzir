@@ -485,11 +485,13 @@ auto catalog_state::select_rebuild_batch(rebuild_run& run, time now)
     }
   }
   auto const remaining = run.options.max_partitions - run.selected;
-  for (auto& group : *run.groups) {
+  for (auto group_it = run.groups->begin(); group_it != run.groups->end();) {
+    auto& group = *group_it;
     auto batch = std::vector<partition_info>{};
     auto events = size_t{0};
     auto bytes = uint64_t{0};
     auto closed_day = false;
+    auto group_deferred = size_t{0};
     for (auto it = group.begin(); it != group.end();) {
       auto current = it++;
       auto const& partition = *current;
@@ -503,6 +505,7 @@ auto catalog_state::select_rebuild_batch(rebuild_run& run, time now)
           or retiring.contains(partition.uuid)
           or blocks_rebuild(partition.uuid, *synopsis, now)) {
         ++run.deferred;
+        ++group_deferred;
         continue;
       }
       if (quarantined_partitions.contains(partition.uuid)) {
@@ -548,6 +551,17 @@ auto catalog_state::select_rebuild_batch(rebuild_run& run, time now)
           batch.size(), outputs, 1,
           closed_day ? maintenance.rebuild_merge_margin : 0.0)) {
       return batch;
+    }
+    // Maintenance runs this selection after every merge. Without deferred
+    // members, the group would produce the same rejected batch every time, so
+    // rescanning it only keeps the catalog busy. Its members become
+    // selectable again only when handed back to the run, which resets the
+    // groups. Size estimates that improve later in the run do not revive the
+    // group; its partitions wait for the next run instead.
+    if (group_deferred == 0) {
+      group_it = run.groups->erase(group_it);
+    } else {
+      ++group_it;
     }
   }
   return {};
