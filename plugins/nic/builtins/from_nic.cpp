@@ -161,7 +161,8 @@ public:
       static_cast<size_t>(pkt_hdr.caplen),
     };
     auto header_bytes = as_bytes(header);
-    buffer_.reserve(buffer_.size() + header_bytes.size() + data.size());
+    // No exact `reserve()` here: it would defeat geometric growth and copy the
+    // whole batch for every packet.
     buffer_.insert(buffer_.end(), header_bytes.begin(), header_bytes.end());
     buffer_.insert(buffer_.end(), data.begin(), data.end());
     ++num_buffered_packets_;
