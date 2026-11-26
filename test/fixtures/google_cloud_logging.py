@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import base64
+import dataclasses
 import json
 import os
+import socket
 import subprocess
 import sys
 import tempfile
@@ -12,10 +14,10 @@ import threading
 from concurrent import futures
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
-from typing import Iterator
+from typing import Any
 from urllib.parse import parse_qs
 
-from tenzir_test import fixture
+from tenzir_test import FixtureHandle, fixture
 from tenzir_test.fixtures import FixtureUnavailable
 
 try:
@@ -32,6 +34,14 @@ except ImportError:
 _HOST = "127.0.0.1"
 _EXPECTED_TOKEN = "test-token-gcl-12345"
 _EXPECTED_SCOPE = "https://www.googleapis.com/auth/logging.write"
+
+
+@dataclasses.dataclass(frozen=True)
+class GoogleCloudLoggingAssertions:
+    # Whether the client compressed its requests. The fixture compares the
+    # bytes that clients sent over the network with the serialized size of
+    # the received requests.
+    compressed: bool | None = None
 
 
 # ==============================================================================
@@ -350,6 +360,10 @@ def _make_grpc_servicer(
     lock = threading.Lock()
 
     class MockLoggingServicer(logging_pb2_grpc.LoggingServiceV2Servicer):
+        def __init__(self) -> None:
+            # The total serialized size of all accepted requests.
+            self.request_bytes = 0
+
         def WriteLogEntries(self, request, context):  # type: ignore[no-untyped-def]
             # Reject requests without a valid bearer token, matching the
             # behavior of the real Google Cloud Logging endpoint. The C++
@@ -380,6 +394,7 @@ def _make_grpc_servicer(
                 preserving_proto_field_name=True,
             )
             with lock:
+                self.request_bytes += request.ByteSize()
                 with open(capture_path, "a") as f:
                     f.write(json.dumps(entry, sort_keys=True) + "\n")
             return logging_pb2.WriteLogEntriesResponse()
@@ -409,13 +424,86 @@ def _start_grpc_server(
     return server, port
 
 
+class _ByteCountingRelay:
+    """Forward TCP connections to a target port and count the client bytes.
+
+    The Python gRPC server does not expose whether a request was compressed,
+    so the fixture measures the bytes on the wire instead. The relay forwards
+    the TLS stream unchanged.
+    """
+
+    def __init__(self, target_port: int) -> None:
+        self._target = (_HOST, target_port)
+        self._listener = socket.create_server((_HOST, 0))
+        self._listener.settimeout(0.2)
+        self.port = self._listener.getsockname()[1]
+        self._lock = threading.Lock()
+        self._client_bytes = 0
+        self._sockets: list[socket.socket] = []
+        self._stopped = threading.Event()
+        self._thread = threading.Thread(target=self._accept, daemon=True)
+        self._thread.start()
+
+    @property
+    def client_bytes(self) -> int:
+        with self._lock:
+            return self._client_bytes
+
+    def close(self) -> None:
+        self._stopped.set()
+        self._thread.join(timeout=2)
+        self._listener.close()
+        with self._lock:
+            for sock in self._sockets:
+                sock.close()
+
+    def _accept(self) -> None:
+        while not self._stopped.is_set():
+            try:
+                client, _ = self._listener.accept()
+            except TimeoutError:
+                continue
+            except OSError:
+                return
+            client.settimeout(None)
+            try:
+                upstream = socket.create_connection(self._target)
+            except OSError:
+                client.close()
+                continue
+            with self._lock:
+                self._sockets += [client, upstream]
+            for src, dst, count in (
+                (client, upstream, True),
+                (upstream, client, False),
+            ):
+                threading.Thread(
+                    target=self._pipe, args=(src, dst, count), daemon=True
+                ).start()
+
+    def _pipe(self, src: socket.socket, dst: socket.socket, count: bool) -> None:
+        try:
+            while data := src.recv(65536):
+                if count:
+                    with self._lock:
+                        self._client_bytes += len(data)
+                dst.sendall(data)
+        except OSError:
+            pass
+        finally:
+            try:
+                dst.shutdown(socket.SHUT_WR)
+            except OSError:
+                pass
+
+
 # ==============================================================================
 # Fixture Entry Point
 # ==============================================================================
 
 
-@fixture()
-def google_cloud_logging() -> Iterator[dict[str, str]]:
+@fixture(assertions=GoogleCloudLoggingAssertions)
+def google_cloud_logging() -> FixtureHandle:
     if grpc is None:
         raise FixtureUnavailable(
             "grpcio/grpcio-tools not installed; install with: "
@@ -436,6 +524,18 @@ def google_cloud_logging() -> Iterator[dict[str, str]]:
     oauth_server = None
     oauth_thread = None
     grpc_server = None
+    relay = None
+
+    def teardown() -> None:
+        if relay is not None:
+            relay.close()
+        if grpc_server is not None:
+            grpc_server.stop(grace=2)
+        if oauth_server is not None:
+            oauth_server.shutdown()
+        if oauth_thread is not None:
+            oauth_thread.join(timeout=2)
+        # Leave temp_dir for debugging; the OS cleans /tmp eventually.
 
     try:
         # --- Proto compilation ---
@@ -477,9 +577,10 @@ def google_cloud_logging() -> Iterator[dict[str, str]]:
             capture_path, public_der, logging_pb2, logging_pb2_grpc
         )
         grpc_server, grpc_port = _start_grpc_server(servicer, logging_pb2_grpc, tls)
+        relay = _ByteCountingRelay(grpc_port)
 
         env = {
-            "GOOGLE_CLOUD_CPP_LOGGING_SERVICE_V2_ENDPOINT": f"localhost:{grpc_port}",
+            "GOOGLE_CLOUD_CPP_LOGGING_SERVICE_V2_ENDPOINT": f"localhost:{relay.port}",
             "GOOGLE_CLOUD_CPP_LOGGING_SERVICE_V2_AUTHORITY": "localhost",
             "GRPC_DEFAULT_SSL_ROOTS_FILE_PATH": str(tls["ca_cert"]),
             "GRPC_VERBOSITY": "ERROR",
@@ -487,13 +588,30 @@ def google_cloud_logging() -> Iterator[dict[str, str]]:
             "GCL_SERVICE_CREDENTIALS": sa_path,
             "GOOGLE_CLOUD_PROJECT": "test-project",
         }
-        yield env
+    except BaseException:
+        teardown()
+        raise
 
-    finally:
-        if grpc_server is not None:
-            grpc_server.stop(grace=2)
-        if oauth_server is not None:
-            oauth_server.shutdown()
-        if oauth_thread is not None:
-            oauth_thread.join(timeout=2)
-        # Leave temp_dir for debugging; the OS cleans /tmp eventually.
+    def assert_test(*, assertions: Any, **_: Any) -> None:
+        if not isinstance(assertions, GoogleCloudLoggingAssertions):
+            return
+        if assertions.compressed is None:
+            return
+        request_bytes = servicer.request_bytes
+        wire_bytes = relay.client_bytes
+        assert request_bytes > 0, "received no WriteLogEntries requests"
+        # The wire bytes include TLS and HTTP/2 overhead, so uncompressed
+        # requests always exceed their serialized size. The test payloads
+        # compress well enough to stay far below it.
+        if assertions.compressed:
+            assert wire_bytes < request_bytes / 2, (
+                f"expected compressed requests, but clients sent {wire_bytes} "
+                f"bytes for {request_bytes} bytes of requests"
+            )
+        else:
+            assert wire_bytes >= request_bytes, (
+                f"expected uncompressed requests, but clients sent {wire_bytes} "
+                f"bytes for {request_bytes} bytes of requests"
+            )
+
+    return FixtureHandle(env=env, teardown=teardown, hooks={"assert_test": assert_test})

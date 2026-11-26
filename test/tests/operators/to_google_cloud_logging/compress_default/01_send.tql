@@ -1,0 +1,14 @@
+---
+assertions:
+  fixtures:
+    google_cloud_logging:
+      compressed: true
+---
+
+// Send repetitive events, which gzip compresses well, with default options.
+from {message: "The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog."}
+repeat 1000
+to_google_cloud_logging log_id="compress-log",
+                        project="test-project",
+                        service_credentials=file_contents(env("GCL_SERVICE_CREDENTIALS")),
+                        batch_timeout=1s

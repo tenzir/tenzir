@@ -1,0 +1,2 @@
+from_file env("GCL_CAPTURE_FILE") { read_ndjson }
+summarize entries=sum(entries.length())
