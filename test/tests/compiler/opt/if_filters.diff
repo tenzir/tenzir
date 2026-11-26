@@ -22,6 +22,15 @@
        filter: [
 -        
 +        binary_expr {
++          left: root_field {
++            id: `foo` @ [1]:85..88 from 0,
++            has_question_mark: false
++          },
++          op: "eq",
++          right: constant int64 42 @ [1]:92..94 from 0,
++          location: [1]:85..94 from 0
++        },
++        binary_expr {
 +          left: binary_expr {
 +            left: root_field {
 +              id: `a` @ [1]:22..23 from 0,
@@ -64,15 +73,6 @@
 +            location: [1]:46..76 from 0
 +          },
 +          location: [1]:22..76 from 0
-+        },
-+        binary_expr {
-+          left: root_field {
-+            id: `foo` @ [1]:85..88 from 0,
-+            has_question_mark: false
-+          },
-+          op: "eq",
-+          right: constant int64 42 @ [1]:92..94 from 0,
-+          location: [1]:85..94 from 0
 +        }
        ],
 -      order: "ordered"

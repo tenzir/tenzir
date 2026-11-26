@@ -40,6 +40,19 @@ struct RoutedBranch {
   OptimizeFilter filter;
 };
 
+/// Returns whether two filter chains consist of structurally identical
+/// predicates in the same order, ignoring source locations.
+auto same_filter(OptimizeFilter const& lhs, OptimizeFilter const& rhs) -> bool;
+
+/// Extracts predicates shared by every branch into a filter chain over the
+/// input of the routing operator and removes them from `filters`.
+///
+/// Because the returned predicates apply regardless of which branch an event
+/// takes, they do not depend on the routing conditions or scrutinee. If every
+/// branch keeps no event, clears `filters` and returns `[false]`.
+auto lift_common_branch_filters(std::vector<OptimizeFilter>& filters,
+                                registry const& reg) -> OptimizeFilter;
+
 /// Combines the filters of routed branches into a filter chain over the input
 /// of the routing operator, which keeps exactly the events that the branch
 /// filters keep.

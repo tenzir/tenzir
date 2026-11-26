@@ -119,7 +119,7 @@ TEST("lift filters of two branches") {
   CHECK_EQUAL(lift({{"c", {"x == 1"}}, {None{}, {"x == 1"}}}),
               render({"x == 1"}));
   CHECK_EQUAL(lift({{"c", {"p", "a", "s"}}, {None{}, {"p", "b", "s"}}}),
-              render({"p", "a if c else b", "s"}));
+              render({"p", "s", "a if c else b"}));
   CHECK_EQUAL(lift({{"c", {"a == 1"}}, {None{}, {"b == 1"}}}),
               render({"a == 1 if c else b == 1"}));
   // A branch without a filter keeps all of its events.
@@ -177,10 +177,11 @@ TEST("lift filters of many branches") {
 }
 
 TEST("lift filters common to the branches that keep events") {
-  // A branch that keeps no event evaluates nothing after its routing.
+  // A branch that keeps no event evaluates nothing after its routing, and a
+  // shared predicate that cannot fail moves in front of the routing.
   CHECK_EQUAL(
     lift({{"c1", {"false"}}, {"c2", {"a", "s"}}, {None{}, {"b", "s"}}}),
-    render({"false if c1 else (a if c2 else b)", "s"}));
+    render({"s", "false if c1 else (a if c2 else b)"}));
   CHECK_EQUAL(
     lift({{"c1", {"false"}}, {"c2", {"p", "a"}}, {None{}, {"p", "b"}}}),
     render({"p", "false if c1 else (a if c2 else b)"}));

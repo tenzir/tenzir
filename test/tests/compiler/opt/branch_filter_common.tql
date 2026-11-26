@@ -1,0 +1,12 @@
+// A filter that every branch keeps the same moves above `if` and `match`
+// without their condition, even an expensive one or a computed scrutinee.
+export
+match id.string() {
+  "1" => { host = Computer }
+  "2" => { host = Computer }
+  _ => { host = Computer }
+}
+if msg.replace_regex("x", "") == "" {
+  drop msg
+}
+where host == "dc01"

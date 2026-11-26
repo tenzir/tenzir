@@ -22,6 +22,15 @@
        filter: [
 -        
 +        binary_expr {
++          left: root_field {
++            id: `c` @ [1]:290..291 from 0,
++            has_question_mark: false
++          },
++          op: "gt",
++          right: constant int64 3 @ [1]:294..295 from 0,
++          location: [1]:290..295 from 0
++        },
++        binary_expr {
 +          left: binary_expr {
 +            left: binary_expr {
 +              left: binary_expr {
@@ -60,15 +69,6 @@
 +          op: "else_",
 +          right: constant bool true @ [0]:0..0 from 0,
 +          location: [1]:244..263 from 0
-+        },
-+        binary_expr {
-+          left: root_field {
-+            id: `c` @ [1]:290..291 from 0,
-+            has_question_mark: false
-+          },
-+          op: "gt",
-+          right: constant int64 3 @ [1]:294..295 from 0,
-+          location: [1]:290..295 from 0
 +        }
        ],
 -      order: "ordered"

@@ -19,6 +19,7 @@
 
 #include <caf/binary_serializer.hpp>
 #include <caf/byte_buffer.hpp>
+#include <caf/save_inspector_base.hpp>
 
 #include <algorithm>
 #include <ranges>
@@ -89,15 +90,115 @@ auto as_bool(ast::expression const& expr) -> Option<bool> {
   return None{};
 }
 
-/// Returns a key that two expressions share if and only if they are identical,
-/// including their locations.
+/// Serializes like `caf::binary_serializer`, skipping `location` objects so
+/// structurally identical expressions from different source positions share a
+/// key.
+class KeySerializer final : public caf::save_inspector_base<KeySerializer> {
+public:
+  explicit KeySerializer(caf::byte_buffer& buffer) : inner_{buffer} {
+  }
+
+  static constexpr auto has_human_readable_format() noexcept -> bool {
+    return false;
+  }
+
+  auto set_error(caf::error stop_reason) -> void {
+    inner_.set_error(std::move(stop_reason));
+  }
+
+  auto get_error() noexcept -> caf::error& {
+    return inner_.get_error();
+  }
+
+  auto begin_object(caf::type_id_t type, std::string_view name) -> bool {
+    if (skipped_ > 0 or name == "location") {
+      ++skipped_;
+      return true;
+    }
+    return inner_.begin_object(type, name);
+  }
+
+  auto end_object() -> bool {
+    if (skipped_ > 0) {
+      --skipped_;
+      return true;
+    }
+    return inner_.end_object();
+  }
+
+  template <class... Ts>
+  auto begin_field(Ts&&... xs) -> bool {
+    return skipped_ > 0 or inner_.begin_field(std::forward<Ts>(xs)...);
+  }
+
+  auto end_field() -> bool {
+    return skipped_ > 0 or inner_.end_field();
+  }
+
+  auto begin_tuple(size_t size) -> bool {
+    return skipped_ > 0 or inner_.begin_tuple(size);
+  }
+
+  auto end_tuple() -> bool {
+    return skipped_ > 0 or inner_.end_tuple();
+  }
+
+  auto begin_sequence(size_t size) -> bool {
+    return skipped_ > 0 or inner_.begin_sequence(size);
+  }
+
+  auto end_sequence() -> bool {
+    return skipped_ > 0 or inner_.end_sequence();
+  }
+
+  auto begin_associative_array(size_t size) -> bool {
+    return skipped_ > 0 or inner_.begin_associative_array(size);
+  }
+
+  auto end_associative_array() -> bool {
+    return skipped_ > 0 or inner_.end_associative_array();
+  }
+
+  auto begin_key_value_pair() -> bool {
+    return skipped_ > 0 or inner_.begin_key_value_pair();
+  }
+
+  auto end_key_value_pair() -> bool {
+    return skipped_ > 0 or inner_.end_key_value_pair();
+  }
+
+  template <class T>
+  auto value(T&& x) -> bool {
+    return skipped_ > 0 or inner_.value(std::forward<T>(x));
+  }
+
+private:
+  caf::binary_serializer inner_;
+  size_t skipped_ = 0;
+};
+
+/// Returns a key that two expressions share if and only if they are
+/// structurally identical, ignoring source locations.
 auto make_key(ast::expression const& expr) -> caf::byte_buffer {
   auto buffer = caf::byte_buffer{};
-  auto f = caf::binary_serializer{buffer};
-  auto copy = expr;
-  auto const success = f.apply(copy);
+  auto f = KeySerializer{buffer};
+  auto const success = f.apply(expr);
   TENZIR_ASSERT(success);
   return buffer;
+}
+
+auto keeps_none(ir::OptimizeFilter const& filter) -> bool {
+  return filter.size() == 1 and as_bool(filter.front()) == false;
+}
+
+auto make_keys(ir::OptimizeFilter const& filter)
+  -> std::vector<caf::byte_buffer> {
+  auto keys = std::vector<caf::byte_buffer>{};
+  keys.reserve(filter.size());
+  for (auto const& predicate : filter) {
+    keys.push_back(make_key(predicate));
+  }
+  return keys;
 }
 
 auto filter_size(ir::OptimizeFilter const& filter) -> size_t {
@@ -116,7 +217,7 @@ struct Branch {
 
   /// Returns whether the branch keeps no event.
   auto keeps_none() const -> bool {
-    return filter.size() == 1 and as_bool(filter.front()) == false;
+    return tenzir::keeps_none(filter);
   }
 
   auto same_filter(Branch const& other) const -> bool {
@@ -242,34 +343,110 @@ auto ir::is_repeatable(ast::expression const& expr, registry const& reg)
   return checker.repeatable;
 }
 
+auto ir::same_filter(OptimizeFilter const& lhs, OptimizeFilter const& rhs)
+  -> bool {
+  if (lhs.size() != rhs.size()) {
+    return false;
+  }
+  for (auto i = size_t{0}; i < lhs.size(); ++i) {
+    if (make_key(lhs[i]) != make_key(rhs[i])) {
+      return false;
+    }
+  }
+  return true;
+}
+
+auto ir::lift_common_branch_filters(std::vector<OptimizeFilter>& filters,
+                                    registry const& reg) -> OptimizeFilter {
+  TENZIR_ASSERT(not filters.empty());
+  auto keeping = std::vector<size_t>{};
+  for (auto i = size_t{0}; i < filters.size(); ++i) {
+    if (not keeps_none(filters[i])) {
+      keeping.push_back(i);
+    }
+  }
+  // If no branch keeps an event, `where false` drops all events before routing.
+  if (keeping.empty()) {
+    auto result = OptimizeFilter{};
+    result.push_back(std::move(filters.front().front()));
+    for (auto& filter : filters) {
+      filter.clear();
+    }
+    return result;
+  }
+  // A predicate of a single branch that keeps events stays behind its
+  // condition.
+  if (keeping.size() < 2) {
+    return {};
+  }
+  auto keys = std::vector<std::vector<caf::byte_buffer>>{};
+  keys.reserve(keeping.size());
+  for (auto index : keeping) {
+    keys.push_back(make_keys(filters[index]));
+  }
+  // A predicate shared by every keeping branch can move before the routing
+  // operator: always if it starts every branch (including no dead branches),
+  // and from any position if evaluating it cannot fail.
+  auto const keeps_all = keeping.size() == filters.size();
+  auto prefix = OptimizeFilter{};
+  auto positions = std::vector<size_t>(keeping.size(), 0);
+  auto& first_filter = filters[keeping.front()];
+  auto& first_keys = keys.front();
+  for (auto idx = size_t{0}; idx < first_keys.size();) {
+    auto const& key = first_keys[idx];
+    auto in_all = true;
+    auto at_front_of_all = keeps_all and idx == 0;
+    positions[0] = idx;
+    for (auto k = size_t{1}; k < keeping.size(); ++k) {
+      auto it = std::ranges::find(keys[k], key);
+      if (it == keys[k].end()) {
+        in_all = false;
+        break;
+      }
+      positions[k] = static_cast<size_t>(it - keys[k].begin());
+      at_front_of_all = at_front_of_all and positions[k] == 0;
+    }
+    if (not in_all
+        or (not at_front_of_all and not is_infallible(first_filter[idx]))) {
+      ++idx;
+      continue;
+    }
+    prefix.push_back(std::move(first_filter[idx]));
+    for (auto k = size_t{0}; k < keeping.size(); ++k) {
+      auto const pos = static_cast<ptrdiff_t>(positions[k]);
+      filters[keeping[k]].erase(filters[keeping[k]].begin() + pos);
+      keys[k].erase(keys[k].begin() + pos);
+    }
+  }
+  return simplify_filter(std::move(prefix), reg);
+}
+
 auto ir::lift_branch_filters(std::vector<RoutedBranch> routed,
                              registry const& reg) -> Option<OptimizeFilter> {
   TENZIR_ASSERT(not routed.empty());
   auto largest = size_t{0};
-  auto branches = std::vector<Branch>{};
-  branches.reserve(routed.size());
+  auto filters = std::vector<OptimizeFilter>{};
+  filters.reserve(routed.size());
   for (auto& branch : routed) {
-    auto const last = branches.size() + 1 == routed.size();
+    auto const last = filters.size() + 1 == routed.size();
     TENZIR_ASSERT(last != branch.condition.has_value());
     largest = std::max(largest, filter_size(branch.filter));
-    auto keys = std::vector<caf::byte_buffer>{};
-    keys.reserve(branch.filter.size());
-    for (auto const& predicate : branch.filter) {
-      keys.push_back(make_key(predicate));
-    }
+    filters.push_back(std::move(branch.filter));
+  }
+  auto prefix = lift_common_branch_filters(filters, reg);
+  auto branches = std::vector<Branch>{};
+  branches.reserve(routed.size());
+  for (auto i = size_t{0}; i < routed.size(); ++i) {
+    auto keys = make_keys(filters[i]);
     branches.push_back(Branch{
-      .condition = std::move(branch.condition),
-      .filter = std::move(branch.filter),
+      .condition = std::move(routed[i].condition),
+      .filter = std::move(filters[i]),
       .keys = std::move(keys),
     });
   }
-  // A predicate that starts every filter applies to every event before it is
-  // routed. One that ends every filter applies to every event that the rest of
-  // its branch filter keeps. The filter of a branch that keeps no event
-  // evaluates nothing after its routing, so a common suffix need not end it,
-  // and a common prefix need not start it if evaluating the prefix for the
-  // events of that branch cannot fail.
-  auto prefix = OptimizeFilter{};
+  // A predicate that ends every keeping branch applies to every event that the
+  // rest of its branch filter keeps, even if it can fail, because it stays
+  // behind the routed filter.
   auto suffix = OptimizeFilter{};
   {
     auto keeping = std::vector<Branch*>{};
@@ -278,33 +455,16 @@ auto ir::lift_branch_filters(std::vector<RoutedBranch> routed,
         keeping.push_back(&branch);
       }
     }
-    auto const keeps_all = keeping.size() == branches.size();
-    auto const common = [&](auto select) {
-      // A predicate of a single branch that keeps events stays behind its
-      // condition.
+    auto const common_back = [&] {
       if (keeping.size() < 2 or keeping.front()->keys.empty()) {
         return false;
       }
-      auto const& first = select(keeping.front()->keys);
+      auto const& back = keeping.front()->keys.back();
       return std::ranges::all_of(keeping, [&](Branch const* branch) {
-        return not branch->keys.empty() and select(branch->keys) == first;
+        return not branch->keys.empty() and branch->keys.back() == back;
       });
     };
-    auto const front = [](auto const& keys) -> auto const& {
-      return keys.front();
-    };
-    auto const back = [](auto const& keys) -> auto const& {
-      return keys.back();
-    };
-    while (common(front)
-           and (keeps_all or is_infallible(keeping.front()->filter.front()))) {
-      prefix.push_back(std::move(keeping.front()->filter.front()));
-      for (auto* branch : keeping) {
-        branch->filter.erase(branch->filter.begin());
-        branch->keys.erase(branch->keys.begin());
-      }
-    }
-    while (common(back)) {
+    while (common_back()) {
       suffix.insert(suffix.begin(), std::move(keeping.front()->filter.back()));
       for (auto* branch : keeping) {
         branch->filter.pop_back();
@@ -317,6 +477,22 @@ auto ir::lift_branch_filters(std::vector<RoutedBranch> routed,
   while (branches.size() > 1
          and branches[branches.size() - 2].same_filter(branches.back())) {
     branches.erase(branches.end() - 2);
+  }
+  // Adjacent branches with the same filter can share one entry: the second
+  // condition runs only if the first does not route the event, just as `or`
+  // short-circuits when its left operand is `true`.
+  for (auto i = size_t{0}; i + 2 < branches.size();) {
+    if (branches[i].same_filter(branches[i + 1])) {
+      auto const source = branches[i].condition->get_location().combine(
+        branches[i + 1].condition->get_location());
+      branches[i].condition
+        = make_or(routing_predicate(std::move(*branches[i].condition)),
+                  routing_predicate(std::move(*branches[i + 1].condition)),
+                  source);
+      branches.erase(branches.begin() + static_cast<ptrdiff_t>(i + 1));
+    } else {
+      ++i;
+    }
   }
   // Route the events from the last branch to the first. Evaluating a branch
   // filter only if its condition is `true` and the next condition only if it is

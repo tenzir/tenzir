@@ -1,0 +1,285 @@
+ {
+   lets: [
+     
+   ],
+   operators: [
+     GenericIr {
+       desc: "export",
+       store: {
+         op: {
+           path: [
+             `export` @ [1]:149..155 from 0
+           ],
+           ref: std::export/op
+         },
+         args: [
+           
+         ],
+         named_args: [
+           
+         ]
+       },
+       filter: [
+-        
++        binary_expr {
++          left: root_field {
++            id: `Computer` @ [1]:194..202 from 0,
++            has_question_mark: false
++          },
++          op: "eq",
++          right: constant string "dc01" @ [1]:328..334 from 0,
++          location: [1]:320..334 from 0
++        }
+       ],
+       order: "ordered"
+     },
+     Match {
+       match_keyword: [1]:156..161 from 0,
+       scrutinee: function_call {
+         fn: {
+           path: [
+             `string` @ [1]:165..171 from 0
+           ],
+           ref: std::string/fn
+         },
+         args: [
+           root_field {
+             id: `id` @ [1]:162..164 from 0,
+             has_question_mark: false
+           }
+         ],
+         method: true,
+         location: [1]:162..173 from 0
+       },
+       arms: [
+         {
+           source: [1]:178..181 from 0,
+           pattern_exprs: [
+             {
+               kind: expression_pattern {
+                 expr: constant string "1" @ [1]:178..181 from 0
+               }
+             }
+           ],
+           patterns: [
+             {
+               kind: Constant {
+                 value: string "1"
+               }
+             }
+           ],
+           pipeline: {
+             lets: [
+               
+             ],
+             operators: [
+               SetIr {
+                 assignments: [
+                   {
+                     left: root_field {
+                       id: `host` @ [1]:187..191 from 0,
+                       has_question_mark: false
+                     },
+                     right: root_field {
+                       id: `Computer` @ [1]:194..202 from 0,
+                       has_question_mark: false
+                     },
+                     location: [1]:187..202 from 0
+                   }
+                 ],
+                 order: "ordered"
+               }
+             ],
+             definition_location: [1]:187..202 from 0
+           },
+           wildcard: false
+         },
+         {
+           source: [1]:207..210 from 0,
+           pattern_exprs: [
+             {
+               kind: expression_pattern {
+                 expr: constant string "2" @ [1]:207..210 from 0
+               }
+             }
+           ],
+           patterns: [
+             {
+               kind: Constant {
+                 value: string "2"
+               }
+             }
+           ],
+           pipeline: {
+             lets: [
+               
+             ],
+             operators: [
+               SetIr {
+                 assignments: [
+                   {
+                     left: root_field {
+                       id: `host` @ [1]:216..220 from 0,
+                       has_question_mark: false
+                     },
+                     right: root_field {
+                       id: `Computer` @ [1]:223..231 from 0,
+                       has_question_mark: false
+                     },
+                     location: [1]:216..231 from 0
+                   }
+                 ],
+                 order: "ordered"
+               }
+             ],
+             definition_location: [1]:216..231 from 0
+           },
+           wildcard: false
+         },
+         {
+           source: [1]:236..237 from 0,
+           pattern_exprs: [
+             
+           ],
+           patterns: [
+             
+           ],
+           pipeline: {
+             lets: [
+               
+             ],
+             operators: [
+               SetIr {
+                 assignments: [
+                   {
+                     left: root_field {
+                       id: `host` @ [1]:243..247 from 0,
+                       has_question_mark: false
+                     },
+                     right: root_field {
+                       id: `Computer` @ [1]:250..258 from 0,
+                       has_question_mark: false
+                     },
+                     location: [1]:243..258 from 0
+                   }
+                 ],
+                 order: "ordered"
+               }
+             ],
+             definition_location: [1]:243..258 from 0
+           },
+           wildcard: true
+         }
+       ]
+     },
+     If {
+       source: [1]:263..311 from 0,
+       condition: binary_expr {
+         left: function_call {
+           fn: {
+             path: [
+               `replace_regex` @ [1]:270..283 from 0
+             ],
+             ref: std::replace_regex/fn
+           },
+           args: [
+             root_field {
+               id: `msg` @ [1]:266..269 from 0,
+               has_question_mark: false
+             },
+             constant string "x" @ [1]:284..287 from 0,
+             constant string "" @ [1]:289..291 from 0
+           ],
+           method: true,
+           location: [1]:266..292 from 0
+         },
+         op: "eq",
+         right: constant string "" @ [1]:296..298 from 0,
+         location: [1]:266..298 from 0
+       },
+       consequence: {
+         lets: [
+           
+         ],
+         operators: [
+           GenericIr {
+             desc: "drop",
+             store: {
+               op: {
+                 path: [
+                   `drop` @ [1]:303..307 from 0
+                 ],
+                 ref: std::drop/op
+               },
+               args: [
+                 field_path {
+                   expr: root_field {
+                     id: `msg` @ [1]:308..311 from 0,
+                     has_question_mark: false
+                   },
+                   has_this: false,
+                   path: [
+                     {
+                       id: `msg` @ [1]:308..311 from 0,
+                       has_question_mark: false
+                     }
+                   ]
+                 }
+               ],
+               named_args: [
+                 
+               ]
+             },
+             filter: [
+               
+             ],
+             order: "ordered"
+           }
+         ],
+         definition_location: [1]:303..311 from 0
+       }
+     },
+-    where_ir {
+-      op: {
+-        path: [
+-          `where` @ [1]:314..319 from 0
+-        ],
+-        ref: std::where/op
+-      },
+-      args: [
+-        expression binary_expr {
+-          left: root_field {
+-            id: `host` @ [1]:320..324 from 0,
+-            has_question_mark: false
+-          },
+-          op: "eq",
+-          right: constant string "dc01" @ [1]:328..334 from 0,
+-          location: [1]:320..334 from 0
+-        }
++    GenericIr {
++      desc: "to_stdout",
++      store: {
++        op: {
++          path: [
++            `to_stdout` @ [1]:334..334 from 0
++          ],
++          ref: std::to_stdout/op
++        },
++        args: [
++          
++        ],
++        named_args: [
++          
++        ]
++      },
++      filter: [
++        
+       ],
+-      named_args: [
+-        
+-      ]
++      order: "ordered"
+     }
+   ],
+   definition_location: [1]:149..334 from 0
+ }

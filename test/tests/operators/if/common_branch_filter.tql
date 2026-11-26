@@ -1,0 +1,16 @@
+// A filter shared by all branches keeps the same events after moving above
+// `if` and `match`.
+from {id: 1, Computer: "dc01", msg: "x"},
+     {id: 2, Computer: "dc02", msg: "y"},
+     {id: 3, Computer: "dc01", msg: "y"},
+     {id: 4, msg: "x"}
+match id.string() {
+  "1" => { host = Computer? }
+  "2" => { host = Computer? }
+  _ => { host = Computer? }
+}
+if msg.replace_regex("x", "") == "" {
+  drop msg
+}
+where host == "dc01"
+select id

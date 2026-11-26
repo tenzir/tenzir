@@ -804,19 +804,6 @@ auto are_disjoint(MatchArgs::Arm const& x, MatchArgs::Arm const& y) -> bool {
   });
 }
 
-/// Returns whether a filter chain keeps no event.
-auto keeps_no_event(ir::OptimizeFilter const& filter) -> bool {
-  if (filter.size() != 1) {
-    return false;
-  }
-  auto const* constant = try_as<ast::constant>(filter.front());
-  if (not constant) {
-    return false;
-  }
-  auto const* value = try_as<bool>(constant->value);
-  return value and not *value;
-}
-
 class MatchIr final : public ir::Operator {
 public:
   MatchIr() = default;
@@ -919,18 +906,29 @@ public:
         ir::add_refs_to_projection(projection, *arm.guard);
       }
     }
-    // The residual filter of an arm applies to the events that `match` routes
-    // to it, so routing them in a predicate moves the arm filters above
-    // `match`. If that fails, the residual filters stay at the front of their
-    // arms.
-    auto lifted = Option<ir::OptimizeFilter>{};
+    // Lift predicates shared by all arms first without evaluating the
+    // scrutinee. Any remaining arm-specific predicates lift only when `match`
+    // routing can be repeated cleanly above `match`.
+    auto lifted = ir::OptimizeFilter{};
     if (types_known) {
-      lifted = lift_arm_filters(arm_filters, octx.reg);
-    }
-    if (not lifted) {
-      for (auto i = size_t{0}; i < args_.arms.size(); ++i) {
-        args_.arms[i].pipeline.prepend(std::move(arm_filters[i]), octx.reg);
+      lifted = ir::lift_common_branch_filters(arm_filters, octx.reg);
+      auto const all_empty
+        = std::ranges::all_of(arm_filters, [](ir::OptimizeFilter const& f) {
+            return f.empty();
+          });
+      if (not all_empty) {
+        if (auto routed = lift_arm_filters(arm_filters, octx.reg)) {
+          lifted.insert(lifted.end(), std::move_iterator{routed->begin()},
+                        std::move_iterator{routed->end()});
+          for (auto& arm_filter : arm_filters) {
+            arm_filter.clear();
+          }
+        }
       }
+      lifted = ir::simplify_filter(std::move(lifted), octx.reg);
+    }
+    for (auto i = size_t{0}; i < args_.arms.size(); ++i) {
+      args_.arms[i].pipeline.prepend(std::move(arm_filters[i]), octx.reg);
     }
     auto replacement = std::vector<Box<ir::Operator>>{};
     replacement.push_back(std::move(*this).move());
@@ -938,7 +936,7 @@ public:
       replacement.push_back(make_where_ir(std::move(expr), octx.reg));
     }
     return {
-      .filter = std::move(lifted).value_or(ir::OptimizeFilter{}),
+      .filter = std::move(lifted),
       .order = result_order,
       .replacement = ir::pipeline{{}, std::move(replacement)},
       .projection = std::move(projection),
@@ -1048,23 +1046,21 @@ private:
       }
       conditions.push_back(std::move(condition));
     }
-    // If the wildcard arm keeps no event, then an arm that keeps no event need
-    // not route its events, provided that no later arm can take them, so that
-    // they reach the wildcard arm instead. Its patterns must therefore be
-    // disjoint from those of every later arm that still routes. Then the
-    // events also never reach the guard of a later arm.
+    // An arm whose filter matches the wildcard arm's filter need not route its
+    // events, provided that no later arm can take them, so that they reach the
+    // wildcard arm instead. Its patterns must therefore be disjoint from those
+    // of every later arm that still routes. Then the events also never reach
+    // the guard of a later arm.
     auto removed = std::vector<bool>(args_.arms.size(), false);
-    if (keeps_no_event(arm_filters.back())) {
-      for (auto k = args_.arms.size() - 1; k-- > 0;) {
-        if (not keeps_no_event(arm_filters[k])) {
-          continue;
-        }
-        auto removable = true;
-        for (auto j = k + 1; j + 1 < args_.arms.size() and removable; ++j) {
-          removable = removed[j] or are_disjoint(args_.arms[k], args_.arms[j]);
-        }
-        removed[k] = removable;
+    for (auto k = args_.arms.size() - 1; k-- > 0;) {
+      if (not ir::same_filter(arm_filters[k], arm_filters.back())) {
+        continue;
       }
+      auto removable = true;
+      for (auto j = k + 1; j + 1 < args_.arms.size() and removable; ++j) {
+        removable = removed[j] or are_disjoint(args_.arms[k], args_.arms[j]);
+      }
+      removed[k] = removable;
     }
     // The lifted filter compares the scrutinee with every pattern of each
     // surviving arm, once for a constant and twice for a range, and `match`

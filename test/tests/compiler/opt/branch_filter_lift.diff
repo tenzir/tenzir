@@ -25,178 +25,6 @@
 +          left: binary_expr {
 +            left: binary_expr {
 +              left: root_field {
-+                id: `a` @ [1]:168..169 from 0,
-+                has_question_mark: false
-+              },
-+              op: "eq",
-+              right: constant int64 42 @ [1]:200..202 from 0,
-+              location: [1]:195..202 from 0
-+            },
-+            op: "if_",
-+            right: binary_expr {
-+              left: root_field {
-+                id: `x` @ [1]:153..154 from 0,
-+                has_question_mark: false
-+              },
-+              op: "eq",
-+              right: constant int64 1 @ [1]:158..159 from 0,
-+              location: [1]:153..159 from 0
-+            },
-+            location: [1]:195..202 from 0
-+          },
-+          op: "else_",
-+          right: binary_expr {
-+            left: root_field {
-+              id: `b` @ [1]:185..186 from 0,
-+              has_question_mark: false
-+            },
-+            op: "eq",
-+            right: constant int64 42 @ [1]:200..202 from 0,
-+            location: [1]:195..202 from 0
-+          },
-+          location: [1]:195..202 from 0
-+        },
-+        binary_expr {
-+          left: binary_expr {
-+            left: root_field {
-+              id: `c` @ [1]:206..207 from 0,
-+              has_question_mark: false
-+            },
-+            op: "else_",
-+            right: constant bool false @ [1]:206..207 from 0,
-+            location: [1]:206..207 from 0
-+          },
-+          op: "or_",
-+          right: binary_expr {
-+            left: root_field {
-+              id: `z` @ [1]:226..227 from 0,
-+              has_question_mark: false
-+            },
-+            op: "eq",
-+            right: constant int64 1 @ [1]:231..232 from 0,
-+            location: [1]:226..232 from 0
-+          },
-+          location: [1]:226..232 from 0
-+        },
-+        binary_expr {
-+          left: binary_expr {
-+            left: binary_expr {
-+              left: root_field {
-+                id: `kind` @ [1]:239..243 from 0,
-+                has_question_mark: false
-+              },
-+              op: "eq",
-+              right: constant string "a" @ [1]:248..251 from 0,
-+              location: [1]:239..251 from 0
-+            },
-+            op: "or_",
-+            right: binary_expr {
-+              left: root_field {
-+                id: `kind` @ [1]:239..243 from 0,
-+                has_question_mark: false
-+              },
-+              op: "eq",
-+              right: constant string "b" @ [1]:254..257 from 0,
-+              location: [1]:239..257 from 0
-+            },
-+            location: [1]:239..257 from 0
-+          },
-+          op: "or_",
-+          right: binary_expr {
-+            left: binary_expr {
-+              left: constant bool false @ [1]:373..379 from 0,
-+              op: "if_",
-+              right: binary_expr {
-+                left: root_field {
-+                  id: `kind` @ [1]:239..243 from 0,
-+                  has_question_mark: false
-+                },
-+                op: "eq",
-+                right: constant none_t {} @ [1]:273..277 from 0,
-+                location: [1]:239..277 from 0
-+              },
-+              location: [1]:373..379 from 0
-+            },
-+            op: "else_",
-+            right: binary_expr {
-+              left: binary_expr {
-+                left: constant bool false @ [1]:373..379 from 0,
-+                op: "if_",
-+                right: binary_expr {
-+                  left: binary_expr {
-+                    left: binary_expr {
-+                      left: root_field {
-+                        id: `v` @ [1]:300..301 from 0,
-+                        has_question_mark: false
-+                      },
-+                      op: "gt",
-+                      right: constant int64 0 @ [1]:304..305 from 0,
-+                      location: [1]:300..305 from 0
-+                    },
-+                    op: "if_",
-+                    right: binary_expr {
-+                      left: root_field {
-+                        id: `kind` @ [1]:239..243 from 0,
-+                        has_question_mark: false
-+                      },
-+                      op: "eq",
-+                      right: constant string "c" @ [1]:293..296 from 0,
-+                      location: [1]:239..296 from 0
-+                    },
-+                    location: [1]:239..305 from 0
-+                  },
-+                  op: "else_",
-+                  right: constant bool false @ [1]:300..305 from 0,
-+                  location: [1]:239..305 from 0
-+                },
-+                location: [1]:373..379 from 0
-+              },
-+              op: "else_",
-+              right: binary_expr {
-+                left: binary_expr {
-+                  left: root_field {
-+                    id: `v` @ [1]:326..327 from 0,
-+                    has_question_mark: false
-+                  },
-+                  op: "lt",
-+                  right: constant int64 0 @ [1]:330..331 from 0,
-+                  location: [1]:326..331 from 0
-+                },
-+                op: "or_",
-+                right: binary_expr {
-+                  left: binary_expr {
-+                    left: root_field {
-+                      id: `k` @ [1]:363..364 from 0,
-+                      has_question_mark: false
-+                    },
-+                    op: "eq",
-+                    right: constant int64 1 @ [1]:368..369 from 0,
-+                    location: [1]:363..369 from 0
-+                  },
-+                  op: "or_",
-+                  right: binary_expr {
-+                    left: root_field {
-+                      id: `k` @ [1]:373..374 from 0,
-+                      has_question_mark: false
-+                    },
-+                    op: "eq",
-+                    right: constant int64 4 @ [1]:378..379 from 0,
-+                    location: [1]:373..379 from 0
-+                  },
-+                  location: [1]:363..379 from 0
-+                },
-+                location: [1]:363..379 from 0
-+              },
-+              location: [1]:363..379 from 0
-+            },
-+            location: [1]:363..379 from 0
-+          },
-+          location: [1]:363..379 from 0
-+        },
-+        binary_expr {
-+          left: binary_expr {
-+            left: binary_expr {
-+              left: root_field {
 +                id: `n` @ [1]:386..387 from 0,
 +                has_question_mark: false
 +              },
@@ -258,6 +86,173 @@
 +            location: [1]:532..538 from 0
 +          },
 +          location: [1]:532..538 from 0
++        },
++        binary_expr {
++          left: binary_expr {
++            left: binary_expr {
++              left: root_field {
++                id: `kind` @ [1]:239..243 from 0,
++                has_question_mark: false
++              },
++              op: "eq",
++              right: constant string "a" @ [1]:248..251 from 0,
++              location: [1]:239..251 from 0
++            },
++            op: "or_",
++            right: binary_expr {
++              left: root_field {
++                id: `kind` @ [1]:239..243 from 0,
++                has_question_mark: false
++              },
++              op: "eq",
++              right: constant string "b" @ [1]:254..257 from 0,
++              location: [1]:239..257 from 0
++            },
++            location: [1]:239..257 from 0
++          },
++          op: "or_",
++          right: binary_expr {
++            left: binary_expr {
++              left: constant bool false @ [1]:373..379 from 0,
++              op: "if_",
++              right: binary_expr {
++                left: binary_expr {
++                  left: root_field {
++                    id: `kind` @ [1]:239..243 from 0,
++                    has_question_mark: false
++                  },
++                  op: "eq",
++                  right: constant none_t {} @ [1]:273..277 from 0,
++                  location: [1]:239..277 from 0
++                },
++                op: "or_",
++                right: binary_expr {
++                  left: binary_expr {
++                    left: binary_expr {
++                      left: root_field {
++                        id: `v` @ [1]:300..301 from 0,
++                        has_question_mark: false
++                      },
++                      op: "gt",
++                      right: constant int64 0 @ [1]:304..305 from 0,
++                      location: [1]:300..305 from 0
++                    },
++                    op: "if_",
++                    right: binary_expr {
++                      left: root_field {
++                        id: `kind` @ [1]:239..243 from 0,
++                        has_question_mark: false
++                      },
++                      op: "eq",
++                      right: constant string "c" @ [1]:293..296 from 0,
++                      location: [1]:239..296 from 0
++                    },
++                    location: [1]:239..305 from 0
++                  },
++                  op: "else_",
++                  right: constant bool false @ [1]:300..305 from 0,
++                  location: [1]:239..305 from 0
++                },
++                location: [1]:239..305 from 0
++              },
++              location: [1]:373..379 from 0
++            },
++            op: "else_",
++            right: binary_expr {
++              left: binary_expr {
++                left: root_field {
++                  id: `v` @ [1]:326..327 from 0,
++                  has_question_mark: false
++                },
++                op: "lt",
++                right: constant int64 0 @ [1]:330..331 from 0,
++                location: [1]:326..331 from 0
++              },
++              op: "or_",
++              right: binary_expr {
++                left: binary_expr {
++                  left: root_field {
++                    id: `k` @ [1]:363..364 from 0,
++                    has_question_mark: false
++                  },
++                  op: "eq",
++                  right: constant int64 1 @ [1]:368..369 from 0,
++                  location: [1]:363..369 from 0
++                },
++                op: "or_",
++                right: binary_expr {
++                  left: root_field {
++                    id: `k` @ [1]:373..374 from 0,
++                    has_question_mark: false
++                  },
++                  op: "eq",
++                  right: constant int64 4 @ [1]:378..379 from 0,
++                  location: [1]:373..379 from 0
++                },
++                location: [1]:363..379 from 0
++              },
++              location: [1]:363..379 from 0
++            },
++            location: [1]:363..379 from 0
++          },
++          location: [1]:363..379 from 0
++        },
++        binary_expr {
++          left: binary_expr {
++            left: root_field {
++              id: `c` @ [1]:206..207 from 0,
++              has_question_mark: false
++            },
++            op: "else_",
++            right: constant bool false @ [1]:206..207 from 0,
++            location: [1]:206..207 from 0
++          },
++          op: "or_",
++          right: binary_expr {
++            left: root_field {
++              id: `z` @ [1]:226..227 from 0,
++              has_question_mark: false
++            },
++            op: "eq",
++            right: constant int64 1 @ [1]:231..232 from 0,
++            location: [1]:226..232 from 0
++          },
++          location: [1]:226..232 from 0
++        },
++        binary_expr {
++          left: binary_expr {
++            left: binary_expr {
++              left: root_field {
++                id: `a` @ [1]:168..169 from 0,
++                has_question_mark: false
++              },
++              op: "eq",
++              right: constant int64 42 @ [1]:200..202 from 0,
++              location: [1]:195..202 from 0
++            },
++            op: "if_",
++            right: binary_expr {
++              left: root_field {
++                id: `x` @ [1]:153..154 from 0,
++                has_question_mark: false
++              },
++              op: "eq",
++              right: constant int64 1 @ [1]:158..159 from 0,
++              location: [1]:153..159 from 0
++            },
++            location: [1]:195..202 from 0
++          },
++          op: "else_",
++          right: binary_expr {
++            left: root_field {
++              id: `b` @ [1]:185..186 from 0,
++              has_question_mark: false
++            },
++            op: "eq",
++            right: constant int64 42 @ [1]:200..202 from 0,
++            location: [1]:195..202 from 0
++          },
++          location: [1]:195..202 from 0
 +        }
        ],
        order: "ordered"
@@ -606,8 +601,8 @@
            },
            wildcard: true
          }
--      ]
--    },
+       ]
+     },
 -    where_ir {
 -      op: {
 -        path: [
@@ -641,8 +636,8 @@
 -      ],
 -      named_args: [
 -        
-       ]
-     },
+-      ]
+-    },
      Match {
        match_keyword: [1]:380..385 from 0,
        scrutinee: root_field {

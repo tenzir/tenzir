@@ -324,31 +324,42 @@ public:
       ir::merge_projection(projection, downstream_projection);
     }
     ir::add_refs_to_projection(projection, args_.condition);
-    // Each branch filter applies to the events that the condition routes to
-    // its branch, so `then_filter if condition else else_filter` keeps the
-    // same events in front of `if`, provided that the condition yields the
-    // same value when `if` evaluates it again. Evaluating it again must also
-    // be cheap, because a condition that calls an expensive function, such as
-    // a parser, could otherwise double the work of the pipeline.
-    auto lifted = Option<ir::OptimizeFilter>{};
-    if (types_known and ir::is_repeatable(args_.condition, octx.reg)
-        and ir::is_cheap(args_.condition, octx.reg)) {
-      auto branches = std::vector<ir::RoutedBranch>{};
-      branches.push_back({args_.condition, cons_filter});
-      branches.push_back({None{}, alt_filter});
-      lifted = ir::lift_branch_filters(std::move(branches), octx.reg);
+    // Lift predicates shared by both branches first without evaluating the
+    // condition. Any remaining branch-specific predicates lift only if
+    // re-evaluating the condition is repeatable and cheap.
+    auto lifted = ir::OptimizeFilter{};
+    if (types_known) {
+      auto branch_filters = std::vector<ir::OptimizeFilter>{
+        std::move(cons_filter), std::move(alt_filter)};
+      lifted = ir::lift_common_branch_filters(branch_filters, octx.reg);
+      auto const all_empty
+        = std::ranges::all_of(branch_filters, [](ir::OptimizeFilter const& f) {
+            return f.empty();
+          });
+      if (not all_empty and ir::is_repeatable(args_.condition, octx.reg)
+          and ir::is_cheap(args_.condition, octx.reg)) {
+        auto branches = std::vector<ir::RoutedBranch>{};
+        branches.push_back({args_.condition, branch_filters[0]});
+        branches.push_back({None{}, branch_filters[1]});
+        if (auto routed
+            = ir::lift_branch_filters(std::move(branches), octx.reg)) {
+          lifted.insert(lifted.end(), std::move_iterator{routed->begin()},
+                        std::move_iterator{routed->end()});
+          branch_filters[0].clear();
+          branch_filters[1].clear();
+        }
+      }
+      lifted = ir::simplify_filter(std::move(lifted), octx.reg);
+      cons_filter = std::move(branch_filters[0]);
+      alt_filter = std::move(branch_filters[1]);
     }
-    if (lifted) {
-      if (not has_else and args_.alternative
-          and args_.alternative->operators.empty()) {
-        args_.alternative = None{};
-      }
-    } else {
-      // The filters stay inside their branches.
-      args_.consequence.prepend(std::move(cons_filter), octx.reg);
-      if (args_.alternative) {
-        args_.alternative->prepend(std::move(alt_filter), octx.reg);
-      }
+    args_.consequence.prepend(std::move(cons_filter), octx.reg);
+    if (args_.alternative) {
+      args_.alternative->prepend(std::move(alt_filter), octx.reg);
+    }
+    if (not has_else and args_.alternative
+        and args_.alternative->operators.empty()) {
+      args_.alternative = None{};
     }
     auto replacement = std::vector<Box<ir::Operator>>{};
     replacement.push_back(std::move(*this).move());
@@ -357,7 +368,7 @@ public:
     }
     // The branches may change the number of events, so no limit passes `if`.
     return {
-      std::move(lifted).value_or(ir::OptimizeFilter{}),
+      std::move(lifted),
       stronger_event_order(cons_order, alt_order),
       ir::pipeline{{}, std::move(replacement)},
       None{},
