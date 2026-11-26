@@ -1333,15 +1333,44 @@ void catalog_state::run_policy_action(const uuid& partition,
   if (not synopsis) {
     return;
   }
+  ++compacting;
+  if (eviction) {
+    ++eviction_running;
+  }
+  if (action.erase) {
+    TENZIR_ASSERT(action.keep == keep_original_partition::no);
+    erase_for_policy(partition, [this, partition, eviction,
+                                 recorded
+                                 = std::move(action.token)](caf::error error) {
+      if (eviction) {
+        --eviction_running;
+      }
+      if (not error) {
+        if (eviction) {
+          ++evicted;
+        } else {
+          ++compacted;
+        }
+      } else if (error != ec::busy) {
+        TENZIR_WARN("{} failed to erase partition {} for a maintenance "
+                    "action: {}",
+                    *self, partition, error);
+        if (policy) {
+          policy->on_failed(recorded, partition, error);
+        }
+      }
+      // A busy partition was claimed by a transform in the meantime. That is
+      // no fault of the partition, so it is not blacklisted: its replacement
+      // arrives at the policy like any other partition.
+      release_compaction_slot();
+    });
+    return;
+  }
   auto batch = std::vector<partition_info>{};
   batch.emplace_back(partition, *synopsis);
   auto const input_bytes = synopsis->store_file.size
                            + synopsis->indexes_file.size
                            + synopsis->sketches_file.size;
-  ++compacting;
-  if (eviction) {
-    ++eviction_running;
-  }
   transform(
     std::move(action.pipeline), std::move(batch), action.keep, action.origin,
     policy ? policy->serialize_token(action.token) : std::string{},
@@ -1388,6 +1417,28 @@ void catalog_state::run_policy_action(const uuid& partition,
       }
       release_compaction_slot();
     });
+}
+
+void catalog_state::erase_for_policy(const uuid& partition,
+                                     std::function<void(caf::error)> done) {
+  TENZIR_VERBOSE("{} erases partition {} without loading it because its "
+                 "maintenance pipeline drops every event",
+                 *self, partition);
+  // The erasure runs as a request to ourselves, like the disk budget's. Claim
+  // the partition now: a maintenance pass before that request is handled
+  // must not select it again, and `transform` refuses retiring inputs.
+  retiring.insert(partition);
+  self->mail(atom::erase_v, partition)
+    .request(caf::actor_cast<catalog_actor>(self), caf::infinite)
+    .then(
+      [this, partition, done](atom::done) {
+        retiring.erase(partition);
+        done({});
+      },
+      [this, partition, done](caf::error& error) {
+        retiring.erase(partition);
+        done(std::move(error));
+      });
 }
 
 auto catalog_state::run_named_rule(std::string rule,
@@ -1492,10 +1543,34 @@ void catalog_state::drain_named_rule(time now) {
     if (not action) {
       continue;
     }
-    auto batch = std::vector<partition_info>{};
-    batch.emplace_back(partition, *synopsis);
     ++compacting;
     ++named_run->running;
+    if (action->erase) {
+      TENZIR_ASSERT(action->keep == keep_original_partition::no);
+      erase_for_policy(
+        partition, [this, partition,
+                    recorded = std::move(action->token)](caf::error error) {
+          if (error == ec::busy) {
+            // Claimed by a transform while queued; its replacement carries an
+            // id this run never saw, so it counts as not covered.
+            if (named_run) {
+              ++named_run->skipped;
+            }
+            error = {};
+          } else if (error) {
+            TENZIR_WARN("{} failed to erase partition {} for a compaction "
+                        "rule: {}",
+                        *self, partition, error);
+            if (policy) {
+              policy->on_failed(recorded, partition, error);
+            }
+          }
+          finish_named_rule_batch(std::move(error));
+        });
+      continue;
+    }
+    auto batch = std::vector<partition_info>{};
+    batch.emplace_back(partition, *synopsis);
     transform(
       std::move(action->pipeline), std::move(batch), action->keep,
       action->origin,
