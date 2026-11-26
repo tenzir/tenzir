@@ -51,7 +51,7 @@ struct ToOpenSearchArgs {
   located<uint64_t> max_content_length{5'000'000, location::unknown};
   located<duration> buffer_timeout{std::chrono::seconds{5}, location::unknown};
   located<uint64_t> parallel{8, location::unknown};
-  Option<location> compress;
+  Option<location> compress = {location::unknown};
   location operator_location = location::unknown;
 };
 

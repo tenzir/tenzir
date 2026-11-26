@@ -1,0 +1,14 @@
+---
+fixtures:
+- http_server:
+    expected:
+    - method: POST
+      path: /_bulk
+      header_name: Content-Encoding
+      header_value: gzip
+      body: "{\"index\":{\"_index\":\"main\"}}\n{\"x\":1}\n"
+---
+
+// The sink compresses the bulk request body with gzip by default.
+from {x: 1}
+to_opensearch env("HTTP_FIXTURE_URL"), tls=false, action="index", index="main"
