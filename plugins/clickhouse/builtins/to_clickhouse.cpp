@@ -83,6 +83,8 @@ struct ToClickhouseArgs {
     = {std::string{to_string(clickhouse::mode::append)}, location::unknown};
   Option<ast::field_path> primary = None{};
   Option<located<data>> tls;
+  // Compresses the inserted blocks with ZSTD unless `compress=false`.
+  Option<location> compress = {location::unknown};
   location operator_location;
   uint64_t jobs = 1;
   // Internal per-schema batching: rows accumulate per schema and are only sent
@@ -406,6 +408,7 @@ public:
       .default_database = None{},
       .set_client_default_database = false,
       .ssl = std::move(*ssl),
+      .compress = args_.compress.is_some(),
       .table = args_.table,
       .mode = {*mode_val, args_.mode.source},
       .primary = std::move(primary),
@@ -711,6 +714,7 @@ public:
     tls_enabled_ = tls->tls.inner;
     auto connection = ConnectionArgs{};
     connection.tls = std::move(*tls);
+    connection.compress = args_.compress.is_some();
     auto const default_port
       = tls_enabled_ ? clickhouse_tls_port : clickhouse_plaintext_port;
     connection.port = detail::narrow_cast<uint16_t>(
@@ -1362,6 +1366,7 @@ public:
       = d.named_optional("max_batch_rows", &ToClickhouseArgs::max_batch_rows);
     auto batch_timeout_arg = d.named_optional(
       "batch_timeout", &ToClickhouseArgs::batch_timeout, "duration");
+    d.named("compress", &ToClickhouseArgs::compress);
     auto tls_validate
       = tls_options{}.add_to_describer(d, &ToClickhouseArgs::tls);
     d.operator_location(&ToClickhouseArgs::operator_location);

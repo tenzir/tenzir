@@ -42,7 +42,8 @@ auto ConnectionArgs::to_client_options() const -> ::clickhouse::ClientOptions {
   auto options = ::clickhouse::ClientOptions()
                    .SetEndpoints({::clickhouse::Endpoint{host, port}})
                    .SetUser(user)
-                   .SetPassword(password);
+                   .SetPassword(password)
+                   .SetCompressionMethod(compression_method(compress));
   TENZIR_ASSERT(tls);
   if (tls->tls.inner) {
     auto ssl = ::clickhouse::ClientOptions::SSLOptions{};

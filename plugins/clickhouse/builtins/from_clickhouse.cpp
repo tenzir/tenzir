@@ -157,14 +157,6 @@ auto backend_names(bool hydrolix) -> BackendNames {
   return {"from_clickhouse", "ClickHouse", "clickhouse"};
 }
 
-/// Asks the server to compress the blocks it sends, which shrinks results that
-/// cross a network at little CPU cost.
-auto with_read_compression(::clickhouse::ClientOptions options)
-  -> ::clickhouse::ClientOptions {
-  options.SetCompressionMethod(::clickhouse::CompressionMethod::LZ4);
-  return options;
-}
-
 /// Returns the planner of a read of `source`. A query of the user is opaque.
 auto make_planner(ReadSource const& source)
   -> pushdown::Planner<ClickHouseRead, ClickHouseTable> {
@@ -782,7 +774,7 @@ private:
       co_await spawn_blocking([&]() {
         // Tables without a database, in `table` and in `sql`, refer to the
         // database of the URI.
-        auto options = with_read_compression(connection.to_client_options());
+        auto options = connection.to_client_options();
         if (connection.default_database) {
           options.SetDefaultDatabase(*connection.default_database);
         }

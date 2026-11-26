@@ -9,6 +9,7 @@
 #pragma once
 
 #include "clickhouse/arguments.hpp"
+#include "clickhouse/connection.hpp"
 #include "clickhouse/table_description.hpp"
 #include "clickhouse/transformers.hpp"
 #include "tenzir/arc.hpp"
@@ -122,6 +123,8 @@ public:
     bool set_client_default_database = true;
     // Set by the caller via `tls_options::resolve()` before invoking.
     Option<TlsConfig> ssl;
+    // Whether to compress the data blocks in both directions.
+    bool compress = true;
     ast::expression table = {};
     located<enum mode> mode = located{mode::append, operator_location};
     Option<located<std::string>> primary = None{};
@@ -143,7 +146,8 @@ public:
             .SetPassword(std::string{password})
             .SetDefaultDatabase(set_client_default_database and default_database
                                   ? *default_database
-                                  : "");
+                                  : "")
+            .SetCompressionMethod(compression_method(compress));
       TENZIR_ASSERT(ssl);
       if (ssl->tls.inner) {
         auto tls_opts = ::clickhouse::ClientOptions::SSLOptions{};

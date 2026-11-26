@@ -1,0 +1,10 @@
+{
+  destination: "default.tc_compressed",
+  compressed: true,
+  rows: 1000,
+}
+{
+  destination: "default.tc_uncompressed",
+  compressed: false,
+  rows: 1000,
+}

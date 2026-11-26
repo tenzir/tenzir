@@ -28,6 +28,16 @@ namespace tenzir::plugins::clickhouse {
 /// Stay below the server's default receive timeout of five minutes.
 inline constexpr auto connection_ping_interval = std::chrono::minutes{3};
 
+/// Returns the method that compresses the data blocks the client sends. ZSTD
+/// shrinks inserts noticeably more than LZ4 at a moderate CPU cost. Any method
+/// also asks the server to compress the blocks it returns, with the method of
+/// its `network_compression_method` setting.
+inline auto compression_method(bool compress)
+  -> ::clickhouse::CompressionMethod {
+  return compress ? ::clickhouse::CompressionMethod::ZSTD
+                  : ::clickhouse::CompressionMethod::None;
+}
+
 /// Everything needed to open a connection to the server.
 struct ConnectionArgs {
   std::string host;
@@ -39,6 +49,8 @@ struct ConnectionArgs {
   Option<std::string> default_database = None{};
   /// Must be set before connecting.
   Option<TlsConfig> tls = None{};
+  /// Whether to compress the data blocks in both directions.
+  bool compress = true;
 
   auto apply_uri(boost::urls::url_view_base const& uri) -> void;
   auto to_client_options() const -> ::clickhouse::ClientOptions;

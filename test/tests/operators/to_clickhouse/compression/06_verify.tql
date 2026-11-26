@@ -1,0 +1,6 @@
+// The server decompresses incoming blocks only for compressed inserts.
+from_clickhouse sql=r"SELECT tables[1] AS destination, toBool(min(ProfileEvents['CompressedReadBufferBlocks'] > 0)) AS compressed, sum(written_rows) AS rows FROM system.query_log WHERE type = 'QueryFinish' AND query_kind = 'Insert' AND tables[1] IN ('default.tc_compressed', 'default.tc_uncompressed') GROUP BY destination ORDER BY destination",
+                host=env("CLICKHOUSE_HOST"),
+                port=int(env("CLICKHOUSE_PORT")),
+                password=env("CLICKHOUSE_PASSWORD"),
+                tls=false
