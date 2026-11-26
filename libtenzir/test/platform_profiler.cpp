@@ -24,10 +24,11 @@ namespace {
 
 constexpr auto max_batch_bytes = std::size_t{256} << 10;
 
-/// What a transport was sent, as the platform decodes it.
+/// What a transport was sent, as the platform decodes it, and when.
 struct Sent {
   std::vector<Batch> batches;
   std::vector<std::size_t> sizes;
+  std::vector<std::chrono::steady_clock::time_point> times;
 };
 
 class RecordingTransport final : public Transport {
@@ -43,6 +44,7 @@ public:
     sent_->batches.push_back(
       parse_batch(document.root()).expect("valid batch"));
     sent_->sizes.push_back(request.body.size());
+    sent_->times.push_back(std::chrono::steady_clock::now());
     auto attempt = sent_->batches.size();
     auto status
       = attempt <= statuses_.size() ? statuses_[attempt - 1] : uint16_t{204};
@@ -130,6 +132,24 @@ auto flush(PlatformReporter const& reporter) -> void {
   auto stop = StopFlag{};
   stop.request();
   folly::coro::blockingWait(reporter.run(stop));
+}
+
+/// Runs `reporter` until `sent` holds `attempts` requests, and then stops it.
+/// Unlike `flush`, the retries take the backoff of a running deployment rather
+/// than fitting into the deadline of the final flush.
+auto send_until(PlatformReporter const& reporter, Sent const& sent,
+                std::size_t attempts) -> void {
+  auto stop = StopFlag{};
+  auto watch = [&]() -> Task<void> {
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{30};
+    while (sent.batches.size() < attempts
+           and std::chrono::steady_clock::now() < deadline) {
+      co_await folly::coro::sleep(std::chrono::milliseconds{10});
+    }
+    stop.request();
+  };
+  folly::coro::blockingWait(
+    folly::coro::collectAll(reporter.run(stop), watch()));
 }
 
 auto external(uint64_t events, MetricsDirection direction
@@ -580,7 +600,7 @@ TEST("platform reporter retries the immutable batch") {
   auto profiler = PlatformProfiler{reporter, "pipeline", 1};
   auto counters = std::array{external(5)};
   profiler.sample(counters);
-  flush(reporter);
+  send_until(reporter, *sent, 3);
   REQUIRE_EQUAL(sent->batches.size(), 3u);
   auto first = std::string{};
   write_json(sent->batches[0], first);
@@ -596,10 +616,31 @@ TEST("platform reporter keeps a batch through repeated transient failures") {
   auto reporter = recording(sent, {500, 429, 0});
   auto profiler = PlatformProfiler{reporter, "pipeline", 1};
   profiler.transition("running");
-  flush(reporter);
+  send_until(reporter, *sent, 4);
   REQUIRE_EQUAL(sent->batches.size(), 4u);
   CHECK_EQUAL(sent->batches[3].dropped.value(), 0);
   CHECK_EQUAL(sent->batches[3].runs.size(), 1u);
+  // A retry never sends faster than a healthy deployment, which sends one
+  // batch a second.
+  for (auto i = std::size_t{1}; i < sent->times.size(); ++i) {
+    auto gap = std::chrono::duration_cast<std::chrono::milliseconds>(
+      sent->times[i] - sent->times[i - 1]);
+    CHECK_GREATER_EQUAL(gap.count(), int64_t{1000});
+  }
+}
+
+TEST("platform reporter retries a failed batch in the final flush") {
+  auto sent = std::make_shared<Sent>();
+  auto reporter = recording(sent, {503});
+  auto profiler = PlatformProfiler{reporter, "pipeline", 1};
+  profiler.transition("finished");
+  flush(reporter);
+  // A retry waits at least a second, so one fits into the three seconds of
+  // the final flush. A third attempt would not: it comes about three seconds
+  // after the first.
+  REQUIRE_EQUAL(sent->batches.size(), 2u);
+  CHECK_EQUAL(sent->batches[1].dropped.value(), 0);
+  CHECK_EQUAL(sent->batches[1].runs.size(), 1u);
 }
 
 TEST("platform reporter flushes a canceled batch before later samples") {
