@@ -785,3 +785,18 @@ TEST("erasing many partitions at once keeps the others") {
   CHECK_EQUAL(f.state.synopses_per_type->size(), size_t{1});
   CHECK_EQUAL(f.state.synopses_per_type->begin()->second->size(), kept.size());
 }
+
+TEST("the catalog returns the synopsis that replaced a partition's") {
+  auto f = fixture{};
+  const auto id = f.add("a", 10);
+  const auto other = f.add("a", 10);
+  auto replacement = f.state.find_synopsis(id);
+  replacement.unshared().events = 20;
+  static_cast<void>(f.state.merge({{id, replacement}},
+                                  catalog_state::merge_source::replacement));
+  CHECK_EQUAL(f.state.find_synopsis(id)->events, size_t{20});
+  CHECK_EQUAL(f.state.find_synopsis(other)->events, size_t{10});
+  f.state.erase(id);
+  CHECK(not f.state.find_synopsis(id));
+  CHECK(f.state.find_synopsis(other));
+}
