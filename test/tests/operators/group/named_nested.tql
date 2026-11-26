@@ -1,0 +1,15 @@
+from {tenant: "a", scale: 10, x: 1, v: 2},
+     {tenant: "a", scale: 10, x: 1, v: 3},
+     {tenant: "a", scale: 10, x: 2, v: 4},
+     {tenant: "b", scale: 100, x: 1, v: 5}
+group tenant {
+  group $scale=scale {
+    group $bucket=x * $scale {
+      summarize total=sum(v)
+      tenant = $group
+      scale = $scale
+      bucket = $bucket
+    }
+  }
+}
+sort tenant, bucket

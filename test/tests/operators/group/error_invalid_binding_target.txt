@@ -1,0 +1,8 @@
+error: expected variable name
+ --> tests/operators/group/error_invalid_binding_target.tql:5:7
+  |
+5 | group $a.b=x {
+  |       ^^^^
+  |
+  = hint: use a variable name such as `$key`
+  = docs: https://tenzir.com/docs/reference/operators/group

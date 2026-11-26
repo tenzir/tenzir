@@ -1,0 +1,6 @@
+from {ts: 2026-01-01T10:15:00Z, v: 1},
+     {ts: 2026-01-01T10:45:00Z, v: 2}
+group $group=ts.floor(1h) {
+  summarize total=sum(v)
+  hour = $group
+}

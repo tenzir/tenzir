@@ -1,0 +1,12 @@
+from {a: 1, b: "x", v: 10}, {a: 1, b: "y", v: 20},
+     {a: 2, b: "x", v: 30}, {a: 2, b: "y", v: 40},
+     {a: 1, b: "x", v: 11}, {a: 1, b: "y", v: 21},
+     {a: 2, b: "x", v: 31}, {a: 2, b: "y", v: 41}
+parallel 2 {
+  group $a=a, $b=b {
+    summarize total=sum(v), n=count()
+    a = $a
+    b = $b
+  }
+}
+sort a, b

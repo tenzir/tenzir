@@ -1,0 +1,18 @@
+{
+  total: 5,
+  tenant: "a",
+  scale: 10,
+  bucket: 10,
+}
+{
+  total: 4,
+  tenant: "a",
+  scale: 10,
+  bucket: 20,
+}
+{
+  total: 5,
+  tenant: "b",
+  scale: 100,
+  bucket: 100,
+}

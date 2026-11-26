@@ -1,0 +1,11 @@
+error: multiple group keys must be named
+ --> tests/operators/group/error_multiple_unnamed.tql:5:10
+  |
+5 | group x, y {
+  |          ^
+  ⋮
+5 | group x, y {
+  |       - first key provided here
+  |
+  = hint: bind each key to a variable, as in `group $a=..., $b=... { ... }`
+  = docs: https://tenzir.com/docs/reference/operators/group

@@ -1,0 +1,11 @@
+error: cannot mix named and unnamed group keys
+ --> tests/operators/group/error_mix_unnamed_named.tql:5:10
+  |
+5 | group x, $b=y {
+  |          ^^^^
+  ⋮
+5 | group x, $b=y {
+  |       - unnamed key provided here
+  |
+  = hint: name every key with `$name=<expr>`
+  = docs: https://tenzir.com/docs/reference/operators/group

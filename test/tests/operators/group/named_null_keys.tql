@@ -1,0 +1,11 @@
+from {a: null, b: "x", v: 1},
+     {a: null, b: "x", v: 2},
+     {a: "x", b: null, v: 10},
+     {a: null, b: null, v: 20},
+     {a: "x", b: "y", v: 30}
+group $a=a, $b=b {
+  summarize total=sum(v)
+  a = $a
+  b = $b
+}
+sort total

@@ -1,0 +1,16 @@
+warning: division by zero
+ --> tests/operators/group/named_fallible_key.tql:4:10
+  |
+4 | group $q=10 / x, $y=y {
+  |          ~~~~~~
+  |
+{
+  total: 10,
+  q: 5.0,
+  y: "a",
+}
+{
+  total: 50,
+  q: null,
+  y: "a",
+}

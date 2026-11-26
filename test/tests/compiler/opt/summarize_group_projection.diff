@@ -53,119 +53,102 @@
 +        }
 +      ]
      },
-     GenericIr {
-       desc: "group",
-       store: {
-         op: {
-           path: [
-             `group` @ [1]:7..12 from 0
-           ],
-           ref: std::group/op
-         },
-         args: [
-           expression root_field {
+     group {
+       self: [1]:7..12 from 0,
+       bindings: [
+         {
+           expr: root_field {
              id: `k` @ [1]:13..14 from 0,
              has_question_mark: false
-           }
-         ],
-         named_args: [
+           },
+           let: 1
+         }
+       ],
+       pipe: {
+         lets: [
            
          ],
-         pipeline: {
-           pipeline: {
-             lets: [
-               
-             ],
-             operators: [
-               summarize {
-                 self: [1]:19..28 from 0,
-                 cfg: {
-                   aggregates: [
-                     {
-                       dest: {
-                         expr: root_field {
-                           id: `n` @ [1]:29..30 from 0,
-                           has_question_mark: false
-                         },
-                         has_this: false,
-                         path: [
-                           {
-                             id: `n` @ [1]:29..30 from 0,
-                             has_question_mark: false
-                           }
-                         ]
-                       },
-                       call: {
-                         fn: {
-                           path: [
-                             `count` @ [1]:31..36 from 0
-                           ],
-                           ref: std::count/fn
-                         },
-                         args: [
-                           
-                         ],
-                         method: false,
-                         location: [1]:31..38 from 0
-                       }
+         operators: [
+           summarize {
+             self: [1]:19..28 from 0,
+             cfg: {
+               aggregates: [
+                 {
+                   dest: {
+                     expr: root_field {
+                       id: `n` @ [1]:29..30 from 0,
+                       has_question_mark: false
                      },
-                     {
-                       dest: {
-                         expr: root_field {
-                           id: `total` @ [1]:40..45 from 0,
-                           has_question_mark: false
-                         },
-                         has_this: false,
-                         path: [
-                           {
-                             id: `total` @ [1]:40..45 from 0,
-                             has_question_mark: false
-                           }
-                         ]
-                       },
-                       call: {
-                         fn: {
-                           path: [
-                             `sum` @ [1]:46..49 from 0
-                           ],
-                           ref: std::sum/fn
-                         },
-                         args: [
-                           root_field {
-                             id: `bytes` @ [1]:50..55 from 0,
-                             has_question_mark: false
-                           }
-                         ],
-                         method: false,
-                         location: [1]:46..56 from 0
+                     has_this: false,
+                     path: [
+                       {
+                         id: `n` @ [1]:29..30 from 0,
+                         has_question_mark: false
                        }
-                     }
-                   ],
-                   groups: [
-                     
-                   ],
-                   indices: [
-                     0,
-                     1
-                   ],
-                   emission: "final",
-                   mode: "reset",
-                   output: "summary",
-                   emit_every: 1
+                     ]
+                   },
+                   call: {
+                     fn: {
+                       path: [
+                         `count` @ [1]:31..36 from 0
+                       ],
+                       ref: std::count/fn
+                     },
+                     args: [
+                       
+                     ],
+                     method: false,
+                     location: [1]:31..38 from 0
+                   }
+                 },
+                 {
+                   dest: {
+                     expr: root_field {
+                       id: `total` @ [1]:40..45 from 0,
+                       has_question_mark: false
+                     },
+                     has_this: false,
+                     path: [
+                       {
+                         id: `total` @ [1]:40..45 from 0,
+                         has_question_mark: false
+                       }
+                     ]
+                   },
+                   call: {
+                     fn: {
+                       path: [
+                         `sum` @ [1]:46..49 from 0
+                       ],
+                       ref: std::sum/fn
+                     },
+                     args: [
+                       root_field {
+                         id: `bytes` @ [1]:50..55 from 0,
+                         has_question_mark: false
+                       }
+                     ],
+                     method: false,
+                     location: [1]:46..56 from 0
+                   }
                  }
-               }
-             ],
-             definition_location: [1]:19..56 from 0
-           } @ [1]:15..58 from 0,
-           let_ids: {
-             "0": 1
+               ],
+               groups: [
+                 
+               ],
+               indices: [
+                 0,
+                 1
+               ],
+               emission: "final",
+               mode: "reset",
+               output: "summary",
+               emit_every: 1
+             }
            }
-         }
-       },
-       filter: [
-         
-       ],
-       order: "ordered"
+         ],
+         definition_location: [1]:19..56 from 0
+       } @ [1]:15..58 from 0
 +    },
 +    GenericIr {
 +      desc: "to_stdout",

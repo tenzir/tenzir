@@ -1,0 +1,8 @@
+error: required subpipeline was not provided
+ --> tests/operators/group/error_no_pipeline.tql:5:1
+  |
+5 | group $a=x
+  | ^^^^^
+  |
+  = usage: group <expr> { ... } or group $name=<expr>, ... { ... }
+  = docs: https://tenzir.com/docs/reference/operators/group

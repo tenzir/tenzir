@@ -1,0 +1,5 @@
+export
+group $a=k1, $b=k2.sub {
+  select payload
+}
+select payload

@@ -1,0 +1,8 @@
+error: expected at least one group key
+ --> tests/operators/group/error_no_keys.tql:5:1
+  |
+5 | group {
+  | ^^^^^
+  |
+  = usage: group <expr> { ... } or group $name=<expr>, ... { ... }
+  = docs: https://tenzir.com/docs/reference/operators/group

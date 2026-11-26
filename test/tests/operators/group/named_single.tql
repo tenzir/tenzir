@@ -1,0 +1,8 @@
+from {ts: 2026-01-01T10:15:00Z, x: 1},
+     {ts: 2026-01-01T10:45:00Z, x: 2},
+     {ts: 2026-01-01T11:05:00Z, x: 3}
+group $hour=ts.floor(1h) {
+  summarize events=collect(this)
+  hour = $hour
+}
+sort hour

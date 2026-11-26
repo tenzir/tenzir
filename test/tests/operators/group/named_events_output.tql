@@ -1,0 +1,8 @@
+from {ts: 2026-01-01T10:15:00Z, ip: 10.0.0.1, bytes: 10},
+     {ts: 2026-01-01T10:45:00Z, ip: 10.0.0.1, bytes: 20},
+     {ts: 2026-01-01T10:30:00Z, ip: 10.0.0.2, bytes: 5},
+     {ts: 2026-01-01T11:05:00Z, ip: 10.0.0.1, bytes: 30}
+group $hour=ts.floor(1h), $ip=ip {
+  summarize hourly_bytes=sum(bytes), options={output: "events"}
+}
+sort ts, ip

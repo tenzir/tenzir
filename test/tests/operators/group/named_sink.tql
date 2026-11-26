@@ -1,0 +1,4 @@
+from {a: 1, b: "x"}, {a: 2, b: "y"}, {a: 1, b: "x"}
+group $a=a, $b=b {
+  discard
+}

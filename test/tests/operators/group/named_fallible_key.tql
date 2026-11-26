@@ -1,0 +1,9 @@
+from {x: 2, y: "a", v: 10},
+     {x: 0, y: "a", v: 20},
+     {x: 0, y: "a", v: 30}
+group $q=10 / x, $y=y {
+  summarize total=sum(v)
+  q = $q
+  y = $y
+}
+sort total

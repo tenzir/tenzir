@@ -1,0 +1,7 @@
+error: unknown variable
+ --> tests/operators/group/error_sibling_ref.tql:5:16
+  |
+5 | group $a=x, $b=$a {
+  |                ^^
+  |
+  = hint: no variables are available here

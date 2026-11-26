@@ -1,0 +1,9 @@
+error: duplicate group binding `$a`
+ --> tests/operators/group/error_duplicate_binding.tql:5:13
+  |
+5 | group $a=x, $a=y {
+  |             ^^
+  ⋮
+5 | group $a=x, $a=y {
+  |       -- previously bound here
+  |

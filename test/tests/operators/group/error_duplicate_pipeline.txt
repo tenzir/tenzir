@@ -1,0 +1,9 @@
+error: duplicate pipeline argument
+ --> tests/operators/group/error_duplicate_pipeline.tql:5:23
+  |
+5 | group $a=x, { pass }, { pass }
+  |                       ^^^^^^^^
+  ⋮
+5 | group $a=x, { pass }, { pass }
+  |             -------- previously provided here
+  |

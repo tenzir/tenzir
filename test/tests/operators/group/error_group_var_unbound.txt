@@ -1,0 +1,7 @@
+error: unknown variable
+ --> tests/operators/group/error_group_var_unbound.tql:6:7
+  |
+6 |   y = $group
+  |       ^^^^^^
+  |
+  = hint: available are `$a`

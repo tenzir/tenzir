@@ -1,0 +1,8 @@
+error: group binding must start with `$`
+ --> tests/operators/group/error_missing_dollar.tql:5:7
+  |
+5 | group a=x {
+  |       ^
+  |
+  = hint: use `$a=...` to bind `$a` in the subpipeline
+  = docs: https://tenzir.com/docs/reference/operators/group
