@@ -711,6 +711,13 @@ public:
   void run_policy_action(const uuid& partition, storage_action action,
                          bool eviction = false);
 
+  /// Erases a partition for a policy action whose pipeline drops every
+  /// event, without loading the partition. Claims the partition immediately,
+  /// so that no maintenance pass selects it again while the erasure is
+  /// queued, and calls `done` with the outcome.
+  void
+  erase_for_policy(const uuid& partition, std::function<void(caf::error)> done);
+
   /// Suppress a rewrite that failed to reclaim bytes, including its new IDs.
   void record_eviction_result(uuid const& input, uint64_t input_bytes,
                               keep_original_partition keep,

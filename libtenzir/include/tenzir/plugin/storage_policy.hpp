@@ -47,6 +47,13 @@ struct storage_action {
   /// Whether the input survives the transform.
   keep_original_partition keep = keep_original_partition::no;
 
+  /// The policy determined that `pipeline` drops every event of the
+  /// partition. The catalog then erases the partition outright instead of
+  /// loading it, only to throw away everything it loaded. The policy sees
+  /// the erasure through `on_erased`, not through `on_committed`. Requires
+  /// `keep == keep_original_partition::no`.
+  bool erase = false;
+
   /// Names what asked for this, for logs and metrics.
   std::string origin = {};
 
