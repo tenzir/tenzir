@@ -10,9 +10,13 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 
+#include <array>
 #include <chrono>
 #include <cstdint>
 #include <string>
+#include <string_view>
+#include <thread>
+#include <tuple>
 #include <unistd.h>
 
 namespace tenzir {
@@ -55,6 +59,26 @@ public:
     return "http://127.0.0.1:" + std::to_string(port_);
   }
 
+  /// Takes one connection, reads a request whose body is `{}`, and answers it
+  /// with `response` as written.
+  auto answer(std::string_view response) const -> void {
+    auto connection = ::accept(fd_, nullptr, nullptr);
+    if (connection < 0) {
+      return;
+    }
+    auto request = std::string{};
+    auto buffer = std::array<char, 1024>{};
+    while (not request.ends_with("\r\n\r\n{}")) {
+      auto read = ::read(connection, buffer.data(), buffer.size());
+      if (read <= 0) {
+        break;
+      }
+      request.append(buffer.data(), static_cast<std::size_t>(read));
+    }
+    std::ignore = ::write(connection, response.data(), response.size());
+    ::close(connection);
+  }
+
 private:
   int fd_;
   uint16_t port_ = 0;
@@ -74,6 +98,23 @@ TEST("HTTP transport reports a peer that does not answer as a timeout") {
   auto result = attempt(socket.url(), std::chrono::milliseconds{200});
   REQUIRE(result.is_err());
   check(result.unwrap_err().kind == RequestError::Kind::timeout);
+}
+
+TEST("HTTP transport passes on how long the peer asks to be left alone") {
+  auto socket = LoopbackSocket{true};
+  // Lowercase, as over HTTP/2.
+  auto server = std::thread{[&] {
+    socket.answer("HTTP/1.1 429 Too Many Requests\r\n"
+                  "retry-after: 7\r\n"
+                  "content-length: 0\r\n"
+                  "connection: close\r\n\r\n");
+  }};
+  auto result = attempt(socket.url(), std::chrono::seconds{2});
+  server.join();
+  REQUIRE(result.is_ok());
+  check(result.unwrap().status == 429);
+  REQUIRE(result.unwrap().retry_after);
+  check(*result.unwrap().retry_after == std::chrono::seconds{7});
 }
 
 TEST("HTTP transport reports a refused connection as unreachable") {

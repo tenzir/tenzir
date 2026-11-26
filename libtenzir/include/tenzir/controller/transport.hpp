@@ -21,6 +21,7 @@
 
 #include <folly/coro/AsyncGenerator.h>
 
+#include <chrono>
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -145,6 +146,10 @@ public:
   std::uint16_t status;
   variant<std::string, HttpBodyStream> body;
   std::string content_type = "application/json";
+  /// How long the peer asked to be left alone before the next attempt, as
+  /// its `Retry-After` header says. Only a transport that reads response
+  /// headers knows it.
+  Option<std::chrono::seconds> retry_after;
 };
 
 /// Carries a request to the platform and brings an answer back.

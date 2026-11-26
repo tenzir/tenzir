@@ -5,6 +5,7 @@
 #include <tenzir/config.hpp>
 #include <tenzir/controller/http_transport.hpp>
 #include <tenzir/curl.hpp>
+#include <tenzir/http.hpp>
 #include <tenzir/tunnel/platform.hpp>
 
 #include <folly/coro/DetachOnCancel.h>
@@ -99,7 +100,12 @@ auto BufferedHttpTransport::request(HttpRequest request)
                                 kind_of(result, reached)}};
       }
       auto status = handle.get<curl::easy::info::response_code>().second;
-      return HttpResponse{static_cast<uint16_t>(status), std::move(body)};
+      auto response
+        = HttpResponse{static_cast<uint16_t>(status), std::move(body)};
+      if (auto value = handle.response_header("Retry-After")) {
+        response.retry_after = http::parse_retry_after(*value);
+      }
+      return response;
     }));
 }
 

@@ -200,6 +200,23 @@ auto easy::headers()
   }
 }
 
+auto easy::response_header(std::string_view name) -> Option<std::string> {
+#if LIBCURL_VERSION_NUM >= 0x075400
+  auto key = std::string{name};
+  auto* header = static_cast<curl_header*>(nullptr);
+  // Of the response itself, not of a proxy's CONNECT, and of the last request
+  // of the transfer.
+  if (curl_easy_header(easy_.get(), key.c_str(), 0, CURLH_HEADER, -1, &header)
+      != CURLHE_OK) {
+    return None{};
+  }
+  return std::string{header->value};
+#else
+  (void)name;
+  return None{};
+#endif
+}
+
 auto easy::perform() -> code {
   auto curl_code = curl_easy_perform(easy_.get());
   return static_cast<code>(curl_code);

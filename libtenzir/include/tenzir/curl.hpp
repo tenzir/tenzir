@@ -349,6 +349,10 @@ public:
   /// Enumerates the list of all added headers.
   auto headers() -> generator<std::pair<std::string_view, std::string_view>>;
 
+  /// Returns the value of a header of the last response, found regardless of
+  /// case. Without curl's header API, which arrived in curl 7.84, none.
+  auto response_header(std::string_view name) -> Option<std::string>;
+
   /// `curl_easy_perform`
   auto perform() -> code;
 

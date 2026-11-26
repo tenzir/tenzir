@@ -14,18 +14,20 @@
 #include <tenzir/time.hpp>
 #include <tenzir/tunnel/platform.hpp>
 #include <tenzir/uuid.hpp>
+#include <tenzir/variant.hpp>
 
+#include <folly/Random.h>
 #include <folly/coro/DetachOnCancel.h>
-#include <folly/coro/Retry.h>
 #include <folly/coro/Sleep.h>
 #include <folly/coro/Timeout.h>
 
 #include <algorithm>
+#include <cmath>
 #include <deque>
 #include <exception>
-#include <limits>
 #include <map>
 #include <mutex>
+#include <random>
 #include <sstream>
 #include <tuple>
 #include <utility>
@@ -50,6 +52,9 @@ constexpr auto max_batch_age = std::chrono::minutes{2};
 // down.
 constexpr auto min_retry_delay = std::chrono::seconds{1};
 constexpr auto max_retry_delay = std::chrono::seconds{5};
+// The longest wait between attempts that the platform may ask for with
+// `Retry-After`. A batch that waits longer is too old to send anyway.
+constexpr auto max_retry_after = std::chrono::seconds{max_batch_age};
 // How long one attempt waits for the platform to answer. One batch is in
 // flight at a time, so a sender that waits for the answer slows down with the
 // platform rather than adding to its load. Well past the platform's usual
@@ -92,6 +97,18 @@ auto count(uint64_t value) -> Count {
     .expect("bounded telemetry count");
 }
 
+/// `nominal` scaled by a random factor around one, within the retry delays.
+/// The jitter keeps deployments from retrying in lockstep when the platform
+/// comes back.
+auto jittered(std::chrono::milliseconds nominal) -> std::chrono::milliseconds {
+  auto rng = folly::ThreadLocalPRNG{};
+  auto factor = std::exp(std::normal_distribution<double>{0.0, 0.1}(rng));
+  auto scaled = std::chrono::milliseconds{
+    static_cast<std::chrono::milliseconds::rep>(nominal.count() * factor)};
+  return std::clamp(scaled, std::chrono::milliseconds{min_retry_delay},
+                    std::chrono::milliseconds{max_retry_delay});
+}
+
 /// Seconds on the wire, which never go backwards.
 auto seconds_of(duration value) -> double {
   return std::chrono::duration<double>{std::max(value, duration{})}.count();
@@ -123,6 +140,11 @@ public:
     uint64_t dropped;
   };
 
+  /// An attempt worth repeating, no sooner than the platform asked.
+  struct Retry {
+    Option<std::chrono::seconds> after;
+  };
+
   Uplink(PlatformConnection connection, Option<Box<Transport>> transport)
     : connection{std::move(connection)},
       transport{std::move(transport)},
@@ -148,14 +170,16 @@ public:
     }
   }
 
-  auto transmit(Pending const& pending) const -> Task<Option<bool>> {
+  /// Sends `pending` once: whether the platform took it (`true`), refused it
+  /// for good (`false`), or may take it on another attempt.
+  auto transmit(Pending const& pending) const -> Task<variant<bool, Retry>> {
     if (not transport) {
       auto discovered = co_await discover_api_url(connection.platform_url,
                                                   {std::chrono::seconds{1},
                                                    std::chrono::seconds{2}});
       if (discovered.is_err()) {
         TENZIR_WARN("platform telemetry discovery failed");
-        co_return {};
+        co_return Retry{};
       }
       auto key = co_await folly::coro::detachOnCancel(
         spawn_blocking([path = connection.key_file] {
@@ -174,7 +198,7 @@ public:
       TENZIR_WARN("platform telemetry could not learn the deployment's "
                   "workspace: {}",
                   std::move(identity).unwrap_err());
-      co_return {};
+      co_return Retry{};
     }
     auto& sender = *transport;
     auto response = co_await sender->request(
@@ -189,14 +213,14 @@ public:
           and response.unwrap_err().kind != RequestError::Kind::timeout) {
         transport.reset();
       }
-      co_return {};
+      co_return Retry{};
     }
     auto status = response.unwrap().status;
     if (status == 204) {
       co_return true;
     }
     if (status == 429 or status >= 500) {
-      co_return {};
+      co_return Retry{response.unwrap().retry_after};
     }
     TENZIR_WARN("platform telemetry rejected with HTTP {}", status);
     if (discover_transport and (status == 401 or status == 403)) {
@@ -208,31 +232,27 @@ public:
   }
 
   /// Retries `pending` until the platform answers for good or the batch is
-  /// older than `max_batch_age`. The jitter keeps deployments from retrying in
-  /// lockstep when the platform comes back.
+  /// older than `max_batch_age`. The wait between attempts doubles from
+  /// `min_retry_delay` up to `max_retry_delay`, with jitter, and lasts at least
+  /// as long as the platform asks for.
   auto deliver(Pending const& pending) const -> Task<bool> {
-    struct RetryTelemetry : std::exception {};
-    try {
-      co_return co_await folly::coro::retryWithExponentialBackoff(
-        std::numeric_limits<uint32_t>::max(), min_retry_delay, max_retry_delay,
-        0.1,
-        [this, &pending]() -> Task<bool> {
-          if (std::chrono::steady_clock::now() - pending.created
-              > max_batch_age) {
-            co_return false;
-          }
-          auto result = co_await transmit(pending);
-          if (result) {
-            co_return *result;
-          }
-          co_yield folly::coro::co_error(RetryTelemetry{});
-        },
-        [](folly::exception_wrapper const& error) {
-          return error.is_compatible_with<RetryTelemetry>();
-        });
-    } catch (RetryTelemetry const&) {
-      co_return false;
+    auto backoff = std::chrono::milliseconds{min_retry_delay};
+    while (std::chrono::steady_clock::now() - pending.created
+           <= max_batch_age) {
+      auto outcome = co_await transmit(pending);
+      if (auto* answer = try_as<bool>(outcome)) {
+        co_return *answer;
+      }
+      auto wait = jittered(backoff);
+      if (auto asked = as<Retry>(outcome).after) {
+        wait = std::max(
+          wait, std::chrono::milliseconds{std::min(*asked, max_retry_after)});
+      }
+      co_await folly::coro::sleep(wait);
+      backoff
+        = std::min(backoff * 2, std::chrono::milliseconds{max_retry_delay});
     }
+    co_return false;
   }
 
   auto send() const -> Task<void> {
