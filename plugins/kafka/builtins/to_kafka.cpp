@@ -126,6 +126,24 @@ auto sink_global_defaults() -> record& {
   return defaults;
 }
 
+/// Returns the codec that `to_kafka` compresses messages with by default.
+///
+/// zstd yields the best ratio for JSON-like payloads, but it is an optional
+/// librdkafka feature, and librdkafka rejects codecs it was built without.
+/// lz4 is always bundled, so it serves as the fallback.
+auto default_compression_type() -> std::string {
+  auto conf = std::unique_ptr<RdKafka::Conf>{
+    RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL),
+  };
+  auto error = std::string{};
+  if (conf
+      and conf->set("compression.type", "zstd", error)
+            == RdKafka::Conf::CONF_OK) {
+    return "zstd";
+  }
+  return "lz4";
+}
+
 /// Builds the default `message=` expression used by `to_kafka`.
 auto default_message_expression() -> ast::expression {
   auto function
@@ -678,6 +696,15 @@ public:
     }
     if (not defaults.contains("client.id")) {
       defaults["client.id"] = "tenzir";
+    }
+    // Compress produced messages by default to reduce the bytes sent over the
+    // network. Consumers decompress transparently. librdkafka treats
+    // `compression.codec` as an alias of `compression.type`, so a setting
+    // under either name takes precedence, and so do the `options` that
+    // `to_kafka` applies on top of these defaults.
+    if (not defaults.contains("compression.type")
+        and not defaults.contains("compression.codec")) {
+      defaults["compression.type"] = default_compression_type();
     }
     sink_global_defaults() = std::move(defaults);
     return caf::none;

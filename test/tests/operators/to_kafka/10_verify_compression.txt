@@ -1,0 +1,6 @@
+{
+  line: "to_kafka_compressed compresscodec: zstd",
+}
+{
+  line: "to_kafka_uncompressed compresscodec: none",
+}

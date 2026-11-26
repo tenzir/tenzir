@@ -1,0 +1,9 @@
+// The broker stores record batches with the codec that the producer used.
+// `to_kafka` compresses with zstd by default, unless `options` override it.
+shell r#"for topic in to_kafka_compressed to_kafka_uncompressed; do
+  codec=$("$KAFKA_CONTAINER_RUNTIME" exec "$KAFKA_CONTAINER_ID" sh -c \
+    "/opt/kafka/bin/kafka-dump-log.sh --files /tmp/kafka-logs/$topic-0/*.log" \
+    | grep -o "compresscodec: [a-z0-9]*")
+  echo "$topic $codec"
+done"#
+read_lines

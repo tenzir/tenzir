@@ -1,0 +1,15 @@
+// Setting `compression.type` in `options` overrides the default compression,
+// even for a message that compresses well.
+from_kafka env("KAFKA_TOPIC"),
+           count=1,
+           offset="beginning",
+           options={
+             "bootstrap.servers": env("KAFKA_BOOTSTRAP_SERVERS"),
+             "group.id": "tenzir-test-to-kafka-uncompressed-forward"
+           }
+to_kafka "to_kafka_uncompressed",
+         message=this.message.repeat(100),
+         options={
+           "bootstrap.servers": env("KAFKA_BOOTSTRAP_SERVERS"),
+           "compression.type": "none"
+         }
