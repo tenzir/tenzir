@@ -1,0 +1,4 @@
+// Requests above the compression threshold use gzip by default.
+from {value: "compressed:"}
+to_google_cloud_pubsub project_id="project", topic_id="topic",
+  message=value.pad_end(1000, "x")

@@ -1,0 +1,3 @@
+from {value: "uncompressed:"}
+to_google_cloud_pubsub project_id="project", topic_id="topic",
+  message=value.pad_end(1000, "x"), compress=false

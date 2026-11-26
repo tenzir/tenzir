@@ -1,3 +1,4 @@
+// Requests below the compression threshold stay uncompressed.
 from {keep: true, value: "one"}, {keep: false, value: 42},
      {keep: true, value: ""}, {keep: true, value: "three"}
 where keep

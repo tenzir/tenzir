@@ -1,0 +1,4 @@
+from_file env("PUBSUB_CAPTURE") { read_ndjson }
+bytes = message.length_bytes()
+message = message.slice(end=16)
+sort message

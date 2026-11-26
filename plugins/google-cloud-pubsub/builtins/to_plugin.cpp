@@ -25,7 +25,10 @@ TENZIR_DIAGNOSTIC_PUSH
 TENZIR_DIAGNOSTIC_IGNORE_DEPRECATED
 #include <google/cloud/future.h>
 #include <google/cloud/internal/future_coroutines.h>
+#include <google/cloud/options.h>
+#include <google/cloud/pubsub/options.h>
 #include <google/cloud/pubsub/publisher.h>
+#include <grpc/compression.h>
 TENZIR_DIAGNOSTIC_POP
 
 #include <chrono>
@@ -39,17 +42,23 @@ namespace {
 
 namespace pubsub = ::google::cloud::pubsub;
 
+/// Publish requests below this size in bytes are sent uncompressed, because
+/// they barely shrink. The Java Pub/Sub client uses the same default.
+constexpr auto compression_threshold = size_t{240};
+
 struct to_args {
   location op;
   located<std::string> project_id;
   located<std::string> topic_id;
   ast::expression message;
+  Option<location> compress = {location::unknown};
 
   friend auto inspect(auto& f, to_args& x) -> bool {
     return f.object(x).fields(f.field("op", x.op),
                               f.field("project_id", x.project_id),
                               f.field("topic_id", x.topic_id),
-                              f.field("message", x.message));
+                              f.field("message", x.message),
+                              f.field("compress", x.compress));
   }
 };
 
@@ -90,7 +99,15 @@ public:
                          MetricsDirection::write, MetricsVisibility::external_,
                          MetricsUnit::events);
     auto topic = pubsub::Topic(args_.project_id.inner, args_.topic_id.inner);
-    publisher_.emplace(pubsub::MakePublisherConnection(std::move(topic)));
+    auto options = google::cloud::Options{};
+    if (args_.compress) {
+      // Pub/Sub decompresses gzip-encoded gRPC requests transparently, so
+      // subscribers receive the original message data.
+      options.set<pubsub::CompressionThresholdOption>(compression_threshold)
+        .set<pubsub::CompressionAlgorithmOption>(GRPC_COMPRESS_GZIP);
+    }
+    publisher_.emplace(
+      pubsub::MakePublisherConnection(std::move(topic), std::move(options)));
     co_return;
   }
 
@@ -215,6 +232,7 @@ public:
     d.named("project_id", &to_args::project_id);
     d.named("topic_id", &to_args::topic_id);
     d.named("message", &to_args::message, "string");
+    d.named("compress", &to_args::compress);
     // Every instance opens its own publisher connection, and the sink does
     // not set ordering keys, so Pub/Sub provides no ordering guarantee that
     // replication could weaken.

@@ -1,2 +1,0 @@
-from_file env("PUBSUB_CAPTURE") { read_ndjson }
-sort message

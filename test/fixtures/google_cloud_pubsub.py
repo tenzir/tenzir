@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import gzip
 import importlib
 import json
 import sys
@@ -79,27 +80,49 @@ def google_cloud_pubsub() -> Iterator[dict[str, str]]:
             def ModifyAckDeadline(self, request, context):
                 return Empty()
 
-        class Publisher(rpc.PublisherServicer):
-            def Publish(self, request, context):
-                with lock, capture.open("a") as output:
-                    for message in request.messages:
-                        output.write(
-                            json.dumps(
-                                {
-                                    "topic": request.topic,
-                                    "message": message.data.decode(),
-                                }
-                            )
-                            + "\n"
+        # The server leaves compressed requests compressed, so the capture can
+        # record whether the client used gRPC compression.
+        def decode_publish(data):
+            compressed = data.startswith(b"\x1f\x8b")
+            if compressed:
+                data = gzip.decompress(data)
+            return compressed, pb.PublishRequest.FromString(data)
+
+        def publish(decoded, context):
+            compressed, request = decoded
+            with lock, capture.open("a") as output:
+                for message in request.messages:
+                    output.write(
+                        json.dumps(
+                            {
+                                "topic": request.topic,
+                                "message": message.data.decode(),
+                                "compressed": compressed,
+                            }
                         )
-                return pb.PublishResponse(
-                    message_ids=[str(i) for i in range(len(request.messages))]
+                        + "\n"
+                    )
+            return pb.PublishResponse(
+                message_ids=[str(i) for i in range(len(request.messages))]
+            )
+
+        publisher = grpc.method_handlers_generic_handler(
+            "google.pubsub.v1.Publisher",
+            {
+                "Publish": grpc.unary_unary_rpc_method_handler(
+                    publish,
+                    request_deserializer=decode_publish,
+                    response_serializer=pb.PublishResponse.SerializeToString,
                 )
+            },
+        )
 
         with ThreadPoolExecutor(max_workers=4) as executor:
-            server = grpc.server(executor)
+            server = grpc.server(
+                executor, options=[("grpc.per_message_decompression", 0)]
+            )
             rpc.add_SubscriberServicer_to_server(Subscriber(), server)
-            rpc.add_PublisherServicer_to_server(Publisher(), server)
+            server.add_generic_rpc_handlers((publisher,))
             port = server.add_insecure_port("127.0.0.1:0")
             server.start()
             try:

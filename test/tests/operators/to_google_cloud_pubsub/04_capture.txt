@@ -1,0 +1,30 @@
+{
+  topic: "projects/project/topics/topic",
+  message: "compressed:xxxxx",
+  compressed: true,
+  bytes: 1000,
+}
+{
+  topic: "projects/project/topics/topic",
+  message: "prefix:",
+  compressed: false,
+  bytes: 7,
+}
+{
+  topic: "projects/project/topics/topic",
+  message: "prefix:one",
+  compressed: false,
+  bytes: 10,
+}
+{
+  topic: "projects/project/topics/topic",
+  message: "prefix:three",
+  compressed: false,
+  bytes: 12,
+}
+{
+  topic: "projects/project/topics/topic",
+  message: "uncompressed:xxx",
+  compressed: false,
+  bytes: 1000,
+}
