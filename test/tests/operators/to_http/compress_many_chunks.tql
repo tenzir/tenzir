@@ -1,0 +1,19 @@
+---
+fixtures:
+- http_server:
+    expected:
+    - method: POST
+      path: /options/body
+      body_pattern: '(\{"value":\d+\}\n){5000}'
+      header_name: Content-Encoding
+      header_value: gzip
+timeout: 120
+---
+
+// Many batches yield many body chunks, which must form one gzip stream.
+from {value: 0}
+repeat 5000
+enumerate value
+to_http env("HTTP_FIXTURE_BODY_URL"), compress=true {
+  write_ndjson
+}

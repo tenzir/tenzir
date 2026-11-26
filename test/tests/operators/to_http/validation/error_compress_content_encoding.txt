@@ -1,0 +1,7 @@
+error: `compress=true` conflicts with the `Content-Encoding` header
+ --> tests/operators/to_http/validation/error_compress_content_encoding.tql:8:82
+  |
+8 | to_http "http://127.0.0.1:31337", headers={"Content-Encoding": "gzip"}, compress=true {
+  |                                                                                  ^^^^
+  |
+  = hint: remove `Content-Encoding` from `headers` to let `compress` set it

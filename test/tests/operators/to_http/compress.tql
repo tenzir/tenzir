@@ -1,0 +1,20 @@
+---
+fixtures:
+- http_server:
+    expected:
+    - method: POST
+      path: /options/body
+      body: '{"value":42}
+
+        '
+      header_name: Content-Encoding
+      header_value: gzip
+timeout: 60
+---
+
+from {
+  value: 42,
+}
+to_http env("HTTP_FIXTURE_BODY_URL"), compress=true {
+  write_ndjson
+}

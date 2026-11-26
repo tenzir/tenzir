@@ -1,0 +1,10 @@
+---
+error: true
+---
+
+from {
+  value: 42,
+}
+to_http "http://127.0.0.1:31337", headers={"Content-Encoding": "gzip"}, compress=true {
+  write_ndjson
+}

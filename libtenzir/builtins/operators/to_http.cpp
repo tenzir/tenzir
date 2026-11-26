@@ -28,6 +28,7 @@
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/try.hpp>
 
+#include <arrow/util/compression.h>
 #include <folly/SocketAddress.h>
 #include <folly/coro/Sleep.h>
 #include <folly/io/IOBuf.h>
@@ -79,6 +80,7 @@ struct ToHttpArgs {
   Option<located<uint64_t>> max_retry_count;
   Option<located<duration>> retry_delay;
   Option<located<bool>> buffer_all;
+  Option<location> compress;
   located<ir::pipeline> printer;
   location operator_location;
 };
@@ -194,6 +196,126 @@ auto get_retry_info(folly::exception_wrapper const& error)
   return result;
 }
 
+// -- request body compression ------------------------------------------------
+
+/// Compresses a request body into a single gzip stream, one chunk at a time.
+class GzipBodyStream {
+public:
+  explicit GzipBodyStream(location loc) : loc_{loc} {
+    auto codec = arrow::util::Codec::Create(
+      arrow::Compression::GZIP, arrow::util::kUseDefaultCompressionLevel);
+    TENZIR_ASSERT(codec.ok(), codec.status().ToString());
+    auto compressor = codec.ValueUnsafe()->MakeCompressor();
+    TENZIR_ASSERT(compressor.ok(), compressor.status().ToString());
+    compressor_ = std::move(compressor).ValueUnsafe();
+  }
+
+  /// Compresses `input` and returns the compressed bytes that are ready.
+  ///
+  /// With `flush`, the result contains all of `input`, so that the receiver
+  /// can decode it without waiting for the next chunk.
+  auto compress(chunk_ptr const& input, bool flush, diagnostic_handler& dh)
+    -> failure_or<chunk_ptr> {
+    has_input_ = has_input_ or input->size() > 0;
+    auto result = std::vector<std::byte>{};
+    auto const* data = reinterpret_cast<uint8_t const*>(input->data());
+    auto remaining = detail::narrow<int64_t>(input->size());
+    auto spare = initial_spare;
+    while (remaining > 0) {
+      auto const offset = result.size();
+      result.resize(offset + spare);
+      auto compressed = compressor_->Compress(
+        remaining, data, detail::narrow<int64_t>(spare),
+        reinterpret_cast<uint8_t*>(result.data() + offset));
+      if (not compressed.ok()) {
+        return fail(compressed.status(), dh);
+      }
+      result.resize(offset + detail::narrow<size_t>(compressed->bytes_written));
+      data += compressed->bytes_read;
+      remaining -= compressed->bytes_read;
+      // Without progress, the compressor needs a larger output buffer.
+      if (compressed->bytes_read == 0 and compressed->bytes_written == 0) {
+        spare *= 2;
+      }
+    }
+    if (not flush) {
+      return chunk::make(std::move(result));
+    }
+    return drain(
+      std::move(result),
+      [this](int64_t size, uint8_t* output) {
+        return compressor_->Flush(size, output);
+      },
+      dh);
+  }
+
+  /// Returns whether `compress` received any bytes.
+  auto has_input() const -> bool {
+    return has_input_;
+  }
+
+  /// Ends the gzip stream and returns its remaining bytes.
+  auto finish(diagnostic_handler& dh) -> failure_or<chunk_ptr> {
+    return drain(
+      {},
+      [this](int64_t size, uint8_t* output) {
+        return compressor_->End(size, output);
+      },
+      dh);
+  }
+
+private:
+  static constexpr auto initial_spare = size_t{64} * 1024;
+
+  /// Calls `step` until it has written all of its output to `result`.
+  template <class Step>
+  auto drain(std::vector<std::byte> result, Step step, diagnostic_handler& dh)
+    -> failure_or<chunk_ptr> {
+    auto spare = initial_spare;
+    while (true) {
+      auto const offset = result.size();
+      result.resize(offset + spare);
+      auto written = step(detail::narrow<int64_t>(spare),
+                          reinterpret_cast<uint8_t*>(result.data() + offset));
+      if (not written.ok()) {
+        return fail(written.status(), dh);
+      }
+      result.resize(offset + detail::narrow<size_t>(written->bytes_written));
+      if (not written->should_retry) {
+        return chunk::make(std::move(result));
+      }
+      spare *= 2;
+    }
+  }
+
+  auto fail(arrow::Status const& status, diagnostic_handler& dh) const
+    -> failure {
+    diagnostic::error("failed to compress request body: {}",
+                      status.ToStringWithoutContextLines())
+      .primary(loc_)
+      .emit(dh);
+    return failure::promise();
+  }
+
+  location loc_;
+  std::shared_ptr<arrow::util::Compressor> compressor_;
+  bool has_input_ = false;
+};
+
+/// Rejects a manual `Content-Encoding` header when `compress=true` sets one.
+auto check_content_encoding(ToHttpArgs const& args, Headers const& headers,
+                            diagnostic_handler& dh) -> failure_or<void> {
+  if (not args.compress or not http::find(headers, "Content-Encoding")) {
+    return {};
+  }
+  diagnostic::error("`compress=true` conflicts with the `Content-Encoding` "
+                    "header")
+    .primary(*args.compress)
+    .hint("remove `Content-Encoding` from `headers` to let `compress` set it")
+    .emit(dh);
+  return failure::promise();
+}
+
 // -- operator ----------------------------------------------------------------
 
 constexpr auto body_channel_capacity = size_t{8};
@@ -240,6 +362,13 @@ public:
         co_return;
       }
       headers_ = std::move(*made);
+    }
+    if (check_content_encoding(args_, headers_, ctx.dh()).is_error()) {
+      lifecycle_ = Lifecycle::done;
+      co_return;
+    }
+    if (args_.compress) {
+      gzip_.emplace(*args_.compress);
     }
     if (url_.empty()) {
       diagnostic::error("`url` must not be empty").primary(args_.url).emit(ctx);
@@ -333,8 +462,13 @@ public:
     }
     if (is_buffer_all()) {
       bytes_write_counter_.add(chunk->size());
+      auto encoded = encode(std::move(chunk), false, ctx.dh());
+      if (not encoded) {
+        lifecycle_ = Lifecycle::done;
+        co_return;
+      }
       buffered_body_.append(
-        folly::IOBuf::copyBuffer(chunk->data(), chunk->size()));
+        folly::IOBuf::copyBuffer((*encoded)->data(), (*encoded)->size()));
       co_return;
     }
     if (not body_tx_) {
@@ -344,7 +478,12 @@ public:
       start_request_task(ctx);
     }
     bytes_write_counter_.add(chunk->size());
-    co_await body_tx_->send(std::move(chunk));
+    auto encoded = encode(std::move(chunk), true, ctx.dh());
+    if (not encoded) {
+      lifecycle_ = Lifecycle::done;
+      co_return;
+    }
+    co_await body_tx_->send(std::move(*encoded));
   }
 
   auto await_task(diagnostic_handler&) const -> Task<Any> override {
@@ -370,6 +509,16 @@ public:
 
   auto finish_sub(SubKeyView, OpCtx& ctx) -> Task<void> override {
     if (is_buffer_all()) {
+      // The compressor may still hold all of the body.
+      if (gzip_ and gzip_->has_input()) {
+        auto trailer = gzip_->finish(ctx.dh());
+        if (not trailer) {
+          lifecycle_ = Lifecycle::done;
+          co_return;
+        }
+        buffered_body_.append(
+          folly::IOBuf::copyBuffer((*trailer)->data(), (*trailer)->size()));
+      }
       if (buffered_body_.empty()) {
         std::ignore = response_->send(http::Response{});
       } else {
@@ -377,10 +526,17 @@ public:
       }
       co_return;
     }
-    TENZIR_UNUSED(ctx);
     if (request_started_) {
-      // Send a null chunk as end-of-body sentinel.
       if (body_tx_) {
+        if (gzip_) {
+          auto trailer = gzip_->finish(ctx.dh());
+          if (not trailer) {
+            lifecycle_ = Lifecycle::done;
+            co_return;
+          }
+          co_await body_tx_->send(std::move(*trailer));
+        }
+        // Send a null chunk as end-of-body sentinel.
         co_await body_tx_->send(chunk_ptr{});
       }
     } else {
@@ -413,6 +569,16 @@ private:
 
   auto is_buffer_all() const -> bool {
     return args_.buffer_all and args_.buffer_all->inner;
+  }
+
+  /// Compresses a body chunk with `compress=true` and passes it through
+  /// otherwise.
+  auto encode(chunk_ptr chunk, bool flush, diagnostic_handler& dh)
+    -> failure_or<chunk_ptr> {
+    if (not gzip_) {
+      return chunk;
+    }
+    return gzip_->compress(chunk, flush, dh);
   }
 
   auto start_request_task(OpCtx& ctx) -> void {
@@ -500,6 +666,9 @@ private:
     msg->setSecure(parsed_url_.isSecure());
     for (auto const& [name, value] : headers_) {
       msg->getHeaders().add(name, value);
+    }
+    if (args_.compress) {
+      msg->getHeaders().add(proxygen::HTTP_HEADER_CONTENT_ENCODING, "gzip");
     }
     add_forward_proxy_authorization(msg->getHeaders(), target_form, proxy);
     if (not msg->getHeaders().exists(proxygen::HTTP_HEADER_HOST)) {
@@ -705,6 +874,7 @@ private:
   Option<Sender<chunk_ptr>> body_tx_;
   Option<Receiver<chunk_ptr>> body_rx_;
   folly::IOBufQueue buffered_body_{folly::IOBufQueue::cacheChainLength()};
+  Option<GzipBodyStream> gzip_;
   mutable Arc<Oneshot<http::Response>> response_{std::in_place};
   bool request_started_ = false;
   Lifecycle lifecycle_ = Lifecycle::running;
@@ -754,6 +924,13 @@ public:
         co_return;
       }
       headers_ = std::move(*made);
+    }
+    if (check_content_encoding(args_, headers_, ctx.dh()).is_error()) {
+      lifecycle_ = Lifecycle::done;
+      co_return;
+    }
+    if (args_.compress) {
+      gzip_.emplace(*args_.compress);
     }
     if (url_.empty()) {
       diagnostic::error("`url` must not be empty").primary(args_.url).emit(ctx);
@@ -849,8 +1026,13 @@ public:
     if (is_buffer_all()) {
       // Counted once the buffered request succeeds, not while buffering.
       buffered_bytes_ += chunk->size();
+      auto encoded = encode(std::move(chunk), false, ctx.dh());
+      if (not encoded) {
+        lifecycle_ = Lifecycle::done;
+        co_return;
+      }
       buffered_body_.append(
-        folly::IOBuf::copyBuffer(chunk->data(), chunk->size()));
+        folly::IOBuf::copyBuffer((*encoded)->data(), (*encoded)->size()));
       co_return;
     }
     if (not body_tx_) {
@@ -860,9 +1042,15 @@ public:
       start_request_task(ctx);
     }
     // A streamed body goes out as it is sent, so it counts as sent, even if
-    // the request fails later.
+    // the request fails later. Like the buffered body, it counts before
+    // compression.
     bytes_write_counter_.add(chunk->size());
-    co_await body_tx_->send(std::move(chunk));
+    auto encoded = encode(std::move(chunk), true, ctx.dh());
+    if (not encoded) {
+      lifecycle_ = Lifecycle::done;
+      co_return;
+    }
+    co_await body_tx_->send(std::move(*encoded));
   }
 
   auto await_task(diagnostic_handler&) const -> Task<Any> override {
@@ -891,6 +1079,16 @@ public:
 
   auto finish_sub(SubKeyView, OpCtx& ctx) -> Task<void> override {
     if (is_buffer_all()) {
+      // The compressor may still hold all of the body.
+      if (gzip_ and gzip_->has_input()) {
+        auto trailer = gzip_->finish(ctx.dh());
+        if (not trailer) {
+          lifecycle_ = Lifecycle::done;
+          co_return;
+        }
+        buffered_body_.append(
+          folly::IOBuf::copyBuffer((*trailer)->data(), (*trailer)->size()));
+      }
       if (buffered_body_.empty()) {
         std::ignore = response_->send(http::Response{});
       } else {
@@ -898,10 +1096,17 @@ public:
       }
       co_return;
     }
-    TENZIR_UNUSED(ctx);
     if (request_started_) {
-      // Send a null chunk as end-of-body sentinel.
       if (body_tx_) {
+        if (gzip_) {
+          auto trailer = gzip_->finish(ctx.dh());
+          if (not trailer) {
+            lifecycle_ = Lifecycle::done;
+            co_return;
+          }
+          co_await body_tx_->send(std::move(*trailer));
+        }
+        // Send a null chunk as end-of-body sentinel.
         co_await body_tx_->send(chunk_ptr{});
       }
     } else {
@@ -943,6 +1148,16 @@ private:
 
   auto is_buffer_all() const -> bool {
     return args_.buffer_all and args_.buffer_all->inner;
+  }
+
+  /// Compresses a body chunk with `compress=true` and passes it through
+  /// otherwise.
+  auto encode(chunk_ptr chunk, bool flush, diagnostic_handler& dh)
+    -> failure_or<chunk_ptr> {
+    if (not gzip_) {
+      return chunk;
+    }
+    return gzip_->compress(chunk, flush, dh);
   }
 
   auto start_request_task(OpCtx& ctx) -> void {
@@ -1030,6 +1245,9 @@ private:
     msg->setSecure(parsed_url_.isSecure());
     for (auto const& [name, value] : headers_) {
       msg->getHeaders().add(name, value);
+    }
+    if (args_.compress) {
+      msg->getHeaders().add(proxygen::HTTP_HEADER_CONTENT_ENCODING, "gzip");
     }
     add_forward_proxy_authorization(msg->getHeaders(), target_form, proxy);
     if (not msg->getHeaders().exists(proxygen::HTTP_HEADER_HOST)) {
@@ -1235,6 +1453,7 @@ private:
   Option<Sender<chunk_ptr>> body_tx_;
   Option<Receiver<chunk_ptr>> body_rx_;
   folly::IOBufQueue buffered_body_{folly::IOBufQueue::cacheChainLength()};
+  Option<GzipBodyStream> gzip_;
   uint64_t buffered_bytes_ = 0;
   mutable Arc<Oneshot<http::Response>> response_{std::in_place};
   bool request_started_ = false;
@@ -1263,6 +1482,7 @@ public:
       = d.named("max_retry_count", &ToHttpArgs::max_retry_count);
     auto retry_delay_arg = d.named("retry_delay", &ToHttpArgs::retry_delay);
     d.named("buffer_all", &ToHttpArgs::buffer_all);
+    d.named("compress", &ToHttpArgs::compress);
     auto printer_arg
       = d.pipeline(&ToHttpArgs::printer, SubOptimize::from_downstream);
     d.operator_location(&ToHttpArgs::operator_location);
