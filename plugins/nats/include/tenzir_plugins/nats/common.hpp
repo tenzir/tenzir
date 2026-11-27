@@ -143,4 +143,11 @@ auto configure_folly_event_loop(natsOptions* options,
                                 folly::EventBase& event_base) -> natsStatus;
 auto initialize_folly_event_loop_adapter() -> void;
 
+/// The event base that drives all NATS connections.
+///
+/// nats.c reads, parses, and writes every message of a connection on its event
+/// base, so the connections get a thread of their own rather than one that all
+/// pipelines share.
+auto nats_event_base() -> folly::Executor::KeepAlive<folly::EventBase>;
+
 } // namespace tenzir::plugins::nats

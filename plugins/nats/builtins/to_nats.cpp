@@ -221,8 +221,8 @@ public:
       done_ = true;
       co_return;
     }
-    io_executor_ = ctx.io_executor();
-    auto* evb = io_executor_->getEventBase();
+    event_base_ = nats_event_base();
+    auto* evb = event_base_.get();
     TENZIR_ASSERT(evb);
     auto options = make_nats_options(
       *resolved, args_.tls,
@@ -473,7 +473,7 @@ private:
 
   ToNatsArgs args_;
   mutable Arc<PublishAckFailures> ack_failures_;
-  folly::Executor::KeepAlive<folly::IOExecutor> io_executor_;
+  folly::Executor::KeepAlive<folly::EventBase> event_base_;
   nats_options_ptr options_;
   nats_connection_ptr connection_;
   js_ctx_ptr js_;
@@ -658,7 +658,7 @@ public:
   Publisher(Publisher&&) = delete;
   auto operator=(Publisher&&) -> Publisher& = delete;
 
-  folly::Executor::KeepAlive<folly::IOExecutor> io_executor;
+  folly::Executor::KeepAlive<folly::EventBase> event_base;
   /// One permit per publish that may be in flight. We enforce `_max_pending`
   /// ourselves, because nats.c blocks the publishing thread for up to its
   /// stall wait once the limit is reached, and then fails the publish.
@@ -729,8 +729,8 @@ public:
       done_ = true;
       co_return;
     }
-    publisher_->io_executor = ctx.io_executor();
-    auto* evb = publisher_->io_executor->getEventBase();
+    publisher_->event_base = nats_event_base();
+    auto* evb = publisher_->event_base.get();
     TENZIR_ASSERT(evb);
     auto options = make_nats_options(
       *resolved, args_.tls,

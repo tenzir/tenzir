@@ -439,8 +439,8 @@ public:
       done_ = true;
       co_return;
     }
-    io_executor_ = ctx.io_executor();
-    auto* evb = io_executor_->getEventBase();
+    event_base_ = nats_event_base();
+    auto* evb = event_base_.get();
     TENZIR_ASSERT(evb);
     auto options = make_nats_options(
       *resolved, args_.tls,
@@ -955,7 +955,7 @@ private:
   }
 
   FromNatsArgs args_;
-  folly::Executor::KeepAlive<folly::IOExecutor> io_executor_;
+  folly::Executor::KeepAlive<folly::EventBase> event_base_;
   nats_options_ptr options_;
   nats_connection_ptr connection_;
   js_ctx_ptr js_;
@@ -1126,7 +1126,7 @@ public:
   // Declared in dependency order, so that destruction releases the
   // subscription before the JetStream context and the connection, and the
   // connection before the event base that it runs on.
-  folly::Executor::KeepAlive<folly::IOExecutor> io_executor;
+  folly::Executor::KeepAlive<folly::EventBase> event_base;
   nats_options_ptr options;
   nats_connection_ptr connection;
   js_ctx_ptr js;
@@ -1220,8 +1220,8 @@ public:
       done_ = true;
       co_return;
     }
-    session_->io_executor = ctx.io_executor();
-    auto* evb = session_->io_executor->getEventBase();
+    session_->event_base = nats_event_base();
+    auto* evb = session_->event_base.get();
     TENZIR_ASSERT(evb);
     auto options = make_nats_options(
       *resolved, args_.tls,
