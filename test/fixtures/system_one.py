@@ -163,10 +163,17 @@ def _make_handler(
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
-            self.wfile.write(body)
+            # A client can submit its next request as soon as it receives the
+            # body. Keep arrivals locked out until this request is no longer
+            # counted, rather than waiting for do_POST's finally block.
+            with lock:
+                self.wfile.write(body)
+                state["active"] -= 1
+                self._request_active = False
 
         def do_POST(self) -> None:  # noqa: N802
             with lock:
+                self._request_active = True
                 state["active"] += 1
                 state["arrivals"] += 1
                 state["max_active"] = max(state["max_active"], state["active"])
@@ -177,7 +184,9 @@ def _make_handler(
                 self._handle(arrival, overlapping)
             finally:
                 with lock:
-                    state["active"] -= 1
+                    if self._request_active:
+                        state["active"] -= 1
+                        self._request_active = False
 
         def _handle(self, arrival: int, overlapping: int) -> None:
             path = urlsplit(self.path).path
