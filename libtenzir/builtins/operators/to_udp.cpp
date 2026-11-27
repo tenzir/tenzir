@@ -25,6 +25,7 @@
 #include <tenzir/tql2/eval.hpp>
 
 #include <folly/SocketAddress.h>
+#include <folly/coro/Coroutine.h>
 #include <folly/io/async/AsyncUDPSocket.h>
 
 #include <algorithm>
@@ -40,6 +41,9 @@ namespace tenzir::plugins::to_udp {
 namespace {
 
 constexpr auto request_queue_capacity = uint32_t{1};
+
+/// Datagrams sent before the event base gets to run other work.
+constexpr auto datagrams_per_turn = size_t{256};
 
 struct ToUdpArgs {
   location self;
@@ -222,7 +226,14 @@ private:
         co_return;
       }
       auto diagnostics = collecting_diagnostic_handler{};
+      auto sent_since_yield = size_t{0};
       for (auto const& payload : batch->payloads) {
+        // A batch holds every row of a slice. Let the other sockets and
+        // timers of this shared event base run in between.
+        if (++sent_since_yield == datagrams_per_turn) {
+          sent_since_yield = 0;
+          co_await folly::coro::co_reschedule_on_current_executor;
+        }
         auto iov = iovec{
           const_cast<std::byte*>(payload->data()),
           payload->size(),
@@ -432,7 +443,14 @@ private:
         co_return;
       }
       auto diagnostics = collecting_diagnostic_handler{};
+      auto sent_since_yield = size_t{0};
       for (auto const& payload : batch->payloads) {
+        // A batch holds every row of a slice. Let the other sockets and
+        // timers of this shared event base run in between.
+        if (++sent_since_yield == datagrams_per_turn) {
+          sent_since_yield = 0;
+          co_await folly::coro::co_reschedule_on_current_executor;
+        }
         auto iov = iovec{
           const_cast<std::byte*>(payload->data()),
           payload->size(),
