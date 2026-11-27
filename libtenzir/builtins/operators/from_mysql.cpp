@@ -814,6 +814,12 @@ public:
   /// Upgrade the connection to TLS.
   auto upgrade_to_tls(std::shared_ptr<folly::SSLContext> ctx,
                       std::string const& hostname) -> Task<MysqlResult<void>> {
+    // Buffered plaintext would bypass TLS. The server sends nothing before
+    // the handshake, so there is none.
+    if (read_begin_ != read_end_) {
+      co_return Err{
+        mysql_error::protocol("unexpected data before the TLS handshake")};
+    }
     try {
       transport_
         = Box<folly::coro::Transport>{co_await upgrade_transport_to_tls_client(
@@ -981,20 +987,43 @@ public:
   }
 
 private:
+  /// Fills `buffer` from the read buffer, refilling that from the transport.
+  ///
+  /// Reading on the event base takes a round trip from the operator's thread.
+  /// Reading ahead lets one read serve many small packets, such as rows.
   auto read_exact(folly::MutableByteRange buffer, std::string_view what)
     -> Task<MysqlResult<void>> {
-    auto bytes_read = size_t{0};
-    while (bytes_read < buffer.size()) {
-      auto chunk = co_await co_withExecutor(
-        evb_,
-        transport_->read(folly::MutableByteRange{buffer.data() + bytes_read,
-                                                 buffer.size() - bytes_read},
-                         read_timeout_));
-      if (chunk == 0) {
-        co_return Err{
-          mysql_error::protocol(fmt::format("short {} read", what))};
+    auto filled = size_t{0};
+    while (filled < buffer.size()) {
+      auto const missing = buffer.size() - filled;
+      if (read_begin_ == read_end_ and missing >= read_buffer_.size()) {
+        // Large enough to read in place rather than through the buffer.
+        auto chunk = co_await co_withExecutor(
+          evb_, transport_->read(folly::MutableByteRange{buffer.data() + filled,
+                                                         missing},
+                                 read_timeout_));
+        if (chunk == 0) {
+          co_return Err{
+            mysql_error::protocol(fmt::format("short {} read", what))};
+        }
+        filled += chunk;
+        continue;
       }
-      bytes_read += chunk;
+      if (read_begin_ == read_end_) {
+        read_begin_ = 0;
+        read_end_ = co_await co_withExecutor(
+          evb_, transport_->read(folly::MutableByteRange{read_buffer_.data(),
+                                                         read_buffer_.size()},
+                                 read_timeout_));
+        if (read_end_ == 0) {
+          co_return Err{
+            mysql_error::protocol(fmt::format("short {} read", what))};
+        }
+      }
+      auto const n = std::min(missing, read_end_ - read_begin_);
+      std::memcpy(buffer.data() + filled, read_buffer_.data() + read_begin_, n);
+      read_begin_ += n;
+      filled += n;
     }
     co_return {};
   }
@@ -1010,6 +1039,12 @@ private:
   Box<folly::coro::Transport> transport_;
   folly::EventBase* evb_ = nullptr;
   std::chrono::milliseconds read_timeout_{std::chrono::seconds{30}};
+  /// Bytes read from the transport but not consumed yet, between
+  /// `read_begin_` and `read_end_`.
+  std::vector<unsigned char> read_buffer_
+    = std::vector<unsigned char>(size_t{64} * 1024);
+  size_t read_begin_ = 0;
+  size_t read_end_ = 0;
   uint8_t sequence_id_ = 0;
   MetricsCounter bytes_read_counter_;
   bool is_tls_ = false;
