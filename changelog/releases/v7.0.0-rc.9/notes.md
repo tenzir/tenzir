@@ -50,6 +50,20 @@ The examples in the help now show what you can do with each command, starting wi
 
 *By @mavam.*
 
+### Gzip-compressed request bodies for to_http
+
+The `to_http` operator has a new `compress` option that compresses the request body with gzip and sets the `Content-Encoding: gzip` header. This reduces the bytes sent over the network when the receiving server accepts gzip-encoded request bodies:
+
+```tql
+to_http "https://example.com/ingest", compress=true {
+  write_ndjson
+}
+```
+
+The option defaults to `false`, because many HTTP servers do not decompress request bodies. It works for both streamed and buffered bodies. Streamed bodies remain a single gzip stream whose data the server can decode as each chunk arrives. Combining `compress=true` with a manual `Content-Encoding` header is an error.
+
+*By @jachris.*
+
 ### Homebrew puts tenzir on PATH
 
 Installing Tenzir with `brew install --cask tenzir/tenzir/tenzir` now links the `tenzir` command into Homebrew's `bin` directory, so it is on your `PATH` without adding `/opt/tenzir/bin` by hand. Uninstalling the cask removes the link.
@@ -88,6 +102,74 @@ This pipeline runs as a single PowerQuery:
 ```
 
 Population `stddev` and `variance` rescale PowerQuery's sample `stddev` with `count`, `all` and `any` use conditional counts, and a single `count_distinct` uses two `group` stages excluding `null` (falling back to approximate `estimate_distinct` alongside `stddev`, `variance`, or a second distinct field). These stages run with SentinelOne's semantics: functions and arithmetic treat `null` as `0` or `""`, numbers are doubles, and an aggregation without a group key returns no event for empty input. Use `pushdown=false` to compute them in Tenzir instead.
+
+*By @mavam.*
+
+### Named bindings in load_balance and each
+
+The `load_balance` and `each` operators now accept explicit `$name=<expr>` bindings, matching `group`:
+
+```tql
+load_balance $target=["192.168.0.30:8080", "192.168.0.30:8081"] {
+  to_tcp $target { write_json }
+}
+```
+
+```tql
+each $id=case_id, $ip=ip, parallel=4 {
+  from_file "events.ndjson" { read_ndjson }
+  where src_ip == $ip
+  case_id = $id
+}
+```
+
+In `load_balance`, a named binding replaces the implicit `$over` variable. In `each`, one or more named bindings replace the implicit `$this` variable, keep enclosing bindings in scope when nesting `each`, and let the optimizer push upstream field projections when explicit field expressions replace `this`. The existing `$over` and `$this` shorthands remain supported.
+
+*By @mavam.*
+
+### Named bindings in the group operator
+
+The `group` operator now accepts one or more `$name=<expr>` bindings, exposing each key as a scoped `$name` variable inside its subpipeline:
+
+```tql
+group $hour=ts.floor(1h), $ip=src_ip {
+  summarize first=min(ts), last=max(ts), total=sum(bytes), n=count()
+  ts = $hour
+  ip = $ip
+}
+```
+
+Named bindings avoid packing and unpacking a record through `$group`, keep an enclosing `$group` variable accessible in nested `group` blocks, and preserve the existing single-key `group <expr> { ... }` shorthand.
+
+*By @mavam.*
+
+### Native input from Apache Iceberg tables
+
+The new experimental `from_iceberg` operator reads events from Apache Iceberg tables through a REST catalog, using the same catalog, storage, and authentication options as `to_iceberg`:
+
+```tql
+from_iceberg "security.ocsf",
+  catalog="https://catalog.example.com",
+  token=secret("iceberg_token")
+where class_uid == 1001 and time >= 2026-07-01
+select time, src_endpoint, dst_endpoint
+head 100
+```
+
+`from_iceberg` reads Parquet and Avro data files with schema evolution (column additions, field renames, and type promotions) and Merge-on-Read support (v2 position and equality delete files). Pass `decimal_format="float"` to decode Iceberg `decimal` columns as floating-point numbers instead of the default exact `"string"` representation.
+
+Downstream `where`, `select`, and `head` stages push hints into the operator: conservative hidden-partition and column-metrics pruning skip non-matching manifests and data files while exact TQL predicates still run locally, column projection reads only required columns (including a snapshot-metadata fast path for unfiltered `summarize count()` queries when the manifest list confirms the row count and zero delete files exist, as well as per-file manifest counting for whole-file tasks without delete files), and `head` limits stop reading data files as soon as enough matching rows are emitted.
+
+To keep throughput high on tables with many files in object storage, `from_iceberg` plans manifests in parallel and prefetches upcoming data files concurrently while emitting files in deterministic order, preserving exact checkpoint recovery across restarts.
+
+The operator requests all table snapshots (`snapshot-loading-mode=ALL`) so point-in-time reads (`snapshot_id`, `as_of`, and named branches or tags via `ref`), bounded incremental append scans (`from_snapshot_id`, `to_snapshot_id`), and continuous tailing of new appends (`live=true` with `poll_interval`, defaulting to `10s`) work across catalogs such as Google BigLake that default to loading only referenced snapshots:
+
+```tql
+from_iceberg "security.ocsf",
+  catalog="https://catalog.example.com",
+  live=true,
+  poll_interval=30s
+```
 
 *By @mavam.*
 
@@ -232,6 +314,54 @@ join ip, kind="left", before=1h, on=ts, pick="latest", into=lease {
 
 ## 🔧 Changes
 
+### Automatic Google Cloud authentication for Iceberg operators
+
+`to_iceberg` no longer accepts the `gcp_auth` option. Google Cloud authentication is now enabled automatically when `gcp_service_account_key` or `gcp_project` is set, or when `catalog` points to an `https://*.googleapis.com` endpoint (such as Google BigLake) without an explicit `token`.
+
+In addition, `gs://` table locations automatically resolve through native GCS storage unless explicit S3 settings (`aws_iam`, `catalog_aws_service`, or `s3_endpoint`) are configured.
+
+Before:
+
+```tql
+to_iceberg "showcase.events",
+  catalog="https://biglake.googleapis.com/iceberg/v1/restcatalog",
+  warehouse="gs://tenzir-demo-iceberg",
+  gcp_auth=true,
+  gcp_project="tenzir-demo"
+```
+
+After:
+
+```tql
+to_iceberg "showcase.events",
+  catalog="https://biglake.googleapis.com/iceberg/v1/restcatalog",
+  warehouse="gs://tenzir-demo-iceberg",
+  gcp_project="tenzir-demo"
+```
+
+*By @mavam.*
+
+### Compaction deletes old partitions without reading them
+
+A compaction rule with the pipeline `where false` now deletes a partition whose events are all older than the rule's cutoff without reading the partition first. Previously, such a rule loaded the entire partition into memory, only to drop every event in it. On nodes with large partitions, this could exhaust memory as soon as the node started.
+
+Partitions that also hold events newer than the cutoff, or events without an import time, still run through the pipeline as before.
+
+*By @tobim.*
+
+### Compressed Google Cloud Pub/Sub publish requests
+
+The `to_google_cloud_pubsub` operator now compresses publish requests with gzip by default, which reduces the network traffic sent to Google Cloud Pub/Sub. The operator compresses requests of at least 240 bytes and sends smaller requests uncompressed, because compression does not pay off for them. Pub/Sub decompresses the requests transparently, so subscribers receive the original message data.
+
+Use `compress=false` to restore the previous behavior:
+
+```tql
+to_google_cloud_pubsub project_id="my-project", topic_id="alerts",
+  message=text, compress=false
+```
+
+*By @jachris.*
+
 ### Content-skipping filters and limits after from_microsoft_365_activity
 
 `from_microsoft_365_activity` now uses the operators after it to skip downloads. The Management Activity API cannot filter events, but every event of a content blob carries the same metadata. A `where` on `microsoft_365_activity` therefore decides which blobs the operator downloads, and `head` stops listing and downloading:
@@ -297,6 +427,12 @@ The `read_parquet` and `read_feather` operators now read only the columns that a
 
 *By @mavam.*
 
+### Filters move past if and match when every branch keeps them
+
+A `where` after an `if` or `match` now moves above it when every branch keeps the same filter, even if the condition is expensive or the `match` dispatches on a computed value. This lets filters on common fields, such as a host name, reach the source through OCSF mappings that branch per event type.
+
+*By @mavam.*
+
 ### Filters move past match statements that dispatch on computed values
 
 A `where` after a `match` whose scrutinee is a computed expression, such as `match (name if ready else "")`, now moves above the `match` when it selects a single arm. Previously, such filters stayed behind the `match` as soon as it had more than one arm.
@@ -317,11 +453,40 @@ The `where` now runs before `replace` as `user.name == "alice"`, where a source 
 
 *By @mavam.*
 
+### Gzip-compressed requests in to_google_cloud_monitoring
+
+The `to_google_cloud_monitoring` operator now compresses its requests to the Cloud Monitoring API with gzip, which reduces the network traffic it causes. Set `compress=false` to send uncompressed requests instead.
+
+*By @jachris.*
+
+### Gzip-compressed requests in to_opensearch by default
+
+The `to_opensearch` and `to_elasticsearch` operators now compress request bodies with gzip by default, which reduces the bytes sent over the network. OpenSearch and Elasticsearch decompress these requests transparently.
+
+To send uncompressed requests, for example to a proxy that does not support compressed request bodies, set `compress=false`:
+
+```tql
+to_opensearch "https://opensearch.example.com:9200",
+  action="index",
+  index="main",
+  compress=false
+```
+
+*By @jachris.*
+
 ### Improved performance downstream of read operators
 
 We tuned the size of batches produced by parsers such as `read_json`, `read_csv`, and `read_syslog`. This improves the throughput of the operators that process events downstream of a parser.
 
 *By @IyeOnline.*
+
+### Kafka messages compressed with zstd by default
+
+The `to_kafka` operator now compresses messages with zstd by default, which reduces the bytes sent over the network. Kafka consumers decompress messages transparently, so no changes are needed on the receiving side. Brokers must run Kafka 2.1 or later to accept zstd-compressed messages.
+
+To keep the previous behavior, set `compression.type` explicitly, for example `options={"compression.type": "none"}`, or pick another codec such as `lz4`. A `compression.type` or `compression.codec` in `options` or in `kafka.yaml` takes precedence over the default. The bytes-written metrics continue to count the payload before compression.
+
+*By @jachris.*
 
 ### KQL sources project fields also without pushdown
 
@@ -587,6 +752,26 @@ The buckets count from the epoch, as in TQL, also before 1970. ClickHouse comput
 
 *By @mavam.*
 
+### to_clickhouse compresses inserted data by default
+
+The `to_clickhouse` operator now compresses the data it inserts with ZSTD, which reduces network traffic to ClickHouse at a moderate CPU cost. ClickHouse decompresses the data transparently, so existing pipelines keep working without changes.
+
+Use `compress=false` to send uncompressed data, for example when Tenzir and ClickHouse run on the same host:
+
+```tql
+to_clickhouse table="events", compress=false
+```
+
+*By @jachris.*
+
+### to_google_cloud_logging compresses requests by default
+
+The `to_google_cloud_logging` operator now compresses its write requests to Google Cloud Logging with gzip by default. Cloud Logging decompresses the requests transparently, so this reduces network egress without changing the ingested log entries.
+
+Use the new `compress=false` option to send uncompressed requests, for example when CPU usage matters more than network traffic.
+
+*By @jachris.*
+
 ### Truncated Log Analytics results warn instead of failing
 
 When a query result exceeds the Log Analytics record count or data size limit, by default 500,000 rows or 64 MiB, the service returns the rows it kept together with a partial error. `from_azure_log_analytics` now emits these rows with a single warning instead of failing the pipeline:
@@ -650,11 +835,29 @@ The node now creates fewer, larger partitions. Because the limit now reflects th
 
 *By @tobim.*
 
+### Empty string partition values in to_iceberg
+
+Readers of a table that `to_iceberg` writes now find the rows of a string partition when one of its values is the empty string. Previously, such a value removed the lower bound of the partition from the manifest list. Readers such as PyIceberg then skipped the manifest, so a filter like `k = 'a'` returned no rows, even for values other than the empty string.
+
+*By @zedoraps.*
+
 ### Exact fractional seconds in parsed times
 
 Time literals and parsed time strings could be off by a nanosecond, as their fractional seconds went through a floating-point number that holds them only approximately. For example, `2024-01-01T00:00:00.000001` meant `2024-01-01T00:00:00.000000999`. Such times now mean exactly what they spell, in literals, in `time()`, and in parsers such as `read_syslog`.
 
 *By @mavam.*
+
+### Faster from_mysql on large result sets
+
+The `from_mysql` operator now reads query results in larger blocks instead of making two network reads per row. This makes reading large result sets faster and reduces the load on network threads that other pipelines share.
+
+*By @jachris.*
+
+### Faster from_splunk on large result sets
+
+The `from_splunk` operator now splits Splunk responses into results in time linear in the response size. Previously, a response chunk with many results took time quadratic in their number to process.
+
+*By @jachris.*
 
 ### Kafka consumers stay in their group under backpressure
 
@@ -680,6 +883,18 @@ The `subscribe` operator uses less CPU. Its `schema_id` metrics values now match
 
 *By @IyeOnline.*
 
+### Lower CPU usage of from_nic on busy interfaces
+
+The `from_nic` operator no longer copies all packets it has buffered so far whenever it captures another packet. On busy interfaces, this made packet capture far more CPU-intensive than necessary and could delay other network I/O in the same process.
+
+*By @jachris.*
+
+### NATS operators use a thread of their own
+
+The `from_nats` and `to_nats` operators now handle their connections on a dedicated thread. Previously, a busy NATS connection kept a network thread that other pipelines share occupied, and adding or removing events of a connection from another thread was not properly synchronized.
+
+*By @jachris.*
+
 ### Non-ASCII varchar text from SQL Server
 
 `from_microsoft_sql` now decodes `varchar`, `char`, and `text` values by the code page of their collation, so non-ASCII text such as `élan` arrives as valid UTF-8 instead of raw code page bytes. Previously, string functions in the pipeline returned `null` for such values.
@@ -697,6 +912,12 @@ When a workspace's lock is unreadable, misses a dependency, or names a package t
 A degree of parallelism of `max` now respects the CPU limit of a container. Previously, it used the number of CPUs of the host, so a container limited to 2 CPUs on a 64-core host ran 64 instances of every parallelizable operator. Now `max` is the number of CPUs that the process may run on, capped by the CPU quota of its cgroup and rounded up.
 
 *By @jachris.*
+
+### Partition values with special characters in to_iceberg
+
+The `to_iceberg` operator now writes data files that `from_iceberg` and other engines can read when a partition value contains a character that the partition path percent-encodes, such as a space or a slash. The operator stores such a file under the literal location that the table metadata records, for example `…/k=a%20b/…`. Files that an earlier version stored under the decoded name remain readable.
+
+*By @zedoraps.*
 
 ### Platform connection drops behind load balancers and under load
 
@@ -755,6 +976,26 @@ The Check Point dialect also accepts records that it previously rejected:
 - A tab between a structured-data element and the message.
 
 *By @zedoraps.*
+
+### Table creation on Amazon S3 Tables in to_iceberg
+
+The `to_iceberg` operator now creates tables in an Amazon S3 Tables catalog. Previously, creating a table failed with the error `stage-create is a required field and cannot be null`, while appending to an existing table worked.
+
+*By @zedoraps.*
+
+### to_udp shares its I/O thread fairly
+
+The `to_udp` operator now pauses every 256 datagrams to let other network I/O on the same thread proceed. Previously, a large batch of events delayed network traffic of other pipelines until all of its datagrams were sent.
+
+*By @jachris.*
+
+### Uninterrupted ingestion during rebuilds with many schemas
+
+Ingestion no longer stalls for minutes while a rebuild runs on a node that stores many distinct schemas.
+
+Previously, while a rebuild was in progress, the node spent over a second choosing its next batch after every newly written partition. On a node with hundreds of schema variants and around 100,000 partitions, this kept the partition bookkeeping fully busy, so incoming events piled up and sources stopped receiving data until the rebuild finished.
+
+*By @tobim.*
 
 ### Zeek TSV round trip with write_zeek_tsv and read_zeek_tsv
 
