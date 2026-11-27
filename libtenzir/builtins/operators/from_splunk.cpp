@@ -772,15 +772,19 @@ auto run_export_request_events(
       co_return false;
     }
     buffer += chunk;
+    // Erase the processed lines at once: erasing each one would move the rest
+    // of the buffer per line.
+    auto begin = size_t{0};
     auto pos = size_t{};
-    while ((pos = buffer.find('\n')) != std::string::npos) {
-      auto const line = std::string_view{buffer.data(), pos};
+    while ((pos = buffer.find('\n', begin)) != std::string::npos) {
+      auto const line = std::string_view{buffer}.substr(begin, pos - begin);
       if (co_await process_line(line)) {
         stopped = true;
         co_return true;
       }
-      buffer.erase(0, pos + 1);
+      begin = pos + 1;
     }
+    buffer.erase(0, begin);
     if (not records.empty()) {
       co_await queue->enqueue(EventResultBatch{std::move(records)});
       records.clear();
