@@ -8,8 +8,10 @@
 
 #include "tenzir/concepts.hpp"
 #include "tenzir/data.hpp"
+#include "tenzir/detail/saturating_arithmetic.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/ir.hpp"
+#include "tenzir/ir_expr_props.hpp"
 #include "tenzir/nova/const_eval.hpp"
 #include "tenzir/nova/eval.hpp"
 #include "tenzir/nova/function_plugin.hpp"
@@ -71,31 +73,6 @@ auto is_operation(ast::expression const& expr) -> bool {
          or is<ast::index_expr>(expr) or is<ast::format_expr>(expr);
 }
 
-/// Returns whether `expr` is a constant, or a list or record literal that holds
-/// only such values. The evaluator repeats the value of such a literal for all
-/// rows instead of building it row by row.
-auto is_constant_literal(ast::expression const& expr) -> bool {
-  return expr.match(
-    [](ast::constant const&) {
-      return true;
-    },
-    [](ast::list const& x) {
-      return std::ranges::all_of(x.items, [](auto const& item) {
-        auto const* element = try_as<ast::expression>(item);
-        return element and is_constant_literal(*element);
-      });
-    },
-    [](ast::record const& x) {
-      return std::ranges::all_of(x.items, [](auto const& item) {
-        auto const* field = try_as<ast::record::field>(item);
-        return field and is_constant_literal(field->expr);
-      });
-    },
-    [](auto const&) {
-      return false;
-    });
-}
-
 /// Returns whether the evaluator accepts `x` when the pipeline starts. It
 /// instantiates every function call up front, even in operands that it never
 /// evaluates, and a call that it rejects, such as `int(x, base=3)`, fails the
@@ -129,96 +106,6 @@ auto is_evaluable(auto const& value) -> bool {
     []<class T>(T const&) {
       return not concepts::one_of<T, pattern, enumeration, map, secret>;
     });
-}
-
-/// Returns whether evaluating `x` never fails the pipeline, so that a
-/// predicate may omit `x` although the runtime evaluates it. A function can
-/// fail depending on its input, such as `slice(x, stride=-1)` for a string,
-/// so `x` must not call any.
-auto is_removable(ast::expression const& x) -> bool {
-  auto const is_removable_item = [](auto const& item) {
-    return tenzir::match(
-      item,
-      [](ast::expression const& expr) {
-        return is_removable(expr);
-      },
-      [](ast::record::field const& field) {
-        return is_removable(field.expr);
-      },
-      [](ast::spread const& spread) {
-        return is_removable(spread.expr);
-      });
-  };
-  return x.match(
-    [](ast::constant const& y) {
-      return is_evaluable(y.value);
-    },
-    [](ast::this_ const&) {
-      return true;
-    },
-    [](ast::root_field const&) {
-      return true;
-    },
-    [](ast::meta const&) {
-      return true;
-    },
-    [](ast::field_access const& y) {
-      return is_removable(y.left);
-    },
-    [](ast::index_expr const& y) {
-      return is_removable(y.expr) and is_removable(y.index);
-    },
-    [](ast::binary_expr const& y) {
-      return is_removable(y.left) and is_removable(y.right);
-    },
-    [](ast::unary_expr const& y) {
-      return is_removable(y.expr);
-    },
-    [&](ast::record const& y) {
-      // The evaluator rejects a record literal with several spreads.
-      auto const spreads = std::ranges::count_if(y.items, [](auto const& item) {
-        return is<ast::spread>(item);
-      });
-      return spreads <= 1 and std::ranges::all_of(y.items, is_removable_item);
-    },
-    [&](ast::list const& y) {
-      return std::ranges::all_of(y.items, is_removable_item);
-    },
-    [](ast::format_expr const& y) {
-      return std::ranges::all_of(
-        y.segments, [](ast::format_expr::segment const& segment) {
-          auto const* replacement
-            = try_as<ast::format_expr::replacement>(segment);
-          return not replacement or is_removable(replacement->expr);
-        });
-    },
-    [](auto const&) {
-      return false;
-    });
-}
-
-/// Detects a `move`, which removes the field that it reads.
-class MoveFinder final : public ast::visitor<MoveFinder> {
-public:
-  template <class T>
-  auto visit(T& x) -> void {
-    enter(x);
-  }
-
-  auto visit(ast::unary_expr& x) -> void {
-    found = found or x.op == ast::unary_op::move;
-    enter(x);
-  }
-
-  bool found = false;
-};
-
-/// Returns whether `x` contains a `move`.
-auto moves(ast::expression const& x) -> bool {
-  auto finder = MoveFinder{};
-  // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
-  finder.visit(const_cast<ast::expression&>(x));
-  return finder.found;
 }
 
 /// What the simplifier learns about an expression while simplifying it.
@@ -577,18 +464,22 @@ private:
     }
     auto const* plugin
       = dynamic_cast<nova::FunctionPlugin const*>(&reg_.get(*call));
-    if (not plugin) {
+    if (not plugin or plugin->volatility() != Volatility::immutable) {
       return None{};
     }
     for (auto const& arg : call->args) {
       auto const* named = try_as<ast::assignment>(arg);
+      if (named) {
+        auto const* name = try_as<ast::root_field>(named->left);
+        if (not name or name->has_question_mark) {
+          return None{};
+        }
+      }
       auto const& value = named ? named->right : arg;
-      if (not is_removable(value) or moves(value)) {
+      auto const props = ir::analyze(value, reg_);
+      if (not props.is_tql_infallible() or not props.is_duplicable()) {
         return None{};
       }
-    }
-    if (not base->is_deterministic(reg_)) {
-      return None{};
     }
     std::ranges::reverse(path);
     return CallAccess{*base, *call, *plugin, std::move(path)};
@@ -683,7 +574,10 @@ private:
     // even if a description reads its own call again.
     auto reserved = size_t{0};
     for (auto const& [guard, value] : *cases) {
-      reserved += ir::expression_size(guard) + ir::expression_size(value);
+      reserved = detail::saturating_add<size_t>(
+        reserved, ir::analyze(guard, reg_).node_count);
+      reserved = detail::saturating_add<size_t>(
+        reserved, ir::analyze(value, reg_).node_count);
     }
     if (reserved > rewrite_budget_) {
       return false;
@@ -738,7 +632,7 @@ private:
 
   /// Replaces `x` by `replacement` if the rewrite budget suffices.
   auto commit(ast::expression& x, ast::expression replacement) -> bool {
-    auto const size = ir::expression_size(replacement);
+    auto const size = size_t{ir::analyze(replacement, reg_).node_count};
     if (size > rewrite_budget_) {
       return false;
     }
@@ -763,7 +657,8 @@ private:
       return {.rejected = true};
     }
     auto properties = Properties{
-      .constant = x.fn.ref.resolved() and reg_.get(x).is_deterministic(),
+      .constant = x.fn.ref.resolved()
+                  and reg_.get(x).volatility() == Volatility::immutable,
       .evaluable = true,
       // The function may fail depending on its input.
       .removable = false,
@@ -941,64 +836,6 @@ private:
   size_t rewrite_budget_ = ir::max_rewritten_predicate_size;
 };
 
-/// Counts the expression nodes of an expression.
-class SizeCounter final : public ast::visitor<SizeCounter> {
-public:
-  template <class T>
-  auto visit(T& x) -> void {
-    enter(x);
-  }
-
-  auto visit(ast::expression& x) -> void {
-    ++size;
-    enter(x);
-  }
-
-  size_t size = 0;
-};
-
-/// Finds the parts of an expression whose evaluation costs more than reading
-/// fields and combining them with operators.
-class CostFinder final : public ast::visitor<CostFinder> {
-public:
-  explicit CostFinder(registry const& reg) : reg_{reg} {
-  }
-
-  template <class T>
-  auto visit(T& x) -> void {
-    enter(x);
-  }
-
-  auto visit(ast::function_call& x) -> void {
-    if (not x.fn.ref.resolved() or not reg_.get(x).is_cheap()) {
-      ++expensive;
-    }
-    enter(x);
-  }
-
-  auto visit(ast::lambda_expr& x) -> void {
-    ++expensive;
-    enter(x);
-  }
-
-  auto visit(ast::pipeline_expr&) -> void {
-    ++expensive;
-  }
-
-  /// A format string stringifies its values, which may be nested, and builds a
-  /// new string.
-  auto visit(ast::format_expr& x) -> void {
-    ++expensive;
-    enter(x);
-  }
-
-  /// The number of expensive parts, including those nested in others.
-  size_t expensive = 0;
-
-private:
-  registry const& reg_;
-};
-
 /// Replaces package `let` references by their cached values where the
 /// evaluator accepts them. The simplifier keeps the references, but a
 /// condition that only reads them is constant.
@@ -1078,61 +915,8 @@ auto ir::constant_condition(ast::expression const& condition,
   return as_bool(simplified);
 }
 
-auto ir::expression_size(ast::expression const& expr) -> size_t {
-  auto counter = SizeCounter{};
-  // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
-  counter.visit(const_cast<ast::expression&>(expr));
-  return counter.size;
-}
-
-auto ir::is_plain(ast::expression const& expr) -> bool {
-  return expr.match(
-    [](ast::constant const&) {
-      return true;
-    },
-    [&](ast::list const&) {
-      return is_constant_literal(expr);
-    },
-    [&](ast::record const&) {
-      return is_constant_literal(expr);
-    },
-    [](ast::meta const&) {
-      return true;
-    },
-    [](ast::this_ const&) {
-      return true;
-    },
-    [](ast::root_field const&) {
-      return true;
-    },
-    [](ast::field_access const& x) {
-      return is_plain(x.left);
-    },
-    [](ast::index_expr const& x) {
-      return is_plain(x.expr) and is<ast::constant>(x.index);
-    },
-    [](auto const&) {
-      return false;
-    });
-}
-
-auto ir::count_expensive(ast::expression const& expr, registry const& reg)
-  -> size_t {
-  auto finder = CostFinder{reg};
-  // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
-  finder.visit(const_cast<ast::expression&>(expr));
-  return finder.expensive;
-}
-
-auto ir::is_cheap(ast::expression const& expr, registry const& reg) -> bool {
-  return count_expensive(expr, reg) == 0;
-}
-
-auto ir::is_infallible(ast::expression const& expr) -> bool {
-  return is_removable(expr);
-}
-
-auto ir::conjoin_filter(OptimizeFilter filter) -> ast::expression {
+auto ir::conjoin_filter(OptimizeFilter filter, registry const& reg)
+  -> ast::expression {
   if (filter.empty()) {
     return ast::constant{true, location::unknown};
   }
@@ -1141,7 +925,7 @@ auto ir::conjoin_filter(OptimizeFilter filter) -> ast::expression {
     // The chain evaluates `predicate` only if `result` is `true`, and so does
     // `predicate if result else false`. `result and predicate` also evaluates
     // it if `result` is `null`, which is harmless only if it cannot fail.
-    if (is_removable(predicate)) {
+    if (ir::analyze(predicate, reg).is_tql_infallible()) {
       result = ast::binary_expr{std::move(result), ast::binary_op::and_,
                                 std::move(predicate)};
       continue;

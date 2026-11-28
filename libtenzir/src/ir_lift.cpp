@@ -9,8 +9,10 @@
 #include "tenzir/ir_lift.hpp"
 
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/detail/saturating_arithmetic.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/ir.hpp"
+#include "tenzir/ir_expr_props.hpp"
 #include "tenzir/nova/events.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/tql2/ast.hpp"
@@ -27,57 +29,6 @@
 namespace tenzir {
 
 namespace {
-
-/// Checks whether evaluating an expression again yields the same value.
-class RepeatabilityChecker final : public ast::visitor<RepeatabilityChecker> {
-public:
-  explicit RepeatabilityChecker(registry const& reg) : reg_{reg} {
-  }
-
-  template <class T>
-  auto visit(T& x) -> void {
-    enter(x);
-  }
-
-  auto visit(ast::unary_expr& x) -> void {
-    // A `move` removes the field that it reads.
-    repeatable = repeatable and x.op != ast::unary_op::move;
-    enter(x);
-  }
-
-  auto visit(ast::function_call& x) -> void {
-    repeatable
-      = repeatable and x.fn.ref.resolved() and reg_.get(x).is_deterministic();
-    for (auto& arg : x.args) {
-      // A named argument is an assignment.
-      if (auto* named = try_as<ast::assignment>(arg)) {
-        visit(named->right);
-      } else {
-        visit(arg);
-      }
-    }
-  }
-
-  auto visit(ast::assignment&) -> void {
-    // An assignment in place of a value only warns, and the evaluator does
-    // not support it inside other expressions.
-    repeatable = false;
-  }
-
-  auto visit(ast::dollar_var&) -> void {
-    // A variable that is still unbound has no value yet.
-    repeatable = false;
-  }
-
-  auto visit(ast::pipeline_expr&) -> void {
-    repeatable = false;
-  }
-
-  bool repeatable = true;
-
-private:
-  registry const& reg_;
-};
 
 auto as_bool(ast::expression const& expr) -> Option<bool> {
   auto const* constant = try_as<ast::constant>(expr);
@@ -201,10 +152,12 @@ auto make_keys(ir::OptimizeFilter const& filter)
   return keys;
 }
 
-auto filter_size(ir::OptimizeFilter const& filter) -> size_t {
+auto filter_size(ir::OptimizeFilter const& filter, registry const& reg)
+  -> size_t {
   auto result = size_t{0};
   for (auto const& predicate : filter) {
-    result += ir::expression_size(predicate);
+    result = detail::saturating_add<size_t>(
+      result, ir::analyze(predicate, reg).node_count);
   }
   return result;
 }
@@ -335,14 +288,6 @@ auto ir::returns_events(pipeline const& branch, registry const& reg)
   return output->is<table_slice>() or output->is<nova::Events>();
 }
 
-auto ir::is_repeatable(ast::expression const& expr, registry const& reg)
-  -> bool {
-  auto checker = RepeatabilityChecker{reg};
-  // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
-  checker.visit(const_cast<ast::expression&>(expr));
-  return checker.repeatable;
-}
-
 auto ir::same_filter(OptimizeFilter const& lhs, OptimizeFilter const& rhs)
   -> bool {
   if (lhs.size() != rhs.size()) {
@@ -407,7 +352,8 @@ auto ir::lift_common_branch_filters(std::vector<OptimizeFilter>& filters,
       at_front_of_all = at_front_of_all and positions[k] == 0;
     }
     if (not in_all
-        or (not at_front_of_all and not is_infallible(first_filter[idx]))) {
+        or (not at_front_of_all
+            and not ir::analyze(first_filter[idx], reg).is_tql_infallible())) {
       ++idx;
       continue;
     }
@@ -430,7 +376,7 @@ auto ir::lift_branch_filters(std::vector<RoutedBranch> routed,
   for (auto& branch : routed) {
     auto const last = filters.size() + 1 == routed.size();
     TENZIR_ASSERT(last != branch.condition.has_value());
-    largest = std::max(largest, filter_size(branch.filter));
+    largest = std::max(largest, filter_size(branch.filter, reg));
     filters.push_back(std::move(branch.filter));
   }
   auto prefix = lift_common_branch_filters(filters, reg);
@@ -503,7 +449,7 @@ auto ir::lift_branch_filters(std::vector<RoutedBranch> routed,
     routed_filter = std::move(branches.back().filter);
   } else {
     auto rest_source = filter_location(branches.back().filter);
-    auto rest = conjoin_filter(std::move(branches.back().filter));
+    auto rest = conjoin_filter(std::move(branches.back().filter), reg);
     for (auto& branch : std::views::reverse(branches) | std::views::drop(1)) {
       auto condition = std::move(*branch.condition);
       auto const source = filter_location(branch.filter);
@@ -514,7 +460,7 @@ auto ir::lift_branch_filters(std::vector<RoutedBranch> routed,
           routed_filter = std::move(branch.filter);
           break;
         }
-        rest = conjoin_filter(std::move(branch.filter));
+        rest = conjoin_filter(std::move(branch.filter), reg);
         relocate(rest, source);
         rest_source = source;
       } else if (branch.filter.empty()) {
@@ -523,7 +469,7 @@ auto ir::lift_branch_filters(std::vector<RoutedBranch> routed,
                        rest_source);
       } else {
         rest_source = source.combine(rest_source);
-        rest = make_if_else(conjoin_filter(std::move(branch.filter)),
+        rest = make_if_else(conjoin_filter(std::move(branch.filter), reg),
                             std::move(condition), std::move(rest), source,
                             rest_source);
       }
@@ -538,7 +484,8 @@ auto ir::lift_branch_filters(std::vector<RoutedBranch> routed,
   result.insert(result.end(), std::move_iterator{suffix.begin()},
                 std::move_iterator{suffix.end()});
   result = simplify_filter(std::move(result), reg);
-  if (filter_size(result) > std::max(max_rewritten_predicate_size, largest)) {
+  if (filter_size(result, reg)
+      > std::max(max_rewritten_predicate_size, largest)) {
     return None{};
   }
   return result;

@@ -873,6 +873,10 @@ public:
     return false;
   }
 
+  auto volatility() const -> Volatility override {
+    return Volatility::stable;
+  }
+
   auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     TRY(argument_parser2::function("now").parse(inv, ctx));

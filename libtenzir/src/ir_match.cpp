@@ -12,6 +12,7 @@
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/narrow.hpp"
+#include "tenzir/ir_expr_props.hpp"
 #include "tenzir/ir_lift.hpp"
 #include "tenzir/nova/array.hpp"
 #include "tenzir/nova/bitmap.hpp"
@@ -742,8 +743,8 @@ auto arm_condition(MatchArgs::Arm const& arm, ast::expression const& scrutinee,
     return condition;
   }
   // Evaluating the guard again must be cheap, as for the scrutinee.
-  if (not ir::is_repeatable(*arm.guard, reg)
-      or not ir::is_cheap(*arm.guard, reg)) {
+  auto const guard_props = ir::analyze(*arm.guard, reg);
+  if (not guard_props.is_duplicable() or not guard_props.is_cheap()) {
     return None{};
   }
   if (not condition) {
@@ -1028,7 +1029,8 @@ private:
     TENZIR_ASSERT(args_.arms.back().wildcard);
     // The scrutinee and the guards must yield the same values when `match`
     // evaluates them again.
-    if (not ir::is_repeatable(args_.scrutinee, reg)) {
+    auto const scrutinee_props = ir::analyze(args_.scrutinee, reg);
+    if (not scrutinee_props.is_duplicable()) {
       return None{};
     }
     // Every arm but the wildcard arm, which takes the remaining events, needs
@@ -1067,7 +1069,7 @@ private:
     // evaluates it again. An expensive function call, such as a parser, would
     // repeat expensive work, and so would copying other computations several
     // times.
-    if (not ir::is_plain(args_.scrutinee)) {
+    if (not scrutinee_props.is_plain()) {
       auto comparisons = size_t{0};
       for (auto i = size_t{0}; i < args_.arms.size(); ++i) {
         if (removed[i] or args_.arms[i].wildcard) {
@@ -1087,7 +1089,7 @@ private:
         }
       }
       if (comparisons > 1
-          or (comparisons > 0 and not ir::is_cheap(args_.scrutinee, reg))) {
+          or (comparisons > 0 and not scrutinee_props.is_cheap())) {
         return None{};
       }
     }

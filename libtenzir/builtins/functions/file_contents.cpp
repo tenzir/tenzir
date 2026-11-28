@@ -135,6 +135,10 @@ struct file_contents final : public nova::FunctionPlugin {
     return false;
   }
 
+  auto volatility() const -> Volatility override {
+    return Volatility::stable;
+  }
+
   auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto path = located<std::string>{};

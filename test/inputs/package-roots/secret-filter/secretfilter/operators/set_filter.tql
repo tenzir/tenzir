@@ -1,0 +1,10 @@
+---
+description: "Assign a secret argument into a field and filter on its censored value"
+args:
+  positional:
+    - name: value
+      type: secret
+---
+
+x = $value
+where x == "***"

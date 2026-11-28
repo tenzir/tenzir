@@ -24,10 +24,6 @@ namespace tenzir::ir {
 auto returns_events(pipeline const& branch, registry const& reg)
   -> Option<bool>;
 
-/// Returns whether evaluating `expr` again for the same event yields the same
-/// value, which requires that it is deterministic and moves no field.
-auto is_repeatable(ast::expression const& expr, registry const& reg) -> bool;
-
 /// A branch of an operator that routes each event to the first branch whose
 /// condition is `true`, such as `if` and `match`.
 struct RoutedBranch {
@@ -63,8 +59,8 @@ auto lift_common_branch_filters(std::vector<OptimizeFilter>& filters,
 /// for `OptimizeRequest::filter`. Returns `None` if the result would exceed
 /// both `max_rewritten_predicate_size` and the largest branch filter.
 ///
-/// The conditions must be repeatable, as in `is_repeatable`, because the
-/// routing operator evaluates them again.
+/// The conditions must be duplicable, as in `ExprProps::is_duplicable`,
+/// because the routing operator evaluates them again.
 auto lift_branch_filters(std::vector<RoutedBranch> branches,
                          registry const& reg) -> Option<OptimizeFilter>;
 

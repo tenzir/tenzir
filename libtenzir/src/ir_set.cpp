@@ -13,6 +13,7 @@
 #include "tenzir/detail/enumerate.hpp"
 #include "tenzir/detail/heterogeneous_string_hash.hpp"
 #include "tenzir/detail/narrow.hpp"
+#include "tenzir/ir_expr_props.hpp"
 #include "tenzir/nova/array.hpp"
 #include "tenzir/nova/array_builder.hpp"
 #include "tenzir/nova/bitmap.hpp"
@@ -1177,23 +1178,6 @@ auto access_field(ast::expression const& base, Segments path)
   return append_path(base, path);
 }
 
-/// Detects a `move` that `resolve_move_keyword` left in place, such as one
-/// within a lambda.
-class MoveFinder final : public ast::visitor<MoveFinder> {
-public:
-  template <class T>
-  auto visit(T& x) -> void {
-    enter(x);
-  }
-
-  auto visit(ast::unary_expr& x) -> void {
-    found = found or x.op == ast::unary_op::move;
-    enter(x);
-  }
-
-  bool found = false;
-};
-
 /// Resolves the fields and metadata of a `set`'s output to expressions over
 /// its input.
 ///
@@ -1366,13 +1350,7 @@ private:
   /// Returns whether the predicate may evaluate `expr` in place of the
   /// assignment, which requires the same value and no side effects.
   auto substitutable(ast::expression const& expr) const -> bool {
-    if (not expr.is_deterministic(*registry_)) {
-      return false;
-    }
-    auto finder = MoveFinder{};
-    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
-    finder.visit(const_cast<ast::expression&>(expr));
-    return not finder.found;
+    return ir::analyze(expr, *registry_).is_duplicable();
   }
 
   Ref<registry const> registry_;
@@ -1492,8 +1470,9 @@ auto ir::SetIr::rewrite_aggregate(QueryStage::Aggregate aggregate,
     // the pipeline. This includes targets that type inference rejects, such
     // as `move this` with Nova events.
     auto dh = null_diagnostic_handler{};
-    if (not ir::is_infallible(assignment.left)
-        or not(rewrite.reached(i) or ir::is_infallible(assignment.right))
+    if (not ir::analyze(assignment.left, octx.reg).is_tql_infallible()
+        or not(rewrite.reached(i)
+               or ir::analyze(assignment.right, octx.reg).is_tql_infallible())
         or not validate_nova_target(assignment, dh)) {
       return None{};
     }

@@ -8,6 +8,7 @@
 
 #include <tenzir/builtins/join/common.hpp>
 #include <tenzir/detail/narrow.hpp>
+#include <tenzir/ir_expr_props.hpp>
 #include <tenzir/nova/bitmap_iteration.hpp>
 #include <tenzir/nova/eval_util.hpp>
 #include <tenzir/nova/materialize.hpp>
@@ -58,121 +59,9 @@ auto is_comparison_or_logical_expr(ast::expression const& expr) -> bool {
   return false;
 }
 
-auto is_pure_constant_impl(ast::expression const& expr, registry const& reg,
-                           std::vector<std::string_view>& bound_params)
-  -> bool {
-  return match(
-    *expr.kind,
-    [](ast::constant const&) {
-      return true;
-    },
-    [](ast::pkg_dollar_var const&) {
-      return true;
-    },
-    [](ast::type_expr const&) {
-      return true;
-    },
-    [](ast::underscore const&) {
-      return true;
-    },
-    [&](ast::root_field const& field) {
-      return std::ranges::contains(bound_params, field.id.name);
-    },
-    [&](ast::unary_expr const& un) {
-      return is_pure_constant_impl(un.expr, reg, bound_params);
-    },
-    [&](ast::binary_expr const& bin) {
-      return is_pure_constant_impl(bin.left, reg, bound_params)
-             and is_pure_constant_impl(bin.right, reg, bound_params);
-    },
-    [&](ast::field_access const& access) {
-      return is_pure_constant_impl(access.left, reg, bound_params);
-    },
-    [&](ast::index_expr const& idx) {
-      return is_pure_constant_impl(idx.expr, reg, bound_params)
-             and is_pure_constant_impl(idx.index, reg, bound_params);
-    },
-    [&](ast::unpack const& u) {
-      return is_pure_constant_impl(u.expr, reg, bound_params);
-    },
-    [&](ast::assignment const& assign) {
-      return is_pure_constant_impl(assign.right, reg, bound_params);
-    },
-    [&](ast::lambda_expr const& lambda) {
-      auto const saved = bound_params.size();
-      for (auto const& param : lambda.params) {
-        bound_params.push_back(param.name);
-      }
-      auto const result = is_pure_constant_impl(lambda.body, reg, bound_params);
-      bound_params.resize(saved);
-      return result;
-    },
-    [&](ast::function_call const& call) {
-      if (not call.fn.ref.resolved() or not reg.get(call).is_deterministic()) {
-        return false;
-      }
-      return std::ranges::all_of(call.args, [&](ast::expression const& arg) {
-        return is_pure_constant_impl(arg, reg, bound_params);
-      });
-    },
-    [&](ast::format_expr const& fmt_expr) {
-      return std::ranges::all_of(
-        fmt_expr.segments, [&](ast::format_expr::segment const& seg) {
-          return match(
-            seg,
-            [](std::string const&) {
-              return true;
-            },
-            [&](ast::format_expr::replacement const& rep) {
-              return is_pure_constant_impl(rep.expr, reg, bound_params);
-            });
-        });
-    },
-    [&](ast::record const& rec) {
-      return std::ranges::all_of(rec.items, [&](ast::record::item const& item) {
-        return match(
-          item,
-          [&](ast::record::field const& field) {
-            return is_pure_constant_impl(field.expr, reg, bound_params);
-          },
-          [&](ast::spread const& spread) {
-            return is_pure_constant_impl(spread.expr, reg, bound_params);
-          });
-      });
-    },
-    [&](ast::list const& list) {
-      return std::ranges::all_of(list.items, [&](ast::list::item const& item) {
-        return match(
-          item,
-          [&](ast::expression const& inner) {
-            return is_pure_constant_impl(inner, reg, bound_params);
-          },
-          [&](ast::spread const& spread) {
-            return is_pure_constant_impl(spread.expr, reg, bound_params);
-          });
-      });
-    },
-    [](ast::meta const&) {
-      return false;
-    },
-    [](ast::this_ const&) {
-      return false;
-    },
-    [](ast::pipeline_expr const&) {
-      return false;
-    },
-    [](ast::dollar_var const&) {
-      return false;
-    },
-    [](ast::resolved_secret const&) {
-      return false;
-    });
-}
-
 auto is_pure_constant(ast::expression const& expr, registry const& reg)
   -> bool {
-  auto bound_params = std::vector<std::string_view>{};
-  return is_pure_constant_impl(expr, reg, bound_params);
+  return ir::analyze(expr, reg).is_pure_constant();
 }
 
 auto is_constant_option_name(std::string_view name) -> bool {

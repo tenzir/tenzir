@@ -9,6 +9,7 @@
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/ir.hpp"
+#include "tenzir/ir_expr_props.hpp"
 #include "tenzir/nova/array.hpp"
 #include "tenzir/nova/data_array_builder.hpp"
 #include "tenzir/nova/eval.hpp"
@@ -290,13 +291,16 @@ TEST("simplify keeps evaluated operands that could fail") {
 }
 
 TEST("branch lifting keeps constants that the evaluator rejects") {
-  CHECK(ir::is_infallible(parse("x == 1")));
-  CHECK(not ir::is_infallible(parse("x.length() == 1")));
-  CHECK(not ir::is_infallible(parse_with_secret("s == x")));
-  CHECK(not ir::is_infallible(parse_with_secret("{a: s} == x")));
-  CHECK(not ir::is_infallible(parse_with_secret("[s] == x")));
+  auto const& reg = test::builtin_registry();
+  CHECK(ir::analyze(parse("x == 1"), reg).is_tql_infallible());
+  CHECK(not ir::analyze(parse("x.length() == 1"), reg).is_tql_infallible());
+  CHECK(not ir::analyze(parse_with_secret("s == x"), reg).is_tql_infallible());
+  CHECK(
+    not ir::analyze(parse_with_secret("{a: s} == x"), reg).is_tql_infallible());
+  CHECK(
+    not ir::analyze(parse_with_secret("[s] == x"), reg).is_tql_infallible());
   auto chain = ir::OptimizeFilter{parse("x == 1"), parse_with_secret("s == y")};
-  CHECK_EQUAL(fmt::format("{:?}", ir::conjoin_filter(std::move(chain))),
+  CHECK_EQUAL(fmt::format("{:?}", ir::conjoin_filter(std::move(chain), reg)),
               render_with_secret("s == y if x == 1 else false"));
 }
 
@@ -395,9 +399,10 @@ TEST("simplify filter chains") {
 }
 
 TEST("expression size") {
-  CHECK_EQUAL(ir::expression_size(parse("x")), size_t{1});
-  CHECK_EQUAL(ir::expression_size(parse("x == 1")), size_t{3});
-  CHECK_EQUAL(ir::expression_size(parse("x.y == [1, 2]")), size_t{6});
+  auto const& reg = test::builtin_registry();
+  CHECK_EQUAL(ir::analyze(parse("x"), reg).node_count, uint32_t{1});
+  CHECK_EQUAL(ir::analyze(parse("x == 1"), reg).node_count, uint32_t{3});
+  CHECK_EQUAL(ir::analyze(parse("x.y == [1, 2]"), reg).node_count, uint32_t{6});
 }
 
 TEST("substitution stops when the predicate grows beyond the bound") {
@@ -422,8 +427,9 @@ TEST("substitution stops when the predicate grows beyond the bound") {
   }
   // After `n` steps, the predicate has `3n + 3` nodes, and the bound is 4096
   // nodes.
+  auto const& reg = test::builtin_registry();
   CHECK_EQUAL(steps, 1364);
-  CHECK_EQUAL(ir::expression_size(predicate), size_t{4095});
+  CHECK_EQUAL(ir::analyze(predicate, reg).node_count, uint32_t{4095});
   // A substitution that does not grow the predicate may exceed the bound.
   auto const rename = [](ast::field_path const&) -> Option<ast::expression> {
     return ast::root_field{ast::identifier{"y", location::unknown}};
@@ -433,40 +439,42 @@ TEST("substitution stops when the predicate grows beyond the bound") {
     large = ast::binary_expr{large, ast::binary_op::add, large};
   }
   large = ast::binary_expr{large, ast::binary_op::eq, parse("1")};
-  REQUIRE_GREATER(ir::expression_size(large), size_t{4096});
+  REQUIRE_GREATER(ir::analyze(large, reg).node_count, uint32_t{4096});
   auto split = ir::split_filter_by_substitution(
     {large}, test::builtin_registry(), rename);
   REQUIRE_EQUAL(split.independent.size(), size_t{1});
-  CHECK_EQUAL(ir::expression_size(split.independent.front()),
-              ir::expression_size(large));
+  CHECK_EQUAL(ir::analyze(split.independent.front(), reg).node_count,
+              ir::analyze(large, reg).node_count);
 }
 
 TEST("plain and cheap expressions") {
-  CHECK(ir::is_plain(parse("x")));
-  CHECK(ir::is_plain(parse("x.y[\"z\"]")));
-  CHECK(ir::is_plain(parse("this")));
-  CHECK(ir::is_plain(parse("@name")));
-  CHECK(ir::is_plain(parse("42")));
-  CHECK(ir::is_plain(parse("[]")));
-  CHECK(ir::is_plain(parse("[1, \"a\"]")));
-  CHECK(ir::is_plain(parse("{a: 1, b: {c: [2.0]}}")));
-  CHECK(ir::is_plain(parse("{a: [1]}.a")));
-  CHECK(not ir::is_plain(parse("x + 1")));
-  CHECK(not ir::is_plain(parse("x[y]")));
-  CHECK(not ir::is_plain(parse("{a: x}")));
-  CHECK(not ir::is_plain(parse("[1, x]")));
-  CHECK(not ir::is_plain(parse("{a: {b: x}}")));
-  CHECK(not ir::is_plain(parse("[1, [1 + 1]]")));
-  CHECK(not ir::is_plain(parse("[...x]")));
-  CHECK(not ir::is_plain(parse("{...x}")));
   auto const& reg = test::builtin_registry();
-  CHECK(ir::is_cheap(parse("x + 1 == y.z"), reg));
-  CHECK(ir::is_cheap(parse("{a: x, b: [y, 1]}"), reg));
-  CHECK(ir::is_cheap(parse("x.ip() == 1.2.3.4 and y.length() > 1"), reg));
-  CHECK(not ir::is_cheap(parse("x.parse_json()"), reg));
-  CHECK(not ir::is_cheap(parse("x + y.parse_syslog().app_name"), reg));
+  CHECK(ir::analyze(parse("x"), reg).is_plain());
+  CHECK(ir::analyze(parse("x.y[\"z\"]"), reg).is_plain());
+  CHECK(ir::analyze(parse("this"), reg).is_plain());
+  CHECK(ir::analyze(parse("@name"), reg).is_plain());
+  CHECK(ir::analyze(parse("42"), reg).is_plain());
+  CHECK(ir::analyze(parse("[]"), reg).is_plain());
+  CHECK(ir::analyze(parse("[1, \"a\"]"), reg).is_plain());
+  CHECK(ir::analyze(parse("{a: 1, b: {c: [2.0]}}"), reg).is_plain());
+  CHECK(ir::analyze(parse("{a: [1]}.a"), reg).is_plain());
+  CHECK(not ir::analyze(parse("x + 1"), reg).is_plain());
+  CHECK(not ir::analyze(parse("x[y]"), reg).is_plain());
+  CHECK(not ir::analyze(parse("{a: x}"), reg).is_plain());
+  CHECK(not ir::analyze(parse("[1, x]"), reg).is_plain());
+  CHECK(not ir::analyze(parse("{a: {b: x}}"), reg).is_plain());
+  CHECK(not ir::analyze(parse("[1, [1 + 1]]"), reg).is_plain());
+  CHECK(not ir::analyze(parse("[...x]"), reg).is_plain());
+  CHECK(not ir::analyze(parse("{...x}"), reg).is_plain());
+  CHECK(ir::analyze(parse("x + 1 == y.z"), reg).is_cheap());
+  CHECK(ir::analyze(parse("{a: x, b: [y, 1]}"), reg).is_cheap());
+  CHECK(
+    ir::analyze(parse("x.ip() == 1.2.3.4 and y.length() > 1"), reg).is_cheap());
+  CHECK(not ir::analyze(parse("x.parse_json()"), reg).is_cheap());
+  CHECK(
+    not ir::analyze(parse("x + y.parse_syslog().app_name"), reg).is_cheap());
   // A cheap function with an expensive argument is expensive.
-  CHECK(not ir::is_cheap(parse("x.parse_json().length()"), reg));
+  CHECK(not ir::analyze(parse("x.parse_json().length()"), reg).is_cheap());
 }
 
 TEST("substitution copies plain values freely") {
@@ -760,8 +768,9 @@ TEST("split_filter_by_rewrite enforces rejection, size bound, and "
     predicate = std::move(step.independent.front());
     ++steps;
   }
+  auto const& reg = test::builtin_registry();
   CHECK_GREATER(steps, size_t{0});
-  CHECK_LESS_EQUAL(ir::expression_size(predicate),
+  CHECK_LESS_EQUAL(ir::analyze(predicate, reg).node_count,
                    ir::max_rewritten_predicate_size);
   // A non-growing rewrite is allowed even above the bound.
   auto large = parse("x");
@@ -769,11 +778,12 @@ TEST("split_filter_by_rewrite enforces rejection, size bound, and "
     large = ast::binary_expr{large, ast::binary_op::add, large};
   }
   large = ast::binary_expr{large, ast::binary_op::eq, parse("1")};
-  REQUIRE_GREATER(ir::expression_size(large), ir::max_rewritten_predicate_size);
+  REQUIRE_GREATER(ir::analyze(large, reg).node_count,
+                  ir::max_rewritten_predicate_size);
   split = ir::split_filter_by_rewrite({large}, rewrite);
   REQUIRE_EQUAL(split.independent.size(), size_t{1});
-  CHECK_EQUAL(ir::expression_size(split.independent.front()),
-              ir::expression_size(large));
+  CHECK_EQUAL(ir::analyze(split.independent.front(), reg).node_count,
+              ir::analyze(large, reg).node_count);
 }
 
 TEST("long chains of replace operators stay within the size bound") {
@@ -802,9 +812,10 @@ TEST("long chains of replace operators stay within the size bound") {
     source += "where x != null\n";
     return source;
   };
+  auto const& reg = test::builtin_registry();
   auto opt = optimize(make_distinct(100));
   REQUIRE_EQUAL(opt.filter.size(), size_t{1});
-  CHECK_LESS_EQUAL(ir::expression_size(opt.filter.front()),
+  CHECK_LESS_EQUAL(ir::analyze(opt.filter.front(), reg).node_count,
                    ir::max_rewritten_predicate_size);
   opt = optimize(make_distinct(750));
   CHECK(opt.filter.empty());
@@ -827,7 +838,7 @@ TEST("long chains of replace operators stay within the size bound") {
   folding += "where x == \"a\"\n";
   opt = optimize(folding);
   REQUIRE_EQUAL(opt.filter.size(), size_t{1});
-  CHECK_EQUAL(ir::expression_size(opt.filter.front()), size_t{3});
+  CHECK_EQUAL(ir::analyze(opt.filter.front(), reg).node_count, uint32_t{3});
 }
 
 TEST("replace guarded conditionals preserve secret and cross-type semantics") {

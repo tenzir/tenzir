@@ -178,6 +178,10 @@ public:
     return false;
   }
 
+  auto volatility() const -> Volatility override {
+    return Volatility::volatile_;
+  }
+
   auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     argument_parser2::function("random").parse(inv, ctx).ignore();

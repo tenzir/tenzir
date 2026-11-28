@@ -42,9 +42,15 @@ public:
 
   // Values that contain a secret are censored before they are stored in
   // events, so optimizations must not substitute a `secret` call for a field
-  // that holds its censored value.
+  // that holds its censored value. `secret` resolves once at operator startup
+  // (so it is `Volatility::stable`), while `ExprProps::has_secret` enforces
+  // censoring safety independently of volatility.
   auto is_deterministic() const -> bool final {
     return false;
+  }
+
+  auto volatility() const -> Volatility final {
+    return Volatility::stable;
   }
 
   auto describe() const -> nova::FunctionDescription override {

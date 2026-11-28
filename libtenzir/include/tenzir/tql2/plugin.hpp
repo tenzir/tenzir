@@ -15,6 +15,7 @@
 #include "tenzir/plugin/base.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/tql2/ast.hpp"
+#include "tenzir/tql2/function_properties.hpp"
 #include "tenzir/tql2/plugin_api.hpp"
 
 namespace tenzir {
@@ -155,8 +156,13 @@ public:
 
   virtual auto function_name() const -> std::string;
 
+  /// Legacy compatibility hook for `volatility()`.
+  /// Scheduled for removal once all plugins override `volatility()` directly.
   virtual auto is_deterministic() const -> bool = 0;
 
+  /// Legacy compatibility hook for `cost()`.
+  /// Scheduled for removal once all plugins override `cost()` directly.
+  ///
   /// Returns whether a call costs about as much as an arithmetic operator or a
   /// comparison, such as a type conversion. Its cost must not grow with the
   /// size of nested values, and it must not build new strings or other large
@@ -165,6 +171,25 @@ public:
   /// parsers.
   virtual auto is_cheap() const -> bool {
     return false;
+  }
+
+  /// How this function's return value may vary across calls with equal
+  /// arguments. Defaults via `is_deterministic()` for backward compatibility.
+  virtual auto volatility() const -> Volatility {
+    return is_deterministic() ? Volatility::immutable : Volatility::volatile_;
+  }
+
+  /// Per-row evaluation fallibility over event input, assuming the call site
+  /// instantiates successfully. Defaults conservatively to `Fallibility::fails`.
+  virtual auto fallibility() const -> Fallibility {
+    return Fallibility::fails;
+  }
+
+  /// Relative per-row evaluation cost tier (`Cost::cheap` or
+  /// `Cost::expensive`). Defaults via `is_cheap()` for backward compatibility.
+  /// Functions must not return `Cost::plain`.
+  virtual auto cost() const -> Cost {
+    return is_cheap() ? Cost::cheap : Cost::expensive;
   }
 };
 

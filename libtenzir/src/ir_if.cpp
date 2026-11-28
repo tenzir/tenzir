@@ -11,6 +11,7 @@
 #include "tenzir/async.hpp"
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/ir_expr_props.hpp"
 #include "tenzir/ir_lift.hpp"
 #include "tenzir/multi_series.hpp"
 #include "tenzir/nova/array.hpp"
@@ -336,17 +337,19 @@ public:
         = std::ranges::all_of(branch_filters, [](ir::OptimizeFilter const& f) {
             return f.empty();
           });
-      if (not all_empty and ir::is_repeatable(args_.condition, octx.reg)
-          and ir::is_cheap(args_.condition, octx.reg)) {
-        auto branches = std::vector<ir::RoutedBranch>{};
-        branches.push_back({args_.condition, branch_filters[0]});
-        branches.push_back({None{}, branch_filters[1]});
-        if (auto routed
-            = ir::lift_branch_filters(std::move(branches), octx.reg)) {
-          lifted.insert(lifted.end(), std::move_iterator{routed->begin()},
-                        std::move_iterator{routed->end()});
-          branch_filters[0].clear();
-          branch_filters[1].clear();
+      if (not all_empty) {
+        auto const cond_props = ir::analyze(args_.condition, octx.reg);
+        if (cond_props.is_duplicable() and cond_props.is_cheap()) {
+          auto branches = std::vector<ir::RoutedBranch>{};
+          branches.push_back({args_.condition, branch_filters[0]});
+          branches.push_back({None{}, branch_filters[1]});
+          if (auto routed
+              = ir::lift_branch_filters(std::move(branches), octx.reg)) {
+            lifted.insert(lifted.end(), std::move_iterator{routed->begin()},
+                          std::move_iterator{routed->end()});
+            branch_filters[0].clear();
+            branch_filters[1].clear();
+          }
         }
       }
       lifted = ir::simplify_filter(std::move(lifted), octx.reg);

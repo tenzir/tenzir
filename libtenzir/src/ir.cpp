@@ -13,6 +13,7 @@
 #include "tenzir/compile_ctx.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/narrow.hpp"
+#include "tenzir/ir_expr_props.hpp"
 #include "tenzir/ir_if.hpp"
 #include "tenzir/ir_match.hpp"
 #include "tenzir/ir_set.hpp"
@@ -66,7 +67,9 @@ auto ir::split_filter(
     // A predicate behind one that stays must not move past it if it could fail
     // for the events that the other one drops.
     if (not movable(expr)
-        or (not result.dependent.empty() and not is_infallible(expr))) {
+        or (not result.dependent.empty()
+            and not detail::analyze_expr_without_registry(expr)
+                      .is_tql_infallible())) {
       result.dependent.push_back(std::move(expr));
     } else {
       result.independent.push_back(std::move(expr));
@@ -99,14 +102,18 @@ auto ir::split_filter_by_rewrite(
       continue;
     }
     // A predicate that grows past the bound stays behind the operator.
-    auto const size = expression_size(*rewritten);
-    if (size > max_rewritten_predicate_size and size > expression_size(expr)) {
+    auto const rewritten_props
+      = detail::analyze_expr_without_registry(*rewritten);
+    if (rewritten_props.node_count > max_rewritten_predicate_size
+        and rewritten_props.node_count
+              > detail::analyze_expr_without_registry(expr).node_count) {
       result.dependent.push_back(std::move(expr));
       continue;
     }
     // As in `split_filter`, a predicate must not move past one that stays if
     // it could fail for the events that the other one drops.
-    if (not result.dependent.empty() and not is_infallible(*rewritten)) {
+    if (not result.dependent.empty()
+        and not rewritten_props.is_tql_infallible()) {
       result.dependent.push_back(std::move(expr));
       continue;
     }
@@ -155,7 +162,7 @@ auto ir::split_filter_by_substitution(OptimizeFilter filter,
     auto const placeholder = ast::FieldSubstitution{
       [&](ast::field_path const& field) -> Option<ast::expression> {
         auto replacement = fields(field);
-        if (replacement and not is_cheap(*replacement, reg)) {
+        if (replacement and not ir::analyze(*replacement, reg).is_cheap()) {
           return ast::root_field{
             ast::identifier{"__expensive", replacement->get_location()},
             false,
@@ -184,13 +191,16 @@ auto ir::split_filter_by_substitution(OptimizeFilter filter,
     auto const counting = ast::FieldSubstitution{
       [&](ast::field_path const& field) -> Option<ast::expression> {
         auto replacement = fields(field);
-        if (replacement and not is_plain(*replacement)) {
-          // The simplifier may describe a member of an expensive value by a
-          // cheap computation of only that member, such as `ocsf_cast(this).a`
-          // by `_ocsf_cast_field(…)`, so each member counts on its own.
-          auto const cheap = is_cheap(*replacement, reg);
-          expensive = expensive or not cheap;
-          ++computed[computation_key(*replacement, not cheap)];
+        if (replacement) {
+          auto const props = ir::analyze(*replacement, reg);
+          if (not props.is_plain()) {
+            // The simplifier may describe a member of an expensive value by a
+            // cheap computation of only that member, such as `ocsf_cast(this).a`
+            // by `_ocsf_cast_field(…)`, so each member counts on its own.
+            auto const cheap = props.is_cheap();
+            expensive = expensive or not cheap;
+            ++computed[computation_key(*replacement, not cheap)];
+          }
         }
         return replacement;
       }};
@@ -199,27 +209,32 @@ auto ir::split_filter_by_substitution(OptimizeFilter filter,
       result.dependent.push_back(std::move(expr));
       continue;
     }
-    auto predicate = simplify_predicate(std::move(*substituted), reg);
     auto const copied = std::ranges::any_of(computed, [&](auto const& entry) {
       auto const it = reads.find(entry.first);
       return entry.second + (it == reads.end() ? 0 : it->second) > 1;
     });
-    if (copied
-        or (expensive
-            and count_expensive(predicate, reg)
-                  > count_expensive(without_expensive(expr), reg))) {
+    if (copied) {
+      result.dependent.push_back(std::move(expr));
+      continue;
+    }
+    auto predicate = simplify_predicate(std::move(*substituted), reg);
+    auto const predicate_props = ir::analyze(predicate, reg);
+    if (expensive
+        and predicate_props.expensive_ops
+              > ir::analyze(without_expensive(expr), reg).expensive_ops) {
       result.dependent.push_back(std::move(expr));
       continue;
     }
     // A predicate that grows past the bound stays behind the operator.
-    auto const size = expression_size(predicate);
-    if (size > max_rewritten_predicate_size and size > expression_size(expr)) {
+    if (predicate_props.node_count > max_rewritten_predicate_size
+        and predicate_props.node_count > ir::analyze(expr, reg).node_count) {
       result.dependent.push_back(std::move(expr));
       continue;
     }
     // As in `split_filter_by_dependents`, a predicate must not move past one
     // that stays if it could fail for the events that the other one drops.
-    if (not result.dependent.empty() and not is_infallible(predicate)) {
+    if (not result.dependent.empty()
+        and not predicate_props.is_tql_infallible()) {
       result.dependent.push_back(std::move(expr));
       continue;
     }

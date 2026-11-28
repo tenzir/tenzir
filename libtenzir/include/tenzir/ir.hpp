@@ -69,8 +69,8 @@ struct OptimizeRequest {
   ///   pipeline does not fail. So a predicate may move past a predicate that
   ///   stays behind, or evaluate an expression for events that the original
   ///   pipeline does not evaluate it for, only if evaluating it cannot fail,
-  ///   as for `is_infallible`. If the original pipeline fails, the optimized
-  ///   one may fail with another error.
+  ///   as for `ExprProps::is_tql_infallible`. If the original pipeline fails,
+  ///   the optimized one may fail with another error.
   /// - It may emit other warnings. A moved predicate may warn for values that
   ///   the operators it passes handle silently, or warn again for a condition
   ///   that both it and the operator evaluate.
@@ -592,8 +592,8 @@ auto split_conjunction(ast::expression predicate) -> OptimizeFilter;
 ///
 /// A predicate moves if `movable` accepts it, which states whether it keeps
 /// the same events in front of the operator. A predicate behind one that stays
-/// moves only if it also cannot fail, as for `is_infallible`, because moving
-/// it would evaluate it for the events that the other one drops.
+/// moves only if it also cannot fail, as for `ExprProps::is_tql_infallible`,
+/// because moving it would evaluate it for the events that the other one drops.
 auto split_filter(
   ir::OptimizeFilter filter,
   std::function<auto(ast::expression const&)->bool> const& movable)
@@ -618,7 +618,8 @@ inline constexpr auto max_rewritten_predicate_size = size_t{4096};
 /// cannot rewrite the predicate. Rewritten predicates move to `independent`;
 /// the others stay in `dependent` unchanged, including those that the rewrite
 /// would grow beyond `max_rewritten_predicate_size` and those behind a
-/// dependent predicate whose rewritten form could fail, as for `is_infallible`.
+/// dependent predicate whose rewritten form could fail, as for
+/// `ExprProps::is_tql_infallible`.
 auto split_filter_by_rewrite(
   OptimizeFilter filter,
   std::function<auto(ast::expression const&)->Option<ast::expression>> const&
@@ -690,38 +691,14 @@ auto simplify_filter(OptimizeFilter filter, registry const& reg)
 auto constant_condition(ast::expression const& condition, registry const& reg)
   -> Option<bool>;
 
-/// Returns the number of expression nodes in `expr`.
-auto expression_size(ast::expression const& expr) -> size_t;
-
-/// Returns whether evaluating `expr` costs about as much as reading a field,
-/// which holds for constants, metadata, and fields, including their members
-/// and constant indexes. A rewrite may evaluate such an expression any number
-/// of times in place of a value that the pipeline computes once.
-auto is_plain(ast::expression const& expr) -> bool;
-
-/// Returns whether `expr` combines its values with operators and cheap
-/// functions only, as for `function_plugin::is_cheap`, but no expensive ones,
-/// such as parsers. A rewrite may evaluate such an expression once more in
-/// place of a value that the pipeline computes, but should not copy it several
-/// times.
-auto is_cheap(ast::expression const& expr, registry const& reg) -> bool;
-
-/// Returns the number of expensive parts of `expr`, such as calls of expensive
-/// functions, including those within others. See `is_cheap`.
-auto count_expensive(ast::expression const& expr, registry const& reg)
-  -> size_t;
-
-/// Returns whether evaluating `expr` cannot fail the pipeline. A function can
-/// fail depending on its input, so `expr` must not call any.
-auto is_infallible(ast::expression const& expr) -> bool;
-
 /// Combines a filter chain into a single predicate that keeps the same events.
 ///
 /// Like the chain, the predicate evaluates each of its predicates only for the
 /// events that all previous ones keep. It may evaluate a predicate for more
-/// events if that predicate calls no function and thus cannot fail. An empty
-/// chain becomes `true`.
-auto conjoin_filter(OptimizeFilter filter) -> ast::expression;
+/// events if that predicate cannot fail, as for `ExprProps::is_tql_infallible`.
+/// An empty chain becomes `true`.
+auto conjoin_filter(OptimizeFilter filter, registry const& reg)
+  -> ast::expression;
 
 /// Returns whether `prefix` is a prefix of `path` (or equal to it), comparing
 /// segment names. An empty `prefix` is a prefix of every path.

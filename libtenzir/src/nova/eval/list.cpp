@@ -73,7 +73,8 @@ auto _::EvalRun::eval(const ast::list& x, EvalFrame frame) -> Array<Data> {
   if (x.items.size() == 1) {
     if (auto const* item = try_as<ast::expression>(x.items.front())) {
       auto value = frame.eval(*item);
-      // A constant item makes a constant list, which `ir::is_plain` relies on.
+      // A constant item makes a constant list, which `ir::ExprProps::is_plain`
+      // relies on.
       if (auto constant = _::repeated_value(value)) {
         return repeat(List{std::move(*constant)}, length);
       }
@@ -120,8 +121,8 @@ auto _::EvalRun::eval(const ast::list& x, EvalFrame frame) -> Array<Data> {
       {.is_spread = false, .value = frame.eval(expr), .spread_shape = {}});
   }
 
-  // Constant items without spreads make a constant list, which `ir::is_plain`
-  // relies on.
+  // Constant items without spreads make a constant list, which
+  // `ir::ExprProps::is_plain` relies on.
   auto constant = Option<List>{List{}};
   constant->reserve(items.size());
   for (auto const& item : items) {

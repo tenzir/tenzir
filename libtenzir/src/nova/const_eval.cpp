@@ -81,7 +81,8 @@ public:
         and ref.segments().front() == "secret") {
       frame_.requires_startup = true;
     } else {
-      frame_.deterministic &= ctx_.reg().get(call).is_deterministic();
+      frame_.deterministic
+        &= ctx_.reg().get(call).volatility() == Volatility::immutable;
     }
     enter(call);
   }

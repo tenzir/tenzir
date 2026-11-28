@@ -14,6 +14,7 @@
 #include <tenzir/collect.hpp>
 #include <tenzir/defaults.hpp>
 #include <tenzir/fwd.hpp>
+#include <tenzir/ir_expr_props.hpp>
 #include <tenzir/nova/array_builder.hpp>
 #include <tenzir/nova/eval_util.hpp>
 #include <tenzir/nova/events.hpp>
@@ -654,7 +655,7 @@ public:
           std::move(req.filter), [&](ast::expression const& expr) {
             auto refs = ast::collect_refs(expr);
             return refs and not refs->overlaps(touched)
-                   and ir::is_infallible(expr);
+                   and ir::analyze(expr, ctx.reg()).is_tql_infallible();
           });
         // An input event may have any number of outputs, so a limit on the
         // outputs does not bound the inputs.

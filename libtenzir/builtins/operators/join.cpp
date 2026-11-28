@@ -8,7 +8,7 @@
 
 #include <tenzir/builtins/join/common.hpp>
 #include <tenzir/detail/narrow.hpp>
-#include <tenzir/ir_lift.hpp>
+#include <tenzir/ir_expr_props.hpp>
 #include <tenzir/operator_plugin.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/ast.hpp>
@@ -602,7 +602,7 @@ public:
         continue;
       }
       auto const must_be_infallible_left = any_kept or kind != JoinKind::left;
-      auto const repeatable = ir::is_repeatable(expr, octx.reg);
+      auto const repeatable = ir::analyze(expr, octx.reg).is_duplicable();
       auto left_candidate = Option<ast::expression>{};
       if (kind == JoinKind::semi or kind == JoinKind::anti) {
         left_candidate = expr;
@@ -614,14 +614,16 @@ public:
       } else {
         if (auto sub = ast::substitute_refs(expr, octx.reg, left_stripper);
             sub
-            and ir::expression_size(*sub) <= ir::max_rewritten_predicate_size) {
+            and ir::analyze(*sub, octx.reg).node_count
+                  <= ir::max_rewritten_predicate_size) {
           left_candidate = std::move(*sub);
         }
       }
       if (left_candidate and (repeatable or not left_fans_out)) {
         *left_candidate
           = ir::simplify_predicate(std::move(*left_candidate), octx.reg);
-        if (not must_be_infallible_left or ir::is_infallible(*left_candidate)) {
+        if (not must_be_infallible_left
+            or ir::analyze(*left_candidate, octx.reg).is_tql_infallible()) {
           left_filter.push_back(std::move(*left_candidate));
           continue;
         }
@@ -633,9 +635,10 @@ public:
         if (auto sub
             = ast::substitute_refs(expr, octx.reg, right_stripper, no_meta);
             sub
-            and ir::expression_size(*sub) <= ir::max_rewritten_predicate_size) {
+            and ir::analyze(*sub, octx.reg).node_count
+                  <= ir::max_rewritten_predicate_size) {
           *sub = ir::simplify_predicate(std::move(*sub), octx.reg);
-          if (ir::is_infallible(*sub)) {
+          if (ir::analyze(*sub, octx.reg).is_tql_infallible()) {
             direct_right_filter.push_back(std::move(*sub));
             continue;
           }
@@ -683,17 +686,17 @@ public:
       if (not is_event_time_streaming) {
         auto const l_to_r = make_equiv_subst(true);
         for (auto const& expr : left_filter) {
-          if (not ir::is_infallible(expr)
+          if (not ir::analyze(expr, octx.reg).is_tql_infallible()
               or not is_equal_congruent_predicate(expr)) {
             continue;
           }
           if (auto implied
               = ast::substitute_refs(expr, octx.reg, l_to_r, no_meta);
               implied
-              and ir::expression_size(*implied)
+              and ir::analyze(*implied, octx.reg).node_count
                     <= ir::max_rewritten_predicate_size) {
             *implied = ir::simplify_predicate(std::move(*implied), octx.reg);
-            if (ir::is_infallible(*implied)
+            if (ir::analyze(*implied, octx.reg).is_tql_infallible()
                 and seen_right.insert(serialize_expression(*implied)).second) {
               right_filter.push_back(std::move(*implied));
             }
@@ -707,17 +710,17 @@ public:
         }
         auto const r_to_l = make_equiv_subst(false);
         for (auto const& expr : direct_right_filter) {
-          if (not ir::is_infallible(expr)
+          if (not ir::analyze(expr, octx.reg).is_tql_infallible()
               or not is_equal_congruent_predicate(expr)) {
             continue;
           }
           if (auto implied
               = ast::substitute_refs(expr, octx.reg, r_to_l, no_meta);
               implied
-              and ir::expression_size(*implied)
+              and ir::analyze(*implied, octx.reg).node_count
                     <= ir::max_rewritten_predicate_size) {
             *implied = ir::simplify_predicate(std::move(*implied), octx.reg);
-            if (ir::is_infallible(*implied)
+            if (ir::analyze(*implied, octx.reg).is_tql_infallible()
                 and seen_left.insert(serialize_expression(*implied)).second) {
               left_filter.push_back(std::move(*implied));
             }

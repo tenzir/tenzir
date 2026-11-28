@@ -108,6 +108,10 @@ public:
     return false;
   }
 
+  auto volatility() const -> Volatility override {
+    return Volatility::volatile_;
+  }
+
   auto make_function(function_invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto version_opt = Option<located<std::string>>{};

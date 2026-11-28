@@ -67,7 +67,7 @@ auto _::EvalRun::eval(const ast::record& x, EvalFrame frame) -> Array<Data> {
     fields.clear();
   };
   // Constant fields without spreads make a constant record, which
-  // `ir::is_plain` relies on.
+  // `ir::ExprProps::is_plain` relies on.
   auto constant = Option<Record>{Record{}};
   for (auto const& item : x.items) {
     if (auto const* field = try_as<ast::record::field>(item)) {

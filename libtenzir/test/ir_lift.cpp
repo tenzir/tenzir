@@ -10,6 +10,7 @@
 
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/ir.hpp"
+#include "tenzir/ir_expr_props.hpp"
 #include "tenzir/session.hpp"
 #include "tenzir/test/registry.hpp"
 #include "tenzir/test/test.hpp"
@@ -60,7 +61,8 @@ auto render(std::vector<std::string_view> const& sources) -> std::string {
 }
 
 auto conjoin(std::vector<std::string_view> const& sources) -> std::string {
-  return fmt::format("{:?}", ir::conjoin_filter(parse_chain(sources)));
+  return fmt::format("{:?}", ir::conjoin_filter(parse_chain(sources),
+                                                test::builtin_registry()));
 }
 
 struct Branch {
@@ -99,19 +101,15 @@ TEST("conjoin filter chains") {
 }
 
 TEST("repeatable expressions") {
-  CHECK(ir::is_repeatable(parse("x == 1 and y.length() > 2"),
-                          test::builtin_registry()));
-  CHECK(ir::is_repeatable(parse("@name == \"foo\""), test::builtin_registry()));
-  CHECK(not ir::is_repeatable(parse("now() > x"), test::builtin_registry()));
-  CHECK(
-    not ir::is_repeatable(parse("random() < 0.5"), test::builtin_registry()));
-  CHECK(
-    not ir::is_repeatable(parse("(move x) == 1"), test::builtin_registry()));
+  auto const& reg = test::builtin_registry();
+  CHECK(ir::analyze(parse("x == 1 and y.length() > 2"), reg).is_duplicable());
+  CHECK(ir::analyze(parse("@name == \"foo\""), reg).is_duplicable());
+  CHECK(not ir::analyze(parse("now() > x"), reg).is_duplicable());
+  CHECK(not ir::analyze(parse("random() < 0.5"), reg).is_duplicable());
+  CHECK(not ir::analyze(parse("(move x) == 1"), reg).is_duplicable());
   // An assignment in place of a value only warns.
-  CHECK(not ir::is_repeatable(parse("(x = 42) else false"),
-                              test::builtin_registry()));
-  CHECK(ir::is_repeatable(parse("x.slice(stride=-1) == \"\""),
-                          test::builtin_registry()));
+  CHECK(not ir::analyze(parse("(x = 42) else false"), reg).is_duplicable());
+  CHECK(ir::analyze(parse("x.slice(stride=-1) == \"\""), reg).is_duplicable());
 }
 
 TEST("lift filters of two branches") {

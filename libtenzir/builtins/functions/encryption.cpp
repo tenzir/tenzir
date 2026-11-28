@@ -803,6 +803,10 @@ public:
     return false;
   }
 
+  auto volatility() const -> Volatility override {
+    return Volatility::volatile_;
+  }
+
   auto describe() const -> nova::FunctionDescription override {
     auto d = nova::FunctionDescriber<HpkeEncryptArgs, HpkeEncryptFunction>{};
     d.positional("x", &HpkeEncryptArgs::x, "blob|string");
