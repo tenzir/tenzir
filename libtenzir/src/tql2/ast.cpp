@@ -317,7 +317,22 @@ public:
         return substitute(y.expr) and substitute(y.index);
       },
       [&](ast::binary_expr& y) {
-        return substitute(y.left) and substitute(y.right);
+        auto const is_if = [](ast::expression const& expr) {
+          auto const* inner = try_as<ast::binary_expr>(expr);
+          return inner and inner->op == ast::binary_op::if_;
+        };
+        auto const was_if = y.op == ast::binary_op::else_ and is_if(y.left);
+        if (not substitute(y.left) or not substitute(y.right)) {
+          return false;
+        }
+        // `a if c else b` shares the `else_` AST node with `a else b`,
+        // distinguished only by whether `left` is an `if_`. Substituting a bare
+        // `if_` into a coalescing `else_` would silently turn it into a
+        // ternary conditional.
+        if (y.op == ast::binary_op::else_ and not was_if and is_if(y.left)) {
+          return false;
+        }
+        return true;
       },
       [&](ast::unary_expr& y) {
         return substitute(y.expr);

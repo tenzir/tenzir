@@ -58,6 +58,11 @@ auto is_null(ast::expression const& expr) -> bool {
   return constant and is<caf::none_t>(constant->value);
 }
 
+auto is_if(ast::expression const& expr) -> bool {
+  auto const* binary = try_as<ast::binary_expr>(expr);
+  return binary and binary->op == ast::binary_op::if_;
+}
+
 /// Returns whether evaluating `expr` performs an operation, as opposed to
 /// building a record or list from its operands.
 auto is_operation(ast::expression const& expr) -> bool {
@@ -280,11 +285,14 @@ public:
 
   /// Simplifies `x` in place and returns its properties. They describe the
   /// result even if folding it failed, so that the enclosing expression does
-  /// not rescan it.
-  auto simplify(ast::expression& x, Context context) -> Properties {
+  /// not rescan it. When `allow_if` is false, `x` is the left operand of a
+  /// coalescing `else_` and must not be replaced by a bare `if_`.
+  auto simplify(ast::expression& x, Context context, bool allow_if = true)
+    -> Properties {
+    TENZIR_ASSERT(allow_if or (context == Context::value and not is_if(x)));
     auto result = x.match(
       [&](ast::binary_expr& y) {
-        return simplify_binary(y, context);
+        return simplify_binary(y, context, allow_if);
       },
       [&](ast::unary_expr& y) {
         return simplify_unary(y, context);
@@ -304,6 +312,7 @@ public:
     if (context != Context::value and rewrite_call_access(x, context)) {
       return simplify(x, context);
     }
+    TENZIR_ASSERT(allow_if or not is_if(x));
     return result.properties;
   }
 
@@ -332,26 +341,33 @@ private:
     return false;
   }
 
-  auto simplify_binary(ast::binary_expr& x, Context context) -> Simplified {
+  auto simplify_binary(ast::binary_expr& x, Context context, bool allow_if)
+    -> Simplified {
     switch (x.op) {
       case ast::binary_op::and_:
       case ast::binary_op::or_:
         return simplify_and_or(x, context);
       case ast::binary_op::if_:
-        return simplify_if(x, nullptr, context);
+        return simplify_if(x, nullptr, context, allow_if);
       case ast::binary_op::else_: {
         // The parser represents `a if b else c` as `(a if b) else c`, which
         // does not evaluate `c` when `b` is `true` and `a` is `null`.
         auto* condition = try_as<ast::binary_expr>(x.left);
         if (condition and condition->op == ast::binary_op::if_) {
-          return simplify_if(*condition, &x.right, context);
+          return simplify_if(*condition, &x.right, context, allow_if);
         }
         // The fallback applies only if the value is `null`, so its exact value
-        // matters.
-        auto const left = simplify(x.left, Context::value);
+        // matters. Simplifying `x.left` must not expose a bare `if_` directly
+        // on the left of a coalescing `else_`, because the AST and evaluators
+        // read `(a if b) else c` as a ternary conditional rather than
+        // coalescing.
+        auto const left = simplify(x.left, Context::value, /*allow_if=*/false);
         auto right = simplify(x.right, context);
         if (is_null(x.left)) {
-          return {.replacement = std::move(x.right), .properties = right};
+          if (allow_if or not is_if(x.right)) {
+            return {.replacement = std::move(x.right), .properties = right};
+          }
+          return {.properties = left & right};
         }
         if (is<ast::constant>(x.left) and is_skippable(x.right, right)) {
           return {.replacement = std::move(x.left), .properties = left};
@@ -436,7 +452,7 @@ private:
   /// Simplifies `x.left if x.right else fallback`, where a missing fallback
   /// reads as `null`.
   auto simplify_if(ast::binary_expr& x, ast::expression* fallback,
-                   Context context) -> Simplified {
+                   Context context, bool allow_if) -> Simplified {
     TENZIR_ASSERT(x.op == ast::binary_op::if_);
     auto const condition_properties = simplify(x.right, Context::condition);
     auto then_properties = simplify(x.left, context);
@@ -464,7 +480,8 @@ private:
     }
     // The runtime evaluates the branch that the condition skips for no rows.
     if (*condition) {
-      if (fallback and not is_skippable(*fallback, fallback_properties)) {
+      if ((fallback and not is_skippable(*fallback, fallback_properties))
+          or (not allow_if and is_if(x.left))) {
         return unchanged();
       }
       return {
@@ -476,6 +493,9 @@ private:
       return unchanged();
     }
     if (fallback) {
+      if (not allow_if and is_if(*fallback)) {
+        return unchanged();
+      }
       return {
         .replacement = std::move(*fallback),
         .properties = fallback_properties,

@@ -880,3 +880,93 @@ TEST("replace guarded conditionals preserve secret and cross-type semantics") {
     }
   }
 }
+
+TEST("coalescing else does not turn into ternary if-else under rewrite or "
+     "simplification") {
+  // Replacing `y` in `y else x` with `b if c` would produce `(b if c) else x`,
+  // which TQL evaluates as a ternary instead of null-coalescing.
+  auto const fields
+    = [](ast::field_path const& field) -> Option<ast::expression> {
+    if (field.path().size() == 1 and field.path().front().id.name == "y") {
+      return parse("b if c");
+    }
+    return field.inner();
+  };
+  auto const& reg = test::builtin_registry();
+  CHECK(not ast::substitute_refs(parse("(y else x) == 1"), reg, fields));
+  // An existing ternary stays a ternary when its branches are substituted.
+  auto const sub
+    = ast::substitute_refs(parse("(a if y else x) == 1"), reg, fields);
+  REQUIRE(sub);
+  CHECK_EQUAL(fmt::format("{:?}", *sub), render("(a if (b if c) else x) == 1"));
+  // Simplifying the left operand of a coalescing `else` must not expose a bare
+  // `if_` directly on the left, which would turn coalescing into a ternary.
+  CHECK_EQUAL(simplify("((null else (b? if c)) else x) == 1"),
+              render("((null else (b? if c)) else x) == 1"));
+  CHECK_EQUAL(simplify("(((b? if c) if true else z) else x) == 1"),
+              render("(((b? if c) if true else z) else x) == 1"));
+  CHECK_EQUAL(simplify("((z if false else (b? if c)) else x) == 1"),
+              render("((z if false else (b? if c)) else x) == 1"));
+  CHECK_EQUAL(simplify("((null else (null else (b? if c))) else x) == 1"),
+              render("((null else (b? if c)) else x) == 1"));
+  CHECK_EQUAL(simplify("(((null else null) else (b? if c)) else x) == 1"),
+              render("((null else (b? if c)) else x) == 1"));
+  CHECK_EQUAL(simplify("(((1 + 2 if c) if true else z) else x) == 1"),
+              render("(((3 if c) if true else z) else x) == 1"));
+  CHECK_EQUAL(simplify("(((null else (b? if c)) if true else z) else x) == 1"),
+              render("(((b? if c) if true else z) else x) == 1"));
+  // Simplifications that do not place a bare `if_` on the left of a coalescing
+  // `else` still apply.
+  CHECK_EQUAL(simplify("(null else (b? if c)) == 1"), render("(b? if c) == 1"));
+  CHECK_EQUAL(simplify("(a else (null else (b? if c))) == 1"),
+              render("(a else (b? if c)) == 1"));
+  CHECK_EQUAL(simplify("((1 else (b? if c)) else x) == 1"), render("true"));
+  CHECK_EQUAL(simplify("(((b? if c) if false else z) else x) == 1"),
+              render("(z else x) == 1"));
+  CHECK_EQUAL(simplify("((null else y) else x) == 1"),
+              render("(y else x) == 1"));
+  CHECK_EQUAL(simplify("((null else (b? if c)) if d else x) == 1"),
+              render("((b? if c) if d else x) == 1"));
+}
+
+TEST("simplifying long coalescing else chains") {
+  constexpr auto chain_length = 2000;
+  // A long left-associative chain starting with `null else (b? if c)` keeps its
+  // coalescing guard intact across all terms.
+  auto guarded = std::string{"(null else (b? if c))"};
+  for (auto i = 0; i < chain_length; ++i) {
+    guarded += fmt::format(" else x{}", i);
+  }
+  guarded = fmt::format("({}) == 1", guarded);
+  CHECK_EQUAL(simplify(guarded), render(guarded));
+  // A long left-associative chain with a foldable `null else` prefix still
+  // simplifies the prefix without losing any fallback terms.
+  auto tail = std::string{"x0"};
+  for (auto i = 1; i < chain_length; ++i) {
+    tail += fmt::format(" else x{}", i);
+  }
+  CHECK_EQUAL(simplify(fmt::format("(null else {}) == 1", tail)),
+              render(fmt::format("({}) == 1", tail)));
+  // A long right-associative chain collapses a nested `null else (b? if c)`
+  // on the right operand because it does not sit on the left of an `else`.
+  auto const make_field = [](std::string name) {
+    return ast::expression{
+      ast::root_field{ast::identifier{std::move(name), location::unknown},
+                      false},
+    };
+  };
+  auto right_chain = parse("null else (b? if c)");
+  auto expected_right = parse("b? if c");
+  for (auto i = chain_length - 1; i >= 0; --i) {
+    auto name = fmt::format("x{}", i);
+    right_chain = ast::binary_expr{make_field(name), ast::binary_op::else_,
+                                   std::move(right_chain)};
+    expected_right
+      = ast::binary_expr{make_field(std::move(name)), ast::binary_op::else_,
+                         std::move(expected_right)};
+  }
+  auto const simplified
+    = ir::simplify_predicate(std::move(right_chain), test::builtin_registry());
+  CHECK_EQUAL(fmt::format("{:?}", simplified),
+              fmt::format("{:?}", expected_right));
+}

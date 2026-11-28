@@ -1,0 +1,43 @@
+// Rewriting and simplifying a filter over a coalescing `else` must not turn
+// it into a ternary `if-else`, whether `y` is assigned a bare `if` directly or
+// wrapped in `null else (b? if c)`.
+from {id: 1, raw: 1, b: null, c: true},
+     {id: 2, raw: 2, b: 1, c: true},
+     {id: 3, raw: 1, b: 2, c: false},
+     {id: 4, raw: null, b: null, c: true}
+set x = raw?, y = null else (b? if c)
+where (y else x) == 1
+this = {case: "nested_null_else", id: id, optimized: true}
+merge {
+  from {id: 1, raw: 1, b: null, c: true},
+       {id: 2, raw: 2, b: 1, c: true},
+       {id: 3, raw: 1, b: 2, c: false},
+       {id: 4, raw: null, b: null, c: true}
+  set x = raw?, y = null else (b? if c)
+  optimize_barrier
+  where (y else x) == 1
+  this = {case: "nested_null_else", id: id, optimized: false}
+}
+merge {
+  from {id: 1, raw: 1, b: null, c: true},
+       {id: 2, raw: 2, b: 1, c: true},
+       {id: 3, raw: 1, b: 2, c: false},
+       {id: 4, raw: null, b: null, c: true}
+  set x = raw?, y = b? if c
+  where (y else x) == 1
+  this = {case: "bare_if", id: id, optimized: true}
+}
+merge {
+  from {id: 1, raw: 1, b: null, c: true},
+       {id: 2, raw: 2, b: 1, c: true},
+       {id: 3, raw: 1, b: 2, c: false},
+       {id: 4, raw: null, b: null, c: true}
+  set x = raw?, y = b? if c
+  optimize_barrier
+  where (y else x) == 1
+  this = {case: "bare_if", id: id, optimized: false}
+}
+summarize case, id, optimized=collect(optimized)
+optimized = optimized.sort()
+sort case, id
+write_ndjson

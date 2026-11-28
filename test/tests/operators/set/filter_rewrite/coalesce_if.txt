@@ -1,0 +1,6 @@
+{"case":"bare_if","id":1,"optimized":[false,true]}
+{"case":"bare_if","id":2,"optimized":[false,true]}
+{"case":"bare_if","id":3,"optimized":[false,true]}
+{"case":"nested_null_else","id":1,"optimized":[false,true]}
+{"case":"nested_null_else","id":2,"optimized":[false,true]}
+{"case":"nested_null_else","id":3,"optimized":[false,true]}
