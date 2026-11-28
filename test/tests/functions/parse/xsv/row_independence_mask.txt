@@ -1,0 +1,29 @@
+{
+  id: 1,
+  all: {
+    a: 1,
+    unnamed1: 2,
+    unnamed2: 3,
+  },
+  masked: null,
+}
+{
+  id: 2,
+  all: {
+    a: 4,
+  },
+  masked: {
+    a: 4,
+  },
+}
+{
+  id: 3,
+  all: {
+    a: 5,
+    unnamed1: 6,
+  },
+  masked: {
+    a: 5,
+    unnamed1: 6,
+  },
+}

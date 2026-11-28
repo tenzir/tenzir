@@ -1,0 +1,10 @@
+{
+  id: 1,
+  all: "1,2,3",
+  masked: null,
+}
+{
+  id: 2,
+  all: "4,",
+  masked: "4,",
+}

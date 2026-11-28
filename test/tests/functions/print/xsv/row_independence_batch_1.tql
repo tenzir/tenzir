@@ -1,0 +1,14 @@
+// A `null` nested record prints as a single `null` value, so the result for a
+// row does not depend on the other rows in its batch.
+// Every row is in a batch of its own.
+from {id: 1, x: {a: 1, b: {c: 2, d: 3}}},
+  {id: 2, x: {a: 4, b: null}},
+  {id: 3, x: {a: 5}}
+batch 1
+optimize_barrier
+select id,
+  csv = x.print_csv(),
+  tsv = x.print_tsv(),
+  ssv = x.print_ssv(),
+  xsv = x.print_xsv(field_separator=";", list_separator=",", null_value="null")
+where id != 1

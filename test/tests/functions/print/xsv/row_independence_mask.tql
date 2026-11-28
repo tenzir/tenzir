@@ -1,0 +1,6 @@
+// A `null` nested record prints as a single `null` value, so evaluating the
+// function for fewer rows of the same batch does not change the result: `all`
+// and `masked` must be equal. `batch` puts all rows into one batch.
+from {id: 1, x: {a: 1, b: {c: 2, d: 3}}}, {id: 2, x: {a: 4, b: null}}
+batch 100
+select id, all = x.print_csv(), masked = x.print_csv() if id != 1 else null

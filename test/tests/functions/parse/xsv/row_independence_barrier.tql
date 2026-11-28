@@ -1,0 +1,17 @@
+// `auto_expand` adds fields only for the excess values of the row itself, so
+// the result for a row does not depend on the other rows in its batch.
+// The barrier keeps the filter after the functions, which therefore also see
+// the row that the filter drops.
+from {id: 1, csv: "1,2,3", tsv: "1\t2\t3", ssv: "1 2 3", xsv: "1;2;3"},
+  {id: 2, csv: "4", tsv: "4", ssv: "4", xsv: "4"},
+  {id: 3, csv: "5,6", tsv: "5\t6", ssv: "5 6", xsv: "5;6"}
+batch 100
+optimize_barrier
+select id,
+  csv = csv.parse_csv(header="a", auto_expand=true),
+  tsv = tsv.parse_tsv(header="a", auto_expand=true),
+  ssv = ssv.parse_ssv(header="a", auto_expand=true),
+  xsv = xsv.parse_xsv(header="a", field_separator=";", list_separator="",
+                      null_value="", auto_expand=true)
+optimize_barrier
+where id != 1

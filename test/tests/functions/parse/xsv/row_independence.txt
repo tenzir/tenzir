@@ -1,0 +1,34 @@
+{
+  id: 2,
+  csv: {
+    a: 4,
+  },
+  tsv: {
+    a: 4,
+  },
+  ssv: {
+    a: 4,
+  },
+  xsv: {
+    a: 4,
+  },
+}
+{
+  id: 3,
+  csv: {
+    a: 5,
+    unnamed1: 6,
+  },
+  tsv: {
+    a: 5,
+    unnamed1: 6,
+  },
+  ssv: {
+    a: 5,
+    unnamed1: 6,
+  },
+  xsv: {
+    a: 5,
+    unnamed1: 6,
+  },
+}

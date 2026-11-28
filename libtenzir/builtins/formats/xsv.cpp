@@ -675,8 +675,20 @@ struct xsv_printer_impl {
   std::string_view null;
 };
 
+/// Whether `parse_line` gives a line `null` values for the fields that
+/// `auto_expand` added for earlier lines, but that the line lacks.
+enum class ExpandedFields {
+  /// Fill them, so that all lines share one header.
+  fill,
+  /// Omit them, so that every line only gets fields for its own values.
+  omit,
+};
+
+/// Parses `line` into `builder`. The first `original_field_count` entries of
+/// `fields` are the header; `auto_expand` appends names for excess values.
 auto parse_line(std::string_view line, std::vector<std::string>& fields,
-                const size_t original_field_count, auto builder,
+                const size_t original_field_count,
+                const ExpandedFields expanded_fields, auto builder,
                 const xsv_parser_options& args, const size_t line_counter,
                 const detail::quoting_escaping_policy& quoting,
                 diagnostic_handler& dh) -> void {
@@ -775,8 +787,10 @@ auto parse_line(std::string_view line, std::vector<std::string>& fields,
       }
     }
   }
-  for (; field_idx < fields.size(); ++field_idx) {
-    field_at(field_idx).null();
+  if (expanded_fields == ExpandedFields::fill) {
+    for (; field_idx < fields.size(); ++field_idx) {
+      field_at(field_idx).null();
+    }
   }
 }
 
@@ -814,51 +828,9 @@ auto collect_xsv_header(nova::Array<nova::Record> const& records,
   }
 }
 
-/// Collects the columns of every active record, unlike `collect_xsv_header`,
-/// which follows a single baseline row. Inspects columns, not rows.
-auto collect_xsv_columns(nova::Array<nova::Record> const& records,
-                         nova::storage::BitMap const& active,
-                         std::string_view prefix, std::vector<std::string>& out,
-                         std::vector<std::string>& record_paths) -> void {
-  auto visit = [&](std::string_view name,
-                   nova::storage::BitMap const& field_active,
-                   nova::Array<nova::Data> const& data) {
-    auto path = fmt::format("{}{}", prefix, name);
-    auto nested = data.get_alternative<nova::Record>();
-    auto nested_active = nested ? field_active & nested->present
-                                : nova::storage::BitMap{active.length(), false};
-    if (nested_active.any()) {
-      if (std::ranges::find(record_paths, path) == record_paths.end()) {
-        record_paths.push_back(path);
-      }
-      collect_xsv_columns(nested->data, nested_active, fmt::format("{}.", path),
-                          out, record_paths);
-    } else if (std::ranges::find(out, path) == out.end()) {
-      out.push_back(std::move(path));
-    }
-  };
-  match(
-    records.storage(),
-    [&](nova::storage::RecordStorage const& storage) {
-      auto const& fields = *storage;
-      for (auto index = size_t{0}; index < fields.arrays.size(); ++index) {
-        auto const& field = fields.arrays[index];
-        auto const field_active = active & field.present;
-        if (field_active.any()) {
-          visit(fields.names_by_index[index], field_active, field.data);
-        }
-      }
-    },
-    [&](nova::storage::ConstantStorage<nova::Record,
-                                       nova::RowView<nova::Record>> const&) {
-      // Every row shares one shape, so any active row is representative.
-      if (active.any()) {
-        auto const first = *nova::storage::true_bits(active).begin();
-        collect_xsv_header(records, active, first, prefix, out, record_paths);
-      }
-    });
-}
-
+/// Flattens `record` into its leaf fields. Without a `header`, a `null` nested
+/// record is a single field, like any other `null`. With one, it expands to the
+/// columns of the header below its path.
 auto flatten_xsv_row(
   nova::RowView<nova::Record> record, std::string_view prefix,
   Option<std::vector<std::string>> const& header,
@@ -1474,8 +1446,8 @@ private:
         return msb_->record();
       }
     }();
-    parse_line(line, *header_, *original_field_count_, r, opts_, line_counter_,
-               quoting_, dh);
+    parse_line(line, *header_, *original_field_count_, ExpandedFields::fill, r,
+               opts_, line_counter_, quoting_, dh);
   }
 
   ReadXsvArgs args_;
@@ -1811,7 +1783,10 @@ struct ParseXsvFunction {
       }};
     auto builder = nova::EventBuilder::make_prevalidated(args.settings, dh);
     TENZIR_ASSERT(args.opts.header);
-    // `auto_expand` adds the names of excess values to the header.
+    auto const field_count = args.opts.header->size();
+    // `auto_expand` appends the names for excess values to `header`, which
+    // keeps them for later rows. Every row omits the names it has no values
+    // for, so that its fields do not depend on the other rows.
     auto header = *args.opts.header;
     for (auto index : nova::storage::bitmap_iteration(mask)) {
       if (not index) {
@@ -1822,8 +1797,9 @@ struct ParseXsvFunction {
         builder.value().null();
         continue;
       }
-      parse_line(*strings->data.get(*index), header, args.opts.header->size(),
-                 builder.value().record(), args.opts, 0, args.quoting, dh);
+      parse_line(*strings->data.get(*index), header, field_count,
+                 ExpandedFields::omit, builder.value().record(), args.opts, 0,
+                 args.quoting, dh);
     }
     return builder.finish_data();
   }
@@ -1854,7 +1830,8 @@ auto make_xsv_parsing_function(ast::expression input, xsv_parser_options opts,
             continue;
           }
           parse_line(*line, *opts.header, original_field_count,
-                     builder.record(), opts, 0, quoting, ctx);
+                     ExpandedFields::fill, builder.record(), opts, 0, quoting,
+                     ctx);
         }
         return multi_series{builder.finalize()};
       });
@@ -2007,14 +1984,6 @@ auto print_xsv_rows(nova::ValueArgument const& input,
         .emit(frame);
     });
   }
-  // A `null` nested record expands to the columns that the nested record has
-  // in any active row of the batch, regardless of row order.
-  auto header = Option<std::vector<std::string>>{};
-  auto record_paths = Option<std::vector<std::string>>{};
-  if (record_rows.any()) {
-    collect_xsv_columns(records->data, record_rows, "", header.emplace(),
-                        record_paths.emplace());
-  }
   auto builder = nova::ArrayBuilder<nova::Data>{};
   auto buffer = std::string{};
   auto fields
@@ -2029,9 +1998,11 @@ auto print_xsv_rows(nova::ValueArgument const& input,
       builder.null();
       continue;
     }
+    // Without a header, every row prints only its own fields, so a `null`
+    // nested record prints as a single `null` value, independent of the other
+    // rows.
     fields.clear();
-    flatten_xsv_row(records->data.get(*index), "", header, record_paths,
-                    fields);
+    flatten_xsv_row(records->data.get(*index), "", None{}, None{}, fields);
     buffer.clear();
     auto out = std::back_inserter(buffer);
     auto first = true;

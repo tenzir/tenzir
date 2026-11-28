@@ -1,0 +1,9 @@
+// `auto_expand` adds fields only for the excess values of the row itself, so
+// evaluating the function for fewer rows of the same batch does not change the
+// result: `all` and `masked` must be equal. `batch` puts all rows into one
+// batch.
+from {id: 1, x: "1,2,3"}, {id: 2, x: "4"}, {id: 3, x: "5,6"}
+batch 100
+select id,
+  all = x.parse_csv(header="a", auto_expand=true),
+  masked = x.parse_csv(header="a", auto_expand=true) if id != 1 else null
