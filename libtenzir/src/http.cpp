@@ -406,19 +406,12 @@ auto set(std::vector<http::Header>& headers, std::string name,
 }
 
 auto Message::header(const std::string& name) -> Header* {
-  auto pred = [&](auto& x) -> bool {
-    if (x.name.size() != name.size()) {
-      return false;
+  for (auto& candidate : headers) {
+    if (detail::ascii_icase_equal(candidate.name, name)) {
+      return &candidate;
     }
-    for (auto i = 0u; i < name.size(); ++i) {
-      if (::toupper(x.name[i]) != ::toupper(name[i])) {
-        return false;
-      }
-    }
-    return true;
-  };
-  auto i = std::find_if(headers.begin(), headers.end(), pred);
-  return i == headers.end() ? nullptr : &*i;
+  }
+  return nullptr;
 }
 
 auto Message::header(const std::string& name) const -> Header const* {

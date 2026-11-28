@@ -38,9 +38,6 @@
 
   # Python
   programs.ruff-format.enable = true;
-  programs.ruff-format.excludes = [
-    "scripts/splunk-search.py"
-  ];
 
   # Shell
   programs.shellcheck.enable = true;

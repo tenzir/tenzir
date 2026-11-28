@@ -384,12 +384,20 @@ std::string double_unescape(std::string_view str, std::string_view esc) {
 
 std::string replace_all(std::string str, std::string_view search,
                         std::string_view replace) {
-  auto pos = std::string::size_type{0};
-  while ((pos = str.find(search, pos)) != std::string::npos) {
-    str.replace(pos, search.length(), replace);
-    pos += replace.length();
+  if (search.empty()) {
+    return str;
   }
-  return str;
+  auto result = std::string{};
+  result.reserve(str.size());
+  auto remainder = std::string_view{str};
+  for (auto hit = remainder.find(search); hit != std::string_view::npos;
+       hit = remainder.find(search)) {
+    result.append(remainder.substr(0, hit));
+    result.append(replace);
+    remainder.remove_prefix(hit + search.size());
+  }
+  result.append(remainder);
+  return result;
 }
 
 std::vector<std::string_view>

@@ -330,17 +330,16 @@ std::string json_escape(std::string_view str);
 /// @relates json_escape
 std::string json_unescape(std::string_view str);
 
-/// Escapes a string according to percent-encoding.
-/// @note This function escapes all non-*unreserved* characters as listed in
-///       RFC3986. It does *not* correctly preserve HTTP URLs, but servers
-///       merely as poor-man's substitute to prevent illegal characters from
-///       slipping in.
+/// Percent-encodes every character outside the RFC 3986 *unreserved* set.
+/// @note The result is suitable for a single URL component, such as a path
+///       segment or a query value. Applying it to a complete URL also encodes
+///       separators like `/` and `?`.
 /// @param str The string to escape.
 /// @returns The escaped string.
 /// @relates percent_unescape
 std::string percent_escape(std::string_view str);
 
-/// Unescapes a percent-encoded string.
+/// Decodes `%XX` sequences in a string.
 /// @param str The string to unescape.
 /// @returns The unescaped string.
 /// @relates percent_escape
@@ -360,11 +359,10 @@ std::string double_escape(std::string_view str, std::string_view esc);
 /// @relates double_escape
 std::string double_unescape(std::string_view str, std::string_view esc);
 
-/// Replaces all occurences of a substring.
-/// @param str The string in which to replace a substring.
-/// @param search The string to search.
-/// @param replace The replacement string.
-/// @returns The string with replacements.
+/// Substitutes every non-overlapping occurrence of `search` in `str` with
+/// `replace`, scanning from left to right. An empty `search` leaves `str`
+/// unchanged.
+/// @returns The resulting string.
 std::string
 replace_all(std::string str, std::string_view search, std::string_view replace);
 

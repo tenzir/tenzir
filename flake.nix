@@ -51,17 +51,7 @@
       flake-utils,
       ...
     }@inputs:
-    {
-      nixosModules.tenzir = {
-        imports = [
-          ./nix/module.nix
-        ];
-        _module.args = {
-          inherit (self.packages."x86_64-linux") tenzir;
-        };
-      };
-    }
-    // flake-utils.lib.eachSystem [ "x86_64-linux" "aarch64-linux" "aarch64-darwin" ] (
+    flake-utils.lib.eachSystem [ "x86_64-linux" "aarch64-linux" "aarch64-darwin" ] (
       system:
       let
         overlay = import ./nix/overlay.nix;

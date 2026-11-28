@@ -3,7 +3,7 @@
 //    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
 //    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
 //
-// SPDX-FileCopyrightText: (c) 2025
+// SPDX-FileCopyrightText: (c) 2025 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/diagnostics.hpp"

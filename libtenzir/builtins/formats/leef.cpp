@@ -18,7 +18,6 @@
 #include <tenzir/data.hpp>
 #include <tenzir/detail/assert.hpp>
 #include <tenzir/detail/coding.hpp>
-#include <tenzir/detail/line_range.hpp>
 #include <tenzir/detail/string.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/module.hpp>

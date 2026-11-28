@@ -35,20 +35,18 @@ if (NOT DEFINED CPACK_PACKAGE_FILE_NAME)
     string(APPEND CPACK_PACKAGE_FILE_NAME "-${TENZIR_PACKAGE_FILE_NAME_SUFFIX}")
   endif ()
   if (NOT DEFINED CPACK_DEBIAN_FILE_NAME)
-    # Taken from CPackDeb.cmake (BSD 3-Clause).
-    # BEGIN SNIPPET
-    find_program(DPKG_CMD dpkg)
-    if (NOT DPKG_CMD)
-      message(
-        STATUS "TenzirPackage: Can not find dpkg in your path, default to i386."
-      )
-      set(_debian_package_architecture i386)
+    # Debian package names carry the architecture as dpkg spells it, e.g.,
+    # amd64 instead of x86_64. Fall back to i386 like CPack does.
+    find_program(TENZIR_DPKG_EXECUTABLE dpkg)
+    set(_debian_package_architecture i386)
+    if (TENZIR_DPKG_EXECUTABLE)
+      execute_process(
+        COMMAND "${TENZIR_DPKG_EXECUTABLE}" --print-architecture
+        OUTPUT_VARIABLE _debian_package_architecture
+        OUTPUT_STRIP_TRAILING_WHITESPACE)
+    else ()
+      message(STATUS "TenzirPackage: dpkg not found, assuming i386")
     endif ()
-    execute_process(
-      COMMAND "${DPKG_CMD}" --print-architecture
-      OUTPUT_VARIABLE _debian_package_architecture
-      OUTPUT_STRIP_TRAILING_WHITESPACE)
-    # END SNIPPET
     set(CPACK_DEBIAN_FILE_NAME
         "${_edition_name_lower}_${CPACK_PACKAGE_VERSION}_${_debian_package_architecture}.deb"
     )

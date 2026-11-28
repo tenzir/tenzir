@@ -39,7 +39,8 @@
 #  define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_OFF
 #endif
 
-// Important: keep that below the log level mapping
+// These headers include spdlog, which reads SPDLOG_ACTIVE_LEVEL. They must
+// therefore come after the definition above.
 #include "tenzir/detail/logger.hpp"
 #include "tenzir/detail/logger_formatters.hpp"
 

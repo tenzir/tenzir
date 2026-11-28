@@ -181,7 +181,7 @@ tenzir:
   # If not specified no log files are written for clients at all.
   client-log-file: "client.log"
 
-  # Format for printing individual log entries to the log-file.
+  # The layout of each line in the log file.
   # For a list of valid format specifiers, see spdlog format specification
   # at https://github.com/gabime/spdlog/wiki/3.-Custom-formatting.
   file-format: "[%Y-%m-%dT%T.%e%z] [%n] [%l] [%s:%#] %v"
@@ -213,7 +213,7 @@ tenzir:
 
   # Mode for console log output generation. Automatic renders color only when
   # writing to a tty.
-  # Possible values: always, automatic, never. (default automatic)
+  # Possible values: always, automatic (default), never.
   console: automatic
 
   # Format for printing individual log entries to the console. For a list

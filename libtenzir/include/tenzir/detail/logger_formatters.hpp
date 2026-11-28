@@ -99,18 +99,25 @@ struct use_name_member_formatter<caf::blocking_actor> : std::true_type {};
 template <>
 struct use_name_member_formatter<caf::event_based_actor> : std::true_type {};
 
+namespace detail {
+
+/// Base for `fmt::formatter` specializations that accept no format
+/// specification, so that only the plain `{}` placeholder is valid.
+struct formatter_without_spec {
+  template <class ParseContext>
+  constexpr auto parse(ParseContext& ctx) {
+    return ctx.begin();
+  }
+};
+
+} // namespace detail
 } // namespace tenzir
 
 namespace fmt {
 
 template <class T>
   requires(tenzir::use_deep_to_string_formatter<T>::value)
-struct formatter<T> {
-  template <class ParseContext>
-  constexpr auto parse(ParseContext& ctx) {
-    return ctx.begin();
-  }
-
+struct formatter<T> : tenzir::detail::formatter_without_spec {
   template <class FormatContext>
   constexpr auto format(const T& value, FormatContext& ctx) const
     -> decltype(ctx.out()) {
@@ -120,12 +127,7 @@ struct formatter<T> {
 
 template <class T>
   requires(tenzir::use_name_member_formatter<T>::value)
-struct formatter<T> {
-  template <class ParseContext>
-  constexpr auto parse(ParseContext& ctx) {
-    return ctx.begin();
-  }
-
+struct formatter<T> : tenzir::detail::formatter_without_spec {
   template <class FormatContext>
   constexpr auto format(const T& value, FormatContext& ctx) const
     -> decltype(ctx.out()) {
@@ -139,28 +141,20 @@ struct formatter<T> {
 };
 
 template <class T>
-struct formatter<tenzir::detail::single_arg_wrapper<T>> {
-  template <class ParseContext>
-  constexpr auto parse(ParseContext& ctx) {
-    return ctx.begin();
-  }
-
+struct formatter<tenzir::detail::named_value<T>>
+  : tenzir::detail::formatter_without_spec {
   template <class FormatContext>
-  auto format(const tenzir::detail::single_arg_wrapper<T>& value,
+  auto format(const tenzir::detail::named_value<T>& value,
               FormatContext& ctx) const {
     return fmt::format_to(ctx.out(), "{} = {}", value.name, value.value);
   }
 };
 
 template <class T>
-struct formatter<tenzir::detail::range_arg_wrapper<T>> {
-  template <class ParseContext>
-  constexpr auto parse(ParseContext& ctx) {
-    return ctx.begin();
-  }
-
+struct formatter<tenzir::detail::named_range<T>>
+  : tenzir::detail::formatter_without_spec {
   template <class FormatContext>
-  auto format(const tenzir::detail::range_arg_wrapper<T>& value,
+  auto format(const tenzir::detail::named_range<T>& value,
               FormatContext& ctx) const {
     return fmt::format_to(ctx.out(), "{} = <{}>", value.name,
                           join(value.first, value.last, ", "));
@@ -168,12 +162,8 @@ struct formatter<tenzir::detail::range_arg_wrapper<T>> {
 };
 
 template <class T>
-struct formatter<caf::intrusive_ptr<T>> {
-  template <class ParseContext>
-  constexpr auto parse(ParseContext& ctx) {
-    return ctx.begin();
-  }
-
+struct formatter<caf::intrusive_ptr<T>>
+  : tenzir::detail::formatter_without_spec {
   template <class FormatContext>
   auto format(const caf::intrusive_ptr<T>& value, FormatContext& ctx) const {
     if (not value) {
@@ -184,12 +174,8 @@ struct formatter<caf::intrusive_ptr<T>> {
 };
 
 template <class T>
-struct formatter<caf::intrusive_cow_ptr<T>> {
-  template <class ParseContext>
-  constexpr auto parse(ParseContext& ctx) {
-    return ctx.begin();
-  }
-
+struct formatter<caf::intrusive_cow_ptr<T>>
+  : tenzir::detail::formatter_without_spec {
   template <class FormatContext>
   auto
   format(const caf::intrusive_cow_ptr<T>& value, FormatContext& ctx) const {
@@ -201,12 +187,7 @@ struct formatter<caf::intrusive_cow_ptr<T>> {
 };
 
 template <class T>
-struct formatter<caf::expected<T>> {
-  template <class ParseContext>
-  constexpr auto parse(ParseContext& ctx) {
-    return ctx.begin();
-  }
-
+struct formatter<caf::expected<T>> : tenzir::detail::formatter_without_spec {
   template <class FormatContext>
   auto format(const caf::expected<T>& value, FormatContext& ctx) const {
     if (not value) {
@@ -217,12 +198,7 @@ struct formatter<caf::expected<T>> {
 };
 
 template <>
-struct formatter<caf::error> {
-  template <class ParseContext>
-  constexpr auto parse(ParseContext& ctx) {
-    return ctx.begin();
-  }
-
+struct formatter<caf::error> : tenzir::detail::formatter_without_spec {
   template <class FormatContext>
   auto format(const caf::error& value, FormatContext& ctx) const {
     return fmt::format_to(ctx.out(), "{}", tenzir::render(value));
@@ -239,12 +215,7 @@ struct formatter<boost::core::string_view> : formatter<std::string_view> {
 };
 
 template <class T>
-struct formatter<std::span<T>> {
-  template <class ParseContext>
-  constexpr auto parse(ParseContext& ctx) {
-    return ctx.begin();
-  }
-
+struct formatter<std::span<T>> : tenzir::detail::formatter_without_spec {
   template <class FormatContext>
   auto format(const std::span<T>& value, FormatContext& ctx) const {
     return fmt::format_to(ctx.out(), "tenzir.span({})",
@@ -253,12 +224,8 @@ struct formatter<std::span<T>> {
 };
 
 template <>
-struct formatter<std::span<std::byte>> {
-  template <class ParseContext>
-  constexpr auto parse(ParseContext& ctx) {
-    return ctx.begin();
-  }
-
+struct formatter<std::span<std::byte>>
+  : tenzir::detail::formatter_without_spec {
   template <class FormatContext>
   auto format(const std::span<std::byte>&, FormatContext& ctx) const {
     // Inentioanlly unprintable.
@@ -276,12 +243,7 @@ struct formatter<std::filesystem::path> : formatter<std::string> {};
 #if (FMT_VERSION / 10000) < 11
 
 template <>
-struct formatter<std::error_code> {
-  template <class ParseContext>
-  constexpr auto parse(ParseContext& ctx) {
-    return ctx.begin();
-  }
-
+struct formatter<std::error_code> : tenzir::detail::formatter_without_spec {
   template <class FormatContext>
   constexpr auto format(const std::error_code& value, FormatContext& ctx) const
     -> decltype(ctx.out()) {

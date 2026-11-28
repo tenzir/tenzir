@@ -125,12 +125,9 @@ TEST("percent escaping") {
   CHECK_EQUAL(percent_escape(""), "");
   CHECK_EQUAL(percent_unescape(""), "");
   CHECK_EQUAL(percent_escape("ABC"), "ABC");
-
-  CHECK(percent_escape("/f o o/index.html&foo=b@r")
-        == "%2Ff%20o%20o%2Findex.html%26foo%3Db%40r");
-  CHECK(percent_unescape("/f%20o%20o/index.html&foo=b@r")
-        == "/f o o/index.html&foo=b@r");
-
+  CHECK_EQUAL(percent_escape("a-b_c.d~e"), "a-b_c.d~e");
+  CHECK_EQUAL(percent_escape("/a b/c?d=e"), "%2Fa%20b%2Fc%3Fd%3De");
+  CHECK_EQUAL(percent_unescape("/a%20b/c?d=e"), "/a b/c?d=e");
   CHECK_EQUAL(percent_escape("&text"), "%26text");
   CHECK_EQUAL(percent_unescape("%26text"), "&text");
   CHECK_EQUAL(percent_unescape("text%3C"), "text<");

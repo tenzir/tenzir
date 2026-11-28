@@ -117,27 +117,6 @@ struct byte_parser : parser_base<byte_parser<T, Policy, Bytes>> {
   }
 };
 
-template <size_t N, class T = uint8_t>
-struct static_bytes_parser : parser_base<static_bytes_parser<N>> {
-  static_assert(sizeof(T) == 1, "byte type T must have size 1");
-
-  using attribute = std::array<T, N>;
-
-  template <typename Iterator>
-  auto parse(Iterator& f, const Iterator& l, std::array<T, N>& x) const
-    -> bool {
-    auto save = f;
-    for (auto i = 0u; i < N; i++) {
-      if (save == l) {
-        return false;
-      }
-      x[i] = *save++ & 0xFF;
-    }
-    f = save;
-    return true;
-  }
-};
-
 template <class N = size_t, class T = uint8_t>
 struct dynamic_bytes_parser : parser_base<dynamic_bytes_parser<N, T>> {
   static_assert(sizeof(T) == 1, "byte type T must have size 1");
@@ -186,15 +165,6 @@ auto const b16le = byte_parser<uint16_t, policy::little_endian>{};
 auto const b32le = byte_parser<uint32_t, policy::little_endian>{};
 auto const b64le = byte_parser<uint64_t, policy::little_endian>{};
 
-template <size_t N, class T = uint8_t>
-auto const bytes = static_bytes_parser<N, T>{};
-
-// TODO: Make the interface coherent by replacing the above variable template
-// with this function and then renaming nbytes to bytes.
-// template <size_t N, class T = uint8_t>
-// auto bytes() {
-//  return static_bytes_parser<N, T>{};
-//}
 template <class T, class N>
 auto nbytes(const N& n) {
   return dynamic_bytes_parser<N, T>{n};

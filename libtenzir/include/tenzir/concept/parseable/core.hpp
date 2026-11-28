@@ -30,5 +30,4 @@
 #include "tenzir/concept/parseable/core/rule.hpp"         // IWYU pragma: export
 #include "tenzir/concept/parseable/core/sequence.hpp"     // IWYU pragma: export
 #include "tenzir/concept/parseable/core/sequence_choice.hpp" // IWYU pragma: export
-#include "tenzir/concept/parseable/core/skip.hpp" // IWYU pragma: export
 #include "tenzir/concept/parseable/core/when.hpp" // IWYU pragma: export

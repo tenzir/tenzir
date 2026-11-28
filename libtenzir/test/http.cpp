@@ -8,7 +8,6 @@
 
 #include "tenzir/concept/parseable/tenzir/http.hpp"
 
-#include "tenzir/concept/printable/tenzir/http.hpp"
 #include "tenzir/concept/printable/to_string.hpp"
 #include "tenzir/http.hpp"
 #include "tenzir/http_pool.hpp"

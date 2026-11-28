@@ -5,6 +5,91 @@
 //
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
+//
+// This file contains 3rd-party code that has been adapted to fit into the
+// Tenzir code base. The PATRICIA trie implementation in the anonymous namespace
+// below comes from the MRT routing toolkit via Zeek's fork of CAIDA's
+// libpatricia. Details about the original code:
+//
+// - Repository: https://github.com/CAIDA/cc-common
+// - Commit:     fd262ab5ac5bae8b0d4a8b5e2e723115b1846376
+// - Path:       libpatricia/patricia.c, libpatricia/patricia.h
+// - Author:     Dave Plonka, Merit Network, Inc., and contributors
+// - Copyright:  (c) 1999-2013 The Regents of the University of Michigan and
+//               Merit Network, Inc.
+// - License:    BSD-2-Clause (see below)
+//
+// The `patricia_search_all` function and the other modifications listed below
+// come from Zeek:
+//
+// - Repository: https://github.com/zeek/zeek-3rdparty
+// - Path:       patricia.c, patricia.h
+// - Copyright:  (c) 1995-now, The Regents of the University of California
+//               through the Lawrence Berkeley National Laboratory and the
+//               International Computer Science Institute.
+// - License:    BSD-3-Clause (see below)
+//
+// License of the libpatricia code:
+//
+//   Copyright (c) 1999-2013
+//
+//   The Regents of the University of Michigan ("The Regents") and Merit
+//   Network, Inc.
+//
+//   Redistributions of source code must retain the above copyright notice,
+//   this list of conditions and the following disclaimer.
+//
+//   Redistributions in binary form must reproduce the above copyright
+//   notice, this list of conditions and the following disclaimer in the
+//   documentation and/or other materials provided with the distribution.
+//
+//   THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+//   "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+//   LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+//   A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+//   HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+//   SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+//   LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+//   DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+//   THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+//   (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+//   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+//
+// License of the Zeek modifications:
+//
+//   Copyright (c) 1995-now, The Regents of the University of California
+//   through the Lawrence Berkeley National Laboratory and the
+//   International Computer Science Institute. All rights reserved.
+//
+//   Redistribution and use in source and binary forms, with or without
+//   modification, are permitted provided that the following conditions are
+//   met:
+//
+//   (1) Redistributions of source code must retain the above copyright
+//       notice, this list of conditions and the following disclaimer.
+//
+//   (2) Redistributions in binary form must reproduce the above copyright
+//       notice, this list of conditions and the following disclaimer in the
+//       documentation and/or other materials provided with the
+//       distribution.
+//
+//   (3) Neither the name of the University of California, Lawrence Berkeley
+//       National Laboratory, U.S. Dept. of Energy, International Computer
+//       Science Institute, nor the names of contributors may be used to
+//       endorse or promote products derived from this software without
+//       specific prior written permission.
+//
+//   THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+//   "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+//   LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+//   A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+//   OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+//   SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+//   LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+//   DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+//   THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+//   (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+//   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "tenzir/detail/subnet_tree.hpp"
 

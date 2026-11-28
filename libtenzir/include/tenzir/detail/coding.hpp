@@ -24,9 +24,9 @@ struct lowercase {};
 
 namespace tenzir::detail {
 
-/// Converts a byte value into an ASCII character.
-/// @param b The byte to convert.
-/// @returns The ASCII representation of *b*.
+/// Maps a nibble value between 0 and 15 onto its lowercase hex digit.
+/// @param b The nibble value.
+/// @returns The hex digit for *b*.
 /// @relates byte_to_hex hex_to_byte
 template <class T>
 constexpr auto byte_to_char(T b) -> char {
@@ -49,7 +49,8 @@ constexpr auto byte_to_hex(T x, const char (&xs)[16 + 1])
   return {xs[hi], xs[lo]};
 }
 
-/// Converts a byte value into a hex value.
+/// Converts a byte value into two hex digits, in the case the `Policy`
+/// selects.
 /// @param x The byte to convert.
 /// @returns The two hex nibbles as `(high, low)` pair.
 /// @relates byte_to_char hex_to_byte
@@ -91,7 +92,7 @@ auto hexify(std::span<const std::byte> xs) -> std::string {
 /// Converts a single hex character into its byte value.
 /// @param hex The hex character.
 /// @returns The byte value of *hex* or 0 if *hex* is not a valid hex char.
-/// @relates byte_to_hex byte_to_char
+/// @relates byte_to_char byte_to_hex
 template <class T>
 constexpr auto hex_to_byte(T hex) -> char {
   static_assert(std::is_integral_v<T> or sizeof(T) == 1);
@@ -107,10 +108,10 @@ constexpr auto hex_to_byte(T hex) -> char {
   return '\0';
 }
 
-/// Converts two characters representing a hex byte into a single byte value.
-/// @param hi The high hex nibble.
-/// @param lo The low hex nibble.
-/// @relates byte_to_hex byte_to_char
+/// Combines two hex digits into the byte value they encode.
+/// @param hi The digit for the upper four bits.
+/// @param lo The digit for the lower four bits.
+/// @relates byte_to_char byte_to_hex
 template <class T>
 constexpr auto hex_to_byte(T hi, T lo) -> char {
   static_assert(std::is_integral_v<T> or sizeof(T) == 1);

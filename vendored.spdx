@@ -144,17 +144,6 @@ LicenseComments: Includes code from https://github.com/Naios/function2
 
 Relationship: SPDXRef-Tenzir CONTAINS SPDXRef-file-libtenzir-include-tenzir-function-hpp
 
-FileName: ./libtenzir/include/tenzir/detail/absorb_line.hpp
-SPDXID: SPDXRef-file-libtenzir-include-tenzir-absorb-line-hpp
-FileChecksum: SHA1: c4bbdb45b992feee40d9227911f4649ebd1eec2f
-FileChecksum: SHA256: 845dcd0d5bb72195d2591e3d73eb200f7361594a263272db079dbfb714842e4f
-FileCopyrightText: (c) 2017 user763305 et al.
-LicenseConcluded: CC-BY-SA-3.0
-LicenseInfoInFile: CC-BY-SA-3.0
-LicenseComments: See https://stackoverflow.com/a/6089413/92560
-
-Relationship: SPDXRef-Tenzir CONTAINS SPDXRef-file-libtenzir-include-tenzir-absorb-line-hpp
-
 FileName: ./libtenzir/include/tenzir/generator.hpp
 SPDXID: SPDXRef-file-libtenzir-include-tenzir-generator-hpp
 FileChecksum: SHA1: e131f23b99a569cf5a8e7e5fa03d064577acfdf5
@@ -209,3 +198,85 @@ LicenseInfoInFile: MIT
 LicenseComments: https://github.com/mariusbancila/croncpp
 
 Relationship: SPDXRef-Tenzir CONTAINS SPDXRef-file-libtenzir-include-tenzir-croncpp-hpp
+
+FileName: ./libtenzir/src/detail/subnet_tree.cpp
+SPDXID: SPDXRef-file-libtenzir-src-detail-subnet-tree-cpp
+FileChecksum: SHA1: ada843c7d720cc3349b7f8d23c28d405fba5b58d
+FileChecksum: SHA256: a6bcdd9a226bc362ccf9028b405252efe383072bfd5462cfa6796e46e19d09ba
+FileCopyrightText: (c) 1999-2013 The Regents of the University of Michigan and Merit Network, Inc.; (c) 1995-now The Regents of the University of California through the Lawrence Berkeley National Laboratory and the International Computer Science Institute
+LicenseConcluded: BSD-2-Clause AND BSD-3-Clause
+LicenseInfoInFile: BSD-2-Clause AND BSD-3-Clause
+LicenseComments: PATRICIA trie from https://github.com/CAIDA/cc-common (libpatricia) with modifications from https://github.com/zeek/zeek-3rdparty
+
+Relationship: SPDXRef-Tenzir CONTAINS SPDXRef-file-libtenzir-src-detail-subnet-tree-cpp
+
+FileName: ./libtenzir/src/detail/geodesic.cpp
+SPDXID: SPDXRef-file-libtenzir-src-detail-geodesic-cpp
+FileChecksum: SHA1: c4017281a3ee364446f756a1d628dcbecac37231
+FileChecksum: SHA256: 39b950dbb1814760dcb0bcccf75dd72fc45075c273a9c55f0622f023a08819c7
+FileCopyrightText: (c) Charles Karney (2012-2025)
+LicenseConcluded: MIT
+LicenseInfoInFile: MIT
+LicenseComments: https://github.com/geographiclib/geographiclib-c
+
+Relationship: SPDXRef-Tenzir CONTAINS SPDXRef-file-libtenzir-src-detail-geodesic-cpp
+
+FileName: ./libtenzir/include/tenzir/detail/tdigest.hpp
+SPDXID: SPDXRef-file-libtenzir-include-tenzir-detail-tdigest-hpp
+FileChecksum: SHA1: 4930548fa7829c4ca310854dcf6becedd4631461
+FileChecksum: SHA256: 10134723776647af380ce17bf06b4fc1021f58413aad398f5d08356400c3173b
+FileCopyrightText: Copyright (C) Apache Software Foundation
+LicenseConcluded: Apache-2.0
+LicenseInfoInFile: Apache-2.0
+LicenseComments: Adapted from the Apache Arrow library.
+
+Relationship: SPDXRef-Tenzir CONTAINS SPDXRef-file-libtenzir-include-tenzir-detail-tdigest-hpp
+
+FileName: ./libtenzir/src/detail/tdigest.cpp
+SPDXID: SPDXRef-file-libtenzir-src-detail-tdigest-cpp
+FileChecksum: SHA1: 9bbaec861027068689d40034b6f895e204eecf8a
+FileChecksum: SHA256: 786a717f1ddd4f2b58644f80a99375d59943b3ec233b27c3e92c53adc0b130d5
+FileCopyrightText: Copyright (C) Apache Software Foundation
+LicenseConcluded: Apache-2.0
+LicenseInfoInFile: Apache-2.0
+LicenseComments: Adapted from the Apache Arrow library.
+
+Relationship: SPDXRef-Tenzir CONTAINS SPDXRef-file-libtenzir-src-detail-tdigest-cpp
+
+FileName: ./libtenzir/builtins/formats/grok-patterns/*
+SPDXID: SPDXRef-file-libtenzir-builtins-formats-grok-patterns
+FileCopyrightText: Copyright 2012-2015 Elasticsearch; Copyright 2020 Elastic and contributors
+LicenseConcluded: Apache-2.0
+LicenseInfoInFile: Apache-2.0
+LicenseComments: Grok patterns from Logstash, https://github.com/logstash-plugins/logstash-patterns-core
+
+Relationship: SPDXRef-Tenzir CONTAINS SPDXRef-file-libtenzir-builtins-formats-grok-patterns
+
+FileName: ./plugins/fluent-bit/include/fluent-bit/fluent-bit-minimal.h
+SPDXID: SPDXRef-file-plugins-fluent-bit-include-fluent-bit-fluent-bit-minimal-h
+FileChecksum: SHA1: 96d46a924657fb5dc52a54ba8146ebc14523ba63
+FileChecksum: SHA256: 4ce70e9b8a9f23324cdca3782b23db3f8598acb7be8a0a0181dd03308a9a759f
+FileCopyrightText: The Fluent Bit Authors
+LicenseConcluded: Apache-2.0
+LicenseInfoInFile: Apache-2.0
+LicenseComments: Derived from include/fluent-bit/flb_lib.h of https://github.com/fluent/fluent-bit
+
+Relationship: SPDXRef-Tenzir CONTAINS SPDXRef-file-plugins-fluent-bit-include-fluent-bit-fluent-bit-minimal-h
+
+FileName: ./plugins/prometheus/proto/*
+SPDXID: SPDXRef-file-plugins-prometheus-proto
+FileCopyrightText: Copyright 2016-2024 Prometheus Team
+LicenseConcluded: Apache-2.0
+LicenseInfoInFile: Apache-2.0
+LicenseComments: Protocol definitions from https://github.com/prometheus/prometheus
+
+Relationship: SPDXRef-Tenzir CONTAINS SPDXRef-file-plugins-prometheus-proto
+
+FileName: ./test/fixtures/protos/google/*
+SPDXID: SPDXRef-file-test-fixtures-protos-google
+FileCopyrightText: Copyright 2025 Google LLC
+LicenseConcluded: Apache-2.0
+LicenseInfoInFile: Apache-2.0
+LicenseComments: Test fixtures from https://github.com/googleapis/googleapis
+
+Relationship: SPDXRef-Tenzir CONTAINS SPDXRef-file-test-fixtures-protos-google
