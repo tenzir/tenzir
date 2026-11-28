@@ -1,0 +1,8 @@
+---
+error: true
+---
+
+from {org: "acme", labels: {app: "a"}, line: "x"}
+to_loki "http://127.0.0.1:3100",
+        tenant=org,
+        headers={"X-Scope-OrgID": "static"}

@@ -1,0 +1,277 @@
+suite:
+  name: to-loki-basic
+  mode: sequential
+fixtures: [loki_push_mock]
+assertions:
+  fixtures:
+    loki_push_mock:
+      unordered_tests:
+        - 12_parallel_multi_tenant.tql
+      requests:
+        01_protobuf_default.tql:
+          - path: /loki/api/v1/push
+            content_type: application/x-protobuf
+            content_encoding: null
+            tenant: null
+            streams:
+              - labels: '{app="api", code="200", env="prod", note="hi \"quote\"\n\\ok"}'
+                entries:
+                  - timestamp_ns: 1778839200123456789
+                    line: request handled
+                    structured_metadata:
+                      retries: "2"
+                      trace_id: abc-123
+                      user: alice
+                  - timestamp_ns: 1778839201000000000
+                    line: second line without metadata
+        02_json_gzip.tql:
+          - path: /loki/api/v1/push
+            content_type: application/json
+            content_encoding: gzip
+            tenant: null
+            streams:
+              - stream:
+                  env: staging
+                  service: auth
+                values:
+                  - - "1778839200000000000"
+                    - login succeeded
+                    - ok: "true"
+                      trace_id: t-1
+                  - - "1778839201000000000"
+                    - plain event
+        03_json_uncompressed.tql:
+          - path: /loki/api/v1/push
+            content_type: application/json
+            content_encoding: null
+            tenant: null
+            streams:
+              - stream:
+                  app: worker
+                values:
+                  - - "1778839200000000000"
+                    - uncompressed json
+        04_multi_tenant.tql:
+          - path: /loki/api/v1/push
+            content_type: application/x-protobuf
+            content_encoding: null
+            tenant: null
+            streams:
+              - labels: '{app="shared"}'
+                entries:
+                  - timestamp_ns: 1778839202000000000
+                    line: no-tenant
+          - path: /loki/api/v1/push
+            content_type: application/x-protobuf
+            content_encoding: null
+            tenant: tenant-a
+            streams:
+              - labels: '{app="web"}'
+                entries:
+                  - timestamp_ns: 1778839201000000000
+                    line: a-1
+                  - timestamp_ns: 1778839203000000000
+                    line: a-2
+          - path: /loki/api/v1/push
+            content_type: application/x-protobuf
+            content_encoding: null
+            tenant: tenant-b
+            streams:
+              - labels: '{app="billing"}'
+                entries:
+                  - timestamp_ns: 1778839200000000000
+                    line: b-1
+        05_line_record_json.tql:
+          - path: /loki/api/v1/push
+            content_type: application/x-protobuf
+            content_encoding: null
+            tenant: null
+            streams:
+              - labels: '{app="checkout", level="warn"}'
+                entries:
+                  - timestamp_ns: 1778839200000000000
+                    line: '{"service":"checkout","level":"warn","msg":"slow query","duration_ms":420,"ts":"2026-05-15T10:00:00Z"}'
+                    structured_metadata:
+                      duration_ms: "420"
+        06_custom_headers_and_path.tql:
+          - path: /custom/push?k=v
+            content_type: application/x-protobuf
+            content_encoding: null
+            tenant: static-tenant
+            headers:
+              Authorization: Bearer test-token
+              X-Custom: hello
+            streams:
+              - labels: '{app="gateway"}'
+                entries:
+                  - timestamp_ns: 1778839200000000000
+                    line: routed
+        07_timestamp_sorting_and_split.tql:
+          - path: /loki/api/v1/push
+            content_type: application/json
+            content_encoding: null
+            tenant: null
+            streams:
+              - stream:
+                  app: split
+                values:
+                  - - "1778839201000000000"
+                    - '1""""""""""""""""""""'
+                  - - "1778839202000000000"
+                    - '2""""""""""""""""""""'
+          - path: /loki/api/v1/push
+            content_type: application/json
+            content_encoding: null
+            tenant: null
+            streams:
+              - stream:
+                  app: split
+                values:
+                  - - "1778839203000000000"
+                    - '3""""""""""""""""""""'
+                  - - "1778839204000000000"
+                    - '4""""""""""""""""""""'
+        08_invalid_rows_skip.tql:
+          - path: /loki/api/v1/push
+            content_type: application/x-protobuf
+            content_encoding: null
+            tenant: null
+            streams:
+              - labels: '{app="ok"}'
+                entries:
+                  - timestamp_ns: 1778839203000000000
+                    line: valid with bad metadata
+        09_timer_flushes_before_finalize.tql:
+          - path: /loki/api/v1/push
+            content_type: application/x-protobuf
+            content_encoding: null
+            tenant: null
+            streams:
+              - labels: '{app="timer"}'
+                entries:
+                  - timestamp_ns: 1778839200000000000
+                    line: tick
+          - path: /loki/api/v1/push
+            content_type: application/x-protobuf
+            content_encoding: null
+            tenant: null
+            streams:
+              - labels: '{app="timer"}'
+                entries:
+                  - timestamp_ns: 1778839200000000000
+                    line: tick
+        10_retry_429.tql:
+          - path: /retry-429/loki/api/v1/push
+            status: 429
+            attempt: 1
+          - path: /retry-429/loki/api/v1/push
+            status: 429
+            attempt: 2
+          - path: /retry-429/loki/api/v1/push
+            content_type: application/x-protobuf
+            content_encoding: null
+            tenant: null
+            streams:
+              - labels: '{app="retry"}'
+                entries:
+                  - timestamp_ns: 1778839200000000000
+                    line: retried event
+        11_http_400_no_retry.tql:
+          - path: /bad-request/loki/api/v1/push
+            status: 400
+        12_parallel_multi_tenant.tql:
+          - path: /barrier-2/loki/api/v1/push
+            content_type: application/x-protobuf
+            content_encoding: null
+            tenant: t1
+            streams:
+              - labels: '{app="svc"}'
+                entries:
+                  - timestamp_ns: 1778839200000000000
+                    line: m1
+          - path: /barrier-2/loki/api/v1/push
+            content_type: application/x-protobuf
+            content_encoding: null
+            tenant: t2
+            streams:
+              - labels: '{app="svc"}'
+                entries:
+                  - timestamp_ns: 1778839201000000000
+                    line: m2
+        13_default_timestamp_fallback.tql:
+          - path: /loki/api/v1/push
+            content_type: application/x-protobuf
+            content_encoding: null
+            tenant: null
+            streams:
+              - labels: '{app="clock"}'
+                entries:
+                  - timestamp_ns: "<recent>"
+                    line: omitted timestamp
+                  - timestamp_ns: "<recent>"
+                    line: null timestamp
+        14_single_entry_too_large.tql: []
+        15_http_260_blocked.tql:
+          - path: /blocked-260/loki/api/v1/push
+            status: 260
+        16_huge_error_body.tql:
+          - path: /huge-error/loki/api/v1/push
+            status: 400
+            huge: true
+        17_same_tenant_serialized.tql:
+          - path: /hold-same-tenant/loki/api/v1/push
+            status: 429
+            attempt: 1
+          - path: /hold-same-tenant/loki/api/v1/push
+            content_type: application/x-protobuf
+            content_encoding: null
+            tenant: tenant-a
+            streams:
+              - labels: '{app="ordered"}'
+                entries:
+                  - timestamp_ns: 1778839200000000000
+                    line: batch-1
+          - path: /hold-same-tenant/loki/api/v1/push
+            content_type: application/x-protobuf
+            content_encoding: null
+            tenant: tenant-a
+            streams:
+              - labels: '{app="ordered"}'
+                entries:
+                  - timestamp_ns: 1778839201000000000
+                    line: batch-2
+        18_tenant_id_validation.tql:
+          - path: /loki/api/v1/push
+            content_type: application/x-protobuf
+            content_encoding: null
+            tenant: __mimir_cluster
+            streams:
+              - labels: '{app="tenants"}'
+                entries:
+                  - timestamp_ns: 1778839201000000000
+                    line: mimir_cluster allowed
+          - path: /loki/api/v1/push
+            content_type: application/x-protobuf
+            content_encoding: null
+            tenant: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+            streams:
+              - labels: '{app="tenants"}'
+                entries:
+                  - timestamp_ns: 1778839200000000000
+                    line: exact 150 bytes ok
+        19_invalid_custom_headers_no_request.tql: []
+        20_invalid_static_tenant_header.tql: []
+        21_http_200_rejected.tql:
+          - path: /ok-200/loki/api/v1/push
+            status: 200
+        22_stalled_260_no_replay.tql:
+          - path: /stalled-260/loki/api/v1/push
+            status: 260
+            stalled: 1-byte
+        23_stalled_400_zero_bytes_no_replay.tql:
+          - path: /stalled-400/loki/api/v1/push
+            status: 400
+            stalled: 0-bytes
+        24_reserved_header_redacts_inline_secret.tql: []
+        25_wrong_header_type_redacts_inline_secret.tql: []
+timeout: 60

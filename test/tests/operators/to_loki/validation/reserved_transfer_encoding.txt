@@ -1,0 +1,2 @@
+error: `to_loki` header `Transfer-Encoding` is reserved
+  = note: this header is managed by `to_loki`

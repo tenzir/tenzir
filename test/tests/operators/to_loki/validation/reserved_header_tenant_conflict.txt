@@ -1,0 +1,2 @@
+error: `to_loki` header `X-Scope-OrgID` is reserved
+  = note: `X-Scope-OrgID` is managed per batch when `tenant` is specified

@@ -1,0 +1,16 @@
+---
+error: true
+---
+
+from {
+  labels: {app: "stalled"},
+  line: "must not replay 400",
+  timestamp: 2026-05-15T10:00:00Z,
+}
+to_loki env("LOKI_STALLED_400_URL"),
+        timeout=150ms,
+        max_retry_count=3,
+        retry_delay=30s,
+        flush_interval=10s,
+        max_batch_size=100,
+        parallel=1

@@ -1,0 +1,12 @@
+from {
+  labels: {app: "clock"},
+  line: "omitted timestamp",
+}, {
+  labels: {app: "clock"},
+  line: "null timestamp",
+  timestamp: null,
+}
+to_loki env("LOKI_PUSH_URL"),
+        flush_interval=10s,
+        max_batch_size=100,
+        parallel=1

@@ -28,6 +28,7 @@ from . import hydrolix  # noqa: F401
 from . import kafka  # noqa: F401
 from . import local_files  # noqa: F401
 from . import localstack  # noqa: F401
+from . import loki_push_mock  # noqa: F401
 from . import microsoft_defender  # noqa: F401
 from . import microsoft_graph  # noqa: F401
 from . import microsoft_365_activity  # noqa: F401
@@ -94,6 +95,7 @@ __all__ = [
     "kafka",
     "local_files",
     "localstack",
+    "loki_push_mock",
     "microsoft_defender",
     "microsoft_graph",
     "microsoft_365_activity",

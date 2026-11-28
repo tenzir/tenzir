@@ -1,0 +1,11 @@
+---
+error: true
+---
+
+from {
+  labels: {app: "hdr"},
+  line: "should not send",
+  timestamp: 2026-05-15T10:00:00Z,
+}
+to_loki env("LOKI_PUSH_URL"),
+        headers={"X-Scope-OrgID": "invalid/tenant-secret-canary"}

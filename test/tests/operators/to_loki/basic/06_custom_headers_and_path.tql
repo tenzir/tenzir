@@ -1,0 +1,14 @@
+from {
+  labels: {app: "gateway"},
+  line: "routed",
+  timestamp: 2026-05-15T10:00:00Z,
+}
+to_loki env("LOKI_CUSTOM_URL") + "?k=v#client-only",
+        headers={
+          Authorization: "Bearer test-token",
+          "X-Custom": "hello",
+          "X-Scope-OrgID": "static-tenant",
+        },
+        flush_interval=10s,
+        max_batch_size=100,
+        parallel=1

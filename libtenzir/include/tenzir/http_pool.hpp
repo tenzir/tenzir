@@ -143,6 +143,11 @@ struct HttpStreamCallbacks {
   /// Providing this callback permits retries after partial response bodies were
   /// delivered.
   std::function<void()> on_retry;
+  /// Whether a transport failure while reading the response body may retry
+  /// after final non-retryable headers have arrived (when no body bytes have
+  /// been delivered yet, or `on_retry` is set). Set to `false` for requests
+  /// where receiving final headers is authoritative and must not be replayed.
+  bool retry_after_headers = true;
 };
 
 /// Registers well-known system CA bundle paths for Proxygen HTTPS clients.

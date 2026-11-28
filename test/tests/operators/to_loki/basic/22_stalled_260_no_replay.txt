@@ -1,0 +1,7 @@
+error: Loki blocked log ingestion with HTTP status 260
+  --> tests/operators/to_loki/basic/22_stalled_260_no_replay.tql:10:1
+   |
+10 | to_loki env("LOKI_STALLED_260_URL"),
+   | ^^^^^^^
+   |
+   = hint: ingestion is blocked on the Loki server or tenant; check Loki blocklist and quota settings

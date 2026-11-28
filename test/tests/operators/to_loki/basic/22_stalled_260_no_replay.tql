@@ -1,0 +1,16 @@
+---
+error: true
+---
+
+from {
+  labels: {app: "stalled"},
+  line: "must not replay 260",
+  timestamp: 2026-05-15T10:00:00Z,
+}
+to_loki env("LOKI_STALLED_260_URL"),
+        timeout=150ms,
+        max_retry_count=3,
+        retry_delay=0s,
+        flush_interval=10s,
+        max_batch_size=100,
+        parallel=1

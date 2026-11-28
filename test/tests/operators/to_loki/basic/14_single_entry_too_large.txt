@@ -1,0 +1,6 @@
+error: Loki push request with a single entry exceeds `max_batch_bytes`
+  --> tests/operators/to_loki/basic/14_single_entry_too_large.tql:11:25
+   |
+11 |         max_batch_bytes=16,
+   |                         ^^
+   |

@@ -1,0 +1,12 @@
+every 200ms {
+  from {
+    labels: {app: "timer"},
+    line: "tick",
+    timestamp: 2026-05-15T10:00:00Z,
+  }
+}
+head 2
+to_loki env("LOKI_PUSH_URL"),
+        flush_interval=20ms,
+        max_batch_size=100,
+        parallel=1

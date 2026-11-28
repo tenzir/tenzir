@@ -1,0 +1,6 @@
+warning: HTTP error 429, attempt 1/4, retrying after 0s
+  --> tests/operators/to_loki/basic/17_same_tenant_serialized.tql:12:1
+   |
+12 | to_loki env("LOKI_HOLD_SAME_TENANT_URL"),
+   | ~~~~~~~
+   |

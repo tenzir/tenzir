@@ -1,0 +1,34 @@
+//
+//  ▀▀█▀▀ █▀▀▀ █▄  █ ▀▀▀█▀ ▀█▀ █▀▀▄
+//    █   █▀▀  █ ▀▄█  ▄▀    █  █▀▀▄
+//    ▀   ▀▀▀▀ ▀   ▀ ▀▀▀▀▀ ▀▀▀ ▀  ▀
+//
+// SPDX-FileCopyrightText: (c) 2026 The Tenzir Contributors
+// SPDX-License-Identifier: BSD-3-Clause
+
+// Clean-room wire schema for the Grafana Loki Push API (/loki/api/v1/push).
+
+syntax = "proto3";
+package tenzir.loki.proto;
+
+import "google/protobuf/timestamp.proto";
+
+message PushRequest {
+  repeated Stream streams = 1;
+}
+
+message Stream {
+  string labels = 1;
+  repeated Entry entries = 2;
+}
+
+message Entry {
+  google.protobuf.Timestamp timestamp = 1;
+  string line = 2;
+  repeated LabelPair structured_metadata = 3;
+}
+
+message LabelPair {
+  string name = 1;
+  string value = 2;
+}

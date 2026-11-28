@@ -1,0 +1,16 @@
+from {
+  org: "t1",
+  labels: {app: "svc"},
+  line: "m1",
+  timestamp: 2026-05-15T10:00:00Z,
+}, {
+  org: "t2",
+  labels: {app: "svc"},
+  line: "m2",
+  timestamp: 2026-05-15T10:00:01Z,
+}
+to_loki env("LOKI_BARRIER_2_URL"),
+        tenant=org,
+        flush_interval=10s,
+        max_batch_size=1,
+        parallel=4

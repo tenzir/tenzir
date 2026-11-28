@@ -1,0 +1,7 @@
+warning: invalid Loki tenant ID, skipping event
+  --> tests/operators/to_loki/basic/18_tenant_id_validation.tql:33:16
+   |
+33 |         tenant=org,
+   |                ~~~
+   |
+   = note: tenant IDs must be 1..150 bytes of ASCII letters, digits, or `!`, `-`, `_`, `.`, `*`, `'`, `(`, `)`, and must not be `.` or `..`

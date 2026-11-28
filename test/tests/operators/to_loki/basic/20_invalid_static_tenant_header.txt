@@ -1,0 +1,2 @@
+error: `to_loki` has an invalid Loki tenant ID in `X-Scope-OrgID` header
+  = note: tenant IDs must be 1..150 bytes of ASCII letters, digits, or `!`, `-`, `_`, `.`, `*`, `'`, `(`, `)`, and must not be `.` or `..`

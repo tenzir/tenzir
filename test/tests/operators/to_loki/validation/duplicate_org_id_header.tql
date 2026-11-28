@@ -1,0 +1,7 @@
+---
+error: true
+---
+
+from {labels: {app: "a"}, line: "x"}
+to_loki "http://127.0.0.1:3100",
+        headers={"X-Scope-OrgID": "tenant-a", "x-scope-orgid": "tenant-b"}

@@ -1,0 +1,30 @@
+from {
+  labels: {},
+  line: "empty labels skipped",
+  timestamp: 2026-05-15T10:00:00Z,
+}, {
+  labels: "not-a-record",
+  line: "non-record labels skipped",
+  timestamp: 2026-05-15T10:00:01Z,
+}, {
+  labels: {"service name": "bad"},
+  line: "invalid label name skipped",
+  timestamp: 2026-05-15T10:00:01Z,
+}, {
+  labels: {app: "ok"},
+  line: null,
+  timestamp: 2026-05-15T10:00:02Z,
+}, {
+  labels: {app: "ok"},
+  line: "bad ts skipped",
+  timestamp: "not-a-time",
+}, {
+  labels: {app: "ok"},
+  line: "valid with bad metadata",
+  timestamp: 2026-05-15T10:00:03Z,
+  structured_metadata: 42,
+}
+to_loki env("LOKI_PUSH_URL"),
+        flush_interval=10s,
+        max_batch_size=100,
+        parallel=1

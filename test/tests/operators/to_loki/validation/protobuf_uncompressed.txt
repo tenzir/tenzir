@@ -1,0 +1,7 @@
+error: `compress=false` is only supported with `encoding="json"`
+ --> tests/operators/to_loki/validation/protobuf_uncompressed.tql:6:64
+  |
+6 | to_loki "http://127.0.0.1:3100", encoding="protobuf", compress=false
+  |                                                                ^^^^^
+  |
+  = note: Loki requires Snappy compression for protobuf push requests

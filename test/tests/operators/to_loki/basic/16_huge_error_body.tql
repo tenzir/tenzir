@@ -1,0 +1,15 @@
+---
+error: true
+---
+
+from {
+  labels: {app: "huge-err"},
+  line: "triggers oversized error response",
+  timestamp: 2026-05-15T10:00:00Z,
+}
+to_loki env("LOKI_HUGE_ERROR_URL"),
+        headers={Authorization: "Bearer huge-body-secret-canary"},
+        max_retry_count=0,
+        flush_interval=10s,
+        max_batch_size=100,
+        parallel=1

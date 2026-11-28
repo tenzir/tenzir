@@ -1,0 +1,6 @@
+---
+error: true
+---
+
+from {labels: {app: "a"}, line: "x"}
+to_loki "http://127.0.0.1:3100", encoding="yaml"

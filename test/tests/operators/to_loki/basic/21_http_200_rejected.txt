@@ -1,0 +1,7 @@
+error: Loki push request returned unexpected HTTP status 200
+  --> tests/operators/to_loki/basic/21_http_200_rejected.tql:10:1
+   |
+10 | to_loki env("LOKI_OK_200_URL"),
+   | ^^^^^^^
+   |
+   = hint: Loki returns HTTP 204 No Content on push success; check that the URL targets a Loki push endpoint rather than a proxy or web page

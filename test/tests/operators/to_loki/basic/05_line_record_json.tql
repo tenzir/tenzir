@@ -1,0 +1,15 @@
+from {
+  service: "checkout",
+  level: "warn",
+  msg: "slow query",
+  duration_ms: 420,
+  ts: 2026-05-15T10:00:00Z,
+}
+to_loki env("LOKI_PUSH_URL"),
+        labels={app: service, level: level},
+        line=this,
+        timestamp=ts,
+        structured_metadata={duration_ms: duration_ms},
+        flush_interval=10s,
+        max_batch_size=100,
+        parallel=1

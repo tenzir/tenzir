@@ -1,0 +1,11 @@
+from {
+  labels: {app: "worker"},
+  line: "uncompressed json",
+  timestamp: 2026-05-15T10:00:00Z,
+}
+to_loki env("LOKI_PUSH_URL"),
+        encoding="json",
+        compress=false,
+        flush_interval=10s,
+        max_batch_size=100,
+        parallel=1

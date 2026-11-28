@@ -803,8 +803,11 @@ auto HttpPool::stream_request(proxygen::HTTPMethod method, std::string path,
               using Type = proxygen::coro::HTTPCoroSessionPool::Exception::Type;
               is_retryable = err.type == Type::Timeout;
             });
-          if (body_cancelled or (body_started and not callbacks.on_retry)
-              or not is_retryable or attempt >= impl->config.max_retry_count) {
+          if (body_cancelled
+              or (received_headers and not retryable_status
+                  and not callbacks.retry_after_headers)
+              or (body_started and not callbacks.on_retry) or not is_retryable
+              or attempt >= impl->config.max_retry_count) {
             co_return Err{std::move(attempt_err).what().toStdString()};
           }
           retry_reason = "connection error";

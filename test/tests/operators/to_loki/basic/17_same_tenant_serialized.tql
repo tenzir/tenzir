@@ -1,0 +1,18 @@
+from {
+  org: "tenant-a",
+  labels: {app: "ordered"},
+  line: "batch-1",
+  timestamp: 2026-05-15T10:00:00Z,
+}, {
+  org: "tenant-a",
+  labels: {app: "ordered"},
+  line: "batch-2",
+  timestamp: 2026-05-15T10:00:01Z,
+}
+to_loki env("LOKI_HOLD_SAME_TENANT_URL"),
+        tenant=org,
+        max_retry_count=3,
+        retry_delay=30s,
+        flush_interval=10s,
+        max_batch_size=1,
+        parallel=4

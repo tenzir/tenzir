@@ -1,0 +1,7 @@
+error: unsupported Loki encoding `yaml`
+ --> tests/operators/to_loki/validation/invalid_encoding.tql:6:43
+  |
+6 | to_loki "http://127.0.0.1:3100", encoding="yaml"
+  |                                           ^^^^^^
+  |
+  = note: supported values are `protobuf` and `json`

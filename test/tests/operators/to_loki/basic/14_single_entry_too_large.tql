@@ -1,0 +1,13 @@
+---
+error: true
+---
+
+from {
+  labels: {app: "huge"},
+  line: "this single log line exceeds the configured max_batch_bytes limit",
+  timestamp: 2026-05-15T10:00:00Z,
+}
+to_loki env("LOKI_PUSH_URL"),
+        max_batch_bytes=16,
+        flush_interval=10s,
+        parallel=1

@@ -1,0 +1,36 @@
+from {
+  org: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  labels: {app: "tenants"},
+  line: "exact 150 bytes ok",
+  timestamp: 2026-05-15T10:00:00Z,
+}, {
+  org: "__mimir_cluster",
+  labels: {app: "tenants"},
+  line: "mimir_cluster allowed",
+  timestamp: 2026-05-15T10:00:01Z,
+}, {
+  org: "",
+  labels: {app: "tenants"},
+  line: "explicit empty string skipped",
+  timestamp: 2026-05-15T10:00:02Z,
+}, {
+  org: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab",
+  labels: {app: "tenants"},
+  line: "151 bytes skipped",
+  timestamp: 2026-05-15T10:00:03Z,
+}, {
+  org: "bad/tenant-canary",
+  labels: {app: "tenants"},
+  line: "invalid slash skipped",
+  timestamp: 2026-05-15T10:00:04Z,
+}, {
+  org: "..",
+  labels: {app: "tenants"},
+  line: "dotdot skipped",
+  timestamp: 2026-05-15T10:00:05Z,
+}
+to_loki env("LOKI_PUSH_URL"),
+        tenant=org,
+        flush_interval=10s,
+        max_batch_size=100,
+        parallel=1

@@ -1,0 +1,32 @@
+from {
+  labels: {
+    env: "prod",
+    app: "api",
+    code: 200,
+    note: "hi \"quote\"\n\\ok",
+    empty_ignored: "",
+    null_ignored: null,
+  },
+  line: "request handled",
+  timestamp: 2026-05-15T10:00:00.123456789Z,
+  structured_metadata: {
+    user: "alice",
+    trace_id: "abc-123",
+    retries: 2,
+    ignored_null: null,
+    ignored_empty: "",
+  },
+}, {
+  labels: {
+    app: "api",
+    env: "prod",
+    code: 200,
+    note: "hi \"quote\"\n\\ok",
+  },
+  line: "second line without metadata",
+  timestamp: 2026-05-15T10:00:01Z,
+}
+to_loki env("LOKI_BASE_URL"),
+        flush_interval=10s,
+        max_batch_size=100,
+        parallel=1

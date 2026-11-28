@@ -1,0 +1,13 @@
+warning: HTTP error 429, attempt 1/4, retrying after 0s
+ --> tests/operators/to_loki/basic/10_retry_429.tql:6:1
+  |
+6 | to_loki env("LOKI_RETRY_429_URL"),
+  | ~~~~~~~
+  |
+
+warning: HTTP error 429, attempt 2/4, retrying after 0s
+ --> tests/operators/to_loki/basic/10_retry_429.tql:6:1
+  |
+6 | to_loki env("LOKI_RETRY_429_URL"),
+  | ~~~~~~~
+  |

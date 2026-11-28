@@ -1,0 +1,24 @@
+from {
+  labels: {
+    env: "staging",
+    service: "auth",
+  },
+  line: "login succeeded",
+  timestamp: 2026-05-15T10:00:00Z,
+  structured_metadata: {
+    trace_id: "t-1",
+    ok: true,
+  },
+}, {
+  labels: {
+    service: "auth",
+    env: "staging",
+  },
+  line: "plain event",
+  timestamp: 2026-05-15T10:00:01Z,
+}
+to_loki env("LOKI_PUSH_URL"),
+        encoding="json",
+        flush_interval=10s,
+        max_batch_size=100,
+        parallel=1

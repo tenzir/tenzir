@@ -1,0 +1,42 @@
+warning: Loki stream requires at least one non-empty label, skipping event
+  --> tests/operators/to_loki/basic/08_invalid_rows_skip.tql:27:1
+   |
+27 | to_loki env("LOKI_PUSH_URL"),
+   | ~~~~~~~
+   |
+
+warning: `labels` must evaluate to a record, skipping event
+  --> tests/operators/to_loki/basic/08_invalid_rows_skip.tql:27:1
+   |
+27 | to_loki env("LOKI_PUSH_URL"),
+   | ~~~~~~~
+   |
+
+warning: invalid Loki label name, skipping event
+  --> tests/operators/to_loki/basic/08_invalid_rows_skip.tql:27:1
+   |
+27 | to_loki env("LOKI_PUSH_URL"),
+   | ~~~~~~~
+   |
+   = note: Loki label names must match `[a-zA-Z_][a-zA-Z0-9_]*`
+
+warning: log line is `null`, skipping event
+  --> tests/operators/to_loki/basic/08_invalid_rows_skip.tql:27:1
+   |
+27 | to_loki env("LOKI_PUSH_URL"),
+   | ~~~~~~~
+   |
+
+warning: invalid timestamp, skipping event
+  --> tests/operators/to_loki/basic/08_invalid_rows_skip.tql:27:1
+   |
+27 | to_loki env("LOKI_PUSH_URL"),
+   | ~~~~~~~
+   |
+
+warning: `structured_metadata` must evaluate to a record, omitting structured metadata
+  --> tests/operators/to_loki/basic/08_invalid_rows_skip.tql:27:1
+   |
+27 | to_loki env("LOKI_PUSH_URL"),
+   | ~~~~~~~
+   |

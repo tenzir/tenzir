@@ -1,0 +1,6 @@
+error: `max_batch_size` must be positive
+ --> tests/operators/to_loki/validation/invalid_batch_limits.tql:6:49
+  |
+6 | to_loki "http://127.0.0.1:3100", max_batch_size=0
+  |                                                 ^
+  |

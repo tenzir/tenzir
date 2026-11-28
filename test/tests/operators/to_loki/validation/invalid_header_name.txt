@@ -1,0 +1,2 @@
+error: `to_loki` received an invalid HTTP header name
+  = note: HTTP header names must contain RFC 9110 token characters only

@@ -1,0 +1,7 @@
+error: Loki rejected push request with HTTP status 400
+  --> tests/operators/to_loki/basic/23_stalled_400_zero_bytes_no_replay.tql:10:1
+   |
+10 | to_loki env("LOKI_STALLED_400_URL"),
+   | ^^^^^^^
+   |
+   = hint: check stream labels, timestamp range, and structured metadata limits
